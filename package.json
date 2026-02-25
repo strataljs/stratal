@@ -2,6 +2,32 @@
   "name": "stratal-monorepo",
   "packageManager": "yarn@4.12.0",
   "private": true,
+  "description": "A modular Cloudflare Workers framework with dependency injection, queue-based events, and type-safe configuration",
+  "license": "MIT",
+  "author": "Temitayo Fadojutimi",
+  "homepage": "https://stratal.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/strataljs/stratal.git"
+  },
+  "bugs": {
+    "url": "https://github.com/strataljs/stratal/issues"
+  },
+  "keywords": [
+    "cloudflare-workers",
+    "framework",
+    "dependency-injection",
+    "modules",
+    "hono",
+    "queue",
+    "cron",
+    "i18n",
+    "openapi",
+    "typescript"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "workspaces": [
     "packages/*"
   ],
