@@ -1,4 +1,8 @@
-# stratal
+# Stratal
+
+<p align="center">
+  <img src="media/banner.png" alt="Stratal" width="600" />
+</p>
 
 A modular Cloudflare Workers framework with dependency injection, queue-based events, and type-safe configuration.
 
