@@ -1,8 +1,18 @@
 # stratal
 
-A modular Cloudflare Workers framework with dependency injection, queue-based events, and type-safe configuration.
+A modular Cloudflare Workers framework with automatic OpenAPI documentation, dependency injection, queue consumers, cron jobs, and type-safe configuration.
 
 For full documentation and examples, see the [main README](../../README.md).
+
+## Features
+
+- Automatic OpenAPI 3.0 spec generation with Scalar docs UI from Zod schemas
+- Two-tier dependency injection (global + request-scoped) via tsyringe
+- NestJS-style modular architecture with lifecycle hooks and dynamic modules
+- Convention-based Hono routing with auto-derived HTTP methods and status codes
+- Typed Cloudflare Queue consumers and cron job scheduling
+- S3-compatible storage, email (Resend/SMTP), and type-safe i18n
+- Route guards, middleware, and environment type augmentation
 
 ## Installation
 
@@ -35,14 +45,14 @@ npm install @tus/server
 Import specific modules for better tree-shaking:
 
 ```typescript
-import { Application } from 'stratal'           // Core
-import { Container } from 'stratal/di'           // DI container
-import { RouterService } from 'stratal/router'   // Routing
-import { z } from 'stratal/validation'            // Zod + OpenAPI
-import { ApplicationError } from 'stratal/errors' // Error types
-import { I18nModule } from 'stratal/i18n'         // Internationalization
-import { CacheModule } from 'stratal/cache'       // Caching
-import { LoggerService } from 'stratal/logger'    // Logging
+import { Application, OpenAPIModule } from 'stratal' // Core + OpenAPI docs
+import { Container } from 'stratal/di'               // DI container
+import { RouterService } from 'stratal/router'       // Routing
+import { z } from 'stratal/validation'                // Zod + OpenAPI
+import { ApplicationError } from 'stratal/errors'     // Error types
+import { I18nModule } from 'stratal/i18n'             // Internationalization
+import { CacheModule } from 'stratal/cache'           // Caching
+import { LoggerService } from 'stratal/logger'        // Logging
 ```
 
 ## License

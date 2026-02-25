@@ -4,11 +4,24 @@
   <img src="media/banner.png" alt="Stratal" width="600" />
 </p>
 
-A modular Cloudflare Workers framework with dependency injection, queue-based events, and type-safe configuration.
+A modular Cloudflare Workers framework with automatic OpenAPI documentation, dependency injection, queue consumers, cron jobs, and type-safe configuration.
 
 [![npm version](https://img.shields.io/npm/v/stratal)](https://www.npmjs.com/package/stratal)
 [![CI](https://github.com/strataljs/stratal/actions/workflows/ci.yml/badge.svg)](https://github.com/strataljs/stratal/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
+## Features
+
+- **OpenAPI Documentation** — Define Zod schemas once and get a full OpenAPI 3.0 spec with Scalar docs UI, auto-derived HTTP methods and status codes, error schemas, and security definitions
+- **Dependency Injection** — Two-tier DI container (global + request-scoped) powered by tsyringe with Symbol-based tokens
+- **Modular Architecture** — NestJS-style `@Module()` decorator pattern with lifecycle hooks, dynamic modules, and middleware configuration
+- **Hono Routing** — Convention-based RESTful controllers with `@Controller` and `@Route` decorators, auto-mapped to HTTP methods
+- **Queue Consumers** — Typed Cloudflare Queue consumers with message-type filtering
+- **Cron Jobs** — Scheduled tasks via Cloudflare Workers cron triggers
+- **Storage** — S3-compatible file storage with presigned URLs and TUS upload support
+- **Email** — Resend and SMTP providers with React Email template support
+- **Internationalization** — Type-safe i18n with locale detection from request headers
+- **Guards & Middleware** — Route protection with guard decorators and per-module middleware configuration
 
 ## Installation
 
@@ -88,6 +101,124 @@ export default class Backend extends StratalWorker {
 }
 ```
 
+## OpenAPI Documentation
+
+Stratal generates a full OpenAPI 3.0 specification from your Zod schemas and controller conventions. Routes get HTTP methods, paths, and success status codes automatically — you just define the schemas.
+
+### Setup
+
+Import `OpenAPIModule` in your root module:
+
+```typescript
+import { Module } from 'stratal'
+import { OpenAPIModule } from 'stratal'
+
+@Module({
+  imports: [
+    OpenAPIModule.forRoot({
+      info: { title: 'My API', version: '1.0.0', description: 'My app API' },
+      jsonPath: '/api/openapi.json',  // default
+      docsPath: '/api/docs',          // default
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+This gives you two endpoints out of the box:
+
+| Endpoint | Description |
+|---|---|
+| `/api/docs` | Interactive Scalar docs UI |
+| `/api/openapi.json` | Raw OpenAPI 3.0 JSON spec |
+
+### How It Works
+
+Controller method names map to HTTP methods, paths, and status codes automatically:
+
+| Method name | HTTP method | Path | Status code |
+|---|---|---|---|
+| `index` | GET | `/` | 200 |
+| `show` | GET | `/:id` | 200 |
+| `create` | POST | `/` | 201 |
+| `update` | PUT | `/:id` | 200 |
+| `patch` | PATCH | `/:id` | 200 |
+| `destroy` | DELETE | `/:id` | 200 |
+
+### Controller Tags & Security
+
+Use `@Controller` options to set default tags and security for all routes. Route-level tags are merged with controller-level tags:
+
+```typescript
+import { Controller, Route } from 'stratal/router'
+import { z } from 'stratal/validation'
+
+@Controller('/api/users', {
+  tags: ['Users'],
+  security: ['bearerAuth'],
+})
+class UsersController {
+  @Route({
+    summary: 'List users',
+    response: z.array(UserSchema),
+    tags: ['Admin'],  // merged → ['Users', 'Admin']
+  })
+  async index(ctx: RouterContext) {
+    return ctx.json(users)
+  }
+
+  @Route({
+    summary: 'Create user',
+    body: CreateUserSchema,
+    response: UserSchema,
+    security: [],  // override → public route (no auth)
+  })
+  async create(ctx: RouterContext) {
+    const data = ctx.req.valid('json')
+    return ctx.json(newUser, 201)
+  }
+}
+```
+
+Built-in security scheme identifiers: `bearerAuth`, `apiKey`, `sessionCookie`.
+
+### Hiding Routes
+
+Hide routes from the generated documentation at the controller or route level. Hidden routes remain fully functional:
+
+```typescript
+// Hide all routes in a controller
+@Controller('/api/internal', { hideFromDocs: true })
+class InternalController { /* ... */ }
+
+// Hide a single route
+@Route({ response: HealthSchema, hideFromDocs: true })
+async healthCheck(ctx: RouterContext) { /* ... */ }
+```
+
+### Async Configuration
+
+Use `forRootAsync` when your OpenAPI config depends on injected services:
+
+```typescript
+OpenAPIModule.forRootAsync({
+  useFactory: (configService) => ({
+    info: {
+      title: configService.get('API_TITLE'),
+      version: configService.get('API_VERSION'),
+    },
+  }),
+  inject: [CONFIG_TOKEN],
+})
+```
+
 ## Core Concepts
 
 ### Modules
@@ -156,14 +287,15 @@ export class AppModule {}
 
 ### Routing
 
-Hono-based routing with OpenAPI schema generation. Controllers are auto-discovered from modules:
+Hono-based routing with automatic [OpenAPI documentation](#openapi-documentation). Controllers are auto-discovered from modules. Method names determine the HTTP method, path suffix, and success status code:
 
 ```typescript
 import { Controller, Route } from 'stratal/router'
 import { z } from 'stratal/validation'
 
-@Controller('/api/users')
+@Controller('/api/users', { tags: ['Users'] })
 class UsersController {
+  // index → GET /api/users (200)
   @Route({
     summary: 'List users',
     response: z.array(UserSchema),
@@ -172,6 +304,7 @@ class UsersController {
     return ctx.json(users)
   }
 
+  // create → POST /api/users (201)
   @Route({
     summary: 'Create user',
     body: CreateUserSchema,
@@ -183,6 +316,8 @@ class UsersController {
   }
 }
 ```
+
+See the [OpenAPI Documentation](#openapi-documentation) section for the full method-to-HTTP mapping, tags, security, and how to hide routes.
 
 ### Queue Consumers
 
@@ -311,14 +446,14 @@ export default class Backend extends StratalWorker<Cloudflare.Env> {
 Import specific modules for better tree-shaking:
 
 ```typescript
-import { Application } from 'stratal'           // Core
-import { Container } from 'stratal/di'           // DI container
-import { RouterService } from 'stratal/router'   // Routing
-import { z } from 'stratal/validation'            // Zod + OpenAPI
-import { ApplicationError } from 'stratal/errors' // Error types
-import { I18nModule } from 'stratal/i18n'         // Internationalization
-import { CacheModule } from 'stratal/cache'       // Caching
-import { LoggerService } from 'stratal/logger'    // Logging
+import { Application, OpenAPIModule } from 'stratal' // Core + OpenAPI docs
+import { Container } from 'stratal/di'               // DI container
+import { RouterService } from 'stratal/router'       // Routing
+import { z } from 'stratal/validation'                // Zod + OpenAPI
+import { ApplicationError } from 'stratal/errors'     // Error types
+import { I18nModule } from 'stratal/i18n'             // Internationalization
+import { CacheModule } from 'stratal/cache'           // Caching
+import { LoggerService } from 'stratal/logger'        // Logging
 ```
 
 ## Testing
