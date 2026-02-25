@@ -1,0 +1,21 @@
+{
+  "name": "stratal-example-03-testing",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "reflect-metadata": "^0.2.2",
+    "stratal": "latest"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.0",
+    "@cloudflare/workers-types": "^4.20251014.0",
+    "@stratal/testing": "latest",
+    "typescript": "^5.9.3",
+    "vitest": "~3.2.0",
+    "wrangler": "^4.0.0"
+  }
+}

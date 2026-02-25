@@ -1,0 +1,73 @@
+{
+  "name": "@stratal/testing",
+  "version": "0.0.1",
+  "description": "Testing utilities and mocks for Stratal framework applications",
+  "type": "module",
+  "license": "MIT",
+  "author": "Stratal Contributors",
+  "homepage": "https://github.com/strataljs/stratal#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/strataljs/stratal.git",
+    "directory": "packages/testing"
+  },
+  "bugs": {
+    "url": "https://github.com/strataljs/stratal/issues"
+  },
+  "keywords": [
+    "stratal",
+    "testing",
+    "mocks",
+    "cloudflare-workers",
+    "vitest"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./mocks": {
+      "types": "./dist/mocks/index.d.ts",
+      "import": "./dist/mocks/index.js"
+    },
+    "./mocks/nodemailer": {
+      "types": "./dist/mocks/nodemailer.d.ts",
+      "import": "./dist/mocks/nodemailer.js"
+    },
+    "./mocks/zenstack-runtime": {
+      "types": "./dist/mocks/zenstack-runtime.d.ts",
+      "import": "./dist/mocks/zenstack-runtime.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "prebuild": "yarn clean",
+    "typecheck": "tsc --noEmit",
+    "lint": "npx eslint .",
+    "lint:fix": "npx eslint --fix ."
+  },
+  "dependencies": {
+    "@faker-js/faker": "^9.7.0",
+    "@golevelup/ts-vitest": "^2.1.1"
+  },
+  "peerDependencies": {
+    "stratal": "^0.0.1",
+    "vitest": "^3.2.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.9.0",
+    "@cloudflare/workers-types": "^4.20251121.0",
+    "@types/node": "^24.10.0",
+    "stratal": "workspace:*",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.0"
+  }
+}

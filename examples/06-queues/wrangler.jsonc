@@ -1,0 +1,31 @@
+{
+  "name": "stratal-example-06-queues",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-02-25",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "vars": {
+    "ENVIRONMENT": "development"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      "id": "placeholder"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "NOTIFICATIONS_QUEUE",
+        "queue": "notifications"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "notifications",
+        "max_batch_size": 10
+      }
+    ]
+  }
+}

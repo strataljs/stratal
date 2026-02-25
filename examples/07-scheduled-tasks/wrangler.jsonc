@@ -1,0 +1,15 @@
+{
+  "name": "stratal-example-07-scheduled-tasks",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-02-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "ENVIRONMENT": "development"
+  },
+  "kv_namespaces": [
+    { "binding": "CACHE", "id": "placeholder" }
+  ],
+  "triggers": {
+    "crons": ["0 2 * * *", "*/5 * * * *"]
+  }
+}

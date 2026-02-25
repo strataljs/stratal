@@ -1,0 +1,13 @@
+{
+  "name": "stratal-example-04-guards",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-02-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "ENVIRONMENT": "development",
+    "API_KEY": "my-secret-api-key"
+  },
+  "kv_namespaces": [
+    { "binding": "CACHE", "id": "placeholder" }
+  ]
+}

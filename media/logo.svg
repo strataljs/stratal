@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Flowing S-shaped Strata: 5 parallel bezier curves forming an S -->
+  <g fill="none" stroke-linecap="round">
+    <!-- Outermost left stroke -->
+    <path d="M 100,60 C 300,60 140,250 340,250 C 540,250 380,452 180,452"
+          stroke="#00D4AA" stroke-width="14" opacity="0.3"/>
+    <!-- Inner left stroke -->
+    <path d="M 110,110 C 300,110 160,256 340,256 C 520,256 370,402 190,402"
+          stroke="#00D4AA" stroke-width="18" opacity="0.5"/>
+    <!-- Center stroke (thickest, full opacity) -->
+    <path d="M 120,160 C 300,160 180,256 340,256 C 500,256 360,352 200,352"
+          stroke="#00D4AA" stroke-width="26" opacity="1.0"/>
+    <!-- Inner right stroke -->
+    <path d="M 130,210 C 290,210 200,256 340,256 C 480,256 350,302 210,302"
+          stroke="#00D4AA" stroke-width="18" opacity="0.5"/>
+    <!-- Outermost right stroke -->
+    <path d="M 145,255 C 270,255 230,256 340,256 C 450,256 345,258 225,258"
+          stroke="#00D4AA" stroke-width="14" opacity="0.3"/>
+  </g>
+</svg>

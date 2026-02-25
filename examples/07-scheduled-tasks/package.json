@@ -1,0 +1,17 @@
+{
+  "name": "stratal-example-07-scheduled-tasks",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev"
+  },
+  "dependencies": {
+    "reflect-metadata": "^0.2.2",
+    "stratal": "latest"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251014.0",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.0.0"
+  }
+}

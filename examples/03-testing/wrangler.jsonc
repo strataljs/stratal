@@ -1,0 +1,12 @@
+{
+  "name": "stratal-example-03-testing",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-02-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "ENVIRONMENT": "development"
+  },
+  "kv_namespaces": [
+    { "binding": "CACHE", "id": "placeholder" }
+  ]
+}

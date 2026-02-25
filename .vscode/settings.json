@@ -1,0 +1,25 @@
+{
+  "files.associations": {
+    "wrangler.json": "jsonc",
+    ".dev.vars*": "dotenv"
+  },
+  "editor.defaultFormatter": "dbaeumer.vscode-eslint",
+  "eslint.format.enable": true,
+  "eslint.enable": true,
+  "eslint.useFlatConfig": true,
+  "eslint.workingDirectories": [
+    {
+      "mode": "auto"
+    }
+  ],
+  "editor.quickSuggestions": {
+    "strings": "on"
+  },
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "always",
+    "source.fixAll": "always",
+    "source.addMissingImports.ts": "always"
+  },
+  "diffEditor.diffAlgorithm": "advanced",
+  "diffEditor.experimental.showMoves": true
+}
