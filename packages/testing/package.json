@@ -40,10 +40,6 @@
     "./mocks/nodemailer": {
       "types": "./dist/mocks/nodemailer.d.ts",
       "import": "./dist/mocks/nodemailer.js"
-    },
-    "./mocks/zenstack-runtime": {
-      "types": "./dist/mocks/zenstack-runtime.d.ts",
-      "import": "./dist/mocks/zenstack-runtime.js"
     }
   },
   "scripts": {

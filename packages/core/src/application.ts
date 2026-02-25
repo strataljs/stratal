@@ -154,7 +154,6 @@ export class Application {
    * @param token - DI token for the service
    * @returns Resolved service instance
    */
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- T is used to allow for any type of token
   resolve<T>(token: symbol): T {
     try {
       return this._container.resolve(token)

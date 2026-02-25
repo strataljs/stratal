@@ -42,7 +42,7 @@ export default defineConfig([
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
-      " @typescript-eslint/no-unnecessary-type-parameters": "off",
+      "@typescript-eslint/no-unnecessary-type-parameters": "off",
       "@typescript-eslint/no-extraneous-class": "off",
       "@typescript-eslint/no-non-null-assertion": "warn",
       "@typescript-eslint/no-unsafe-argument": "warn",
@@ -77,6 +77,17 @@ export default defineConfig([
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/unbound-method": "off",
       "@typescript-eslint/no-non-null-assertion": "off",
+    },
+  },
+
+  {
+    files: ["examples/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-return": "off",
     },
   },
 
