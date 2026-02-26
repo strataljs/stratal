@@ -1,16 +1,16 @@
-import { Controller, IController, Route, RouterContext } from 'stratal'
+import { Controller, IController, inject, Route, RouterContext } from 'stratal'
 import { z } from 'stratal/validation'
-import { NotesService } from './notes.service'
 import {
   createNoteSchema,
   noteListSchema,
   noteResponseSchema,
   updateNoteSchema,
 } from './notes.schemas'
+import { NotesService } from './notes.service'
 
 @Controller('/api/notes')
 export class NotesController implements IController {
-  constructor(private readonly notesService: NotesService) {}
+  constructor(@inject(NotesService) private readonly notesService: NotesService) { }
 
   @Route({
     response: noteListSchema,
