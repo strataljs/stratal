@@ -24,6 +24,12 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
+      - name: Build core
+        run: yarn workspace stratal build
+
+      - name: Build testing package
+        run: yarn workspace @stratal/testing build
+
       - name: Lint
         run: yarn lint
 
@@ -43,6 +49,9 @@ jobs:
 
       - name: Install dependencies
         run: yarn install --immutable
+
+      - name: Build core
+        run: yarn workspace stratal build
 
       - name: Build testing package
         run: yarn workspace @stratal/testing build
@@ -70,6 +79,9 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
+      - name: Build core
+        run: yarn workspace stratal build
+
       - name: Build testing package
         run: yarn workspace @stratal/testing build
 
@@ -93,11 +105,11 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
-      - name: Build testing package
-        run: yarn workspace @stratal/testing build
-
       - name: Build core
         run: yarn workspace stratal build
+
+      - name: Build testing package
+        run: yarn workspace @stratal/testing build
 
       - name: Verify package contents
         run: cd packages/core && npm pack --dry-run
