@@ -1,7 +1,7 @@
 /**
  * Storage Module
  * Provides file storage capabilities using AWS S3
- * Supports multiple disk configurations with tenant-aware path templates
+ * Supports multiple disk configurations with dynamic path templates
  */
 
 import { Module } from '../module'

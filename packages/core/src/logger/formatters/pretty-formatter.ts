@@ -10,7 +10,6 @@ import type { ILogFormatter } from './formatter.interface'
  *
  * Output format:
  * [2024-01-15 10:30:45] INFO: User logged in
- *   tenantId: tenant_123
  *   userId: user_456
  */
 export class PrettyFormatter implements ILogFormatter {

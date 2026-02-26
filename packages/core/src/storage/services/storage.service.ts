@@ -18,9 +18,6 @@ import { StorageManagerService } from './storage-manager.service'
  * Main facade for storage operations.
  * Request-scoped for proper isolation.
  *
- * This service is tenant-agnostic. For tenant-aware path resolution,
- * use TenantStorageService from the tenant module.
- *
  * @example
  * ```typescript
  * @inject(STORAGE_TOKENS.StorageService)
@@ -203,7 +200,7 @@ export class StorageService {
 
   /**
    * Substitute template variables in path
-   * Override this method in subclasses to add tenant-specific substitutions
+   * Override this method in subclasses to add custom substitutions
    *
    * @param path - Path with template variables
    * @returns Path with substituted variables

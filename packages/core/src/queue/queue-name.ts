@@ -9,7 +9,7 @@
  * declare module 'stratal' {
  *   interface QueueNames {
  *     'notifications-queue': true
- *     'tenant-notifications-queue': true
+ *     'batch-notifications-queue': true
  *   }
  * }
  * ```
@@ -30,7 +30,7 @@
  * declare module 'stratal' {
  *   interface QueueNames {
  *     'notifications-queue': true
- *     'tenant-notifications-queue': true
+ *     'batch-notifications-queue': true
  *   }
  * }
  * ```

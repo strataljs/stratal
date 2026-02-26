@@ -1,11 +1,11 @@
 # Logger Module
 
-Production-ready logging system with multi-transport support, tenant awareness, and async processing.
+Production-ready logging system with multi-transport support and async processing.
 
 ## Features
 
 - **Multi-transport architecture** - Console transport initially, extensible for Sentry/Cloudflare Analytics/HTTP/S3
-- **Tenant-aware logging** - Automatically includes tenant context (tenantId, domain, userId) when available
+- **Contextual logging** - Automatically includes request context (userId) when available
 - **Async processing** - Non-blocking logging via `ctx.waitUntil()` for zero request latency impact
 - **Flexible formatters** - JSON (production) and Pretty (development) formatters
 - **Log level filtering** - Filter logs by severity (debug, info, warn, error)
@@ -110,10 +110,8 @@ The logger automatically enriches logs with:
 **Always included:**
 - `timestamp` - Unix timestamp in milliseconds
 
-**Tenant requests:**
-- `tenantId` - Tenant identifier
-- `domain` - Tenant domain
-- `userId` - Authenticated user ID (if available)
+**Request context (when available):**
+- `userId` - Authenticated user ID
 
 **Custom context:**
 ```typescript
@@ -129,13 +127,12 @@ this.logger.info('Payment processed', {
 
 **JSON (Production):**
 ```json
-{"level":"info","message":"User created","timestamp":1234567890,"tenantId":"tenant_123","userId":"user_456"}
+{"level":"info","message":"User created","timestamp":1234567890,"userId":"user_456"}
 ```
 
 **Pretty (Development):**
 ```
 [2024-01-15T10:30:45.123Z] INFO : User created
-  tenantId: "tenant_123"
   userId: "user_456"
 ```
 
@@ -183,10 +180,10 @@ export class EmailQueueConsumer implements QueueConsumer {
 
 ```typescript
 import { injectable, inject } from 'tsyringe'
-import { TenantController, Route, type RouterContext } from 'stratal'
+import { Controller, Route, type RouterContext } from 'stratal'
 import { LOGGER_TOKENS, type LoggerService } from 'stratal'
 
-@TenantController('/api/v1/users', { tags: ['Users'] })
+@Controller('/api/v1/users', { tags: ['Users'] })
 export class UsersController {
   constructor(
     @inject(LOGGER_TOKENS.LoggerService)
@@ -405,11 +402,7 @@ this.logger.info('Test log')  // Should appear
 
 **Ensure request-scoped:**
 - LoggerService is registered as request-scoped automatically by LoggerModule
-- Tenant context populated by middleware
-
-**Verify tenant middleware:**
-- Check `TenantIdentificationMiddleware` is registered
-- Verify `Host` header contains the correct domain
+- Context populated by middleware
 
 ### Performance issues
 

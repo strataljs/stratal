@@ -1,15 +1,14 @@
 # Email Module
 
-Comprehensive email service with provider abstraction, multi-tenant awareness, and async queue processing.
+Comprehensive email service with provider abstraction and async queue processing.
 
 ## Overview
 
-The Email Module provides a unified interface for sending emails across the application with automatic provider selection, multi-tenant context routing, and asynchronous processing via Cloudflare Queues.
+The Email Module provides a unified interface for sending emails across the application with automatic provider selection and asynchronous processing via Cloudflare Queues.
 
 **Key Features:**
 - 📧 **Provider Abstraction** - Supports multiple email providers (Resend, SMTP)
 - 🔄 **Async Processing** - Non-blocking email sending via Cloudflare Queues
-- 🏢 **Multi-Tenant Aware** - Automatic tenant context detection and queue routing
 - 🌍 **Auto Locale Injection** - Automatic locale detection from request context
 - ⚡ **Type-Safe** - Full TypeScript support with Zod schema validation
 - 🔌 **Extensible** - Easy to add new email providers
@@ -32,7 +31,7 @@ email/
 ├── consumers/          # Queue processors
 │   ├── base-email.consumer.ts        # Shared consumer logic
 │   ├── landlord-notifications.consumer.ts
-│   └── tenant-notifications.consumer.ts
+│   └── email.consumer.ts
 └── errors/            # Focused error classes
     ├── resend-api-key-missing.error.ts
     ├── smtp-configuration-missing.error.ts
@@ -44,13 +43,11 @@ email/
 
 ### Request-Scoped Service
 
-**EmailService is request-scoped** (registered with `scope: Scope.Request`) to ensure proper tenant context isolation across concurrent requests.
+**EmailService is request-scoped** (registered with `scope: Scope.Request`) to ensure proper isolation across concurrent requests.
 
 **Why Request-Scoped?**
 
-EmailService depends on [TenantContext](../context/tenant-context.ts) (request-scoped) to determine the correct notification queue (landlord vs tenant). By making EmailService request-scoped:
-
-- ✅ **Tenant Isolation:** Each request gets its own EmailService instance with correct tenant context
+- ✅ **Request Isolation:** Each request gets its own EmailService instance
 - ✅ **Thread Safety:** Eliminates potential race conditions in concurrent request handling
 - ✅ **Consistency:** Matches pattern used by DatabaseService and I18nService
 - ✅ **Locale-Aware Routing:** Can access I18nService for locale-specific queue metadata
@@ -67,7 +64,7 @@ export class EmailService { }
 { provide: EMAIL_TOKENS.EmailService, useClass: EmailService, scope: Scope.Request }
 ```
 
-**Note:** The `@Transient()` decorator marks the class as injectable. Scope is specified at registration time via `scope: Scope.Request`. EmailService gets request context via its injected dependencies (TenantContext, I18nService).
+**Note:** The `@Transient()` decorator marks the class as injectable. Scope is specified at registration time via `scope: Scope.Request`. EmailService gets request context via its injected dependencies (I18nService).
 
 **EmailProviderFactory remains a singleton** since it has no request dependencies and creates providers on demand.
 
@@ -80,11 +77,9 @@ Application Code
       ↓
 EmailService.send()
       ↓
-Queue Selection (Tenant/Landlord)
+[NOTIFICATIONS_QUEUE]
       ↓
-[NOTIFICATIONS_QUEUE] or [TENANT_NOTIFICATIONS_QUEUE]
-      ↓
-Consumer (Landlord/Tenant)
+EmailConsumer
       ↓
 EmailProviderFactory
       ↓
@@ -173,21 +168,6 @@ For real-world usage examples, see:
 - [Auth Module Magic Link](../../domain/auth/) - Sending authentication emails
 - [Consumers](consumers/) - Queue processing implementation
 
-## Multi-Tenant Behavior
-
-The [EmailService](services/email.service.ts) automatically detects the execution context and routes emails to the appropriate queue:
-
-**Landlord Context** (No tenant set):
-- Routes to: `NOTIFICATIONS_QUEUE`
-- Processed by: [LandlordNotificationsConsumer](consumers/landlord-notifications.consumer.ts)
-
-**Tenant Context** (Tenant identified via middleware):
-- Routes to: `TENANT_NOTIFICATIONS_QUEUE`
-- Processed by: [TenantNotificationsConsumer](consumers/tenant-notifications.consumer.ts)
-- Automatically includes `tenantId` in queue message for audit logging
-
-See [TenantContext](../context/tenant-context.ts) for tenant identification implementation.
-
 ## Queue Processing
 
 ### Queue Configuration
@@ -200,11 +180,6 @@ Defined in `apps/backend/wrangler.jsonc`:
     "consumers": [
       {
         "queue": "notifications-queue",
-        "max_batch_size": 50,
-        "max_retries": 3
-      },
-      {
-        "queue": "tenant-notifications-queue",
         "max_batch_size": 50,
         "max_retries": 3
       }
@@ -326,10 +301,6 @@ All email addresses are validated via Zod schemas before queueing.
 
 SMTP credentials are never logged and only accessible via ConfigService.
 
-### Tenant Isolation
-
-Tenant emails automatically include tenantId for audit logging and tracking.
-
 ## Monitoring & Logging
 
 All email operations are logged via the Logger service with PII-free metadata:
@@ -337,7 +308,7 @@ All email operations are logged via the Logger service with PII-free metadata:
 ```typescript
 // Processing
 logger.info('Processing email message', {
-  type, tenantId, recipientCount, hasHtml, hasText, hasAttachments
+  type, recipientCount, hasHtml, hasText, hasAttachments
 })
 
 // Success

@@ -23,8 +23,6 @@ export const errors = {
   // Context errors
   contextNotInitialized: 'Context has not been initialized',
   userNotAuthenticated: 'User is not authenticated',
-  tenantNotSet: 'Tenant context has not been set',
-  tenantIdRequired: 'Tenant ID is required for this operation. Ensure tenant context is properly initialized.',
   insufficientPermissions: 'Insufficient permissions to perform this action',
   requestContainerNotInitialized: 'Request container has not been initialized',
   requestScopeOperationNotAllowed: '{methodName}() cannot be called on this container scope. Check if you are calling it on the correct container (global vs request-scoped).',
@@ -72,13 +70,6 @@ export const errors = {
   // OpenAPI errors
   openapiValidation: 'OpenAPI validation failed: {details}',
   openapiRouteRegistration: 'Failed to register OpenAPI route {path}: {reason}',
-
-  // Tenant errors
-  tenants: {
-    domainAlreadyExists: 'Domain {domain} is already registered',
-    notFound: 'No tenant found for domain {domain}',
-    inactive: 'Tenant for domain {domain} is inactive'
-  },
 
   // Email errors
   email: {

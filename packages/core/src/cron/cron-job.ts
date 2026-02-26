@@ -7,21 +7,20 @@
  * @example
  * ```typescript
  * @Transient()
- * export class TenantCleanupJob implements CronJob {
+ * export class DataCleanupJob implements CronJob {
  *   readonly schedule = '0 2 * * *' // Daily at 2 AM UTC
  *
  *   constructor(
- *     @inject(DI_TOKENS.Logger) private logger: Logger,
- *     @inject(TENANTS_TOKENS.TenantsService) private tenantsService: TenantsService
+ *     @inject(LOGGER_TOKENS.LoggerService) private logger: LoggerService,
  *   ) {}
  *
  *   async execute(controller: ScheduledController): Promise<void> {
- *     this.logger.info('Running tenant cleanup')
- *     await this.tenantsService.cleanupInactiveTenants()
+ *     this.logger.info('Running data cleanup')
+ *     await this.cleanupExpiredData()
  *   }
  *
  *   async onError(error: Error): Promise<void> {
- *     this.logger.error('Tenant cleanup failed', { error: error.message })
+ *     this.logger.error('Data cleanup failed', { error: error.message })
  *   }
  * }
  * ```

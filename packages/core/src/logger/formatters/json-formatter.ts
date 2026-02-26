@@ -12,7 +12,6 @@ import type { ILogFormatter } from './formatter.interface'
  *   "level": "info",
  *   "message": "User logged in",
  *   "timestamp": 1234567890,
- *   "tenantId": "tenant_123",
  *   "userId": "user_456",
  *   "error": { "message": "...", "stack": "..." }
  * }

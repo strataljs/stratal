@@ -6,7 +6,7 @@ import { ConfigNotInitializedError } from '../errors'
 /**
  * ConfigService with dot notation support for get/set operations
  *
- * Supports runtime overrides via set() - useful for tenant-specific config.
+ * Supports runtime overrides via set() - useful for request-specific config overrides.
  * Use reset() to restore original values.
  *
  * @example
@@ -15,8 +15,8 @@ import { ConfigNotInitializedError } from '../errors'
  * const url = config.get('database.url')
  * const fromName = config.get('email.from.name')
  *
- * // Set at runtime (e.g., in middleware for tenant override)
- * config.set('email.from.name', tenant.schoolName)
+ * // Set at runtime (e.g., in middleware for runtime override)
+ * config.set('email.from.name', 'Custom Name')
  *
  * // Reset to original
  * config.reset('email.from.name') // reset specific path
@@ -47,8 +47,8 @@ export class ConfigService<T extends object = ModuleConfig> implements IConfigSe
   }
 
   /**
-   * Set config value at runtime (for tenant overrides)
-   * @example config.set('email.from.name', 'School Name')
+   * Set config value at runtime (for runtime overrides)
+   * @example config.set('email.from.name', 'Custom Name')
    */
   set<P extends ConfigPath<T>>(path: P, value: ConfigPathValue<T, P>): void {
     this.ensureInitialized()

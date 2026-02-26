@@ -158,16 +158,15 @@ describe('EmailConsumer', () => {
   })
 
   describe('onError()', () => {
-    it('should log error with tenantId and recipientCount', async () => {
+    it('should log error with recipientCount', async () => {
       const error = new Error('final failure')
-      const message = createMessage({ tenantId: 'tenant-123' })
+      const message = createMessage()
 
       await consumer.onError(error, message)
 
       expect(mockLogger.error).toHaveBeenCalledWith(
         'Email send failed after retries',
         expect.objectContaining({
-          tenantId: 'tenant-123',
           recipientCount: 1,
           error: 'final failure',
         })

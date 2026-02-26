@@ -94,7 +94,6 @@ export interface ContainerOptions {
  * @example Request scope (manual lifecycle)
  * ```typescript
  * const reqContainer = container.createRequestScope(routerContext)
- * reqContainer.registerValue(DI_TOKENS.TenantContext, tenantContext)
  * await reqContainer.runWithContextStore(async () => {
  *   // use reqContainer...
  * })
@@ -472,7 +471,6 @@ export class Container {
    * @example
    * ```typescript
    * const reqContainer = container.createRequestScope(routerContext)
-   * reqContainer.registerValue(DI_TOKENS.TenantContext, tenantContext)
    * await reqContainer.runWithContextStore(async () => {
    *   // use reqContainer...
    * })
@@ -508,7 +506,6 @@ export class Container {
    * @example
    * ```typescript
    * const reqContainer = container.createRequestScope(routerContext)
-   * reqContainer.registerValue(DI_TOKENS.TenantContext, tenantContext)
    * await reqContainer.runWithContextStore(async () => {
    *   const i18n = reqContainer.resolve(I18N_TOKENS.I18nService)
    *   // ...

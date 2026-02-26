@@ -11,8 +11,6 @@ export interface QueueMessage<T = unknown> {
   timestamp: number
   /** Message type for routing to consumers */
   type: string
-  /** Optional tenant ID for multi-tenant context */
-  tenantId?: string
   /** Message payload */
   payload: T
   /** Optional metadata including locale for i18n */

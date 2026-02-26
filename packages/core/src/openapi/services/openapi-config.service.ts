@@ -23,7 +23,7 @@ import type {
  *
  * async handle(ctx, next) {
  *   this.openAPIConfig.override({
- *     info: { title: 'Tenant API' },
+ *     info: { title: 'Custom API' },
  *     routeFilter: (path) => shouldInclude(path)
  *   })
  *   await next()

@@ -57,8 +57,6 @@ export const ERROR_CODES = {
     CONTEXT_NOT_INITIALIZED: 3004,
     /** User not authenticated */
     USER_NOT_AUTHENTICATED: 3005,
-    /** Tenant context not set */
-    TENANT_NOT_SET: 3006,
     /** Email verification required before login */
     EMAIL_NOT_VERIFIED: 3007,
     /** Password doesn't meet minimum length */

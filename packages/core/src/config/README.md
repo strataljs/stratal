@@ -45,7 +45,7 @@ The config system uses `registerAs()` to create typed config namespaces that are
 │                                                                  │
 │  ConfigService (runtime)                                         │
 │      - Dot notation get/set                                     │
-│      - Runtime overrides for tenancy                            │
+│      - Runtime overrides                                        │
 │      - Reset to original values                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -88,7 +88,7 @@ export class CoreModule {}
 
 ### 3. Inject and Use
 
-For services and controllers that need **runtime-overridable config** (e.g., tenant-specific values), use `ConfigService`:
+For services and controllers that need **runtime-overridable config** (e.g., request-specific values), use `ConfigService`:
 
 ```typescript
 import { inject } from 'tsyringe'
@@ -151,8 +151,8 @@ private readonly config: IConfigService
 const url = config.get('database.url')
 const fromName = config.get('email.from.name')
 
-// Set at runtime (tenant overrides)
-config.set('email.from.name', tenant.schoolName)
+// Set at runtime (runtime overrides)
+config.set('email.from.name', 'Custom Name')
 
 // Reset to original
 config.reset('email.from.name') // Reset specific path
@@ -222,22 +222,20 @@ Framework modules use `forRootAsync` to receive config from namespaces.
 
 ## Runtime Overrides
 
-Use `config.set()` for tenant-specific configuration. Works anywhere in the request lifecycle.
+Use `config.set()` for request-specific configuration overrides. Works anywhere in the request lifecycle.
 
 ```typescript
 // In middleware
 async handle(ctx: RouterContext, next: () => Promise<void>) {
-  const tenant = await this.getTenant(ctx)
-
   // Override config for this request
-  this.config.set('email.from.name', tenant.schoolName)
+  this.config.set('email.from.name', 'Custom Name')
 
   await next()
 }
 
 // In service - reflects middleware overrides
 async sendEmail() {
-  const fromName = this.config.get('email.from.name') // Tenant's school name
+  const fromName = this.config.get('email.from.name') // Custom Name (from middleware override)
 }
 ```
 

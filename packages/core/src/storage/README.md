@@ -1,14 +1,14 @@
 # Storage Module
 
-The Storage Module provides file storage capabilities using S3-compatible storage (AWS S3, Cloudflare R2, MinIO, etc.). It supports multi-disk configuration with tenant-aware path templates, presigned URLs, and independent credentials per disk.
+The Storage Module provides file storage capabilities using S3-compatible storage (AWS S3, Cloudflare R2, MinIO, etc.). It supports multi-disk configuration with dynamic path templates, presigned URLs, and independent credentials per disk.
 
 ## Features
 
-- **Multi-Disk Configuration**: Support for multiple storage disks (public, private, tenant-specific) with independent credentials
-- **Tenant-Aware Paths**: Dynamic path templates with variables like `{tenantId}`, `{date}`, `{year}`, `{month}`
+- **Multi-Disk Configuration**: Support for multiple storage disks (public, private) with independent credentials
+- **Dynamic Path Templates**: Path templates with variables like `{date}`, `{year}`, `{month}`
 - **Presigned URLs**: Generate temporary signed URLs for secure file access (GET, PUT, DELETE, HEAD operations)
 - **Provider Abstraction**: Extensible provider interface supporting multiple storage backends
-- **Request-Scoped**: Tenant context automatically injected for multi-tenant isolation
+- **Request-Scoped**: Proper isolation via request-scoped DI
 - **Type-Safe**: Full TypeScript support with Zod validation
 - **i18n Error Messages**: Localized error messages in English and Swahili
 
@@ -16,7 +16,7 @@ The Storage Module provides file storage capabilities using S3-compatible storag
 
 The module follows a layered architecture:
 
-1. **StorageService** (Request-scoped): Main facade providing high-level storage operations with tenant context
+1. **StorageService** (Request-scoped): Main facade providing high-level storage operations
 2. **StorageManagerService** (Singleton): Manages multiple storage providers, one per disk, with lazy initialization
 3. **Provider Layer**: Abstract interface with S3 implementation using AWS SDK
 4. **Configuration**: Static disk configuration via ConfigService from environment variables
@@ -24,7 +24,6 @@ The module follows a layered architecture:
 ### Why Request-Scoped?
 
 StorageService is request-scoped because it depends on:
-- **TenantContext**: Injected to resolve `{tenantId}` in path templates
 - **I18nService**: Used by error classes for localized messages
 
 StorageManagerService remains a singleton since it has no request dependencies and manages provider instances across requests.
@@ -58,17 +57,6 @@ STORAGE__STORAGE='[
     "secretAccessKey": "your-secret-access-key",
     "root": "private",
     "visibility": "private"
-  },
-  {
-    "disk": "tenant",
-    "provider": "s3",
-    "endpoint": "https://your-account-id.r2.cloudflarestorage.com",
-    "bucket": "my-app-tenant",
-    "region": "auto",
-    "accessKeyId": "your-access-key-id",
-    "secretAccessKey": "your-secret-access-key",
-    "root": "tenants/{tenantId}",
-    "visibility": "private"
   }
 ]'
 
@@ -81,7 +69,7 @@ STORAGE__PRESIGNED_URL__MAX_EXPIRY="604800"
 
 Each storage entry supports:
 
-- **disk**: Unique identifier for the disk (e.g., "public", "private", "tenant")
+- **disk**: Unique identifier for the disk (e.g., "public", "private")
 - **provider**: Storage provider type ("s3" or "gcs")
 - **endpoint**: S3-compatible endpoint URL (e.g., `https://account-id.r2.cloudflarestorage.com` for R2, `https://s3.us-east-1.amazonaws.com` for AWS)
 - **bucket**: S3 bucket name
@@ -116,7 +104,7 @@ export class DocumentService {
   ) {}
 
   async uploadDocument(file: File): Promise<void> {
-    // Upload to default disk with tenant-aware path
+    // Upload to default disk
     await this.storage.upload(file, 'documents/resume.pdf')
 
     // Upload to specific disk
@@ -134,7 +122,7 @@ Generate temporary signed URLs for client-side uploads/downloads:
 const { url, expiresAt } = await this.storage.getPresignedUploadUrl(
   'documents/application.pdf',
   3600, // expires in 1 hour
-  'tenant'
+  'private'
 )
 
 // Generate download URL with default expiry
@@ -154,7 +142,6 @@ const { url } = await this.storage.getPresignedDeleteUrl(
 
 The `root` configuration supports dynamic variables that are substituted at runtime:
 
-- **{tenantId}**: Current tenant ID from TenantContext (or "default" if none)
 - **{date}**: Current date in ISO format (YYYY-MM-DD)
 - **{year}**: Current year (YYYY)
 - **{month}**: Current month with leading zero (MM)
@@ -162,29 +149,14 @@ The `root` configuration supports dynamic variables that are substituted at runt
 ### Examples
 
 ```
-# Tenant-specific isolation
-root: "tenants/{tenantId}/files"
-→ "tenants/school-abc/files/document.pdf"
-
 # Date-based organization
 root: "uploads/{year}/{month}"
 → "uploads/2025/11/document.pdf"
 
 # Combined templates
-root: "tenants/{tenantId}/uploads/{date}"
-→ "tenants/school-abc/uploads/2025-11-04/document.pdf"
+root: "uploads/{year}/{month}/{date}"
+→ "uploads/2025/11/2025-11-04/document.pdf"
 ```
-
-## Multi-Tenant Isolation
-
-The storage module provides automatic tenant isolation through path templates:
-
-1. Configure tenant disk with `{tenantId}` variable in root path
-2. StorageService automatically resolves tenant from TenantContext
-3. All operations are scoped to tenant's path prefix
-4. No cross-tenant access possible without explicit disk switching
-
-**Example**: School A uploads `documents/grades.pdf` → stored at `tenants/school-a/documents/grades.pdf`, completely isolated from School B's files.
 
 ## Error Handling
 
@@ -205,7 +177,7 @@ All errors include contextual data (file path, disk name, etc.) and are automati
 The module registers two services:
 
 - **StorageManagerService**: Singleton managing provider instances
-- **StorageService**: Request-scoped with tenant context
+- **StorageService**: Request-scoped for proper isolation
 
 Registration happens automatically in `application.ts` as a core module (alongside ConfigModule, I18nModule, EmailModule).
 
@@ -215,12 +187,12 @@ Query available disk configurations:
 
 ```typescript
 const disks = this.storage.getAvailableDisks()
-// Returns: ['public', 'private', 'tenant']
+// Returns: ['public', 'private']
 ```
 
 ## Best Practices
 
-1. **Use Path Templates**: Leverage `{tenantId}` for automatic tenant isolation
+1. **Use Path Templates**: Leverage `{date}`, `{year}`, `{month}` for dynamic path organization
 2. **Minimal Disk Switching**: Design file organization to minimize explicit disk parameter usage
 3. **Presigned URLs for Clients**: Generate presigned URLs for direct client uploads/downloads to avoid proxying large files through your API
 4. **Expiry Times**: Use shortest practical expiry times for presigned URLs (default 1 hour is reasonable)
@@ -250,7 +222,7 @@ Set environment variables in Cloudflare Workers dashboard:
 # Using Wrangler CLI
 wrangler r2 bucket create my-app-public
 wrangler r2 bucket create my-app-private
-wrangler r2 bucket create my-app-tenant
+wrangler r2 bucket create my-app-uploads
 
 # Generate API tokens in Cloudflare Dashboard:
 # R2 → Manage R2 API Tokens → Create API Token

@@ -17,7 +17,6 @@ describe('CloudflareQueueProvider', () => {
 
     mockEnv = {
       NOTIFICATIONS_QUEUE: mockQueue,
-      TENANT_NOTIFICATIONS_QUEUE: mockQueue,
     } as unknown as StratalEnv
 
     provider = new CloudflareQueueProvider(mockEnv)
@@ -57,15 +56,6 @@ describe('CloudflareQueueProvider', () => {
       expect(mockQueue.send).toHaveBeenCalled()
     })
 
-    it('should handle tenant queue binding resolution', async () => {
-      const message = createMessage('email.send', { to: 'test@example.com' })
-
-      // tenant-notifications-queue -> TENANT_NOTIFICATIONS_QUEUE
-      await provider.send('tenant-notifications-queue', message)
-
-      expect(mockQueue.send).toHaveBeenCalledTimes(1)
-    })
-
     it('should propagate queue.send errors', async () => {
       const sendError = new Error('Queue send failed')
       mockQueue.send.mockRejectedValue(sendError)
@@ -94,18 +84,5 @@ describe('CloudflareQueueProvider', () => {
       expect(mockQueue.send).toHaveBeenCalledWith(message)
     })
 
-    it('should send message with tenantId', async () => {
-      const message: QueueMessage<{ to: string }> = {
-        id: 'test-id-123',
-        timestamp: Date.now(),
-        type: 'email.send',
-        tenantId: 'tenant-123',
-        payload: { to: 'test@example.com' },
-      }
-
-      await provider.send('tenant-notifications-queue', message)
-
-      expect(mockQueue.send).toHaveBeenCalledWith(message)
-    })
   })
 })

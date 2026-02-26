@@ -64,7 +64,7 @@ class MiddlewareBuilderImpl implements IMiddlewareBuilder {
    * consumer.apply(LoggingMiddleware).forRoutes('*')
    *
    * // Apply to specific controllers
-   * consumer.apply(TenantMiddleware).forRoutes(TenantsController, SchoolsController)
+   * consumer.apply(CorsMiddleware).forRoutes(ApiController, WebhooksController)
    *
    * // Apply to specific paths
    * consumer.apply(RateLimitMiddleware).forRoutes(
@@ -99,10 +99,10 @@ class MiddlewareBuilderImpl implements IMiddlewareBuilder {
  *       .exclude('/health')
  *       .forRoutes('*')
  *
- *     // Tenant identification for specific controllers
+ *     // CORS middleware for specific controllers
  *     consumer
- *       .apply(TenantIdentificationMiddleware)
- *       .forRoutes(TenantsController, SchoolsController)
+ *       .apply(CorsMiddleware)
+ *       .forRoutes(ApiController, WebhooksController)
  *
  *     // Rate limiting for auth endpoints
  *     consumer

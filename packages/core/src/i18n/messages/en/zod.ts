@@ -27,7 +27,7 @@ export const zodI18n = {
       storageDiskRequired: 'At least one storage disk is required',
       // Database validation
       databaseUrlRequired: 'Database URL is required',
-      // Tenant validation
+      // Domain validation
       domainRequired: 'Domain is required',
       domainTooLong: 'Domain too long',
       invalidDomainFormat: 'Invalid domain format',

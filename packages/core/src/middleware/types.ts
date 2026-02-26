@@ -50,8 +50,8 @@ export type MiddlewareRouteTarget = Constructor<IController> | RouteInfo | '*'
  *       .forRoutes('*')
  *
  *     consumer
- *       .apply(TenantMiddleware)
- *       .forRoutes(TenantsController, SchoolsController)
+ *       .apply(CorsMiddleware)
+ *       .forRoutes(ApiController, WebhooksController)
  *   }
  * }
  * ```

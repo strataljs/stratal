@@ -13,7 +13,7 @@
  *
  * // 2. Register queues (queue name IS the injection token)
  * QueueModule.registerQueue('notifications-queue')
- * QueueModule.registerQueue('tenant-notifications-queue')
+ * QueueModule.registerQueue('batch-notifications-queue')
  *
  * // 3. Inject and use
  * constructor(@InjectQueue('notifications-queue') private queue: IQueueSender) {}

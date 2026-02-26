@@ -41,12 +41,11 @@ export class EmailConsumer implements IQueueConsumer<SendEmailInput> {
   ) { }
 
   async handle(message: QueueMessage<SendEmailInput>): Promise<void> {
-    const { type, payload, tenantId } = message
+    const { type, payload } = message
     const recipientCount = Array.isArray(payload.to) ? payload.to.length : 1
 
     this.logger.info('Processing email message', {
       type,
-      tenantId,
       recipientCount,
       hasHtml: !!payload.html,
       hasText: !!payload.text,
@@ -65,7 +64,6 @@ export class EmailConsumer implements IQueueConsumer<SendEmailInput> {
 
       this.logger.info('Email sent successfully', {
         type,
-        tenantId,
         recipientCount,
         messageId: result.messageId,
       })
@@ -73,7 +71,6 @@ export class EmailConsumer implements IQueueConsumer<SendEmailInput> {
     catch (error) {
       this.logger.error('Failed to send email', {
         type,
-        tenantId,
         recipientCount,
         error: (error as Error).message,
       })
@@ -87,7 +84,6 @@ export class EmailConsumer implements IQueueConsumer<SendEmailInput> {
       : 1
 
     this.logger.error('Email send failed after retries', {
-      tenantId: message.tenantId,
       recipientCount,
       error: error.message,
       stack: error.stack,

@@ -167,7 +167,7 @@ describe('SyncQueueProvider', () => {
       const message2 = createMessage('email.send', { to: 'b@example.com' })
 
       await provider.send('notifications-queue', message1)
-      await provider.send('tenant-notifications-queue', message2)
+      await provider.send('batch-notifications-queue', message2)
 
       // Same consumer handles messages from both queues
       expect(consumer.handle).toHaveBeenCalledTimes(2)

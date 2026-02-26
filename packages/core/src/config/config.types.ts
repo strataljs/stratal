@@ -68,8 +68,8 @@ export interface IConfigService<T extends object = ModuleConfig> {
   get<P extends ConfigPath<T>>(path: P): ConfigPathValue<T, P>
 
   /**
-   * Set config value at runtime (for tenant overrides)
-   * @example config.set('email.from.name', 'School Name')
+   * Set config value at runtime (for runtime overrides)
+   * @example config.set('email.from.name', 'Custom Name')
    */
   set<P extends ConfigPath<T>>(path: P, value: ConfigPathValue<T, P>): void
 

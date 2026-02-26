@@ -14,7 +14,7 @@ import type { ILogTransport } from '../transports/transport.interface'
  * Singleton service that can be enriched with request context via `withContext()`.
  *
  * **Features:**
- * - Optional request context enrichment (tenantId, domain, userId) via `withContext()`
+ * - Optional request context enrichment (userId) via `withContext()`
  * - Async logging via ctx.waitUntil() for non-blocking performance
  * - Multi-transport support (console, future Sentry/Cloudflare Analytics)
  * - Configurable formatters (JSON production, Pretty development)
@@ -144,7 +144,7 @@ export class LoggerService {
 
   /**
    * Enrich log context with request info and timestamp
-   * Note: Tenant-specific context enrichment is handled by TenantLoggerService in tenant module
+   * Context enrichment can be extended by application modules
    */
   private enrichContext(userContext: LogContext): InternalLogContext {
     return {

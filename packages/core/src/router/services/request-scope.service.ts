@@ -33,8 +33,6 @@ import type { RouterEnv } from '../types'
  * - Locale extraction is handled by I18nModule's LocaleExtractionMiddleware
  * - Zod i18n context is handled by I18nModule's I18nContextMiddleware
  * - Session verification is handled by AuthModule's SessionVerificationMiddleware
- * - Tenant-specific setup (TenancyContext, TenancyDatabaseService) is handled
- *   by TenancyScopeMiddleware from the tenancy module
  */
 @Transient()
 export class RequestScopeService {

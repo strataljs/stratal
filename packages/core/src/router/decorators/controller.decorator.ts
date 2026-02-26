@@ -13,32 +13,16 @@ const CONTROLLER_ROUTE_KEY = ROUTE_METADATA_KEYS.CONTROLLER_ROUTE
  * - Route metadata storage
  * - Controller options (tags, security schemes, hideFromDocs)
  *
- * NOTE: This decorator does NOT set route access context.
- * For multi-tenant applications, use the decorators from tenancy module:
- * - @Controller (from tenancy) - Landlord-only routes
- * - @TenantController - Tenant-only routes
- * - @UniversalController - Routes accessible from both domains
- *
  * @param route - Base route for this controller (e.g., '/api/v1/users')
  * @param options - Optional configuration (tags, security schemes, hideFromDocs)
  *
- * @example Single-tenant application (no tenancy module)
+ * @example
  * ```typescript
  * import { Controller } from 'stratal/router'
  *
  * @Controller('/api/v1/users', { tags: ['Users'] })
  * export class UsersController implements IController {
- *   // All routes accessible (no access context filtering)
- * }
- * ```
- *
- * @example Multi-tenant application (use tenancy decorators instead)
- * ```typescript
- * import { Controller } from 'stratal/tenancy'
- *
- * @Controller('/api/v1/tenants', { tags: ['Tenants'] })
- * export class TenantsController implements IController {
- *   // Only accessible from landlord domain
+ *   // All routes accessible
  * }
  * ```
  */

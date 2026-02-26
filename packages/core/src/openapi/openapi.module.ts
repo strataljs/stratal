@@ -30,7 +30,7 @@
  *
  * async handle(ctx, next) {
  *   this.openAPIConfig.override({
- *     info: { title: 'Tenant API' },
+ *     info: { title: 'Custom API' },
  *     routeFilter: (path) => this.shouldInclude(path)
  *   })
  *   await next()
