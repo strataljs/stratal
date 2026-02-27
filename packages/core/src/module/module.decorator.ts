@@ -24,9 +24,9 @@ type RegistryEntry = {
 } & TsyringeProvider
 
 /**
- * @Module decorator - defines a module with imports, providers, controllers, consumers, jobs
+ * `@Module` decorator - defines a module with imports, providers, controllers, consumers, jobs
  *
- * Uses tsyringe's @registry internally to auto-register providers when module is imported.
+ * Uses tsyringe's `@registry` internally to auto-register providers when module is imported.
  *
  * @example
  * ```typescript
@@ -63,7 +63,7 @@ export function getModuleOptions(target: Constructor): ModuleOptions | undefined
 }
 
 /**
- * Check if a class is decorated with @Module
+ * Check if a class is decorated with `@Module`
  */
 export function isModuleClass(target: unknown): target is Constructor {
   return (

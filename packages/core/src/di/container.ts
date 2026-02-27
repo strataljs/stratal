@@ -230,7 +230,6 @@ export class Container {
    *
    * @param token - DI token for resolution
    * @param factory - Factory function that receives the Container
-   * @param scope - Optional lifecycle scope (defaults to Transient)
    *
    * @example
    * ```typescript

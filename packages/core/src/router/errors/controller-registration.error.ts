@@ -5,7 +5,7 @@ import { ERROR_CODES } from '../../errors'
  * Error thrown when a controller fails to register
  *
  * This typically happens when:
- * - Controller is missing the @Controller decorator
+ * - Controller is missing the `@Controller` decorator
  * - Controller route metadata is not set
  * - Controller class name is invalid
  *

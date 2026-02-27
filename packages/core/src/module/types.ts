@@ -185,7 +185,7 @@ export interface ModuleClass<T extends object = object> extends Constructor<T> {
 }
 
 /**
- * Module options for @Module decorator
+ * Module options for `@Module` decorator
  *
  * Note: Middlewares are configured via the MiddlewareConfigurable interface's
  * configure() method, not via this options object. See middleware/types.ts.

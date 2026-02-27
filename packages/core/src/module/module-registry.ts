@@ -66,7 +66,7 @@ export class ModuleRegistry {
   /**
    * Register a module (static or dynamic)
    *
-   * @param moduleOrDynamic - Module class decorated with @Module or DynamicModule from configure()
+   * @param moduleOrDynamic - Module class decorated with `@Module` or DynamicModule from configure()
    */
   register(moduleOrDynamic: ModuleClass | DynamicModule): void {
     const { moduleClass, options } = this.resolveModule(moduleOrDynamic)

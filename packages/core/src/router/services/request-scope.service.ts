@@ -11,7 +11,7 @@ import type { RouterEnv } from '../types'
  * Request Scope Service
  *
  * Manages request-scoped container setup and lifecycle.
- * Creates context-enriched instances of @RequestScoped services.
+ * Creates context-enriched instances of `@RequestScoped` services.
  *
  * **Two-Tier Container Architecture:**
  * ```
@@ -26,7 +26,7 @@ import type { RouterEnv } from '../types'
  *
  * **Responsibilities:**
  * - Setup request-scoped container middleware
- * - Create context-enriched instances of @RequestScoped services
+ * - Create context-enriched instances of `@RequestScoped` services
  *
  * **Note:**
  * - AuthContext registration is handled by AuthModule's AuthContextMiddleware

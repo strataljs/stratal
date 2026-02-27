@@ -53,7 +53,7 @@ export interface AuthGuardOptions {
 }
 
 /**
- * Metadata stored by @UseGuards decorator
+ * Metadata stored by `@UseGuards` decorator
  */
 export interface GuardMetadata {
   guards: Guard[]

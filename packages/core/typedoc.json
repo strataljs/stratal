@@ -1,0 +1,16 @@
+{
+  "intentionallyNotExported": [
+    "__module",
+    "ILogFormatter",
+    "DeepValues",
+    "systemEn",
+    "AnyConfigNamespace",
+    "RouteParameter",
+    "HttpMethod",
+    "IEmailProvider",
+    "ContextQueryResult",
+    "I18nService",
+    "MessageLoaderService",
+    "ILogTransport"
+  ]
+}

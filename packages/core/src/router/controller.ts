@@ -4,7 +4,7 @@ import type { RouterContext } from './router-context'
  * Controller interface for handling HTTP requests
  *
  * Controllers can implement RESTful methods or a custom handle() method.
- * The route for the controller is set via the @Controller decorator.
+ * The route for the controller is set via the `@Controller` decorator.
  *
  * RESTful methods auto-map to HTTP verbs:
  * - index() → GET /route

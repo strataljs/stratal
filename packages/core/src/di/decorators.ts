@@ -22,7 +22,7 @@ export {
 /**
  * Mark a class as injectable
  *
- * This decorator wraps tsyringe's @injectable decorator and optionally
+ * This decorator wraps tsyringe's `@injectable` decorator and optionally
  * associates a token with the class. The actual lifecycle (Singleton, Request,
  * Transient) is determined at registration time, not decoration time.
  *
