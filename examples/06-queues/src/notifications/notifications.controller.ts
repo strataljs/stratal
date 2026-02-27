@@ -4,7 +4,7 @@ import { z } from 'stratal/validation';
 @Controller('/api/notifications')
 export class NotificationsController implements IController {
   constructor(
-    @InjectQueue('notifications') private readonly queue: IQueueSender,
+    @InjectQueue('notifications-queue') private readonly queue: IQueueSender,
   ) { }
 
   @Route({

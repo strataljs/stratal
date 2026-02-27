@@ -18,12 +18,12 @@
     "producers": [
       {
         "binding": "NOTIFICATIONS_QUEUE",
-        "queue": "notifications"
+        "queue": "notifications-queue"
       }
     ],
     "consumers": [
       {
-        "queue": "notifications",
+        "queue": "notifications-queue",
         "max_batch_size": 10
       }
     ]
