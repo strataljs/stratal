@@ -18,7 +18,7 @@ The config system uses `registerAs()` to create typed config namespaces that are
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ Application Layer (apps/backend)                                 │
+│ Application Layer                                                │
 │                                                                  │
 │  1. Define config namespaces with registerAs()                  │
 │     const databaseConfig = registerAs('database', (env) => ...) │
@@ -54,8 +54,6 @@ The config system uses `registerAs()` to create typed config namespaces that are
 
 ### 1. Define Config Namespace
 
-See [apps/backend/src/config/database.config.ts](../../../../apps/backend/src/config/database.config.ts)
-
 ```typescript
 import { registerAs } from 'stratal/config'
 
@@ -68,8 +66,6 @@ export type DatabaseConfig = ReturnType<typeof databaseConfig.factory>
 ```
 
 ### 2. Register in Module
-
-See [apps/backend/src/core/index.ts](../../../../apps/backend/src/core/index.ts)
 
 ```typescript
 import { ConfigModule } from 'stratal/config'
@@ -167,26 +163,18 @@ const all = config.all()
 
 ## App-Specific Methods
 
-App-specific methods like `isDevelopment()`, `buildLandlordURL()` are provided by `AppConfigService` in the application layer.
-
-See [apps/backend/src/config/app-config.service.ts](../../../../apps/backend/src/config/app-config.service.ts)
+For application-specific helpers (e.g., `isDevelopment()`, environment-aware URL builders), create a custom config service in your application layer that wraps `ConfigService`:
 
 ```typescript
-import { APP_CONFIG_TOKENS } from '../config/app-config.tokens'
-
 @Transient()
-export class MyController {
+export class AppConfigService {
   constructor(
-    @inject(APP_CONFIG_TOKENS.AppConfigService)
-    private readonly appConfig: AppConfigService
+    @inject(CONFIG_TOKENS.ConfigService)
+    private readonly config: IConfigService
   ) {}
 
-  async handle(): Promise<void> {
-    if (this.appConfig.isDevelopment()) {
-      // Dev-only logic
-    }
-
-    const url = this.appConfig.buildLandlordURL('/callback')
+  isDevelopment(): boolean {
+    return this.config.get('app.environment') === 'development'
   }
 }
 ```
@@ -279,7 +267,7 @@ expect(config.get('database.url')).toBeDefined()
 ### 1. Create Namespace File
 
 ```typescript
-// apps/backend/src/config/new-feature.config.ts
+// your-app/src/config/new-feature.config.ts
 import { registerAs } from 'stratal/config'
 
 export const newFeatureConfig = registerAs('newFeature', (env: Env) => ({
@@ -294,7 +282,7 @@ export type NewFeatureConfig = ReturnType<typeof newFeatureConfig.factory>
 ### 2. Add to allConfigs
 
 ```typescript
-// apps/backend/src/config/index.ts
+// your-app/src/config/index.ts
 export * from './new-feature.config'
 
 export const allConfigs = [
@@ -306,7 +294,7 @@ export const allConfigs = [
 ### 3. Update Validation Schema (Optional)
 
 ```typescript
-// apps/backend/src/config/app-config.schema.ts
+// your-app/src/config/app-config.schema.ts
 export const AppConfigSchema = z.object({
   // ... existing schemas
   newFeature: z.object({
@@ -354,7 +342,3 @@ Error: ConfigService not initialized
 
 **Solution:** Ensure `ConfigModule.forRoot()` is imported in your module chain.
 
-## See Also
-
-- [apps/backend/src/config/](../../../../apps/backend/src/config/) - Application config implementation
-- [apps/backend/src/config/app-config.service.ts](../../../../apps/backend/src/config/app-config.service.ts) - App-specific config methods

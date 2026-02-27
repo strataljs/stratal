@@ -50,7 +50,7 @@ LOG_LEVEL=info
 LOG_FORMATTER=json
 ```
 
-These are parsed by `AppConfigLoader.parseLogLevel()` and passed to `ApplicationConfig.logging`.
+Parse these in your application layer and pass to `ApplicationConfig.logging`.
 
 ## Usage
 
@@ -344,44 +344,6 @@ container.register(LOGGER_TOKENS.Transports, {
 })
 ```
 
-## Migration from Old Logger
-
-**Before:**
-```typescript
-import { inject } from 'tsyringe'
-import { DI_TOKENS } from 'stratal'
-import type { Logger } from 'stratal'
-
-@Transient()
-export class MyService {
-  constructor(
-    @inject(DI_TOKENS.Logger)
-    private readonly logger: Logger
-  ) {}
-}
-```
-
-**After:**
-```typescript
-import { inject } from 'tsyringe'
-import { Transient, LOGGER_TOKENS, type LoggerService } from 'stratal'
-
-// Registered with scope: Scope.Singleton
-@Transient()
-export class MyService {
-  constructor(
-    @inject(LOGGER_TOKENS.LoggerService)
-    private readonly logger: LoggerService
-  ) {}
-}
-```
-
-**Changes:**
-1. Import `LOGGER_TOKENS` and `LoggerService` from `stratal`
-2. Use `@inject(LOGGER_TOKENS.LoggerService)` instead of `@inject(DI_TOKENS.Logger)`
-3. Type as `LoggerService` instead of `Logger`
-4. Logging methods remain the same: `debug()`, `info()`, `warn()`, `error()`
-
 ## Troubleshooting
 
 ### Logs not appearing
@@ -423,7 +385,5 @@ this.logger.info('Processing', { userId: user.id, orderId: order.id })
 
 ## Related Documentation
 
-- [Architecture](../../../docs/architecture.md) - System architecture overview
-- [Error Handling](../../../docs/error-codes.md) - Error codes and handling patterns
 - [Configuration](../config/README.md) - Configuration service documentation
 - [I18n](../i18n/README.md) - Internationalization service

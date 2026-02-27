@@ -29,8 +29,6 @@ email/
 │   ├── email.service.ts              # Main service (facade)
 │   └── email-provider-factory.ts     # Provider selector
 ├── consumers/          # Queue processors
-│   ├── base-email.consumer.ts        # Shared consumer logic
-│   ├── landlord-notifications.consumer.ts
 │   └── email.consumer.ts
 └── errors/            # Focused error classes
     ├── resend-api-key-missing.error.ts
@@ -68,7 +66,7 @@ export class EmailService { }
 
 **EmailProviderFactory remains a singleton** since it has no request dependencies and creates providers on demand.
 
-See [Request Scoping Documentation](../../docs/request-scoping.md) for details on the pattern.
+Request scoping ensures each HTTP request gets its own service instance, preventing shared state across concurrent requests.
 
 ### Flow Diagram
 
@@ -164,15 +162,13 @@ See [contracts/email-attachment.ts](contracts/email-attachment.ts) for attachmen
 
 ### Implementation Examples
 
-For real-world usage examples, see:
-- [Auth Module Magic Link](../../domain/auth/) - Sending authentication emails
-- [Consumers](consumers/) - Queue processing implementation
+For queue processing implementation, see [Consumers](consumers/).
 
 ## Queue Processing
 
 ### Queue Configuration
 
-Defined in `apps/backend/wrangler.jsonc`:
+Defined in your application's `wrangler.jsonc`:
 
 ```jsonc
 {
@@ -221,7 +217,7 @@ To add a new email provider:
 
 - Create specific error classes for provider failures
 - Follow patterns in [errors/](errors/) directory
-- Add i18n messages to `packages/common/src/i18n/{en,sw}/errors.ts`
+- Add i18n messages to `packages/core/src/i18n/messages/{locale}/errors.ts`
 
 ## Error Handling
 
@@ -237,9 +233,7 @@ The module uses focused error classes that extend `ApplicationError`. Each error
 - **[EmailSmtpConnectionFailedError](errors/email-smtp-connection-failed.error.ts)** - SMTP server connection failed
 - **[EmailResendApiFailedError](errors/email-resend-api-failed.error.ts)** - Resend API returned error
 
-All error messages are internationalized via `packages/common/src/i18n/{en,sw}/errors.ts`.
-
-See [Error Codes Documentation](../../../../docs/error-codes.md) for error code registry and handling patterns.
+All error messages are internationalized via `packages/core/src/i18n/messages/{locale}/errors.ts`.
 
 ## Testing
 
@@ -268,12 +262,6 @@ RESEND_EMAIL_API_KEY=re_sandbox_...
 Sandbox emails are not actually sent but appear in Resend dashboard.
 
 ## Integration Examples
-
-### Auth Module
-
-The email service integrates with the authentication system for sending magic link emails.
-
-See [Auth Module Documentation](../../domain/auth/README.md) for implementation details.
 
 ## Performance Considerations
 
@@ -320,7 +308,7 @@ logger.error('Failed to send email', { error, recipientCount })
 
 **Privacy Note:** Email addresses are never logged to comply with GDPR. Only metadata like `recipientCount` is included.
 
-See [BaseEmailConsumer](consumers/base-email.consumer.ts) for logging implementation.
+See [EmailConsumer](consumers/email.consumer.ts) for the consumer implementation.
 
 ## Troubleshooting
 
@@ -354,7 +342,5 @@ Check Cloudflare dashboard:
 
 ## Related Documentation
 
-- [Architecture Overview](../../../../docs/architecture.md)
 - [Queue System](../queue/README.md)
 - [Configuration Service](../config/README.md)
-- [Auth Module](../../domain/auth/README.md)

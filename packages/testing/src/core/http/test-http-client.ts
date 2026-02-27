@@ -9,9 +9,9 @@ import { TestHttpRequest } from './test-http-request'
  * @example
  * ```typescript
  * const response = await module.http
- *   .forHost('school.admsn.test')
- *   .post('/api/v1/register')
- *   .withBody({ schoolInfo: { name: 'Test' } })
+ *   .forHost('example.com')
+ *   .post('/api/v1/users')
+ *   .withBody({ name: 'Test' })
  *   .send()
  *
  * response.assertCreated()

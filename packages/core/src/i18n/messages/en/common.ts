@@ -9,8 +9,6 @@ export const common = {
   api: {
     title: 'Stratal API',
     description: 'Platform API',
-    landlordTitle: 'Stratal - Admin API',
-    landlordDescription: 'System administration',
     serverDescription: 'API server',
     security: {
       bearerAuth: 'JWT Bearer token authentication',

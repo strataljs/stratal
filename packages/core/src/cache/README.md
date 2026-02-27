@@ -78,7 +78,3 @@ All operations wrap errors in specific error classes:
 - `CacheListError` - Failed to list keys
 
 **Security**: Raw errors are logged via LoggerService but NOT exposed to users.
-
-## Documentation
-
-See [docs/cache.md](../../../../../docs/cache.md) for comprehensive documentation.

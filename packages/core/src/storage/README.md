@@ -264,8 +264,5 @@ Future providers: Google Cloud Storage (GCS)
 
 ## Related Documentation
 
-- [Module System Architecture](../../../docs/architecture.md)
 - [Config Service](../config/README.md)
-- [Error Handling Patterns](../../../../docs/error-codes.md)
-- [Request Scoping](../../../docs/request-scoping.md)
 - [Email Module](../email/README.md) (similar request-scoped pattern)
