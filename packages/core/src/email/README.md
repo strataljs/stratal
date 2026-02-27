@@ -88,37 +88,63 @@ Email Sent
 
 ## Configuration
 
-### Environment Variables
+### Module Registration
 
-The email service uses the following environment variables (configured via ConfigService):
+Register the email module in your application using `EmailModule.forRoot()` (static options) or `EmailModule.forRootAsync()` (factory pattern):
 
-**Provider Selection:**
-```bash
-EMAIL_PROVIDER=smtp  # or 'resend'
+**Static options:**
+```typescript
+import { EmailModule } from 'stratal'
+
+EmailModule.forRoot({
+  provider: 'resend',
+  apiKey: env.RESEND_API_KEY,
+  from: { name: 'My App', email: 'noreply@example.com' },
+  replyTo: 'support@example.com',
+  queue: 'notifications-queue',
+})
 ```
 
-**SMTP Configuration:**
-```bash
-SMTP_URL=smtp://username:password@host:port
-# Example: smtp://user:pass@localhost:1035
-# Example: smtps://user:pass@smtp.gmail.com:465
+**Async factory (e.g. from a config namespace):**
+```typescript
+import { EmailModule } from 'stratal'
+
+EmailModule.forRootAsync({
+  inject: [emailConfig.KEY],
+  useFactory: (email) => ({
+    provider: email.provider,
+    apiKey: email.apiKey,
+    from: email.from,
+    smtp: email.smtp,
+    queue: email.queue,
+  }),
+})
 ```
 
-**Resend Configuration:**
-```bash
-RESEND_EMAIL_API_KEY=re_123...
-```
+### EmailModuleOptions
 
-**Sender Information:**
-```bash
-EMAIL_FROM_NAME=My App
-EMAIL_FROM_ADDRESS=noreply@example.com
-EMAIL_REPLY_TO=support@example.com
-```
+| Field      | Type                            | Required | Description                                          |
+|------------|---------------------------------|----------|------------------------------------------------------|
+| `provider` | `'resend' \| 'smtp'`           | Yes      | Email provider type                                  |
+| `from`     | `{ name: string; email: string }` | Yes   | Default sender address                               |
+| `queue`    | `QueueName`                     | Yes      | Queue name for async dispatch                        |
+| `apiKey`   | `string`                        | No       | Resend API key (required when `provider` is `resend`) |
+| `smtp`     | `SmtpConfig`                    | No       | SMTP settings (required when `provider` is `smtp`)   |
+| `replyTo`  | `string`                        | No       | Default reply-to address                             |
+
+### SmtpConfig
+
+| Field      | Type      | Required | Description       |
+|------------|-----------|----------|-------------------|
+| `host`     | `string`  | Yes      | SMTP server host  |
+| `port`     | `number`  | Yes      | SMTP server port  |
+| `secure`   | `boolean` | No       | Use TLS           |
+| `username` | `string`  | No       | SMTP username     |
+| `password` | `string`  | No       | SMTP password     |
 
 ### Provider Selection Logic
 
-The [EmailProviderFactory](services/email-provider-factory.ts) automatically selects the provider based on `EMAIL_PROVIDER`:
+The [EmailProviderFactory](services/email-provider-factory.ts) automatically selects the provider based on `options.provider`:
 
 - `smtp` → [SmtpProvider](providers/smtp.provider.ts) (via nodemailer)
 - `resend` → [ResendProvider](providers/resend.provider.ts)
@@ -225,8 +251,8 @@ The module uses focused error classes that extend `ApplicationError`. Each error
 
 ### Configuration Errors
 - **[ResendApiKeyMissingError](errors/resend-api-key-missing.error.ts)** - Resend API key not configured
-- **[SmtpConfigurationMissingError](errors/smtp-configuration-missing.error.ts)** - SMTP_URL not set
-- **[SmtpHostMissingError](errors/smtp-host-missing.error.ts)** - SMTP_URL malformed (missing host)
+- **[SmtpConfigurationMissingError](errors/smtp-configuration-missing.error.ts)** - SMTP configuration not provided
+- **[SmtpHostMissingError](errors/smtp-host-missing.error.ts)** - SMTP `host` missing from `SmtpConfig`
 - **[EmailProviderNotSupportedError](errors/email-provider-not-supported.error.ts)** - Unsupported provider configured
 
 ### Runtime Errors
@@ -245,18 +271,31 @@ The project includes Mailpit in `docker-compose.yml` for SMTP testing:
 # Start Mailpit
 docker compose up -d
 
-# Configure SMTP
-SMTP_URL=smtp://localhost:1035
-
 # View emails at: http://localhost:8025
+```
+
+Configure the SMTP provider to point at Mailpit:
+
+```typescript
+EmailModule.forRoot({
+  provider: 'smtp',
+  smtp: { host: 'localhost', port: 1035 },
+  from: { name: 'App', email: 'noreply@example.com' },
+  queue: 'notifications-queue',
+})
 ```
 
 ### Testing with Resend
 
-Use Resend's sandbox mode for development:
+Use Resend's sandbox mode for development by passing a sandbox API key:
 
-```bash
-RESEND_EMAIL_API_KEY=re_sandbox_...
+```typescript
+EmailModule.forRoot({
+  provider: 'resend',
+  apiKey: 're_sandbox_...',
+  from: { name: 'App', email: 'noreply@example.com' },
+  queue: 'notifications-queue',
+})
 ```
 
 Sandbox emails are not actually sent but appear in Resend dashboard.
@@ -317,21 +356,17 @@ See [EmailConsumer](consumers/email.consumer.ts) for the consumer implementation
 ```bash
 # Test SMTP connection
 nc -zv smtp.example.com 587
+```
 
-# Check SMTP URL format
-SMTP_URL=smtp://user:pass@host:port  # Correct
-SMTP_URL=user:pass@host:port         # Wrong (missing protocol)
+Verify your `SmtpConfig` object includes the correct `host` and `port`:
+
+```typescript
+smtp: { host: 'smtp.example.com', port: 587, secure: true, username: '...', password: '...' }
 ```
 
 ### Resend API Errors
 
-```bash
-# Verify API key
-echo $RESEND_EMAIL_API_KEY
-
-# Check Resend dashboard for quota/limits
-# https://resend.com/dashboard
-```
+Verify the `apiKey` value passed to `EmailModuleOptions` is valid and check the [Resend dashboard](https://resend.com/dashboard) for quota or rate-limit issues.
 
 ### Queue Processing Delays
 
