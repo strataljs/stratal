@@ -37,7 +37,9 @@
     "prepare": "husky",
     "changeset": "changeset",
     "version": "changeset version",
-    "release": "yarn workspaces foreach -A npm publish --tolerate-republish"
+    "release": "yarn workspaces foreach -A npm publish --tolerate-republish",
+    "docs": "typedoc",
+    "docs:watch": "typedoc --watch"
   },
   "lint-staged": {
     "*.{ts,mts}": [
@@ -54,6 +56,7 @@
     "husky": "^9.1.7",
     "jiti": "^2.6.1",
     "lint-staged": "^16.2.7",
+    "typedoc": "^0.28.17",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.55.0"
   }

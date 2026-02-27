@@ -1,0 +1,16 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPointStrategy": "packages",
+  "entryPoints": ["packages/core", "packages/testing"],
+  "out": "docs",
+  "name": "Stratal API Reference",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "excludeExternals": true,
+  "skipErrorChecking": true,
+  "categorizeByGroup": true,
+  "readme": "none",
+  "packageOptions": {
+    "entryPoints": ["src/index.ts"]
+  }
+}
