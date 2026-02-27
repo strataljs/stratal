@@ -1,116 +1,92 @@
 # I18n Module
 
-Internationalization (i18n) module for the backend, following NestJS dynamic module patterns.
+Internationalization module for Stratal, following NestJS-style dynamic module patterns.
 
 ## Features
 
-- Type-safe message keys with IDE autocomplete
-- Named parameter interpolation (`{userId}`, `{email}`)
-- Auto-locale detection from X-Locale header
-- Queue message locale propagation (automatic)
-- Error message localization
+- Type-safe message keys with IDE autocomplete via module augmentation
+- Named parameter interpolation (`{userName}`, `{email}`)
+- Auto-locale detection from `X-Locale` header
+- Queue message locale propagation
+- Error message localization via `GlobalErrorHandler`
 - Request-scoped translation context
 - Dynamic module with `withRoot()` configuration
-- Core messages + app messages separation
-- Module augmentation for type-safe keys
+- Core messages + app messages deep merge
+- JIT message compilation (Cloudflare Workers compatible)
+- Zod validation error translations
 
 ## Architecture
 
-### Dynamic Module Pattern
-
-I18nModule follows NestJS dynamic module pattern:
-
-```typescript
-// In CoreModule (apps/backend/src/core/index.ts)
-import { Module, I18nModule } from 'stratal'
-import { i18nConfig } from '../i18n'
-
-@Module({
-  imports: [
-    I18nModule.withRoot(i18nConfig),
-    // ... other core modules
-  ]
-})
-class CoreModule {}
-export default CoreModule
-```
-
-### Configuration Options
-
-```typescript
-// apps/backend/src/i18n/index.ts
-import { messages } from 'stratal/i18n'
-import type { I18nModuleOptions } from 'stratal'
-
-export const i18nConfig: I18nModuleOptions = {
-  defaultLocale: 'en',
-  fallbackLocale: 'en',
-  locales: ['en'],
-  messages  // All locale messages from core
-}
-```
-
-### Message Architecture
-
-Messages are organized in `packages/core/src/i18n/messages/`:
-
-1. **Core Messages** (`en/common.ts`, `en/errors.ts`, `en/emails.ts`)
-   - Error messages used by infrastructure
-   - API documentation strings
-   - Internal module messages
-
-2. **Validation & Zod Messages** (`en/validation.ts`, `en/zod.ts`)
-   - User-facing validation messages
-   - Zod error translations
-   - Additional locales can be added
-
 ### Core Components
 
-1. **Message Loader Service** (`MessageLoaderService`)
-   - Singleton service that merges core and app messages
-   - Pre-compiles messages to AST for Cloudflare Workers compatibility
-   - Caches compiled messages in memory
+1. **`MessageLoaderService`** (singleton) — loads and caches all locale messages at startup. Deep-merges core messages with app-specific messages provided via `withRoot()`.
 
-2. **I18n Service** (`I18nService`)
-   - Request-scoped service for translations
-   - Reads locale from RouterContext
-   - Uses intlify's `@intlify/core-base` for translation
+2. **`I18nService`** (request-scoped) — translates message keys using the current request locale from `RouterContext`. Uses `@intlify/core-base` under the hood.
 
-3. **Middleware**
-   - `LocaleExtractionMiddleware`: Extracts locale from X-Locale header
-   - `I18nContextMiddleware`: Sets up Zod i18n validation context
-
-### Type-Safe Message Keys
-
-The module uses TypeScript module augmentation for type-safe keys:
-
-```typescript
-// apps/backend/src/i18n/types.ts
-import { Messages } from 'stratal/i18n'
-
-declare module 'stratal' {
-  interface AppMessages extends Messages {}
-}
-```
-
-This enables autocomplete for both system and app message keys:
-
-```typescript
-// System keys work
-this.i18n.t('errors.routeNotFound', { method: 'GET', path: '/api' })
-
-// App keys work
-this.i18n.t('common.app.name')
-```
+3. **Middleware pipeline** — applied to all routes:
+   - `LocaleExtractionMiddleware` — extracts locale from the `X-Locale` header
+   - `I18nContextMiddleware` — sets up the Zod i18n validation context
 
 ### Locale Flow
 
 ```
-HTTP Request -> X-Locale Header -> LocaleExtractionMiddleware -> RouterContext -> I18nService
-   |
-   v
-Queue Message -> metadata.locale -> Consumer -> I18nService -> Translated Message
+HTTP Request -> X-Locale header -> LocaleExtractionMiddleware -> RouterContext -> I18nService
+Queue Message -> metadata.locale -> Consumer -> I18nService
 ```
+
+## Configuration
+
+`I18nModule` is included as a core module by default. To add app-specific messages or additional locales, use `withRoot()`:
+
+```typescript
+import { Module, I18nModule } from 'stratal'
+import type { I18nModuleOptions } from 'stratal'
+import * as en from './messages/en'
+import * as fr from './messages/fr'
+
+const i18nConfig: I18nModuleOptions = {
+  defaultLocale: 'en',
+  fallbackLocale: 'en',
+  locales: ['en', 'fr'],
+  messages: { en, fr }
+}
+
+@Module({
+  imports: [I18nModule.withRoot(i18nConfig)]
+})
+export class AppModule {}
+```
+
+### `I18nModuleOptions`
+
+| Option           | Type                                   | Default | Description                                              |
+|------------------|----------------------------------------|---------|----------------------------------------------------------|
+| `defaultLocale`  | `string`                               | `'en'`  | Locale used when no `X-Locale` header is present         |
+| `fallbackLocale` | `string`                               | `'en'`  | Locale used when a translation key is missing            |
+| `locales`        | `string[]`                             | `['en']` | List of supported locales                               |
+| `messages`       | `Record<string, Record<string, unknown>>` | `{}`    | App-specific messages, keyed by locale                   |
+
+## Type-Safe Message Keys
+
+The module uses TypeScript module augmentation to provide autocomplete for message keys. The `AppMessages` interface in `stratal` is empty by default — augment it with the shape of your app's messages for a single locale:
+
+```typescript
+// In your app's type declarations
+import type * as appEn from './messages/en'
+
+declare module 'stratal' {
+  interface AppMessages extends typeof appEn {}
+}
+```
+
+This gives you autocomplete for both system and app message keys:
+
+```typescript
+this.i18n.t('errors.routeNotFound', { method: 'GET', path: '/api' }) // system key
+this.i18n.t('users.welcome', { name: 'Alice' })                      // app key
+```
+
+> **Note:** `AppMessages` should extend `typeof yourLocaleMessages` (the shape of a single locale's message object), not the `Messages` type exported from `stratal/i18n`. The `Messages` type represents the full `{ en: { ... } }` object containing all locales.
 
 ## Usage
 
@@ -118,105 +94,69 @@ Queue Message -> metadata.locale -> Consumer -> I18nService -> Translated Messag
 
 ```typescript
 import { inject } from 'tsyringe'
-import { I18N_TOKENS, type II18nService } from 'stratal'
+import { Transient, I18N_TOKENS, type II18nService } from 'stratal'
 
 @Transient()
 export class NotificationService {
   constructor(
-    @inject(I18N_TOKENS.I18nService)
-    private readonly i18n: II18nService
+    @inject(I18N_TOKENS.I18nService) private readonly i18n: II18nService
   ) {}
 
-  async sendWelcomeEmail(user: User): Promise<void> {
-    const subject = this.i18n.t('emails.welcome.subject', {
-      userName: user.firstName
-    })
-    // ...
+  getWelcomeMessage(user: { firstName: string }): string {
+    return this.i18n.t('emails.welcome.subject', { userName: user.firstName })
   }
 }
 ```
 
 ### In Error Classes
 
-Error classes use message keys translated by `GlobalErrorHandler`:
+Error classes use message keys that `GlobalErrorHandler` translates at response time:
 
 ```typescript
 import { ApplicationError, ERROR_CODES } from 'stratal'
 
 export class UserNotFoundError extends ApplicationError {
   constructor(userId: string) {
-    super(
-      'errors.auth.userNotFound',  // Message key
-      ERROR_CODES.USERS.NOT_FOUND,
-      { userId }
-    )
+    super('errors.auth.userNotFound', ERROR_CODES.USERS.NOT_FOUND, { userId })
   }
 }
 ```
 
-### In Queue Consumers
+### Zod Validation with `withI18n`
 
-Queue messages automatically include locale in metadata:
-
-```typescript
-export class EmailQueueConsumer implements QueueConsumer<EmailPayload> {
-  async handle(message: QueueMessage<EmailPayload>): Promise<void> {
-    const locale = message.metadata?.locale || 'en'
-    // ...
-  }
-}
-```
-
-## Adding New App Messages
-
-Add messages to `packages/core/src/i18n/messages/`:
+Use the `withI18n` helper for type-safe, localized Zod error messages:
 
 ```typescript
-// packages/core/src/i18n/messages/en/users.ts
-export const users = {
-  welcome: 'Welcome, {name}!',
-  profile: {
-    updated: 'Your profile has been updated'
-  }
-} as const
+import { z, withI18n } from 'stratal/validation'
+
+const schema = z.object({
+  email: z.string().email(withI18n('validation.email')),
+  name: z.string().min(2, withI18n('validation.minLength', { min: 2 }))
+})
 ```
 
-Then update the barrel exports in `en/index.ts`.
+## Core Messages
 
-## System Message Keys
+System messages are provided in `en` by default and organized into categories:
 
-System messages in `packages/core` include:
+- `common` — general application strings
+- `errors` — infrastructure error messages
+- `emails` — email-related strings
+- `validation` — user-facing validation messages
+- `zodI18n` — Zod error translations
 
-- `errors.*` - All infrastructure error messages
-- `common.api.*` - OpenAPI documentation strings
-- `emails.magicLink.subject` - Auth email subject
+These are automatically available to all applications using the module.
 
-These are automatically available to all applications using this module.
+## DI Tokens
+
+All tokens are exported from `stratal` via `I18N_TOKENS`:
+
+| Token                          | Service                  | Scope     |
+|--------------------------------|--------------------------|-----------|
+| `I18N_TOKENS.MessageLoader`   | `MessageLoaderService`   | Singleton |
+| `I18N_TOKENS.I18nService`     | `I18nService`            | Request   |
+| `I18N_TOKENS.Options`         | `I18nModuleOptions`      | Value     |
 
 ## JIT Message Compilation
 
-For Cloudflare Workers compatibility, the module uses JIT compilation that generates AST instead of JavaScript code.
-
-**Automatic Initialization:** When `I18nModule` is imported, both `setupI18nCompiler()` and `z.config({ customError: backendErrorMap })` are called automatically at module load time. No manual setup is required in application entry points.
-
-## Best Practices
-
-### DO
-- Use message keys in error classes
-- Provide parameters for interpolation in metadata
-- Keep messages concise and clear
-- Organize messages by category
-- Use consistent parameter naming (`{userId}`, not `{id}`)
-
-### DON'T
-- Don't hardcode user-facing strings
-- Don't use English strings directly in code
-- Don't translate log messages (logs are for developers)
-- Don't create duplicate message keys
-- Don't skip translations for any supported locale
-
-## Related Documentation
-
-- [Backend Agent Guide](/docs/agents/backend.md) - Backend patterns
-- [Error Handling](/docs/error-codes.md) - Error code registry
-- [Queue System](../queue/) - Message queue documentation
+The module uses JIT compilation via `@intlify/core-base` which generates AST instead of JavaScript code. This avoids CSP violations (`eval`/`new Function`) in Cloudflare Workers. Both `setupI18nCompiler()` and Zod error map configuration are called automatically when `I18nModule` is imported — no manual setup is required.

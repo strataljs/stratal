@@ -24,7 +24,7 @@ export class TestHttpClient {
   constructor(private readonly module: TestingModule) { }
 
   /**
-   * Set the host for the request (used for tenant identification)
+   * Set the host for the request
    */
   forHost(host: string): this {
     this.host = host
