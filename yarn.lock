@@ -6159,6 +6159,7 @@ __metadata:
     "@aws-sdk/client-s3": "npm:3.1000.0"
     "@aws-sdk/lib-storage": "npm:^3.1000.0"
     "@aws-sdk/s3-request-presigner": "npm:3.1000.0"
+    "@cloudflare/vitest-pool-workers": "npm:^0.12.18"
     "@cloudflare/workers-types": "npm:4.20260228.1"
     "@hono/zod-openapi": "npm:^1.2.2"
     "@intlify/core-base": "npm:^11.2.8"

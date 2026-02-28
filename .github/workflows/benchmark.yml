@@ -1,0 +1,109 @@
+name: Benchmark
+
+# Pre-requisites (manual setup by maintainer):
+# 1. Create a GitHub Gist (any content) and note the Gist ID
+# 2. Create a PAT with `gist` scope
+# 3. Add repository variable: BENCHMARK_GIST_ID, and secret: GIST_TOKEN
+# 4. After first merge to main, the gh-pages branch is auto-created with benchmark data
+
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  benchmark:
+    name: Run Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@a90bcbc6539c36a85cdfeb73f7e2f433735f215b # v2.15.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+          cache: "yarn"
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Build core
+        run: yarn workspace stratal build
+
+      - name: Build testing package
+        run: yarn workspace @stratal/testing build
+
+      - name: Run benchmarks
+        run: yarn workspace stratal bench --run --outputJson bench-results.json
+
+      - name: Transform benchmark results
+        run: |
+          node -e "
+            const fs = require('fs');
+            const data = JSON.parse(fs.readFileSync('packages/core/bench-results.json', 'utf8'));
+            const results = [];
+            for (const file of data.files || []) {
+              for (const group of file.groups || []) {
+                for (const bench of group.benchmarks || []) {
+                  const groupName = group.fullName ? group.fullName + ' > ' : '';
+                  results.push({
+                    name: groupName + bench.name,
+                    unit: 'ops/sec',
+                    value: bench.hz,
+                    range: '±' + bench.rme.toFixed(2) + '%',
+                    extra: bench.sampleCount + ' samples'
+                  });
+                }
+              }
+            }
+            fs.writeFileSync('transformed-results.json', JSON.stringify(results, null, 2));
+            console.log('Transformed ' + results.length + ' benchmark results');
+          "
+
+      - name: Store benchmark result (main only)
+        if: github.ref == 'refs/heads/main'
+        uses: benchmark-action/github-action-benchmark@d48d326b4ca9ba73ca0cd0d59f108f9e02a381c7 # v1.20.4
+        with:
+          tool: customBiggerIsBetter
+          output-file-path: transformed-results.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          summary-always: true
+          alert-threshold: "150%"
+          comment-on-alert: true
+
+      - name: Compare benchmark result (PRs)
+        if: github.event_name == 'pull_request'
+        uses: benchmark-action/github-action-benchmark@d48d326b4ca9ba73ca0cd0d59f108f9e02a381c7 # v1.20.4
+        with:
+          tool: customBiggerIsBetter
+          output-file-path: transformed-results.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: false
+          summary-always: true
+          alert-threshold: "150%"
+          comment-on-alert: true
+          comment-always: true
+
+      - name: Update benchmark badge (main only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: schneegans/dynamic-badges-action@e9a478b16159b4537c2338c749b920777f10b23b # v1.7.0
+        with:
+          auth: ${{ secrets.GIST_TOKEN }}
+          gistID: ${{ vars.BENCHMARK_GIST_ID }}
+          filename: benchmark-badge.json
+          label: benchmark
+          message: passing
+          color: brightgreen

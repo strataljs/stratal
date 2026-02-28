@@ -1,16 +1,23 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "rootDir": "./src",
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true
   },
+  "include": [
+    "src/**/*"
+  ],
   "exclude": [
     "node_modules",
     "dist",
     "src/**/__tests__/**",
+    "src/**/__benchmarks__/**",
     "src/**/*.spec.ts",
+    "src/**/*.bench.ts",
     "vitest.config.ts",
-    "vitest.setup.ts"
+    "vitest.setup.ts",
+    "test/**/*"
   ]
 }

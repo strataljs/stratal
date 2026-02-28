@@ -1,0 +1,17 @@
+{
+  "name": "stratal-bench",
+  "main": "fixtures/worker.ts",
+  "compatibility_date": "2026-02-28",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "vars": {
+    "ENVIRONMENT": "production"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      "id": "bench-cache"
+    }
+  ]
+}

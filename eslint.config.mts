@@ -12,7 +12,8 @@ export default defineConfig([
     "**/.yarn/",
     "**/*.tsbuildinfo",
     "examples/",
-    "docs/"
+    "docs/",
+    "**/worker-configuration.d.ts"
   ]),
 
   {
