@@ -1,0 +1,61 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /examples/01-hello-world
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /examples/02-crud-api
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /examples/03-testing
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /examples/04-guards
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /examples/05-middleware
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /examples/06-queues
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /examples/07-scheduled-tasks
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /examples/08-openapi
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /packages/core
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /packages/testing
+    schedule:
+      interval: daily
