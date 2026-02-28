@@ -102,7 +102,7 @@ export class ConfigService<T extends object = ModuleConfig> implements IConfigSe
     let current = obj as Record<string, unknown>
     for (let i = 0; i < keys.length - 1; i++) {
       const key = keys[i]
-      if (!(key in current) || typeof current[key] !== 'object' || current[key] === null) {
+      if (!Object.hasOwn(current, key) || typeof current[key] !== 'object' || current[key] === null) {
         Object.defineProperty(current, key, {
           value: {},
           writable: true,

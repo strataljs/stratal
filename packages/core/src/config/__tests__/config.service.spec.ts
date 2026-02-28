@@ -170,6 +170,12 @@ describe('ConfigService', () => {
     it('has() with __proto__ path should return false', () => {
       expect(service.has('__proto__.toString' as ConfigPath<TestConfig>)).toBe(false)
     })
+
+    it('set() should not traverse inherited prototype properties', () => {
+      service.set('toString.polluted' as ConfigPath<TestConfig>, 'malicious')
+      expect(Object.prototype).not.toHaveProperty('polluted')
+      expect(service.get('toString.polluted' as ConfigPath<TestConfig>)).toBe('malicious')
+    })
   })
 
   describe('error handling', () => {
