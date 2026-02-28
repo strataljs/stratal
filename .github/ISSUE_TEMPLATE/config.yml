@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://stratal.dev
+    about: Check the Stratal documentation before opening an issue.
+  - name: Questions & Help
+    url: https://github.com/strataljs/stratal/discussions
+    about: Have a question? Ask in GitHub Discussions instead of opening an issue.

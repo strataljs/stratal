@@ -1,0 +1,84 @@
+name: Bug Report
+description: Report a bug in Stratal
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the sections below so we can reproduce and fix the issue.
+
+        > Have a question? Please use [GitHub Discussions](https://github.com/strataljs/stratal/discussions) instead.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of the bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Minimal steps to reproduce the behavior.
+      placeholder: |
+        1. Create a module with ...
+        2. Register the provider ...
+        3. Call the endpoint ...
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened. Include error messages or stack traces if applicable.
+    validations:
+      required: true
+
+  - type: input
+    id: stratal-version
+    attributes:
+      label: Stratal Version
+      description: The version of `stratal` you're using.
+      placeholder: e.g. 0.5.0
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js Version
+      placeholder: e.g. 20.11.0
+    validations:
+      required: false
+
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime
+      options:
+        - Cloudflare Workers
+        - Miniflare / Wrangler dev
+        - Node.js
+        - Other
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other context, screenshots, or code snippets that might help.
+    validations:
+      required: false
