@@ -11,6 +11,7 @@
   "categorizeByGroup": true,
   "readme": "none",
   "packageOptions": {
-    "entryPoints": ["src/index.ts"]
+    "entryPoints": ["src/index.ts"],
+    "exclude": ["**/__tests__/**"]
   }
 }

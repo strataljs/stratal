@@ -24,6 +24,8 @@ jobs:
           node-version: 20
       - run: corepack enable
       - run: yarn install --immutable
+      - run: yarn workspace stratal build
+      - run: yarn workspace @stratal/testing build
       - run: yarn docs
       - uses: actions/upload-pages-artifact@v3
         with:
