@@ -1,4 +1,5 @@
-import { Module, QueueModule } from 'stratal'
+import { Module } from 'stratal/module'
+import { QueueModule } from 'stratal/queue'
 import { NotificationsController } from './notifications.controller'
 import { NotificationConsumer } from './notification.consumer'
 

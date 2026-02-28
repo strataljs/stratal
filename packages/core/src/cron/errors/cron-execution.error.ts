@@ -1,4 +1,4 @@
-import { ApplicationError } from '../../infrastructure/error-handler'
+import { ApplicationError } from '../../errors'
 import { ERROR_CODES } from '../../errors'
 
 /**

@@ -1,5 +1,4 @@
-import { ERROR_CODES } from '../../errors'
-import { ApplicationError } from '../../infrastructure/error-handler'
+import { ApplicationError, ERROR_CODES } from '../../errors'
 
 /**
  * OpenAPIRouteRegistrationError

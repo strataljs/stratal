@@ -7,7 +7,7 @@
  */
 
 import { ERROR_CODES } from '../../errors'
-import { ApplicationError } from '../../infrastructure/error-handler'
+import { ApplicationError } from '../../errors'
 
 export class LocaleNotSupportedError extends ApplicationError {
   constructor(locale: string, supportedLocales: string[]) {

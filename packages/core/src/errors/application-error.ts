@@ -1,4 +1,4 @@
-import type { Environment, ErrorResponse } from '../infrastructure/error-handler/error-response'
+import type { Environment, ErrorResponse } from './error-response'
 import type { MessageKeys } from '../i18n'
 import type { ErrorCode } from './error-codes'
 

@@ -3,9 +3,6 @@ import { type StratalEnv } from '../env'
 import type { Container } from '../di'
 import { type HTTP_METHODS, type ROUTER_CONTEXT_KEYS, type SECURITY_SCHEMES } from './constants'
 
-// RouteAccessContext is now exported from tenancy module
-// Use: import { RouteAccessContext } from 'stratal/tenancy'
-
 /**
  * Route parameter type for OpenAPI
  * ZodObject or ZodPipe (piped validation)

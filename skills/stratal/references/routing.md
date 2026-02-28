@@ -97,7 +97,8 @@ class RouterContext {
 ## OpenAPI Setup
 
 ```typescript
-import { Module, OpenAPIModule } from 'stratal'
+import { Module } from 'stratal/module'
+import { OpenAPIModule } from 'stratal/openapi'
 
 @Module({
   imports: [

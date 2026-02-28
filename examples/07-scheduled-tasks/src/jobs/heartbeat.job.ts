@@ -1,4 +1,5 @@
-import { CronJob, Transient } from 'stratal';
+import { CronJob } from 'stratal/cron';
+import { Transient } from 'stratal/di';
 
 @Transient()
 export class HeartbeatJob implements CronJob {

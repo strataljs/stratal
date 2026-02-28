@@ -1,5 +1,5 @@
 import { ERROR_CODES } from '../../errors'
-import { ApplicationError } from '../../infrastructure/error-handler'
+import { ApplicationError } from '../../errors'
 
 /**
  * Error thrown when a cache put operation fails

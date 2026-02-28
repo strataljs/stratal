@@ -6,8 +6,7 @@
  * Error Code: 9300
  */
 
-import { ERROR_CODES } from '../../errors'
-import { ApplicationError } from '../../infrastructure/error-handler'
+import { ApplicationError, ERROR_CODES } from '../../errors'
 
 export class TranslationMissingError extends ApplicationError {
   constructor(key: string, locale: string) {

@@ -197,7 +197,9 @@ The augmented type flows automatically through:
 
 ```typescript
 // src/index.ts
-import { StratalWorker, type ApplicationConfig, LogLevel } from 'stratal'
+import { type ApplicationConfig } from 'stratal'
+import { LogLevel } from 'stratal/logger'
+import { StratalWorker } from 'stratal/worker'
 import { AppModule } from './app.module'
 
 export default class Backend extends StratalWorker {
@@ -250,7 +252,8 @@ The `reflect-metadata` import is **required** — tsyringe uses it for construct
 
 ```typescript
 // src/app.module.ts
-import { Module, OpenAPIModule } from 'stratal'
+import { Module } from 'stratal/module'
+import { OpenAPIModule } from 'stratal/openapi'
 import { ConfigModule } from 'stratal/config'
 import { I18nModule } from 'stratal/i18n'
 import { appConfig } from './config/app.config'

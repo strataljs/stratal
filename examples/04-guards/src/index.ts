@@ -1,5 +1,5 @@
 import 'reflect-metadata'
-import { StratalWorker } from 'stratal'
+import { StratalWorker } from 'stratal/worker'
 import { AppModule } from './app.module'
 
 declare module 'stratal' {

@@ -1,11 +1,11 @@
-import { OpenAPIHono } from '../i18n/validation'
 import { cors } from 'hono/cors'
 import { inject } from 'tsyringe'
-import { type StratalEnv } from '../env'
 import { CONTAINER_TOKEN, type Container } from '../di'
 import { Transient } from '../di/decorators'
 import { DI_TOKENS } from '../di/tokens'
-import { GlobalErrorHandler, getHttpStatus } from '../infrastructure/error-handler'
+import { type StratalEnv } from '../env'
+import { GlobalErrorHandler, getHttpStatus } from '../errors'
+import { OpenAPIHono } from '../i18n/validation'
 import { LOGGER_TOKENS, type LoggerService } from '../logger'
 import {
   MiddlewareConfigurationService,

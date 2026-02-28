@@ -1,4 +1,4 @@
-import { Controller, IController, Route, RouterContext, UseGuards } from 'stratal'
+import { Controller, IController, Route, RouterContext, UseGuards } from 'stratal/router'
 import { z } from 'stratal/validation'
 import { ApiKeyGuard } from '../auth/api-key.guard'
 

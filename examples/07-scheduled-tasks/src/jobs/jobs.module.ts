@@ -1,4 +1,4 @@
-import { Module } from 'stratal'
+import { Module } from 'stratal/module'
 import { CleanupJob } from './cleanup.job'
 import { HeartbeatJob } from './heartbeat.job'
 

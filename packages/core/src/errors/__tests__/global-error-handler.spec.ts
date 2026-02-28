@@ -7,7 +7,7 @@ import type { MessageKeys } from '../../i18n/i18n.types'
 import type { ErrorCode } from '../error-codes'
 import { ApplicationError } from '../application-error'
 import { ERROR_CODES } from '../error-codes'
-import { GlobalErrorHandler } from '../../infrastructure/error-handler/global-error-handler'
+import { GlobalErrorHandler } from '../global-error-handler'
 
 // Concrete test errors
 class ValidationTestError extends ApplicationError {

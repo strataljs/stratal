@@ -1,4 +1,4 @@
-import { Module } from 'stratal'
+import { Module } from 'stratal/module'
 import { JobsModule } from './jobs/jobs.module'
 
 @Module({

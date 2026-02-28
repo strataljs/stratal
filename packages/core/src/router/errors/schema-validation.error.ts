@@ -1,7 +1,6 @@
-import { ERROR_CODES } from '../../errors';
+import { ApplicationError, ERROR_CODES } from '../../errors';
 import type { ZodError } from '../../i18n/validation';
 import { type z } from '../../i18n/validation';
-import { ApplicationError } from '../../infrastructure/error-handler';
 /**
  * SchemaValidationError
  *

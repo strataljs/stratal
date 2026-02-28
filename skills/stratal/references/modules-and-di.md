@@ -3,8 +3,6 @@
 ## Module Decorator
 
 ```typescript
-import { Module } from 'stratal'
-// or
 import { Module, type ModuleOptions } from 'stratal/module'
 
 @Module(options: ModuleOptions)

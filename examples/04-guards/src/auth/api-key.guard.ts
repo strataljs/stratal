@@ -1,6 +1,7 @@
-import { CanActivate, DI_TOKENS, RouterContext, Transient } from 'stratal'
 import type { StratalEnv } from 'stratal'
-import { inject } from 'tsyringe'
+import { DI_TOKENS, inject, Transient } from 'stratal/di'
+import { CanActivate } from 'stratal/guards'
+import { RouterContext } from 'stratal/router'
 
 @Transient()
 export class ApiKeyGuard implements CanActivate {

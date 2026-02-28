@@ -1,4 +1,5 @@
-import { Module, OpenAPIModule } from 'stratal'
+import { Module } from 'stratal/module'
+import { OpenAPIModule } from 'stratal/openapi'
 import { UsersModule } from './users/users.module'
 
 @Module({

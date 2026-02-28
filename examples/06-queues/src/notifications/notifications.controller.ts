@@ -1,4 +1,5 @@
-import { Controller, IController, InjectQueue, type IQueueSender, Route, RouterContext } from 'stratal';
+import { InjectQueue, type IQueueSender } from 'stratal/queue';
+import { Controller, IController, Route, RouterContext } from 'stratal/router';
 import { z } from 'stratal/validation';
 
 @Controller('/api/notifications')

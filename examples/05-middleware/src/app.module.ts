@@ -1,4 +1,5 @@
-import { MiddlewareConfigurable, MiddlewareConsumer, Module } from 'stratal'
+import { MiddlewareConfigurable, MiddlewareConsumer } from 'stratal/middleware'
+import { Module } from 'stratal/module'
 import { HelloController } from './hello/hello.controller'
 import { HealthController } from './health/health.controller'
 import { RequestLoggerMiddleware } from './middleware/request-logger.middleware'

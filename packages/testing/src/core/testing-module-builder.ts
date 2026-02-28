@@ -1,17 +1,14 @@
+import { createExecutionContext } from 'cloudflare:test'
 import {
   Application,
   ApplicationConfig,
-  Container,
-  InjectionToken,
-  LogLevel,
-  Module,
   type Constructor,
-  type ModuleClass,
-  type ModuleOptions,
   type StratalEnv,
 } from 'stratal'
+import { Container } from 'stratal/di'
+import { LogLevel } from 'stratal/logger'
+import { InjectionToken, Module, ModuleClass, ModuleOptions } from 'stratal/module'
 import { STORAGE_TOKENS } from 'stratal/storage'
-import { createExecutionContext } from 'cloudflare:test'
 import { FakeStorageService } from '../storage'
 import { getTestEnv } from './env'
 import { ProviderOverrideBuilder, type ProviderOverrideConfig } from './override'

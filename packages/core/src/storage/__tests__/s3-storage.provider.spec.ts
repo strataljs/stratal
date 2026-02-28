@@ -29,7 +29,7 @@ vi.mock('@aws-sdk/s3-request-presigner', () => ({
 }))
 
 import { S3Client } from '@aws-sdk/client-s3'
-import type { StorageEntry } from 'stratal'
+import type { StorageEntry } from '../types'
 import { S3StorageProvider } from '../providers/s3-storage.provider'
 
 describe('S3StorageProvider', () => {

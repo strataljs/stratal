@@ -1,4 +1,4 @@
-import { inject, Transient } from 'stratal'
+import { Transient, inject } from 'stratal/di'
 import {
   FileNotFoundError,
   STORAGE_TOKENS,

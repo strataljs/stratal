@@ -1,4 +1,5 @@
-import { Controller, IController, inject, Route, RouterContext } from 'stratal'
+import { Controller, IController, Route, RouterContext } from 'stratal/router'
+import { inject } from 'stratal/di'
 import { z } from 'stratal/validation'
 import {
   createNoteSchema,

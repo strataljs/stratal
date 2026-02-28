@@ -1,4 +1,7 @@
-import { DI_TOKENS, Module, QueueModule, StratalEnv } from 'stratal'
+import { type StratalEnv } from 'stratal'
+import { DI_TOKENS } from 'stratal/di'
+import { Module } from 'stratal/module'
+import { QueueModule } from 'stratal/queue'
 import { NotificationsModule } from './notifications/notifications.module'
 
 @Module({

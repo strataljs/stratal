@@ -1,5 +1,5 @@
-import { ERROR_CODES } from '../../errors'
-import { ApplicationError } from '.'
+import { ERROR_CODES } from './error-codes'
+import { ApplicationError } from './application-error'
 
 /**
  * InternalError

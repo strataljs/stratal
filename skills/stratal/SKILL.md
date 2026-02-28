@@ -28,7 +28,8 @@ Stratal is a modular Cloudflare Workers framework. It provides dependency inject
 ### Worker Entry Point
 
 ```typescript
-import { StratalWorker, type ApplicationConfig } from 'stratal'
+import { type ApplicationConfig } from 'stratal'
+import { StratalWorker } from 'stratal/worker'
 import { AppModule } from './app.module'
 
 export default class Backend extends StratalWorker {
@@ -45,7 +46,7 @@ export default class Backend extends StratalWorker {
 ### Root Module
 
 ```typescript
-import { Module } from 'stratal'
+import { Module } from 'stratal/module'
 import { UsersModule } from './users/users.module'
 
 @Module({
@@ -340,7 +341,7 @@ Also add matching cron triggers in `wrangler.jsonc`.
 
 | Module | Import | Setup | Purpose |
 |--------|--------|-------|---------|
-| OpenAPIModule | `stratal` | `.forRoot({ info, securitySchemes })` | Automatic API docs at `/api/docs` |
+| OpenAPIModule | `stratal/openapi` | `.forRoot({ info, securitySchemes })` | Automatic API docs at `/api/docs` |
 | ConfigModule | `stratal/config` | `.forRoot({ load: [dbConfig] })` | Typed config with `registerAs()` |
 | CacheModule | `stratal/cache` | auto-registered | KV-backed caching via `CACHE` binding |
 | EmailModule | `stratal/email` | `.forRoot({ provider, from, queue })` | Resend or SMTP email |
@@ -440,7 +441,7 @@ const userService = module.get<UserService>(TOKENS.UserService)
 
 | Import | Exports |
 |--------|---------|
-| `stratal` | Application, StratalWorker, Module, OpenAPIModule, LogLevel, StratalEnv, Constructor, ApplicationConfig |
+| `stratal` | Application, StratalEnv, Constructor, ApplicationConfig |
 | `stratal/di` | Container, inject, Transient, Scope, DI_TOKENS, CONTAINER_TOKEN |
 | `stratal/router` | Controller, Route, IController, RouterContext, UseGuards, ROUTER_TOKENS |
 | `stratal/validation` | z (Zod), ZodType, ZodObject — always use this, not `zod` directly |

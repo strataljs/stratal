@@ -1,4 +1,4 @@
-import type { DynamicModule, ModuleClass } from 'stratal'
+import { type DynamicModule, type ModuleClass } from 'stratal/module'
 import { TestingModuleBuilder, type TestingModuleConfig } from './testing-module-builder'
 
 /**

@@ -1,4 +1,4 @@
-import { Controller, IController, Route, RouterContext } from 'stratal'
+import { Controller, IController, Route, RouterContext } from 'stratal/router'
 import { z } from 'stratal/validation'
 
 @Controller('/api/health')

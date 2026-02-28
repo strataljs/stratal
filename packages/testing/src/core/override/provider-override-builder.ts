@@ -1,4 +1,4 @@
-import type { Container, InjectionToken } from 'stratal'
+import { type InjectionToken } from 'stratal/module'
 import type { TestingModuleBuilder } from '../testing-module-builder'
 
 /**

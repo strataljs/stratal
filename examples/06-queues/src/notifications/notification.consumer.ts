@@ -1,4 +1,5 @@
-import { IQueueConsumer, QueueMessage, Transient } from 'stratal'
+import { Transient } from 'stratal/di'
+import { type IQueueConsumer, type QueueMessage } from 'stratal/queue'
 
 interface NotificationPayload {
   to: string

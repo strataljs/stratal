@@ -1,7 +1,7 @@
 import type { Context } from 'hono'
 import { type ContentfulStatusCode, type RedirectStatusCode } from 'hono/utils/http-status'
 import type { Container } from '../di/container'
-import { RequestContainerNotInitializedError } from '../infrastructure/errors'
+import { RequestContainerNotInitializedError } from '../errors'
 import { ROUTER_CONTEXT_KEYS } from './constants'
 import type { RouterEnv } from './types'
 

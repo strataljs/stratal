@@ -6,7 +6,3 @@ export { RouteNotFoundError } from './route-not-found.error'
 export * from './router-already-configured.error'
 export * from './router-not-configured.error'
 export { SchemaValidationError } from './schema-validation.error'
-
-// RouteAccessDeniedError is now exported from tenancy module
-// Use: import { RouteAccessDeniedError } from 'stratal/tenancy'
-

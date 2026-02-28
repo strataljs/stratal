@@ -1,5 +1,4 @@
-import { ApplicationError } from '../../infrastructure/error-handler'
-import { ERROR_CODES } from '../../errors'
+import { ApplicationError, ERROR_CODES } from '../../errors'
 
 /**
  * Error thrown when a requested route is not found

@@ -1,4 +1,4 @@
-import { Transient } from 'stratal'
+import { Transient } from 'stratal/di'
 import type { CreateNoteInput, Note, UpdateNoteInput } from './notes.schemas'
 
 @Transient()
