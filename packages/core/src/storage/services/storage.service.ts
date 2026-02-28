@@ -1,4 +1,4 @@
-import '../../polyfills'
+import '../dom.polyfill'
 
 import { inject } from 'tsyringe'
 import { Transient } from '../../di/decorators'

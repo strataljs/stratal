@@ -1,6 +1,8 @@
+import 'reflect-metadata'
+
 import { WorkerEntrypoint } from 'cloudflare:workers'
-import type { StratalEnv } from '../env'
 import { Application, type ApplicationConfig } from '../application'
+import type { StratalEnv } from '../env'
 import { ROUTER_TOKENS, type RouterService } from '../router'
 
 /**

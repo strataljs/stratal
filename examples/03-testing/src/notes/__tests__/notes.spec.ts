@@ -1,5 +1,3 @@
-import 'reflect-metadata'
-
 import { Test, type TestingModule } from '@stratal/testing'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { NotesModule } from '../notes.module'

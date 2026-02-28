@@ -4,7 +4,7 @@ name: Benchmark
 # 1. Create a GitHub Gist (any content) and note the Gist ID
 # 2. Create a PAT with `gist` scope
 # 3. Add repository variable: BENCHMARK_GIST_ID, and secret: GIST_TOKEN
-# 4. After first merge to main, the gh-pages branch is auto-created with benchmark data
+# 4. The gh-pages branch is auto-created on first run if it doesn't exist
 
 permissions:
   contents: write
@@ -46,13 +46,13 @@ jobs:
         run: yarn workspace @stratal/testing build
 
       - name: Run benchmarks
-        run: yarn workspace stratal bench --run --outputJson bench-results.json
+        run: yarn workspace stratal bench:json
 
       - name: Transform benchmark results
         run: |
           node -e "
             const fs = require('fs');
-            const data = JSON.parse(fs.readFileSync('packages/core/bench-results.json', 'utf8'));
+            const data = JSON.parse(fs.readFileSync('packages/core/benchmark-results.json', 'utf8'));
             const results = [];
             for (const file of data.files || []) {
               for (const group of file.groups || []) {
@@ -99,7 +99,7 @@ jobs:
 
       - name: Update benchmark badge (main only)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        uses: schneegans/dynamic-badges-action@e9a478b16159b4537c2338c749b920777f10b23b # v1.7.0
+        uses: schneegans/dynamic-badges-action@e9a478b16159b4d31420099ba146cdc50f134483 # v1.7.0
         with:
           auth: ${{ secrets.GIST_TOKEN }}
           gistID: ${{ vars.BENCHMARK_GIST_ID }}
