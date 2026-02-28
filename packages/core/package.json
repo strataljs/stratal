@@ -78,7 +78,7 @@
     "@hono/zod-openapi": "^1.1.4",
     "@intlify/core-base": "^11.1.12",
     "@intlify/message-compiler": "^11.1.12",
-    "@scalar/hono-api-reference": "^0.9.23",
+    "@scalar/hono-api-reference": "^0.9.46",
     "@xmldom/xmldom": "^0.8.11",
     "hono": "^4.10.4",
     "tsyringe": "^4.10.0",
