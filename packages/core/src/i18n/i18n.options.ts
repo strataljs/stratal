@@ -2,7 +2,7 @@
  * I18n Module Options
  *
  * Configuration options for the I18n dynamic module.
- * Use with I18nModule.withRoot() to configure i18n for your application.
+ * Use with I18nModule.forRoot() to configure i18n for your application.
  */
 
 /**
@@ -10,7 +10,7 @@
  *
  * @example
  * ```typescript
- * I18nModule.withRoot({
+ * I18nModule.forRoot({
  *   defaultLocale: 'en',
  *   fallbackLocale: 'en',
  *   locales: ['en', 'fr'],

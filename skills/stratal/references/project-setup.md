@@ -260,7 +260,7 @@ import { OrdersModule } from './orders/orders.module'
 @Module({
   imports: [
     ConfigModule.forRoot({ load: [appConfig] }),
-    I18nModule.withRoot({
+    I18nModule.forRoot({
       defaultLocale: 'en',
       messages: { en: enMessages },
     }),

@@ -2,7 +2,7 @@
  * Message Loader Service
  *
  * Singleton service that loads and caches all locale messages at startup.
- * Merges core messages (from packages/modules) with app messages (from withRoot options).
+ * Merges core messages (from packages/modules) with app messages (from forRoot options).
  */
 
 import { inject } from 'tsyringe'

@@ -188,12 +188,12 @@ DI_TOKENS.AuthContext           // Auth context (userId, etc.)
 
 ## Dynamic Modules
 
-### Synchronous Configuration (withRoot)
+### Synchronous Configuration (forRoot)
 
 ```typescript
 @Module({ providers: [] })
 export class FeatureModule {
-  static withRoot(options: FeatureOptions): DynamicModule {
+  static forRoot(options: FeatureOptions): DynamicModule {
     return {
       module: FeatureModule,  // Required — preserves lifecycle methods
       providers: [
@@ -206,17 +206,17 @@ export class FeatureModule {
 
 // Usage
 @Module({
-  imports: [FeatureModule.withRoot({ enabled: true })],
+  imports: [FeatureModule.forRoot({ enabled: true })],
 })
 export class AppModule {}
 ```
 
-### Async Configuration (withRootAsync)
+### Async Configuration (forRootAsync)
 
 ```typescript
 @Module({ providers: [] })
 export class DatabaseModule {
-  static withRootAsync(options: AsyncModuleOptions<DatabaseOptions>): DynamicModule {
+  static forRootAsync(options: AsyncModuleOptions<DatabaseOptions>): DynamicModule {
     return {
       module: DatabaseModule,
       providers: [
@@ -233,7 +233,7 @@ export class DatabaseModule {
 // Usage
 @Module({
   imports: [
-    DatabaseModule.withRootAsync({
+    DatabaseModule.forRootAsync({
       inject: [CONFIG_TOKENS.ConfigService],
       useFactory: (config) => ({
         url: config.get('database.url'),

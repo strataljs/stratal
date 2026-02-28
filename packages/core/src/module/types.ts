@@ -120,8 +120,8 @@ export type Provider<T extends object = object> =
  * Module class type (decorated with @Module)
  *
  * Static methods for dynamic module configuration:
- * - withRoot: Synchronous configuration (like NestJS forRoot)
- * - withRootAsync: Async configuration with factory (like NestJS forRootAsync)
+ * - forRoot: Synchronous configuration (like NestJS forRoot)
+ * - forRootAsync: Async configuration with factory (like NestJS forRootAsync)
  */
 export interface ModuleClass<T extends object = object> extends Constructor<T> {
   /**
@@ -133,7 +133,7 @@ export interface ModuleClass<T extends object = object> extends Constructor<T> {
    * ```typescript
    * @Module({ providers: [] })
    * export class ConfigModule {
-   *   static withRoot(options: ConfigOptions): DynamicModule {
+   *   static forRoot(options: ConfigOptions): DynamicModule {
    *     return {
    *       providers: [
    *         { provide: CONFIG_TOKEN, useValue: options }
@@ -143,10 +143,10 @@ export interface ModuleClass<T extends object = object> extends Constructor<T> {
    * }
    *
    * // Usage in AppModule
-   * @Module({ imports: [ConfigModule.withRoot({ apiKey: '...' })] })
+   * @Module({ imports: [ConfigModule.forRoot({ apiKey: '...' })] })
    * ```
    */
-  withRoot?: (...args: unknown[]) => DynamicModule
+  forRoot?: (...args: unknown[]) => DynamicModule
 
   /**
    * Async module configuration with dependency injection
@@ -157,7 +157,7 @@ export interface ModuleClass<T extends object = object> extends Constructor<T> {
    * ```typescript
    * @Module({ providers: [] })
    * export class DatabaseModule {
-   *   static withRootAsync<T>(options: AsyncModuleOptions<T>): DynamicModule {
+   *   static forRootAsync<T>(options: AsyncModuleOptions<T>): DynamicModule {
    *     return {
    *       providers: [
    *         {
@@ -173,7 +173,7 @@ export interface ModuleClass<T extends object = object> extends Constructor<T> {
    * // Usage in AppModule
    * @Module({
    *   imports: [
-   *     DatabaseModule.withRootAsync({
+   *     DatabaseModule.forRootAsync({
    *       inject: [CONFIG_TOKEN],
    *       useFactory: (config) => ({ url: config.databaseUrl })
    *     })
@@ -181,7 +181,7 @@ export interface ModuleClass<T extends object = object> extends Constructor<T> {
    * })
    * ```
    */
-  withRootAsync?: <TOptions>(options: AsyncModuleOptions<TOptions>) => DynamicModule
+  forRootAsync?: <TOptions>(options: AsyncModuleOptions<TOptions>) => DynamicModule
 }
 
 /**
@@ -199,7 +199,7 @@ export interface ModuleOptions {
 }
 
 /**
- * Dynamic module returned by withRoot/withRootAsync
+ * Dynamic module returned by forRoot/forRootAsync
  *
  * Contains additional providers, controllers, consumers, and jobs
  * that are added to the module when configured dynamically.
@@ -218,7 +218,7 @@ export interface DynamicModule extends Omit<ModuleOptions, 'imports'> {
 }
 
 /**
- * Async configuration options for withRootAsync
+ * Async configuration options for forRootAsync
  */
 export interface AsyncModuleOptions<TOptions> {
   inject?: InjectionToken<unknown>[]

@@ -137,7 +137,7 @@ describe('ExistingProvider', () => {
         providers: [{ provide: USER_SERVICE_TOKEN, useClass: UserService, scope: Scope.Singleton }],
       })
       class BaseModule {
-        static withRoot() {
+        static forRoot() {
           return {
             module: BaseModule,
             providers: [
@@ -148,7 +148,7 @@ describe('ExistingProvider', () => {
       }
 
       const registry = new ModuleRegistry(container, mockLogger as unknown as LoggerService)
-      registry.register(BaseModule.withRoot())
+      registry.register(BaseModule.forRoot())
 
       // Resolve both tokens
       const concrete = container.resolve<UserService>(USER_SERVICE_TOKEN)

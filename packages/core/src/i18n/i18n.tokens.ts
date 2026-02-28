@@ -8,6 +8,6 @@ export const I18N_TOKENS = {
   MessageLoader: Symbol.for('I18nModule.MessageLoader'),
   /** I18nService - request-scoped translation service */
   I18nService: Symbol.for('I18nModule.I18nService'),
-  /** I18nModuleOptions - configuration options from withRoot() */
+  /** I18nModuleOptions - configuration options from forRoot() */
   Options: Symbol.for('I18nModule.Options')
 } as const

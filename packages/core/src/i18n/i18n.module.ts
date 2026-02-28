@@ -16,7 +16,7 @@
  * import { i18nConfig } from './i18n'
  *
  * @Module({
- *   imports: [I18nModule.withRoot(i18nConfig)],
+ *   imports: [I18nModule.forRoot(i18nConfig)],
  * })
  * export class AppModule {}
  * ```
@@ -76,12 +76,12 @@ export class I18nModule implements MiddlewareConfigurable {
    *
    * // apps/backend/src/app.module.ts
    * @Module({
-   *   imports: [I18nModule.withRoot(i18nConfig)],
+   *   imports: [I18nModule.forRoot(i18nConfig)],
    * })
    * export class AppModule {}
    * ```
    */
-  static withRoot(options: I18nModuleOptions = {}): DynamicModule {
+  static forRoot(options: I18nModuleOptions = {}): DynamicModule {
     return {
       module: I18nModule,
       providers: [

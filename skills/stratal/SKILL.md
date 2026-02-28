@@ -345,7 +345,7 @@ Also add matching cron triggers in `wrangler.jsonc`.
 | CacheModule | `stratal/cache` | auto-registered | KV-backed caching via `CACHE` binding |
 | EmailModule | `stratal/email` | `.forRoot({ provider, from, queue })` | Resend or SMTP email |
 | StorageModule | `stratal/storage` | `.forRoot({ storage, defaultStorageDisk })` | S3-compatible file storage |
-| I18nModule | `stratal/i18n` | `.withRoot({ defaultLocale, messages })` | Type-safe translations |
+| I18nModule | `stratal/i18n` | `.forRoot({ defaultLocale, messages })` | Type-safe translations |
 | QueueModule | `stratal/queue` | `.forRootAsync(...)` | Queue producer/consumer |
 
 > [!reference] For detailed module configuration, see [config-cache-storage-i18n.md](references/config-cache-storage-i18n.md)

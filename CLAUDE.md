@@ -77,7 +77,7 @@ The project is ESM-only (`"type": "module"`). Output goes to `dist/` with `.js`,
 `packages/core/src/module/` — NestJS-style `@Module()` decorator pattern:
 
 - Modules declare `providers`, `controllers`, `consumers`, `jobs`, and `imports`
-- Dynamic modules via `withRoot()` (sync) and `withRootAsync()` (factory)
+- Dynamic modules via `forRoot()` (sync) and `forRootAsync()` (factory)
 - Lifecycle hooks: `OnInitialize`, `OnShutdown`
 - Middleware via `MiddlewareConfigurable.configure()`
 

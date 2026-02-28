@@ -262,7 +262,7 @@ npm install @aws-sdk/client-s3 @aws-sdk/lib-storage @aws-sdk/s3-request-presigne
 ```typescript
 import { I18nModule } from 'stratal/i18n'
 
-I18nModule.withRoot({
+I18nModule.forRoot({
   defaultLocale: 'en',
   fallbackLocale: 'en',
   locales: ['en', 'fr', 'de'],

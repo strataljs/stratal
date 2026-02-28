@@ -75,7 +75,7 @@ export class ModuleRegistry {
     // Check for duplicate registration
     if (this.registeredClasses.has(moduleClass)) {
       // For DynamicModules: Still register the additional providers
-      // This allows withRoot() to add configuration even if base module is registered
+      // This allows forRoot() to add configuration even if base module is registered
       if (isDynamic) {
         this.logger.debug(`Module ${moduleClass.name} already registered, registering DynamicModule providers`)
         for (const provider of options.providers ?? []) {

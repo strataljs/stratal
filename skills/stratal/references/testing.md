@@ -116,7 +116,7 @@ import { Test } from '@stratal/testing'
 
 Test.setBaseModules([
   ConfigModule.forRoot({ load: [appConfig] }),
-  I18nModule.withRoot({ defaultLocale: 'en', messages: { en: testMessages } }),
+  I18nModule.forRoot({ defaultLocale: 'en', messages: { en: testMessages } }),
 ])
 ```
 
