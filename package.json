@@ -37,7 +37,7 @@
     "prepare": "husky",
     "changeset": "changeset",
     "version": "changeset version",
-    "release": "yarn workspaces foreach npm publish --tolerate-republish",
+    "release": "yarn workspaces foreach -A --no-private npm publish --tolerate-republish",
     "docs": "typedoc",
     "docs:watch": "typedoc --watch"
   },
