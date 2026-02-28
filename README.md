@@ -76,7 +76,7 @@ export default class Backend extends StratalWorker {
 
 ## Documentation
 
-Full guides, API reference, and examples are available at **[stratal.dev](https://stratal.dev)**.
+Full guides and examples are available at **[stratal.dev](https://stratal.dev)**. API reference lives at **[api-reference.stratal.dev](https://api-reference.stratal.dev)**.
 
 ## Contributing
 
