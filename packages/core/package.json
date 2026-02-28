@@ -80,7 +80,7 @@
     "@intlify/message-compiler": "^11.1.12",
     "@scalar/hono-api-reference": "^0.9.23",
     "@xmldom/xmldom": "^0.8.11",
-    "hono": "^4.10.4",
+    "hono": "^4.12.3",
     "tsyringe": "^4.10.0",
     "zod": "^4.1.12"
   },

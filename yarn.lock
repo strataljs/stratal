@@ -5020,10 +5020,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"hono@npm:^4.10.4":
-  version: 4.11.9
-  resolution: "hono@npm:4.11.9"
-  checksum: 10c0/fe396a8e1a61755adb7afe8ce8e0935a6423a5680ec62f4fd3577c5c5a9236dec390dc28fef6b9742e067b5d9c53ddb3aa511b3359bf87dcc2105dae751f1242
+"hono@npm:^4.12.3":
+  version: 4.12.3
+  resolution: "hono@npm:4.12.3"
+  checksum: 10c0/df812884acf2f410809ecf14a6c66ff5ea3bb6eaaf75392fa265849186857518d71be18caf2a29ab2ced457d533ba00d285fa72051c08fb0f1bedf887254a4f7
   languageName: node
   linkType: hard
 
@@ -6798,7 +6798,7 @@ __metadata:
     "@types/react-dom": "npm:^19"
     "@vitest/coverage-v8": "npm:^3.2.4"
     "@xmldom/xmldom": "npm:^0.8.11"
-    hono: "npm:^4.10.4"
+    hono: "npm:^4.12.3"
     nodemailer: "npm:^7.0.10"
     react: "npm:^19.2.0"
     react-dom: "npm:^19.2.0"
