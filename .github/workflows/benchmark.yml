@@ -2,9 +2,11 @@ name: Benchmark
 
 # Pre-requisites (manual setup by maintainer):
 # 1. Create a GitHub Gist (any content) and note the Gist ID
-# 2. Create a PAT with `gist` scope
-# 3. Add repository variable: BENCHMARK_GIST_ID, and secret: GIST_TOKEN
-# 4. The gh-pages branch is auto-created on first run if it doesn't exist
+# 2. Create a PAT with `gist` scope and `repo` scope (or fine-grained with Contents read/write on benchmarks repo)
+# 3. Add repository variable: BENCHMARK_GIST_ID, and secrets: GIST_TOKEN, BENCHMARK_REPO_TOKEN
+# 4. Create a private repo: strataljs/benchmarks
+# 5. In Cloudflare dashboard: create a Pages project connected to strataljs/benchmarks,
+#    deploying from the gh-pages branch (no build command — static HTML)
 
 permissions:
   contents: write
@@ -78,7 +80,9 @@ jobs:
         with:
           tool: customBiggerIsBetter
           output-file-path: transformed-results.json
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          gh-pages-branch: gh-pages
+          gh-repository: github.com/strataljs/benchmarks
+          github-token: ${{ secrets.BENCHMARK_REPO_TOKEN }}
           auto-push: true
           summary-always: true
           alert-threshold: "150%"
@@ -90,20 +94,11 @@ jobs:
         with:
           tool: customBiggerIsBetter
           output-file-path: transformed-results.json
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          gh-pages-branch: gh-pages
+          gh-repository: github.com/strataljs/benchmarks
+          github-token: ${{ secrets.BENCHMARK_REPO_TOKEN }}
           auto-push: false
           summary-always: true
           alert-threshold: "150%"
           comment-on-alert: true
           comment-always: true
-
-      - name: Update benchmark badge (main only)
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        uses: schneegans/dynamic-badges-action@e9a478b16159b4d31420099ba146cdc50f134483 # v1.7.0
-        with:
-          auth: ${{ secrets.GIST_TOKEN }}
-          gistID: ${{ vars.BENCHMARK_GIST_ID }}
-          filename: benchmark-badge.json
-          label: benchmark
-          message: passing
-          color: brightgreen
