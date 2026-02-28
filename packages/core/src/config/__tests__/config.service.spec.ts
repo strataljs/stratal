@@ -148,6 +148,30 @@ describe('ConfigService', () => {
     })
   })
 
+  describe('prototype pollution prevention', () => {
+    it('set() with __proto__ path should not modify config', () => {
+      service.set('__proto__.isAdmin' as ConfigPath<TestConfig>, 'malicious')
+      expect(service.all()).toEqual(createConfig())
+    })
+
+    it('set() with constructor.prototype path should not modify config', () => {
+      service.set('constructor.prototype.isAdmin' as ConfigPath<TestConfig>, 'malicious')
+      expect(service.all()).toEqual(createConfig())
+    })
+
+    it('get() with __proto__ path should return undefined', () => {
+      expect(service.get('__proto__.toString' as ConfigPath<TestConfig>)).toBeUndefined()
+    })
+
+    it('get() with constructor path should return undefined', () => {
+      expect(service.get('constructor.prototype' as ConfigPath<TestConfig>)).toBeUndefined()
+    })
+
+    it('has() with __proto__ path should return false', () => {
+      expect(service.has('__proto__.toString' as ConfigPath<TestConfig>)).toBe(false)
+    })
+  })
+
   describe('error handling', () => {
     it('should throw ConfigNotInitializedError when accessing before initialize()', () => {
       const uninitializedService = new ConfigService<TestConfig>()

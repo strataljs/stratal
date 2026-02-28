@@ -89,6 +89,7 @@ export class ConfigService<T extends object = ModuleConfig> implements IConfigSe
     const keys = path.split('.')
     let current = obj
     for (const key of keys) {
+      if (this.isDangerousKey(key)) return undefined
       if (current === null || current === undefined) return undefined
       current = (current as Record<string, unknown>)[key]
     }
@@ -97,15 +98,30 @@ export class ConfigService<T extends object = ModuleConfig> implements IConfigSe
 
   private setByPath(obj: unknown, path: string, value: unknown): void {
     const keys = path.split('.')
+    if (keys.some((key) => this.isDangerousKey(key))) return
     let current = obj as Record<string, unknown>
     for (let i = 0; i < keys.length - 1; i++) {
       const key = keys[i]
       if (!(key in current) || typeof current[key] !== 'object' || current[key] === null) {
-        current[key] = {}
+        Object.defineProperty(current, key, {
+          value: {},
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        })
       }
       current = current[key] as Record<string, unknown>
     }
-    current[keys[keys.length - 1]] = value
+    Object.defineProperty(current, keys[keys.length - 1], {
+      value,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    })
+  }
+
+  private isDangerousKey(key: string): boolean {
+    return key === '__proto__' || key === 'constructor' || key === 'prototype'
   }
 
   private ensureInitialized(): void {
