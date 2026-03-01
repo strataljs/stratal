@@ -90,6 +90,55 @@ export default class Backend extends StratalWorker {
 
 Full guides and examples are available at **[stratal.dev](https://stratal.dev)**. API reference lives at **[api-reference.stratal.dev](https://api-reference.stratal.dev)**.
 
+## Benchmarks
+
+### Request / Response (e2e)
+
+Full request lifecycle: DI resolution → middleware → routing → validation → response serialization.
+
+| Benchmark | ops/sec | ±% | Median | P99 |
+|---|--:|--:|--:|--:|
+| simple GET - 200 | 67,656 | ±0.88% | 13.3 µs | 37.6 µs |
+| GET with route params - 200 | 56,828 | ±1.38% | 15.8 µs | 63.9 µs |
+| POST with JSON body - 201 | 39,253 | ±0.87% | 23.5 µs | 60.0 µs |
+| POST invalid body - validation error | 4,159 | ±2.11% | 210 µs | 925 µs |
+| GET unknown route - 404 | 8,283 | ±0.94% | 114 µs | 329 µs |
+
+### DI Container
+
+| Benchmark | ops/sec | ±% | Median | P99 |
+|---|--:|--:|--:|--:|
+| register class provider | 2,379,293 | ±5.80% | 0.33 µs | 0.83 µs |
+| registerSingleton | 3,007,571 | ±1.65% | 0.29 µs | 0.54 µs |
+| resolve class token | 1,706,979 | ±0.72% | 0.54 µs | 0.83 µs |
+| resolve singleton token | 1,668,264 | ±0.65% | 0.54 µs | 0.83 µs |
+| isRegistered check | 1,961,169 | ±1.63% | 0.46 µs | 1.00 µs |
+
+### Module Registry
+
+| Benchmark | ops/sec | ±% | Median | P99 |
+|---|--:|--:|--:|--:|
+| register single module | 2,215,821 | ±0.97% | 0.42 µs | 0.71 µs |
+| register 3-level module tree | 1,250,163 | ±0.79% | 0.71 µs | 1.21 µs |
+| initialize with lifecycle hooks | 1,593,072 | ±0.56% | 0.58 µs | 0.88 µs |
+
+### Route Registration
+
+| Benchmark | ops/sec | ±% | Median | P99 |
+|---|--:|--:|--:|--:|
+| controller with 5 OpenAPI routes | 41,520 | ±4.87% | 15.7 µs | 50.1 µs |
+| single-route controller | 198,949 | ±3.75% | 3.54 µs | 8.25 µs |
+
+### Application
+
+| Benchmark | ops/sec | ±% | Median | P99 |
+|---|--:|--:|--:|--:|
+| constructor only | 349,958 | ±1.69% | 2.46 µs | 6.00 µs |
+| full initialize() | 43,988 | ±6.88% | 14.0 µs | 69.5 µs |
+| resolve service after bootstrap | 47,981 | ±5.54% | 14.0 µs | 41.8 µs |
+
+> Benchmarks run on: Apple M3 Max (16-core), 48 GB RAM, macOS 26.2, Node.js v22.12.0
+
 ## Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
