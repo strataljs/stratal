@@ -3,7 +3,7 @@
  *
  * Singleton service that loads and caches all locale messages at startup.
  * Merges core messages (from packages/modules) with app messages (from forRoot options).
- * Pre-builds and caches CoreContext per locale for zero-cost translation lookups.
+ * Lazily builds and caches CoreContext per locale on first access.
  */
 
 import type { CoreContext } from '@intlify/core-base'
@@ -41,7 +41,7 @@ export class MessageLoaderService {
     const allLocales = [...new Set([...coreLocales, ...appLocales])]
     this.locales = allLocales
 
-    // Merge messages for each locale, flatten, and pre-build CoreContext
+    // Merge messages for each locale (CoreContext built lazily on first access)
     for (const locale of allLocales) {
       const coreLocaleMessages = coreMessages[locale] ?? {}
       const appLocaleMessages = appMessages[locale] ?? {}
@@ -49,28 +49,38 @@ export class MessageLoaderService {
       // Deep merge: core defaults + app overrides
       const merged = this.deepMerge(coreLocaleMessages, appLocaleMessages)
       this.cache.set(locale, merged)
-
-      // Flatten and pre-build CoreContext at startup
-      const flattened = this.flattenMessages(merged)
-      this.contextCache.set(locale, createCoreContext({
-        locale,
-        messages: { [locale]: flattened },
-        missingWarn: false,
-        fallbackWarn: false,
-      }))
     }
   }
 
   /**
-   * Get pre-built CoreContext for a locale
+   * Get CoreContext for a locale (lazily built and cached on first access)
    * Falls back to default locale if locale not found
    *
    * @param locale - Locale code
    * @returns Cached CoreContext ready for translation
    */
   getCoreContext(locale: string): CoreContext {
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- defaultLocale is always populated in constructor
-    return this.contextCache.get(locale) ?? this.contextCache.get(this.defaultLocale)!
+    const cached = this.contextCache.get(locale)
+    if (cached) return cached
+
+    // Resolve effective locale (fallback to default if unsupported)
+    const effectiveLocale = this.cache.has(locale) ? locale : this.defaultLocale
+
+    // Check if effective locale already cached (handles fallback)
+    const cachedEffective = this.contextCache.get(effectiveLocale)
+    if (cachedEffective) return cachedEffective
+
+    // Build and cache on first access
+    const messages = this.cache.get(effectiveLocale) ?? {}
+    const flattened = this.flattenMessages(messages)
+    const ctx = createCoreContext({
+      locale: effectiveLocale,
+      messages: { [effectiveLocale]: flattened },
+      missingWarn: false,
+      fallbackWarn: false,
+    })
+    this.contextCache.set(effectiveLocale, ctx)
+    return ctx
   }
 
   /**
