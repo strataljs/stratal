@@ -3061,7 +3061,6 @@ __metadata:
     "@faker-js/faker": "npm:^10.3.0"
     "@golevelup/ts-vitest": "npm:^2.2.0"
     "@types/node": "npm:^25.3.2"
-    reflect-metadata: "npm:^0.2.2"
     stratal: "workspace:*"
     typescript: "npm:^5.9.3"
     vitest: "npm:~3.2.0"
