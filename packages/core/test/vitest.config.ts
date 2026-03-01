@@ -5,6 +5,9 @@ export default defineWorkersConfig({
     name: 'workerd',
     include: ['integration/**/*.spec.ts'],
     setupFiles: ['./setup.ts'],
+    benchmark: {
+      include: [],
+    },
     poolOptions: {
       workers: {
         wrangler: { configPath: './wrangler.jsonc' },
