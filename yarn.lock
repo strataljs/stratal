@@ -3065,7 +3065,7 @@ __metadata:
     typescript: "npm:^5.9.3"
     vitest: "npm:~3.2.0"
   peerDependencies:
-    stratal: ^0.0.2
+    stratal: ^0.0.3
     vitest: ^3.2.0
   languageName: unknown
   linkType: soft
