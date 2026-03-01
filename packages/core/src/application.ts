@@ -5,7 +5,7 @@ import { CronManager } from './cron/cron-manager'
 import { Container } from './di/container'
 import { DI_TOKENS } from './di/tokens'
 import { type StratalEnv } from './env'
-import { GlobalErrorHandler } from './errors'
+import { ApplicationError, GlobalErrorHandler } from './errors'
 import { I18nModule } from './i18n/i18n.module'
 import { ConsoleTransport, JsonFormatter, LOGGER_TOKENS, LoggerService, LogLevel, PrettyFormatter } from './logger'
 import { ModuleRegistry } from './module/module-registry'
@@ -116,6 +116,9 @@ export class Application {
     if (this.initialized) {
       return
     }
+
+    // Disable stack trace capture in production (expensive and stripped from responses)
+    ApplicationError.captureStackTraces = this.env.ENVIRONMENT !== 'production'
 
     // Phase 1: Register core infrastructure modules (internal)
     this.moduleRegistry.registerAll([

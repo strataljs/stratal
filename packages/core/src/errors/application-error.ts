@@ -25,6 +25,13 @@ import type { ErrorCode } from './error-codes'
  */
 export abstract class ApplicationError extends Error {
   /**
+   * Controls whether stack traces are captured.
+   * Set to false in production to skip the expensive Error.captureStackTrace() call,
+   * since stack traces are stripped from responses in production anyway.
+   */
+  static captureStackTraces = true
+
+  /**
    * Type-safe error code from ERROR_CODES registry
    * See error-codes.ts for the complete registry
    */
@@ -65,8 +72,9 @@ export abstract class ApplicationError extends Error {
     this.metadata = metadata
 
     // Capture stack trace, excluding constructor call from it
+    // Skip in production where stack traces are stripped from responses anyway
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- captureStackTrace is V8-specific, not always present
-    if (Error.captureStackTrace) {
+    if (ApplicationError.captureStackTraces && Error.captureStackTrace) {
       Error.captureStackTrace(this, this.constructor)
     }
   }

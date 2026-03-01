@@ -1,3 +1,4 @@
+import { createCoreContext } from '@intlify/core-base'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
 import { type RouterContext } from '../../router/router-context'
@@ -10,23 +11,25 @@ describe('I18nService', () => {
   let mockLoader: DeepMocked<MessageLoaderService>
   let mockRouterContext: DeepMocked<RouterContext>
 
-  const createMessages = () => ({
-    common: {
-      welcome: 'Welcome',
-      greeting: 'Hello, {name}!',
-    },
-    auth: {
-      login: {
-        title: 'Sign In',
-      },
-    },
-  })
+  const flatMessages: Record<string, string> = {
+    'common.welcome': 'Welcome',
+    'common.greeting': 'Hello, {name}!',
+    'auth.login.title': 'Sign In',
+  }
+
+  const createContext = (locale: string) =>
+    createCoreContext({
+      locale,
+      messages: { [locale]: flatMessages },
+      missingWarn: false,
+      fallbackWarn: false,
+    })
 
   beforeEach(() => {
     vi.clearAllMocks()
 
     mockLoader = createMock<MessageLoaderService>()
-    mockLoader.getMessages.mockReturnValue(createMessages() as Record<string, unknown>)
+    mockLoader.getCoreContext.mockImplementation((locale: string) => createContext(locale))
 
     mockRouterContext = createMock<RouterContext>()
     mockRouterContext.getLocale.mockReturnValue('en')
@@ -73,20 +76,21 @@ describe('I18nService', () => {
     })
   })
 
-  describe('lazy context', () => {
-    it('should create CoreContext on first t() call and reuse after', () => {
+  describe('cached context', () => {
+    it('should use getCoreContext from loader for each t() call', () => {
       service = new I18nService(mockLoader as unknown as MessageLoaderService, mockRouterContext as unknown as RouterContext)
 
       service.t('common.welcome' as MessageKeys)
       service.t('auth.login.title' as MessageKeys)
 
-      // getMessages is only called once during context creation
-      expect(mockLoader.getMessages).toHaveBeenCalledTimes(1)
+      // getCoreContext is called for each t() call (but it returns a cached singleton)
+      expect(mockLoader.getCoreContext).toHaveBeenCalledTimes(2)
+      expect(mockLoader.getCoreContext).toHaveBeenCalledWith('en')
     })
   })
 
-  describe('flattenMessages', () => {
-    it('should flatten nested messages to dot notation', () => {
+  describe('flattenMessages (via loader)', () => {
+    it('should translate nested keys via pre-flattened messages', () => {
       service = new I18nService(mockLoader as unknown as MessageLoaderService, mockRouterContext as unknown as RouterContext)
 
       const result = service.t('auth.login.title' as MessageKeys)

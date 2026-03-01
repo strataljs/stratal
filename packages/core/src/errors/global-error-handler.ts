@@ -73,12 +73,10 @@ export class GlobalErrorHandler {
   handle(error: unknown): ErrorResponse {
     // Check if it's an ApplicationError
     if (isApplicationError(error)) {
-      this.log(error)
-
-      // Translate message
-      // Works in: HTTP requests, Queue processing (i18n available via request container)
-      // Falls back in: RPC/Startup (i18n might not be available)
+      // Translate once, use for both logging and response
       const translatedMessage = this.translateError(error)
+
+      this.log(error, translatedMessage)
 
       return error.toErrorResponse(this.environment, translatedMessage)
     }
@@ -117,12 +115,12 @@ export class GlobalErrorHandler {
   /**
    * Log an ApplicationError with appropriate severity
    */
-  private log(error: ApplicationError): void {
+  private log(error: ApplicationError, translatedMessage: string): void {
     const severity = this.getSeverity(error.code)
 
     const logData = {
       code: error.code,
-      message: this.translateError(error),
+      message: translatedMessage,
       timestamp: error.timestamp,
       metadata: error.metadata,
       name: error.name,
