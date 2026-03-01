@@ -3,8 +3,11 @@
  *
  * Singleton service that loads and caches all locale messages at startup.
  * Merges core messages (from packages/modules) with app messages (from forRoot options).
+ * Lazily builds and caches CoreContext per locale on first access.
  */
 
+import type { CoreContext } from '@intlify/core-base'
+import { createCoreContext } from '@intlify/core-base'
 import { inject } from 'tsyringe'
 import { Transient } from '../../di/decorators'
 import type { I18nModuleOptions } from '../i18n.options'
@@ -14,6 +17,7 @@ import { getLocales, getMessages } from '../messages'
 @Transient(I18N_TOKENS.MessageLoader)
 export class MessageLoaderService {
   private readonly cache: Map<string, Record<string, unknown>>
+  private readonly contextCache: Map<string, CoreContext>
   private readonly locales: string[]
   private readonly defaultLocale: string
 
@@ -23,6 +27,7 @@ export class MessageLoaderService {
   ) {
     this.defaultLocale = this.options?.defaultLocale ?? 'en'
     this.cache = new Map()
+    this.contextCache = new Map()
 
     // Get core messages (always available)
     const coreMessages = getMessages()
@@ -36,14 +41,46 @@ export class MessageLoaderService {
     const allLocales = [...new Set([...coreLocales, ...appLocales])]
     this.locales = allLocales
 
-    // Merge messages for each locale
+    // Merge messages for each locale (CoreContext built lazily on first access)
     for (const locale of allLocales) {
       const coreLocaleMessages = coreMessages[locale] ?? {}
       const appLocaleMessages = appMessages[locale] ?? {}
 
       // Deep merge: core defaults + app overrides
-      this.cache.set(locale, this.deepMerge(coreLocaleMessages, appLocaleMessages))
+      const merged = this.deepMerge(coreLocaleMessages, appLocaleMessages)
+      this.cache.set(locale, merged)
     }
+  }
+
+  /**
+   * Get CoreContext for a locale (lazily built and cached on first access)
+   * Falls back to default locale if locale not found
+   *
+   * @param locale - Locale code
+   * @returns Cached CoreContext ready for translation
+   */
+  getCoreContext(locale: string): CoreContext {
+    const cached = this.contextCache.get(locale)
+    if (cached) return cached
+
+    // Resolve effective locale (fallback to default if unsupported)
+    const effectiveLocale = this.cache.has(locale) ? locale : this.defaultLocale
+
+    // Check if effective locale already cached (handles fallback)
+    const cachedEffective = this.contextCache.get(effectiveLocale)
+    if (cachedEffective) return cachedEffective
+
+    // Build and cache on first access
+    const messages = this.cache.get(effectiveLocale) ?? {}
+    const flattened = this.flattenMessages(messages)
+    const ctx = createCoreContext({
+      locale: effectiveLocale,
+      messages: { [effectiveLocale]: flattened },
+      missingWarn: false,
+      fallbackWarn: false,
+    })
+    this.contextCache.set(effectiveLocale, ctx)
+    return ctx
   }
 
   /**
@@ -88,6 +125,32 @@ export class MessageLoaderService {
    */
   getDefaultLocale(): string {
     return this.defaultLocale
+  }
+
+  /**
+   * Flatten nested messages to dot-notation
+   *
+   * Converts { auth: { login: { title: 'Sign In' } } }
+   * to { 'auth.login.title': 'Sign In' }
+   */
+  private flattenMessages(
+    messages: Record<string, unknown>,
+    prefix = ''
+  ): Record<string, string> {
+    const result: Record<string, string> = {}
+
+    for (const key of Object.keys(messages)) {
+      const value = messages[key]
+      const newKey = prefix ? `${prefix}.${key}` : key
+
+      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        Object.assign(result, this.flattenMessages(value as Record<string, unknown>, newKey))
+      } else {
+        result[newKey] = String(value)
+      }
+    }
+
+    return result
   }
 
   /**

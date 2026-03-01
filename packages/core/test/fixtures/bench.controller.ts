@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z } from '../../src/i18n/validation'
 import { Controller } from '../../src/router/decorators/controller.decorator'
 import { Route } from '../../src/router/decorators/route.decorator'
 import type { RouterContext } from '../../src/router/router-context'

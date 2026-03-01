@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { MessageKeys } from '../../i18n/i18n.types'
 import type { ErrorCode } from '../error-codes'
 import { ApplicationError } from '../application-error'
@@ -12,6 +12,14 @@ class TestError extends ApplicationError {
 }
 
 describe('ApplicationError', () => {
+  beforeEach(() => {
+    ApplicationError.captureStackTraces = true
+  })
+
+  afterEach(() => {
+    ApplicationError.captureStackTraces = true
+  })
+
   describe('constructor', () => {
     it('should set code, message (messageKey), timestamp, metadata, and name', () => {
       const metadata = { userId: '123' }
@@ -119,6 +127,25 @@ describe('ApplicationError', () => {
       const response = error.toErrorResponse('production')
 
       expect(response.metadata).toBeUndefined()
+    })
+  })
+
+  describe('captureStackTraces', () => {
+    it('should capture stack trace when captureStackTraces is true', () => {
+      ApplicationError.captureStackTraces = true
+      const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC)
+
+      expect(error.stack).toBeDefined()
+    })
+
+    it('should skip stack trace capture when captureStackTraces is false', () => {
+      ApplicationError.captureStackTraces = false
+      const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC)
+
+      // V8 still sets a basic stack via Error constructor, but captureStackTrace is skipped
+      // The key assertion is that it doesn't throw and the error is still functional
+      expect(error.code).toBe(ERROR_CODES.VALIDATION.GENERIC)
+      expect(error.message).toBe('errors.test')
     })
   })
 

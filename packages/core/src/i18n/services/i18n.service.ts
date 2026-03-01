@@ -3,10 +3,10 @@
  *
  * Request-scoped service for translations.
  * Injects RouterContext to access request-specific locale.
+ * Uses pre-built CoreContext from MessageLoaderService (singleton) for zero-cost lookups.
  */
 
-import type { CoreContext } from '@intlify/core-base'
-import { createCoreContext, translate } from '@intlify/core-base'
+import { translate } from '@intlify/core-base'
 import { inject } from 'tsyringe'
 import { Transient } from '../../di/decorators'
 import { ROUTER_TOKENS, RouterContext } from '../../router'
@@ -36,8 +36,6 @@ import type { MessageLoaderService } from './message-loader.service'
  */
 @Transient(I18N_TOKENS.I18nService)
 export class I18nService implements II18nService {
-  private intlContext: CoreContext | undefined
-
   constructor(
     @inject(I18N_TOKENS.MessageLoader) private readonly loader: MessageLoaderService,
     @inject(ROUTER_TOKENS.RouterContext, { isOptional: true }) private readonly routerContext?: RouterContext
@@ -52,7 +50,7 @@ export class I18nService implements II18nService {
    * @returns Translated string
    */
   t(key: MessageKeys, params?: MessageParams): string {
-    const context = this.getIntlContext()
+    const context = this.loader.getCoreContext(this.getLocale())
 
     const result = params !== undefined
       ? translate(context, key, params)
@@ -68,49 +66,5 @@ export class I18nService implements II18nService {
    */
   getLocale(): string {
     return this.routerContext?.getLocale() ?? 'en'
-  }
-
-  /**
-   * Get or create intlify CoreContext
-   * Lazily initializes on first translation call
-   */
-  private getIntlContext(): CoreContext {
-    if (!this.intlContext) {
-      const locale = this.getLocale()
-      const messages = this.loader.getMessages(locale)
-
-      this.intlContext = createCoreContext({
-        locale,
-        messages: { [locale]: this.flattenMessages(messages) },
-        missingWarn: false,
-        fallbackWarn: false
-      })
-    }
-
-    return this.intlContext
-  }
-
-  /**
-   * Flatten nested messages to dot-notation
-   *
-   * Converts { auth: { login: { title: 'Sign In' } } }
-   * to { 'auth.login.title': 'Sign In' }
-   */
-  private flattenMessages(
-    messages: Record<string, unknown>,
-    prefix = ''
-  ): Record<string, string> {
-    return Object.keys(messages).reduce<Record<string, string>>((acc, key) => {
-      const value = messages[key]
-      const newKey = prefix ? `${prefix}.${key}` : key
-
-      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        Object.assign(acc, this.flattenMessages(value as Record<string, unknown>, newKey))
-      } else {
-        acc[newKey] = String(value)
-      }
-
-      return acc
-    }, {})
   }
 }

@@ -38,6 +38,7 @@
     "changeset": "changeset",
     "version": "changeset version",
     "release": "yarn workspaces foreach -A --no-private npm publish --tolerate-republish",
+    "build": "yarn workspaces foreach -A --no-private exec run build",
     "docs": "typedoc",
     "docs:watch": "typedoc --watch"
   },

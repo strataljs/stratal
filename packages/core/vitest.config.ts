@@ -44,6 +44,7 @@ export default defineConfig({
           },
         },
       },
+      './test/vitest.config.ts',
     ],
   },
 })

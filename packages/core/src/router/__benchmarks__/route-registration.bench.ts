@@ -1,7 +1,7 @@
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { injectable } from 'tsyringe'
 import { bench, describe } from 'vitest'
-import { z } from 'zod'
+import { z } from '../../i18n/validation'
 import type { LoggerService } from '../../logger'
 import type { Constructor } from '../../types'
 import type { IController } from '../controller'

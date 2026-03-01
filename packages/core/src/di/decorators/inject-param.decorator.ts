@@ -22,7 +22,7 @@ import type InjectionToken from 'tsyringe/dist/typings/providers/injection-token
 /**
  * Metadata key for storing parameter injection information
  */
-export const INJECT_PARAM_METADATA_KEY = Symbol('inject:param')
+export const INJECT_PARAM_METADATA_KEY = Symbol.for('stratal:inject:param')
 
 /**
  * Describes a parameter injection
