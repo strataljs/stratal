@@ -1,5 +1,20 @@
 # stratal
 
+## 0.0.4
+
+### Patch Changes
+
+- **Lazy i18n context building** — `MessageLoaderService` now lazily builds and caches `CoreContext` per locale on first access instead of eagerly at startup, reducing initialization overhead.
+- **Pre-build i18n contexts at startup** — Moved `CoreContext` creation and message flattening from per-request `I18nService` to the singleton `MessageLoaderService`, eliminating repeated work on every `t()` call.
+- **Skip stack traces in production** — Added a static flag on `ApplicationError` to disable stack trace capture in production, where traces are stripped from responses anyway.
+
+- **Cross-realm metadata keys** — Migrated all internal metadata symbols from `Symbol()` to `Symbol.for()` with a `stratal:` prefix for reliable cross-realm identity in Cloudflare Workers.
+- **Benchmark configuration** — Added a benchmark section to the Vitest config and updated Wrangler compatibility flags for Node.js modules.
+- **i18n integration tests** — Added localization integratnning in the workerd pool.
+
+- **Consistent zod imports** — Updated zod imports across benchmark files to use the i18n validation module.
+- **Cleaner error handling** — `GlobalErrorHandler` now passes the translated message directly to the logger, avoiding double-translation.
+
 ## 0.0.3
 
 ### Patch Changes
