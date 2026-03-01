@@ -13,7 +13,7 @@ import type { Constructor } from '../types'
 import { InvalidModuleProviderError } from './errors'
 import type { ModuleOptions, Provider } from './types'
 
-export const MODULE_OPTIONS_KEY = Symbol('module:options')
+export const MODULE_OPTIONS_KEY = Symbol.for('stratal:module:options')
 
 /**
  * Tsyringe registry entry format

@@ -62,4 +62,4 @@ export interface GuardMetadata {
 /**
  * Metadata key for guard storage
  */
-export const GUARD_METADATA_KEY = Symbol('guards')
+export const GUARD_METADATA_KEY = Symbol.for('stratal:guards')

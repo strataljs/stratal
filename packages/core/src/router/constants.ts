@@ -12,12 +12,12 @@ export const ROUTER_CONTEXT_KEYS = {
  * Using symbols to avoid collisions with other decorators
  */
 export const ROUTE_METADATA_KEYS = {
-  CONTROLLER_ROUTE: Symbol('controller:route'),
-  CONTROLLER_OPTIONS: Symbol('controller:options'),
-  CONTROLLER_MIDDLEWARES: Symbol('controller:middlewares'),
-  ROUTE_CONFIG: Symbol('route:config'),
-  DECORATED_METHODS: Symbol('decorated:methods'),
-  AUTH_GUARD: Symbol('auth:guard')
+  CONTROLLER_ROUTE: Symbol.for('stratal:controller:route'),
+  CONTROLLER_OPTIONS: Symbol.for('stratal:controller:options'),
+  CONTROLLER_MIDDLEWARES: Symbol.for('stratal:controller:middlewares'),
+  ROUTE_CONFIG: Symbol.for('stratal:route:config'),
+  DECORATED_METHODS: Symbol.for('stratal:decorated:methods'),
+  AUTH_GUARD: Symbol.for('stratal:auth:guard')
 } as const
 
 /**

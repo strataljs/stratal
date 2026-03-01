@@ -19,7 +19,7 @@ export type DatabaseConfig = InferConfigType<typeof databaseConfig>
 ```
 
 `registerAs()` returns a `ConfigNamespace` with:
-- `KEY` — Symbol-based DI token (`Symbol('CONFIG:database')`)
+- `KEY` — Symbol-based DI token (`Symbol.for('CONFIG:database')`)
 - `namespace` — The namespace string (`'database'`)
 - `factory(env)` — Factory function that creates config from env
 - `asProvider()` — Returns a `FactoryProvider` for use in module `providers`
@@ -64,7 +64,7 @@ export class DatabaseService {
 ```typescript
 import { CONFIG_TOKENS } from 'stratal/config'
 
-CONFIG_TOKENS.ConfigService  // Symbol('ConfigService')
+CONFIG_TOKENS.ConfigService  // Symbol.for('ConfigService')
 ```
 
 ## Cache Module
@@ -134,7 +134,7 @@ class CacheService {
 ```typescript
 import { CACHE_TOKENS } from 'stratal/cache'
 
-CACHE_TOKENS.CacheService  // Symbol('CacheService')
+CACHE_TOKENS.CacheService  // Symbol.for('CacheService')
 ```
 
 ### Required Wrangler Binding
@@ -244,9 +244,9 @@ class StorageService {
 ```typescript
 import { STORAGE_TOKENS } from 'stratal/storage'
 
-STORAGE_TOKENS.Options         // Symbol('StorageModuleOptions')
-STORAGE_TOKENS.StorageService  // Symbol('StorageService')
-STORAGE_TOKENS.StorageManager  // Symbol('StorageManager')
+STORAGE_TOKENS.Options         // Symbol.for('StorageModuleOptions')
+STORAGE_TOKENS.StorageService  // Symbol.for('StorageService')
+STORAGE_TOKENS.StorageManager  // Symbol.for('StorageManager')
 ```
 
 ### Required Dependencies
@@ -318,9 +318,9 @@ The I18nService resolves the locale from the `X-Locale` request header automatic
 ```typescript
 import { I18N_TOKENS } from 'stratal/i18n'
 
-I18N_TOKENS.I18nService    // Symbol('I18nModule.I18nService')
-I18N_TOKENS.MessageLoader  // Symbol('I18nModule.MessageLoader')
-I18N_TOKENS.Options        // Symbol('I18nModule.Options')
+I18N_TOKENS.I18nService    // Symbol.for('I18nModule.I18nService')
+I18N_TOKENS.MessageLoader  // Symbol.for('I18nModule.MessageLoader')
+I18N_TOKENS.Options        // Symbol.for('I18nModule.Options')
 ```
 
 ### Validation Messages
