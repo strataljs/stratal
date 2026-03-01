@@ -1,6 +1,6 @@
 {
   "name": "stratal",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A modular Cloudflare Workers framework with dependency injection, queue-based events, and type-safe configuration",
   "type": "module",
   "license": "MIT",
@@ -64,7 +64,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "yarn prebuild && tsc -p tsconfig.build.json",
     "clean": "rm -rf dist",
     "prebuild": "yarn clean",
     "typecheck": "yarn tsc --noEmit",
