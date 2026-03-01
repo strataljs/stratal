@@ -1,5 +1,14 @@
 # @stratal/testing
 
+## 0.0.3
+
+### Patch Changes
+
+- - **Build cleanup** — Removed redundant polyfills export and cleaned up the build configuration.
+  - **Relaxed vitest version** — Loosened the vitest peer dependency version constraint.
+- Updated dependencies []:
+  - stratal@0.0.3
+
 ## 0.0.2
 
 ### Patch Changes
