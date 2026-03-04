@@ -24,6 +24,7 @@ npx wrangler dev
 | 06 | [queues](06-queues/) | Queue producer/consumer pattern with Cloudflare Queues |
 | 07 | [scheduled-tasks](07-scheduled-tasks/) | Cron job scheduling with the `CronJob` interface |
 | 08 | [openapi](08-openapi/) | OpenAPI documentation with Scalar UI |
+| 09 | [seeders](09-seeders/) | Database seeding with `@stratal/seeders` and the `stratal-seed` CLI |
 
 ## Shared patterns
 

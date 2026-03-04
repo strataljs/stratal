@@ -37,6 +37,9 @@ jobs:
       - name: Build testing package
         run: yarn workspace @stratal/testing build
 
+      - name: Build framework package
+        run: yarn workspace @stratal/framework build
+
       - name: Lint
         run: yarn lint
 
@@ -74,9 +77,28 @@ jobs:
       - name: Typecheck testing
         run: yarn workspace @stratal/testing typecheck
 
+      - name: Typecheck framework
+        run: yarn workspace @stratal/framework typecheck
+
   test:
     name: Test
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: stratal_test
+          POSTGRES_USER: stratal
+          POSTGRES_PASSWORD: stratal_test
+        ports:
+          - 5438:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://stratal:stratal_test@localhost:5438/stratal_test
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@a90bcbc6539c36a85cdfeb73f7e2f433735f215b # v2.15.0
@@ -102,8 +124,17 @@ jobs:
       - name: Build testing package
         run: yarn workspace @stratal/testing build
 
-      - name: Run tests
+      - name: Build framework package
+        run: yarn workspace @stratal/framework build
+
+      - name: Generate framework schema and types
+        run: yarn workspace @stratal/framework pretest
+
+      - name: Run core tests
         run: yarn workspace stratal test
+
+      - name: Run framework tests
+        run: yarn workspace @stratal/framework test
 
   build:
     name: Build
@@ -133,8 +164,14 @@ jobs:
       - name: Build testing package
         run: yarn workspace @stratal/testing build
 
+      - name: Build framework package
+        run: yarn workspace @stratal/framework build
+
       - name: Verify package contents
         run: cd packages/core && npm pack --dry-run
 
       - name: Verify testing package contents
         run: cd packages/testing && npm pack --dry-run
+
+      - name: Verify framework package contents
+        run: cd packages/framework && npm pack --dry-run

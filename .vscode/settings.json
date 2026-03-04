@@ -1,7 +1,8 @@
 {
   "files.associations": {
     "wrangler.json": "jsonc",
-    ".dev.vars*": "dotenv"
+    ".dev.vars*": "dotenv",
+    "*.zmodel": "zmodel-v3"
   },
   "editor.defaultFormatter": "dbaeumer.vscode-eslint",
   "eslint.format.enable": true,

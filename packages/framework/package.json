@@ -1,0 +1,116 @@
+{
+  "name": "@stratal/framework",
+  "version": "0.0.1",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/strataljs/stratal.git",
+    "directory": "packages/framework"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./auth": {
+      "types": "./dist/auth/index.d.ts",
+      "import": "./dist/auth/index.js"
+    },
+    "./context": {
+      "types": "./dist/context/index.d.ts",
+      "import": "./dist/context/index.js"
+    },
+    "./database": {
+      "types": "./dist/database/index.d.ts",
+      "import": "./dist/database/index.js"
+    },
+    "./factory": {
+      "types": "./dist/factory/index.d.ts",
+      "import": "./dist/factory/index.js"
+    },
+    "./guards": {
+      "types": "./dist/guards/index.d.ts",
+      "import": "./dist/guards/index.js"
+    },
+    "./rbac": {
+      "types": "./dist/rbac/index.d.ts",
+      "import": "./dist/rbac/index.js"
+    }
+  },
+  "scripts": {
+    "build": "yarn prebuild && tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "prebuild": "yarn clean",
+    "generate": "zenstack generate --schema=test/schema.zmodel -o test/zenstack",
+    "generate:types": "wrangler types -c test/wrangler.jsonc",
+    "pretest": "yarn generate && yarn generate:types",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "vitest run --project e2e",
+    "test:coverage": "vitest run --coverage",
+    "test:db": "docker compose -f test/docker-compose.yml up -d",
+    "typecheck": "yarn tsc --noEmit",
+    "lint": "npx eslint .",
+    "lint:fix": "npx eslint --fix ."
+  },
+  "dependencies": {
+    "postgres-array": "^3.0.4"
+  },
+  "peerDependencies": {
+    "@better-auth/core": "^1.0.0",
+    "@faker-js/faker": "^10.3.0",
+    "@zenstackhq/better-auth": "^3.0.0",
+    "@zenstackhq/orm": "^3.0.0",
+    "better-auth": "^1.4.9",
+    "casbin": "^5.41.0",
+    "pg": "^8.0.0",
+    "stratal": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@better-auth/core": {
+      "optional": true
+    },
+    "@faker-js/faker": {
+      "optional": true
+    },
+    "@zenstackhq/better-auth": {
+      "optional": true
+    },
+    "better-auth": {
+      "optional": true
+    },
+    "casbin": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@better-auth/core": "^1.5.0",
+    "@cloudflare/vitest-pool-workers": "^0.12.18",
+    "@cloudflare/workers-types": "4.20260301.1",
+    "@faker-js/faker": "^10.3.0",
+    "@stratal/testing": "workspace:^",
+    "@types/node": "^22.19.13",
+    "@types/pg": "^8.18.0",
+    "@vitest/coverage-istanbul": "3.2.4",
+    "@zenstackhq/better-auth": "^3.4.1",
+    "@zenstackhq/cli": "^3.4.1",
+    "@zenstackhq/orm": "^3.4.1",
+    "better-auth": "^1.5.0",
+    "casbin": "^5.49.0",
+    "pg": "^8.19.0",
+    "reflect-metadata": "^0.2.2",
+    "stratal": "workspace:*",
+    "typescript": "^5.9.3",
+    "vitest": "~3.2.0",
+    "wrangler": "^4.69.0"
+  }
+}

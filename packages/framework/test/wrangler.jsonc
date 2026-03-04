@@ -1,0 +1,23 @@
+{
+  "name": "stratal-framework-test",
+  "main": "fixtures/worker.ts",
+  "compatibility_date": "2026-02-28",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "enable_nodejs_tty_module",
+    "enable_nodejs_fs_module",
+    "enable_nodejs_http_modules",
+    "enable_nodejs_perf_hooks_module"
+  ],
+  "vars": {
+    "ENVIRONMENT": "test",
+    "QUEUE_PROVIDER": "sync"
+  },
+  "hyperdrive": [
+    {
+      "binding": "DB",
+      "id": "1212",
+      "localConnectionString": "postgres://stratal:stratal_test@localhost:5438/stratal_test"
+    }
+  ]
+}

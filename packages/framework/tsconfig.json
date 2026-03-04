@@ -1,0 +1,36 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "target": "esnext",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "rootDir": ".",
+    "outDir": "./dist",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "lib": [
+      "ES2024",
+      "ESNext"
+    ],
+    "types": [
+      "@cloudflare/workers-types/2023-07-01",
+      "node"
+    ],
+    "paths": {
+      "@stratal/framework": ["./src/index.ts"],
+      "@stratal/framework/*": ["./src/*/index.ts"]
+    }
+  },
+  "include": [
+    "src/**/*",
+    "test/**/*",
+    "zenstack/**/*",
+    "worker-configuration.d.ts",
+    "vitest.config.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

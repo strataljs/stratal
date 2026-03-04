@@ -14,7 +14,6 @@ export const DI_TOKENS = {
   Application: Symbol.for('Application'),
   ModuleRegistry: Symbol.for('ModuleRegistry'),
   ErrorHandler: Symbol.for('ErrorHandler'),
-  ConnectionManager: Symbol.for('ConnectionManager'),
   Database: Symbol.for('DatabaseService'),
   Queue: Symbol.for('QueueManager'),
   ConsumerRegistry: Symbol.for('ConsumerRegistry'),
