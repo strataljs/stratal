@@ -4,7 +4,7 @@
   "description": "Database seeder infrastructure for Stratal framework applications",
   "type": "module",
   "license": "MIT",
-  "author": "Stratal Contributors",
+  "author": "Temitayo Fadojutimi",
   "homepage": "https://github.com/strataljs/stratal#readme",
   "repository": {
     "type": "git",
@@ -30,7 +30,8 @@
   "files": [
     "dist",
     "bin",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "exports": {
     ".": {

@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "type": "module",
   "license": "MIT",
+  "author": "Temitayo Fadojutimi",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/strataljs/stratal.git",
@@ -14,7 +15,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "exports": {
     ".": {

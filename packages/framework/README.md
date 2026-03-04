@@ -43,6 +43,14 @@ yarn add @stratal/framework
 | `casbin` | No — needed for `RbacModule` |
 | `@faker-js/faker` | No — needed for `Factory` |
 
+### AI Agent Skills
+
+Stratal provides [Agent Skills](https://agentskills.io) for AI coding assistants like Claude Code and Cursor. Install to give your AI agent knowledge of Stratal patterns, conventions, and APIs:
+
+```bash
+npx skills add strataljs/stratal
+```
+
 ## Quick Start
 
 ```typescript
