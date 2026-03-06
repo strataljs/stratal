@@ -5,7 +5,7 @@
     { "repo": "strataljs/stratal" }
   ],
   "commit": false,
-  "fixed": [],
+  "fixed": [["stratal", "@stratal/*"]],
   "linked": [],
   "access": "public",
   "baseBranch": "main",
