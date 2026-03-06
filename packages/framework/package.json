@@ -102,7 +102,7 @@
     "@stratal/testing": "workspace:^",
     "@types/node": "^22.19.13",
     "@types/pg": "^8.18.0",
-    "@vitest/coverage-istanbul": "3.2.4",
+    "@vitest/coverage-istanbul": "4.0.18",
     "@zenstackhq/better-auth": "^3.4.1",
     "@zenstackhq/cli": "^3.4.1",
     "@zenstackhq/orm": "^3.4.1",
