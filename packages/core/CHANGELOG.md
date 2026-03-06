@@ -1,5 +1,11 @@
 # stratal
 
+## 0.0.5
+
+### Patch Changes
+
+- [#66](https://github.com/strataljs/stratal/pull/66) [`c8ea964`](https://github.com/strataljs/stratal/commit/c8ea964e272b09ebc6619843e77d2b51178f9423) Thanks [@adesege](https://github.com/adesege)! - Add type-safe events system with `@Listener` and `@On` decorators, `EventRegistry` for handler registration and emission, and automatic listener discovery from module providers during application bootstrap. Enhanced DI container with service decoration support.
+
 ## 0.0.4
 
 ### Patch Changes

@@ -1,7 +1,7 @@
 import { zenstackAdapter } from '@zenstackhq/better-auth'
 import type { BetterAuthOptions } from 'better-auth'
 import type { DatabaseService } from '../../src/database/database.service'
-import { schema } from '../../zenstack/schema'
+import { schema } from '../zenstack/schema'
 
 export function createTestAuthOptions(
   db: DatabaseService,

@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@a90bcbc6539c36a85cdfeb73f7e2f433735f215b # v2.15.0
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
         with:
           egress-policy: audit
 
@@ -22,17 +22,8 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      - name: Build core
-        run: yarn workspace stratal build
-
-      - name: Build testing package
-        run: yarn workspace @stratal/testing build
-
-      - name: Build framework package
-        run: yarn workspace @stratal/framework build
-
-      - name: Build seeders package
-        run: yarn workspace @stratal/seeders build
+      - name: Build all packages
+        run: yarn workspaces foreach -At run build
 
       - name: Verify core package contents
         run: cd packages/core && npm pack --dry-run
@@ -63,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@a90bcbc6539c36a85cdfeb73f7e2f433735f215b # v2.15.0
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
         with:
           egress-policy: audit
 
@@ -75,7 +66,10 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: dist-artifacts
-          path: .
+          path: packages
+
+      - name: Generate framework schema and types
+        run: yarn workspace @stratal/framework pretest
 
       - name: Lint
         run: yarn lint
@@ -94,6 +88,7 @@ jobs:
 
   test:
     name: Test
+    needs: build
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -113,7 +108,7 @@ jobs:
       DATABASE_URL: postgres://stratal:stratal_test@localhost:5438/stratal_test
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@a90bcbc6539c36a85cdfeb73f7e2f433735f215b # v2.15.0
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
         with:
           egress-policy: audit
 
@@ -125,7 +120,10 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: dist-artifacts
-          path: .
+          path: packages
+
+      - name: Create framework .env for database
+        run: echo "DATABASE_URL=$DATABASE_URL" > packages/framework/.env
 
       - name: Generate framework schema and types
         run: yarn workspace @stratal/framework pretest
