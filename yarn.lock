@@ -2988,42 +2988,42 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@scalar/core@npm:0.3.43":
-  version: 0.3.43
-  resolution: "@scalar/core@npm:0.3.43"
+"@scalar/core@npm:0.4.0":
+  version: 0.4.0
+  resolution: "@scalar/core@npm:0.4.0"
   dependencies:
-    "@scalar/types": "npm:0.6.8"
-  checksum: 10c0/4b2137e9df50194502b3ce900b3c05bdc69661ac067b32c2e5cf504ebb0eb170d296a4fee8ef9538fb56f6fd2ee078c186c296dad301ae7016a0282d0b183732
+    "@scalar/types": "npm:0.7.0"
+  checksum: 10c0/1f253e5adb1b24eab3bc4616f100d3589de38338c8b970293fe52004757c02e67c1fb16b9d34c63832df38440b894795d3786c92168b36bb888cff7917e1e6a0
   languageName: node
   linkType: hard
 
-"@scalar/helpers@npm:0.2.16":
-  version: 0.2.16
-  resolution: "@scalar/helpers@npm:0.2.16"
-  checksum: 10c0/dd3bf4da93e6024034ce9433f28e8561415067016df1065b3f3e89fb928b71672ec435c2b640588189ca11a49811b094f5d334e42eb6ed4daa6148f18ba6d03e
+"@scalar/helpers@npm:0.3.0":
+  version: 0.3.0
+  resolution: "@scalar/helpers@npm:0.3.0"
+  checksum: 10c0/a100e0a1d1cc6a18b1deb2bcb730547c968deae77e82d39e6c039b9f232eb70b95d55fa0790aa71210ca985ff25da60cbb2feb831df58034c5059b8e930a08ac
   languageName: node
   linkType: hard
 
-"@scalar/hono-api-reference@npm:^0.9.46":
-  version: 0.9.46
-  resolution: "@scalar/hono-api-reference@npm:0.9.46"
+"@scalar/hono-api-reference@npm:^0.10.0":
+  version: 0.10.0
+  resolution: "@scalar/hono-api-reference@npm:0.10.0"
   dependencies:
-    "@scalar/core": "npm:0.3.43"
+    "@scalar/core": "npm:0.4.0"
   peerDependencies:
     hono: ^4.11.5
-  checksum: 10c0/afbdb3caa29a300e7f362aa0ebed8658ee0f54dfab5954d3d32bb09101545d4a1a047139ca7fb877552390d4da614dfa31fa05047bb267c5efeff0c9e338410c
+  checksum: 10c0/5d75420c97638160283b2a658948d4c21c423a7268aa5a9576c0c4dc1a65ac781ba13c10dfb8626bfb96db11fd1b7623feeb0aa458e1778579d7ed6834df3848
   languageName: node
   linkType: hard
 
-"@scalar/types@npm:0.6.8":
-  version: 0.6.8
-  resolution: "@scalar/types@npm:0.6.8"
+"@scalar/types@npm:0.7.0":
+  version: 0.7.0
+  resolution: "@scalar/types@npm:0.7.0"
   dependencies:
-    "@scalar/helpers": "npm:0.2.16"
+    "@scalar/helpers": "npm:0.3.0"
     nanoid: "npm:^5.1.6"
     type-fest: "npm:^5.3.1"
     zod: "npm:^4.3.5"
-  checksum: 10c0/e8d786895660153304c048aec4b1df9b8122c8f7af6f479b6ec99ae3db8f5f383a676ec717ada6db579feceeaaba9bd65ef0ec6e9d6db12f1695e4f426c804e0
+  checksum: 10c0/04e0f41618efd0a5d196f2132eb5617ef0220bc706128c3cbdba1d5eb3e28c1fd62ae70ae4be5640d87c3db88f7d810645d7ff8194a9880d4075a2c1397e878d
   languageName: node
   linkType: hard
 
@@ -9295,7 +9295,7 @@ __metadata:
     "@intlify/core-base": "npm:^11.2.8"
     "@intlify/message-compiler": "npm:^11.2.8"
     "@react-email/components": "npm:^1.0.8"
-    "@scalar/hono-api-reference": "npm:^0.9.46"
+    "@scalar/hono-api-reference": "npm:^0.10.0"
     "@stratal/testing": "workspace:*"
     "@tus/server": "npm:^2.3.0"
     "@types/node": "npm:^25.3.2"

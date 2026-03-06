@@ -83,7 +83,7 @@
     "@hono/zod-openapi": "^1.2.2",
     "@intlify/core-base": "^11.2.8",
     "@intlify/message-compiler": "^11.2.8",
-    "@scalar/hono-api-reference": "^0.9.46",
+    "@scalar/hono-api-reference": "^0.10.0",
     "@xmldom/xmldom": "^0.8.11",
     "hono": "^4.12.3",
     "reflect-metadata": "^0.2.2",
