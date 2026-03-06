@@ -326,9 +326,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@aws-sdk/lib-storage@npm:^3.1003.0":
-  version: 3.1003.0
-  resolution: "@aws-sdk/lib-storage@npm:3.1003.0"
+"@aws-sdk/lib-storage@npm:^3.1000.0":
+  version: 3.1004.0
+  resolution: "@aws-sdk/lib-storage@npm:3.1004.0"
   dependencies:
     "@smithy/abort-controller": "npm:^4.2.11"
     "@smithy/middleware-endpoint": "npm:^4.4.22"
@@ -338,8 +338,8 @@ __metadata:
     stream-browserify: "npm:3.0.0"
     tslib: "npm:^2.6.2"
   peerDependencies:
-    "@aws-sdk/client-s3": ^3.1003.0
-  checksum: 10c0/ac1d24cb71ae165b7c60ffb494c76a0426c7a1a63f072de193dc58e881219b7d88ae780c8ce9cef027967cf09751fc5c71067b4bbc347abff46c14c99c6d1fc8
+    "@aws-sdk/client-s3": ^3.1004.0
+  checksum: 10c0/42f8181fd85d89b8665ce89d78e39d30ec6cac83c53117fbfd5010bdcb9e1c861b996eb380329e9a58691930f97c100c41590a13d5d600f33c8172acf89be1ea
   languageName: node
   linkType: hard
 
@@ -891,7 +891,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@better-auth/core@npm:1.5.4, @better-auth/core@npm:^1.5.4":
+"@better-auth/core@npm:1.5.4, @better-auth/core@npm:^1.5.0":
   version: 1.5.4
   resolution: "@better-auth/core@npm:1.5.4"
   dependencies:
@@ -1318,7 +1318,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@cloudflare/vitest-pool-workers@npm:^0.12.20":
+"@cloudflare/vitest-pool-workers@npm:^0.12.18":
   version: 0.12.20
   resolution: "@cloudflare/vitest-pool-workers@npm:0.12.20"
   dependencies:
@@ -3677,26 +3677,26 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@stratal/framework@workspace:packages/framework"
   dependencies:
-    "@better-auth/core": "npm:^1.5.4"
-    "@cloudflare/vitest-pool-workers": "npm:^0.12.20"
+    "@better-auth/core": "npm:^1.5.0"
+    "@cloudflare/vitest-pool-workers": "npm:^0.12.18"
     "@cloudflare/workers-types": "npm:4.20260306.1"
     "@faker-js/faker": "npm:^10.3.0"
     "@stratal/testing": "workspace:^"
     "@types/node": "npm:^22.19.13"
     "@types/pg": "npm:^8.18.0"
     "@vitest/coverage-istanbul": "npm:3.2.4"
-    "@zenstackhq/better-auth": "npm:^3.4.4"
-    "@zenstackhq/cli": "npm:^3.4.4"
-    "@zenstackhq/orm": "npm:^3.4.4"
-    better-auth: "npm:^1.5.4"
+    "@zenstackhq/better-auth": "npm:^3.4.1"
+    "@zenstackhq/cli": "npm:^3.4.1"
+    "@zenstackhq/orm": "npm:^3.4.1"
+    better-auth: "npm:^1.5.0"
     casbin: "npm:^5.49.0"
-    pg: "npm:^8.20.0"
+    pg: "npm:^8.19.0"
     postgres-array: "npm:^3.0.4"
     reflect-metadata: "npm:^0.2.2"
     stratal: "workspace:*"
     typescript: "npm:^5.9.3"
     vitest: "npm:~3.2.0"
-    wrangler: "npm:^4.71.0"
+    wrangler: "npm:^4.69.0"
   peerDependencies:
     "@better-auth/core": ^1.0.0
     "@faker-js/faker": ^10.3.0
@@ -3745,12 +3745,12 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@stratal/testing@workspace:packages/testing"
   dependencies:
-    "@cloudflare/vitest-pool-workers": "npm:^0.12.20"
+    "@cloudflare/vitest-pool-workers": "npm:^0.12.18"
     "@cloudflare/workers-types": "npm:4.20260306.1"
     "@golevelup/ts-vitest": "npm:^2.2.0"
     "@stratal/framework": "workspace:*"
     "@types/node": "npm:^25.3.2"
-    better-auth: "npm:^1.5.4"
+    better-auth: "npm:^1.5.0"
     stratal: "workspace:*"
     typescript: "npm:^5.9.3"
     vitest: "npm:~3.2.0"
@@ -4394,7 +4394,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@zenstackhq/better-auth@npm:^3.4.4":
+"@zenstackhq/better-auth@npm:^3.4.1":
   version: 3.4.4
   resolution: "@zenstackhq/better-auth@npm:3.4.4"
   dependencies:
@@ -4409,7 +4409,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@zenstackhq/cli@npm:^3.4.4":
+"@zenstackhq/cli@npm:^3.4.1":
   version: 3.4.4
   resolution: "@zenstackhq/cli@npm:3.4.4"
   dependencies:
@@ -4474,7 +4474,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@zenstackhq/orm@npm:3.4.4, @zenstackhq/orm@npm:^3.4.4":
+"@zenstackhq/orm@npm:3.4.4, @zenstackhq/orm@npm:^3.4.1":
   version: 3.4.4
   resolution: "@zenstackhq/orm@npm:3.4.4"
   dependencies:
@@ -4790,7 +4790,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"better-auth@npm:^1.5.4":
+"better-auth@npm:^1.5.0":
   version: 1.5.4
   resolution: "better-auth@npm:1.5.4"
   dependencies:
@@ -6596,7 +6596,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"hono@npm:^4.12.5":
+"hono@npm:^4.12.3":
   version: 4.12.5
   resolution: "hono@npm:4.12.5"
   checksum: 10c0/a8cf0c988e84b370978b57d941fc543b93994b7b01c847611ec73be8e8c9fda5baeac8be08a44eaefdf215381fea2620ccb742ff5c4eaeecb35b92f6a75832c6
@@ -8192,7 +8192,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"pg@npm:^8.20.0":
+"pg@npm:^8.19.0":
   version: 8.20.0
   resolution: "pg@npm:8.20.0"
   dependencies:
@@ -9212,9 +9212,9 @@ __metadata:
   resolution: "stratal@workspace:packages/core"
   dependencies:
     "@aws-sdk/client-s3": "npm:3.1003.0"
-    "@aws-sdk/lib-storage": "npm:^3.1003.0"
+    "@aws-sdk/lib-storage": "npm:^3.1000.0"
     "@aws-sdk/s3-request-presigner": "npm:3.1003.0"
-    "@cloudflare/vitest-pool-workers": "npm:^0.12.20"
+    "@cloudflare/vitest-pool-workers": "npm:^0.12.18"
     "@cloudflare/workers-types": "npm:4.20260306.1"
     "@hono/zod-openapi": "npm:^1.2.2"
     "@intlify/core-base": "npm:^11.2.8"
@@ -9229,7 +9229,7 @@ __metadata:
     "@types/react-dom": "npm:^19.2.3"
     "@vitest/coverage-v8": "npm:^4.0.18"
     "@xmldom/xmldom": "npm:^0.8.11"
-    hono: "npm:^4.12.5"
+    hono: "npm:^4.12.3"
     nodemailer: "npm:^8.0.1"
     react: "npm:^19.2.4"
     react-dom: "npm:^19.2.4"
@@ -10119,7 +10119,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"wrangler@npm:4.71.0, wrangler@npm:^4.71.0":
+"wrangler@npm:4.71.0, wrangler@npm:^4.69.0, wrangler@npm:^4.71.0":
   version: 4.71.0
   resolution: "wrangler@npm:4.71.0"
   dependencies:
