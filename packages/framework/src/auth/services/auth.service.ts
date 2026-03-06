@@ -1,5 +1,5 @@
 import type { Auth, BetterAuthOptions } from 'better-auth'
-import { betterAuth } from 'better-auth/minimal'
+import { betterAuth } from 'better-auth'
 import { inject } from 'tsyringe'
 import { Transient } from 'stratal/di'
 import { AUTH_OPTIONS, AUTH_SERVICE } from '../auth.tokens'

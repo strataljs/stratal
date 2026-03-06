@@ -1,0 +1,16 @@
+{
+  "name": "stratal-example-11-auth",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-02-25",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "ENVIRONMENT": "development",
+    "BETTER_AUTH_SECRET": "my-secret-key-change-in-production"
+  },
+  "kv_namespaces": [
+    { "binding": "CACHE", "id": "placeholder" }
+  ],
+  "d1_databases": [
+    { "binding": "DB", "database_name": "auth-example", "database_id": "placeholder", "migrations_dir": "migrations" }
+  ]
+}

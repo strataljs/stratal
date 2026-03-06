@@ -1,0 +1,30 @@
+{
+  "name": "stratal-example-13-rbac",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "generate": "zenstack generate --schema db/schema.zmodel -o db/zenstack",
+    "wrangler:types": "wrangler types",
+    "db:up": "docker compose up -d",
+    "db:push": "DATABASE_URL='postgres://stratal:stratal@localhost:6432/stratal_rbac_example' npx zenstack db push --schema db/schema.zmodel",
+    "seed": "stratal-seed ./src/seeders/index.ts"
+  },
+  "dependencies": {
+    "@stratal/framework": "latest",
+    "@stratal/seeders": "latest",
+    "@zenstackhq/better-auth": "^3.4.4",
+    "@zenstackhq/orm": "^3.4.4",
+    "better-auth": "^1.0.0",
+    "casbin": "^5.0.0",
+    "pg": "^8.13.3",
+    "reflect-metadata": "^0.2.2",
+    "stratal": "latest"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260305.1",
+    "@types/pg": "^8.11.11",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.71.0"
+  }
+}

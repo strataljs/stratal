@@ -1,0 +1,80 @@
+datasource db {
+    provider = 'postgresql'
+    url      = env('DATABASE_URL')
+}
+
+model User {
+    id            String    @id @default(cuid())
+    email         String    @unique
+    name          String
+    emailVerified Boolean   @default(false)
+    image         String?
+    role          String    @default("user")
+    createdAt     DateTime  @default(now())
+    updatedAt     DateTime  @updatedAt
+    articles      Article[]
+    sessions      Session[]
+    accounts      Account[]
+}
+
+model Session {
+    id        String   @id
+    expiresAt DateTime
+    token     String   @unique
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    ipAddress String?
+    userAgent String?
+    userId    String
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Account {
+    id                    String    @id
+    accountId             String
+    providerId            String
+    userId                String
+    user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+    accessToken           String?
+    refreshToken          String?
+    idToken               String?
+    accessTokenExpiresAt  DateTime?
+    refreshTokenExpiresAt DateTime?
+    scope                 String?
+    password              String?
+    createdAt             DateTime  @default(now())
+    updatedAt             DateTime  @updatedAt
+}
+
+model Verification {
+    id         String   @id
+    identifier String
+    value      String
+    expiresAt  DateTime
+    createdAt  DateTime @default(now())
+    updatedAt  DateTime @updatedAt
+}
+
+model Article {
+    id        String   @id @default(cuid())
+    title     String
+    content   String
+    published Boolean  @default(false)
+    authorId  String
+    author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+}
+
+model CasbinRule {
+    id    Int     @id @default(autoincrement())
+    ptype String
+    v0    String?
+    v1    String?
+    v2    String?
+    v3    String?
+    v4    String?
+    v5    String?
+
+    @@map("casbin_rule")
+}

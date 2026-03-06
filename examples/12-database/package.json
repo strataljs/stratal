@@ -1,0 +1,25 @@
+{
+  "name": "stratal-example-12-database",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "generate": "zenstack generate --schema db/schema.zmodel -o db/zenstack",
+    "wrangler:types": "wrangler types",
+    "db:up": "docker compose up -d",
+    "db:push": "DATABASE_URL='postgres://stratal:stratal@localhost:6432/stratal_database_example' npx zenstack db push --schema db/schema.zmodel"
+  },
+  "dependencies": {
+    "@stratal/framework": "latest",
+    "@zenstackhq/orm": "^3.4.4",
+    "pg": "^8.13.3",
+    "reflect-metadata": "^0.2.2",
+    "stratal": "latest"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260305.1",
+    "@types/pg": "^8.11.11",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.71.0"
+  }
+}

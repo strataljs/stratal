@@ -12,7 +12,7 @@ import {
   type OnShutdown,
 } from 'stratal/module'
 import { instancePerContainerCachingFactory } from 'tsyringe'
-import { createDatabaseService, databaseModuleConfigSchema } from './database.helpers'
+import { createDatabaseService } from './database.helpers'
 import { DATABASE_TOKENS, connectionSymbol } from './database.tokens'
 import { DatabaseConfigError } from './errors/database-config.error'
 
@@ -54,16 +54,24 @@ export class DatabaseModule implements OnInitialize, OnShutdown {
 
   onInitialize(context: ModuleContext): void {
     const config = context.container.resolve<DatabaseModuleConfig>(DATABASE_TOKENS.Options)
-    const parsed = databaseModuleConfigSchema.safeParse(config)
-    if (!parsed.success) {
-      throw new DatabaseConfigError(parsed.error.issues.map(i => i.message).join('; '))
-    }
+    const container = context.container.getTsyringeContainer()
 
     for (const conn of config.connections) {
-      context.container.registerFactory(connectionSymbol(conn.name), c => instancePerContainerCachingFactory((c) => {
-        const eventRegistry = c.resolve<IEventRegistry>(DI_TOKENS.EventRegistry)
-        return createDatabaseService(conn, eventRegistry)
-      })(c.getTsyringeContainer()))
+      container.register(connectionSymbol(conn.name), {
+        useFactory: instancePerContainerCachingFactory((c) => {
+          const resolvedConfig = c.resolve<DatabaseModuleConfig>(DATABASE_TOKENS.Options)
+          const resolvedConn = resolvedConfig.connections.find(
+            connection => connection.name === conn.name
+          )
+
+          if (!resolvedConn) {
+            throw new DatabaseConfigError('Connection not found');
+          }
+
+          const eventRegistry = c.resolve<IEventRegistry>(DI_TOKENS.EventRegistry)
+          return createDatabaseService(resolvedConn, eventRegistry)
+        })
+      })
     }
 
     context.container.registerExisting(DI_TOKENS.Database, connectionSymbol(config.default))

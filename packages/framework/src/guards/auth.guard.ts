@@ -1,8 +1,8 @@
-import { inject } from 'tsyringe'
-import { Transient, DI_TOKENS } from 'stratal/di'
+import { DI_TOKENS, Transient } from 'stratal/di'
+import type { AuthGuardOptions, CanActivate, GuardClass } from 'stratal/guards'
 import { LOGGER_TOKENS, type LoggerService } from 'stratal/logger'
 import type { RouterContext } from 'stratal/router'
-import type { AuthGuardOptions, CanActivate, GuardClass } from 'stratal/guards'
+import { inject } from 'tsyringe'
 import type { AuthContext } from '../context/auth-context'
 import { UserNotAuthenticatedError } from '../context/errors'
 import { InsufficientPermissionsError } from '../rbac/errors/insufficient-permissions.error'
@@ -47,8 +47,8 @@ export function AuthGuard(options?: AuthGuardOptions): GuardClass {
     constructor(
       @inject(DI_TOKENS.AuthContext) private readonly authContext: AuthContext,
       @inject(LOGGER_TOKENS.LoggerService) private readonly logger: LoggerService,
-      @inject(RBAC_TOKENS.CasbinService) private readonly casbinService: CasbinService
-    ) {}
+      @inject(RBAC_TOKENS.CasbinService, { isOptional: true }) private readonly casbinService?: CasbinService
+    ) { }
 
     async canActivate(context: RouterContext): Promise<boolean> {
       if (!this.authContext.isAuthenticated()) {
@@ -69,21 +69,23 @@ export function AuthGuard(options?: AuthGuardOptions): GuardClass {
 
       const httpMethod = context.c.req.method.toLowerCase()
 
-      const hasPermission = await this.casbinService.hasAnyPermission(
-        userId,
-        scopes,
-        httpMethod
-      )
+      if (this.casbinService) {
+        const hasPermission = await this.casbinService.hasAnyPermission(
+          userId,
+          scopes,
+          httpMethod
+        )
 
-      this.logger.debug('Auth guard: Authorization check', {
-        userId,
-        scopes,
-        httpMethod,
-        hasPermission,
-      })
+        this.logger.debug('Auth guard: Authorization check', {
+          userId,
+          scopes,
+          httpMethod,
+          hasPermission,
+        })
 
-      if (!hasPermission) {
-        throw new InsufficientPermissionsError(scopes, userId)
+        if (!hasPermission) {
+          throw new InsufficientPermissionsError(scopes, userId)
+        }
       }
 
       return true
