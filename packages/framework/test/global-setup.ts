@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 
 export default function setup() {
@@ -6,7 +6,7 @@ export default function setup() {
   const zenstackBin = resolve(import.meta.dirname, '../../../node_modules/.bin/zenstack')
   const nodeBinDir = dirname(process.execPath)
 
-  execSync(`${zenstackBin} db push --force-reset --schema=${schemaPath} --accept-data-loss`, {
+  execFileSync(zenstackBin, ['db', 'push', '--force-reset', `--schema=${schemaPath}`, '--accept-data-loss'], {
     stdio: 'inherit',
     env: {
       ...process.env,
