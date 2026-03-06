@@ -51,7 +51,7 @@ jobs:
       - name: Create Release PR or Publish
         uses: changesets/action@v1
         with:
-          version: yarn version
+          version: yarn changeset version
           publish: yarn release
           createGithubReleases: true
         env:
