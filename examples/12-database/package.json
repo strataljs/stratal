@@ -17,7 +17,7 @@
     "stratal": "latest"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260305.1",
+    "@cloudflare/workers-types": "^4.20260306.1",
     "@types/pg": "^8.11.11",
     "typescript": "^5.9.3",
     "wrangler": "^4.71.0"
