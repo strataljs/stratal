@@ -32,7 +32,7 @@ beforeAll(async () => {
     logging: { level: LogLevel.ERROR },
   }
 
-  app = new Application(env, ctx, config)
+  app = new Application({ ...config, env, ctx })
   await app.initialize()
   router = app.resolve<RouterService>(ROUTER_TOKENS.RouterService)
 })

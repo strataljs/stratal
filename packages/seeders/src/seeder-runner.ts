@@ -136,12 +136,14 @@ async function loadApp(
     configPath: wranglerPath,
   })
 
-  const app = new Application(env as unknown as StratalEnv, ctx, {
+  const app = new Application({
     module,
     logging: {
       level: LogLevel.ERROR,
       formatter: 'pretty'
-    }
+    },
+    env: env as unknown as StratalEnv,
+    ctx,
   })
   await app.initialize()
 

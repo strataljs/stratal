@@ -21,7 +21,7 @@ The CLI will prompt you for a project name and scaffold a ready-to-go Stratal pr
 ```
 src/
   app.module.ts              # Root module
-  index.ts                   # Worker entry point (StratalWorker)
+  index.ts                   # Worker entry point (Stratal)
   types/
     env.ts                   # StratalEnv augmentation
   config/
@@ -189,7 +189,7 @@ The base `StratalEnv` already includes:
 - `CACHE: KVNamespace`
 
 The augmented type flows automatically through:
-- `StratalWorker<Env>` — worker entry point
+- `Stratal<Env>` — worker entry point
 - `DI_TOKENS.CloudflareEnv` — inject Cloudflare env in services
 - `RouterContext` — access env via the Hono context
 
@@ -197,22 +197,17 @@ The augmented type flows automatically through:
 
 ```typescript
 // src/index.ts
-import { type ApplicationConfig } from 'stratal'
+import { Stratal } from 'stratal'
 import { LogLevel } from 'stratal/logger'
-import { StratalWorker } from 'stratal/worker'
 import { AppModule } from './app.module'
 
-export default class Backend extends StratalWorker {
-  protected configure(): ApplicationConfig {
-    return {
-      module: AppModule,
-      logging: {
-        level: LogLevel.INFO,
-        formatter: 'json',     // 'json' or 'pretty'
-      },
-    }
-  }
-}
+export default new Stratal({
+  module: AppModule,
+  logging: {
+    level: LogLevel.INFO,
+    formatter: 'json',     // 'json' or 'pretty'
+  },
+})
 ```
 
 ### ApplicationConfig

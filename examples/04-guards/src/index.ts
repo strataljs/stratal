@@ -1,4 +1,4 @@
-import { StratalWorker } from 'stratal/worker'
+import { Stratal } from 'stratal'
 import { AppModule } from './app.module'
 
 declare module 'stratal' {
@@ -7,8 +7,4 @@ declare module 'stratal' {
   }
 }
 
-export default class Worker extends StratalWorker {
-  protected configure() {
-    return { module: AppModule }
-  }
-}
+export default new Stratal({ module: AppModule })

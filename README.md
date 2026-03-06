@@ -54,10 +54,9 @@ npx skills add strataljs/stratal
 Define a module with a controller and wire it up as a Cloudflare Worker:
 
 ```typescript
-import { type ApplicationConfig } from 'stratal'
+import { Stratal } from 'stratal'
 import { Module } from 'stratal/module'
 import { Controller, Route, type RouterContext } from 'stratal/router'
-import { StratalWorker } from 'stratal/worker'
 import { z } from 'stratal/validation'
 
 // Define a controller
@@ -79,11 +78,7 @@ class GreetingsController {
 class AppModule {}
 
 // Worker entry point
-export default class Backend extends StratalWorker {
-  protected configure(): ApplicationConfig {
-    return { module: AppModule }
-  }
-}
+export default new Stratal({ module: AppModule })
 ```
 
 ## Documentation

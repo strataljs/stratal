@@ -6,7 +6,7 @@ description: >-
   queue consumers, cron jobs, email, storage, caching, i18n, authentication (Better Auth),
   database (ZenStack ORM), RBAC (Casbin), guards, factories, and seeders. Use when
   creating, modifying, or testing a Stratal application, or when mentions of stratal,
-  StratalWorker, @Module, @Controller, @Route, IController, RouterContext, AuthModule,
+  Stratal, @Module, @Controller, @Route, IController, RouterContext, AuthModule,
   DatabaseModule, RbacModule, AuthGuard, AuthContext, @InjectDB, DatabaseService,
   CasbinService, Factory, Seeder, SeederRunner, @stratal/framework, @stratal/seeders appear.
 license: MIT
@@ -31,20 +31,13 @@ Stratal is a modular Cloudflare Workers framework. It provides dependency inject
 ### Worker Entry Point
 
 ```typescript
-import { type ApplicationConfig } from 'stratal'
-import { StratalWorker } from 'stratal/worker'
+import { Stratal } from 'stratal'
 import { AppModule } from './app.module'
 
-export default class Backend extends StratalWorker {
-  protected configure(): ApplicationConfig {
-    return {
-      module: AppModule,
-    }
-  }
-}
+export default new Stratal({ module: AppModule })
 ```
 
-`StratalWorker` extends Cloudflare's `WorkerEntrypoint`. It handles HTTP fetch, queue batches, and scheduled cron triggers automatically.
+`Stratal` lazily initializes the application on the first handler call (fetch, queue, or scheduled). It handles HTTP fetch, queue batches, and scheduled cron triggers automatically.
 
 ### Root Module
 
@@ -438,7 +431,7 @@ Entry file: `SeederRunner.run(AppModule)` in `src/seeders/index.ts`.
 
 | Import | Exports |
 |--------|---------|
-| `stratal` | Application, StratalEnv, Constructor, ApplicationConfig |
+| `stratal` | Stratal, Application, StratalEnv, Constructor, ApplicationConfig |
 | `stratal/di` | Container, inject, Transient, Scope, DI_TOKENS, CONTAINER_TOKEN |
 | `stratal/router` | Controller, Route, IController, RouterContext, UseGuards, ROUTER_TOKENS |
 | `stratal/validation` | z (Zod), ZodType, ZodObject — always use this, not `zod` directly |
@@ -454,7 +447,6 @@ Entry file: `SeederRunner.run(AppModule)` in `src/seeders/index.ts`.
 | `stratal/guards` | CanActivate, UseGuards |
 | `stratal/middleware` | Middleware, MiddlewareConfigurable, MiddlewareConsumer |
 | `stratal/module` | Module, ModuleOptions, DynamicModule, OnInitialize, OnShutdown, ModuleContext |
-| `stratal/worker` | StratalWorker |
 | `@stratal/framework` | Re-exports from all sub-paths |
 | `@stratal/framework/auth` | AuthModule, AuthService, AUTH_SERVICE, AUTH_OPTIONS, wrapBetterAuth, auth errors |
 | `@stratal/framework/context` | AuthContext, AuthInfo, UserNotAuthenticatedError, ContextNotInitializedError |

@@ -4,7 +4,7 @@ The simplest possible Stratal application: one module, one controller, one GET e
 
 ## What it demonstrates
 
-- `StratalWorker` entry point
+- `Stratal` entry point
 - `@Module()` decorator to declare controllers
 - `@Controller()` to define a route prefix
 - `@Route()` with a Zod response schema

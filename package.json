@@ -37,7 +37,7 @@
     "prepare": "husky",
     "changeset": "changeset",
     "release": "changeset publish",
-    "build": "yarn workspaces foreach -A --no-private exec run build",
+    "build": "yarn workspaces foreach -At --no-private exec run build",
     "docs": "typedoc",
     "docs:watch": "typedoc --watch"
   },
