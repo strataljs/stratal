@@ -54,5 +54,7 @@ jobs:
           version: yarn changeset version
           publish: yarn release
           createGithubReleases: true
+          title: "chore: version packages"
+          commit: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
