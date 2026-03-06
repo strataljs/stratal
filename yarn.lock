@@ -3682,7 +3682,7 @@ __metadata:
     "@cloudflare/workers-types": "npm:4.20260306.1"
     "@faker-js/faker": "npm:^10.3.0"
     "@stratal/testing": "workspace:^"
-    "@types/node": "npm:^22.19.13"
+    "@types/node": "npm:^25.3.5"
     "@types/pg": "npm:^8.18.0"
     "@vitest/coverage-istanbul": "npm:3.2.4"
     "@zenstackhq/better-auth": "npm:^3.4.1"
@@ -3726,7 +3726,7 @@ __metadata:
   dependencies:
     "@swc-node/register": "npm:^1.10.9"
     "@swc/core": "npm:^1.10.1"
-    "@types/node": "npm:^25.3.2"
+    "@types/node": "npm:^25.3.5"
     "@types/yargs": "npm:^17.0.34"
     chalk: "npm:^5.6.2"
     reflect-metadata: "npm:^0.2.2"
@@ -3749,7 +3749,7 @@ __metadata:
     "@cloudflare/workers-types": "npm:4.20260306.1"
     "@golevelup/ts-vitest": "npm:^2.2.0"
     "@stratal/framework": "workspace:*"
-    "@types/node": "npm:^25.3.2"
+    "@types/node": "npm:^25.3.5"
     better-auth: "npm:^1.5.0"
     stratal: "workspace:*"
     typescript: "npm:^5.9.3"
@@ -4020,7 +4020,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:*, @types/node@npm:^25.3.2":
+"@types/node@npm:*":
   version: 25.3.3
   resolution: "@types/node@npm:25.3.3"
   dependencies:
@@ -4036,12 +4036,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:^22.19.13":
-  version: 22.19.13
-  resolution: "@types/node@npm:22.19.13"
+"@types/node@npm:^25.3.5":
+  version: 25.3.5
+  resolution: "@types/node@npm:25.3.5"
   dependencies:
-    undici-types: "npm:~6.21.0"
-  checksum: 10c0/ad8a0b6a69dd8ef663701573eca94ef6d20ce093f54f05bed823c826374eb1ea8b06e6f2c5d7f6cfc203b82dfd60293296bf80ea987ddb77775840bc2ef9f803
+    undici-types: "npm:~7.18.0"
+  checksum: 10c0/4cf0834a6f6933bf0aca6afead117ae3db3b8f02a5f7187a24f871db0fb9344e5e46573ba387bc53b7505e1e219c4c535cbe67221ced95bb5ad98573223b19d0
   languageName: node
   linkType: hard
 
@@ -9223,7 +9223,7 @@ __metadata:
     "@scalar/hono-api-reference": "npm:^0.10.0"
     "@stratal/testing": "workspace:*"
     "@tus/server": "npm:^2.3.0"
-    "@types/node": "npm:^25.3.2"
+    "@types/node": "npm:^25.3.5"
     "@types/nodemailer": "npm:^7.0.11"
     "@types/react": "npm:^19.2.14"
     "@types/react-dom": "npm:^19.2.3"
@@ -9717,13 +9717,6 @@ __metadata:
   bin:
     ulid: dist/cli.js
   checksum: 10c0/3993499f0cb3f322e46a8da7144b184d9b12d2cc1976dd7eeb35fc2b4e153c547e8963db4d5a320995c481b0e0294289ba8260e0f69dce99ded3c647c33ac574
-  languageName: node
-  linkType: hard
-
-"undici-types@npm:~6.21.0":
-  version: 6.21.0
-  resolution: "undici-types@npm:6.21.0"
-  checksum: 10c0/c01ed51829b10aa72fc3ce64b747f8e74ae9b60eafa19a7b46ef624403508a54c526ffab06a14a26b3120d055e1104d7abe7c9017e83ced038ea5cf52f8d5e04
   languageName: node
   linkType: hard
 

@@ -77,7 +77,7 @@
     "@cloudflare/vitest-pool-workers": "^0.12.18",
     "@cloudflare/workers-types": "4.20260306.1",
     "@stratal/framework": "workspace:*",
-    "@types/node": "^25.3.2",
+    "@types/node": "^25.3.5",
     "better-auth": "^1.5.0",
     "stratal": "workspace:*",
     "typescript": "^5.9.3",
