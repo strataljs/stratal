@@ -1,6 +1,6 @@
 import { Factory } from '@stratal/framework/factory'
-import type { Post } from '../../zenstack/models'
-import type { PostCreateArgs } from '../../zenstack/input'
+import type { PostCreateArgs } from '../zenstack/input'
+import type { Post } from '../zenstack/models'
 
 type PostCreateInput = PostCreateArgs['data']
 

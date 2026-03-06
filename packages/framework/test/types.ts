@@ -1,4 +1,4 @@
-import type { SchemaType } from '../zenstack/schema'
+import type { SchemaType } from './zenstack/schema'
 
 declare module '@stratal/framework/database' {
   interface DatabaseSchemaRegistry {

@@ -1,5 +1,15 @@
 # @stratal/testing
 
+## 0.0.5
+
+### Patch Changes
+
+- [#66](https://github.com/strataljs/stratal/pull/66) [`c8ea964`](https://github.com/strataljs/stratal/commit/c8ea964e272b09ebc6619843e77d2b51178f9423) Thanks [@adesege](https://github.com/adesege)! - Add `actingAs` auth test helper, `TestHttpRequest` builder, ZenStack language mock, and enhanced `TestingModule` utilities with new exports and types.
+
+- Updated dependencies [[`c8ea964`](https://github.com/strataljs/stratal/commit/c8ea964e272b09ebc6619843e77d2b51178f9423), [`c8ea964`](https://github.com/strataljs/stratal/commit/c8ea964e272b09ebc6619843e77d2b51178f9423)]:
+  - stratal@0.0.5
+  - @stratal/framework@0.0.5
+
 ## 0.0.4
 
 ### Patch Changes

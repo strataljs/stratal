@@ -3,59 +3,28 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: daily
+      interval: monthly
+    commit-message:
+      prefix: "chore"
+      include: "scope"
 
   - package-ecosystem: npm
-    directory: /examples/01-hello-world
+    directories:
+      - "/"
+      - "/packages/*"
+      - "/examples/*"
     schedule:
-      interval: daily
-
-  - package-ecosystem: npm
-    directory: /examples/02-crud-api
-    schedule:
-      interval: daily
-
-  - package-ecosystem: npm
-    directory: /examples/03-testing
-    schedule:
-      interval: daily
-
-  - package-ecosystem: npm
-    directory: /examples/04-guards
-    schedule:
-      interval: daily
-
-  - package-ecosystem: npm
-    directory: /examples/05-middleware
-    schedule:
-      interval: daily
-
-  - package-ecosystem: npm
-    directory: /examples/06-queues
-    schedule:
-      interval: daily
-
-  - package-ecosystem: npm
-    directory: /examples/07-scheduled-tasks
-    schedule:
-      interval: daily
-
-  - package-ecosystem: npm
-    directory: /examples/08-openapi
-    schedule:
-      interval: daily
-
-  - package-ecosystem: npm
-    directory: /
-    schedule:
-      interval: daily
-
-  - package-ecosystem: npm
-    directory: /packages/core
-    schedule:
-      interval: daily
-
-  - package-ecosystem: npm
-    directory: /packages/testing
-    schedule:
-      interval: daily
+      interval: monthly
+    open-pull-requests-limit: 20
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    labels:
+      - "dependencies"
+    groups:
+      all-non-major:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      major:
+        patterns: ["*"]
+        update-types: ["major"]
