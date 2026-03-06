@@ -1,0 +1,80 @@
+datasource db {
+    provider = 'postgresql'
+    url      = env('DATABASE_URL')
+}
+
+model User {
+    id            String    @id @default(cuid())
+    email         String    @unique
+    emailVerified Boolean   @default(false)
+    name          String
+    image         String?
+    role          String    @default("user")
+    createdAt     DateTime  @default(now())
+    updatedAt     DateTime  @updatedAt
+
+    sessions Session[]
+    accounts Account[]
+    posts    Post[]
+}
+
+model Session {
+    id        String   @id @default(cuid())
+    expiresAt DateTime
+    token     String   @unique
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    ipAddress String?
+    userAgent String?
+
+    userId String
+    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Account {
+    id           String   @id @default(cuid())
+    accountId    String
+    providerId   String
+    userId       String
+    accessToken  String?
+    refreshToken String?
+    password     String?
+    createdAt    DateTime @default(now())
+    updatedAt    DateTime @updatedAt
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Verification {
+    id         String    @id @default(cuid())
+    identifier String
+    value      String
+    expiresAt  DateTime
+    createdAt  DateTime? @default(now())
+    updatedAt  DateTime? @updatedAt
+}
+
+model Post {
+    id        String   @id @default(cuid())
+    title     String
+    content   String?
+    published Boolean  @default(false)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    authorId String
+    author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model CasbinRule {
+    id    Int     @id @default(autoincrement())
+    ptype String
+    v0    String?
+    v1    String?
+    v2    String?
+    v3    String?
+    v4    String?
+    v5    String?
+
+    @@map("casbin_rule")
+}

@@ -11,8 +11,14 @@ export { TestHttpClient } from './core/http/test-http-client'
 export { TestHttpRequest } from './core/http/test-http-request'
 export { TestResponse } from './core/http/test-response'
 
+// Auth
+export { ActingAs } from './auth'
+
 // Storage
 export { FakeStorageService, type StoredFile } from './storage'
+
+// Types
+export { Seeder } from './types'
 
 // Environment utilities
 export { getTestEnv } from './core/env'

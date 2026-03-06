@@ -11,6 +11,7 @@
 import { instancePerContainerCachingFactory } from 'tsyringe'
 import type { Container } from '../di/container'
 import { Scope } from '../di/types'
+import { isListener } from '../events'
 import type { LoggerService } from '../logger'
 import {
   createMiddlewareConsumer,
@@ -28,6 +29,7 @@ import type {
   OnShutdown,
   Provider,
 } from './types'
+
 
 interface RegisteredModule {
   moduleClass: Constructor
@@ -56,6 +58,7 @@ export class ModuleRegistry {
   private allControllers: Constructor[] = []
   private allConsumers: Constructor[] = []
   private allJobs: Constructor[] = []
+  private allListeners: Constructor[] = []
   private allMiddlewareConfigs: MiddlewareConfigEntry[] = []
 
   constructor(
@@ -192,6 +195,13 @@ export class ModuleRegistry {
   }
 
   /**
+   * Get all listeners registered from all modules
+   */
+  getAllListeners(): Constructor[] {
+    return this.allListeners
+  }
+
+  /**
    * Get all middleware configurations from all modules
    */
   getAllMiddlewareConfigs(): MiddlewareConfigEntry[] {
@@ -315,9 +325,11 @@ export class ModuleRegistry {
     if (typeof provider === 'function') {
       // Class-only provider - transient by default
       this.container.register(provider as Constructor)
+      this.collectIfListener(provider as Constructor)
     } else if ('useClass' in provider) {
       // ClassProvider with optional scope
       this.container.register(provider.provide, provider.useClass as Constructor, provider.scope)
+      this.collectIfListener(provider.useClass as Constructor)
     } else if ('useValue' in provider) {
       // ValueProvider - no scope needed (values are inherently singleton)
       this.container.registerValue(provider.provide, provider.useValue)
@@ -335,6 +347,18 @@ export class ModuleRegistry {
     } else if ('useExisting' in provider) {
       // ExistingProvider - alias to another token
       this.container.registerExisting(provider.provide, provider.useExisting)
+    }
+  }
+
+  /**
+   * Check if a class is a `@Listener()` and collect it for auto-wiring
+   */
+  private collectIfListener(providerClass: Constructor): void {
+    if (isListener(providerClass)) {
+      // Re-register as singleton so the same instance is used across all event registrations
+      this.container.register(providerClass, providerClass, Scope.Singleton)
+      this.allListeners.push(providerClass)
+      this.logger.debug(`Collected listener: ${providerClass.name}`)
     }
   }
 }

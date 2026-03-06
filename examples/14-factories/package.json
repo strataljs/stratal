@@ -1,0 +1,20 @@
+{
+  "name": "stratal-example-14-factories",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "wrangler:types": "wrangler types"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^9.0.0",
+    "@stratal/framework": "file:../../packages/framework",
+    "reflect-metadata": "^0.2.2",
+    "stratal": "file:../../packages/core"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251014.0",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.0.0"
+  }
+}

@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: stratal_test
+      POSTGRES_USER: stratal
+      POSTGRES_PASSWORD: stratal_test
+    ports:
+      - "5438:5432"
+    volumes:
+      - stratal-test-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stratal -d stratal_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  stratal-test-pgdata:

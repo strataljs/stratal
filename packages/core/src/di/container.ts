@@ -571,20 +571,11 @@ export class Container {
   }
 
   /**
-   * Cleanup request container (disconnect database, etc.)
-   *
-   * Disposes the ConnectionManager to close all database pools.
-   * This is called after each request to prevent connection leaks.
+   * Cleanup request container resources.
+   * This is called after each request.
    */
-  private async cleanupRequestContainer(requestContainer: DependencyContainer): Promise<void> {
-    try {
-      if (requestContainer.isRegistered(DI_TOKENS.ConnectionManager)) {
-        const connectionManager = requestContainer.resolve<{ dispose(): Promise<void> }>(DI_TOKENS.ConnectionManager)
-        await connectionManager.dispose()
-      }
-    } catch (error) {
-      this.logger.warn('Failed to dispose ConnectionManager', { error })
-    }
+  private async cleanupRequestContainer(_requestContainer: DependencyContainer): Promise<void> {
+    // No-op: dialects manage their own connection lifecycle
   }
 
   dispose() {
