@@ -41,12 +41,8 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
-      - name: Build packages
-        run: |
-          yarn workspace stratal build
-          yarn workspace @stratal/framework build
-          yarn workspace @stratal/testing build
-          yarn workspace @stratal/seeders build
+      - name: Build all packages
+        run: yarn workspaces foreach -At run build
 
       - name: Create Release PR or Publish
         uses: changesets/action@v1

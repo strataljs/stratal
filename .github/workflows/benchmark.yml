@@ -41,11 +41,8 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
-      - name: Build core
-        run: yarn workspace stratal build
-
-      - name: Build testing package
-        run: yarn workspace @stratal/testing build
+      - name: Build all packages
+        run: yarn workspaces foreach -At run build
 
       - name: Run benchmarks
         run: yarn workspace stratal bench:json

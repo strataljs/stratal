@@ -22,17 +22,8 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      - name: Build core
-        run: yarn workspace stratal build
-
-      - name: Build testing package
-        run: yarn workspace @stratal/testing build
-
-      - name: Build framework package
-        run: yarn workspace @stratal/framework build
-
-      - name: Build seeders package
-        run: yarn workspace @stratal/seeders build
+      - name: Build all packages
+        run: yarn workspaces foreach -At run build
 
       - name: Verify core package contents
         run: cd packages/core && npm pack --dry-run
