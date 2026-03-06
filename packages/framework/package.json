@@ -75,7 +75,7 @@
     "better-auth": "^1.4.9",
     "casbin": "^5.41.0",
     "pg": "^8.0.0",
-    "stratal": "workspace:*"
+    "stratal": "0.0.5"
   },
   "peerDependenciesMeta": {
     "@better-auth/core": {
