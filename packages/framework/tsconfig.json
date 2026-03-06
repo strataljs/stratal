@@ -19,14 +19,17 @@
       "node"
     ],
     "paths": {
-      "@stratal/framework": ["./src/index.ts"],
-      "@stratal/framework/*": ["./src/*/index.ts"]
+      "@stratal/framework": [
+        "./src/index.ts"
+      ],
+      "@stratal/framework/*": [
+        "./src/*/index.ts"
+      ]
     }
   },
   "include": [
     "src/**/*",
     "test/**/*",
-    "zenstack/**/*",
     "worker-configuration.d.ts",
     "vitest.config.ts"
   ],

@@ -1,6 +1,6 @@
 import { Factory } from '@stratal/framework/factory'
-import type { User } from '../../zenstack/models'
-import type { UserCreateArgs } from '../../zenstack/input'
+import type { UserCreateArgs } from '../zenstack/input'
+import type { User } from '../zenstack/models'
 
 type UserCreateInput = UserCreateArgs['data']
 

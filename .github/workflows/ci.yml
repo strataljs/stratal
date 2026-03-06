@@ -122,14 +122,14 @@ jobs:
           name: dist-artifacts
           path: packages
 
+      - name: Create framework .env for database
+        run: echo "DATABASE_URL=$DATABASE_URL" > packages/framework/.env
+
       - name: Generate framework schema and types
         run: yarn workspace @stratal/framework pretest
 
       - name: Run core tests
         run: yarn workspace stratal test
-
-      - name: Create framework .env for database
-        run: echo "DATABASE_URL=$DATABASE_URL" > packages/framework/.env
 
       - name: Run framework tests
         run: yarn workspace @stratal/framework test
