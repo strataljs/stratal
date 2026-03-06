@@ -13,7 +13,8 @@ export default defineConfig([
     "**/*.tsbuildinfo",
     "examples/",
     "docs/",
-    "**/worker-configuration.d.ts"
+    "**/worker-configuration.d.ts",
+    "packages/framework/test/zenstack/",
   ]),
 
   {
