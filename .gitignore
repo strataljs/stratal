@@ -145,3 +145,9 @@ docs/
 
 # Benchmark output
 benchmark-results.json
+
+# ZenStack generated files
+packages/framework/test/zenstack/
+
+# Wrangler generated types
+worker-configuration.d.ts

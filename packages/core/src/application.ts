@@ -6,6 +6,8 @@ import { Container } from './di/container'
 import { DI_TOKENS } from './di/tokens'
 import { type StratalEnv } from './env'
 import { ApplicationError, GlobalErrorHandler } from './errors'
+import type { EventHandler } from './events'
+import { EventRegistry, getListenerHandlers } from './events'
 import { I18nModule } from './i18n/i18n.module'
 import { ConsoleTransport, JsonFormatter, LOGGER_TOKENS, LoggerService, LogLevel, PrettyFormatter } from './logger'
 import { ModuleRegistry } from './module/module-registry'
@@ -141,10 +143,11 @@ export class Application {
     // Phase 5: Register RouterService
     this._container.registerSingleton(ROUTER_TOKENS.RouterService, RouterService)
 
-    // Phase 6: Configure routes, queues, and cron jobs
+    // Phase 6: Configure routes, queues, cron jobs, and event listeners
     this.registerRoutes()
     this.registerQueueConsumers()
     this.registerCronJobs()
+    this.registerEventListeners()
 
     this.initialized = true
   }
@@ -254,6 +257,29 @@ export class Application {
   }
 
   /**
+   * Auto-wire `@Listener()` classes with the EventRegistry.
+   *
+   * Reads `@On()` metadata from each listener and registers handlers.
+   */
+  private registerEventListeners(): void {
+    const listeners = this.moduleRegistry.getAllListeners()
+    if (listeners.length === 0) {
+      return
+    }
+
+    const eventRegistry = this._container.resolve<EventRegistry>(DI_TOKENS.EventRegistry)
+
+    for (const ListenerClass of listeners) {
+      const instance = this._container.resolve(ListenerClass) as Record<string, ((...args: unknown[]) => unknown)>
+      const handlers = getListenerHandlers(ListenerClass)
+
+      for (const { methodName, event, options } of handlers) {
+        eventRegistry.on(event, instance[methodName].bind(instance) as EventHandler, options)
+      }
+    }
+  }
+
+  /**
    * Register LoggerService and dependencies
    */
   private registerLoggerService(): void {
@@ -290,5 +316,8 @@ export class Application {
 
     // Error handler - transient (fresh instance each time with current I18n)
     this._container.register(DI_TOKENS.ErrorHandler, GlobalErrorHandler)
+
+    // Event registry - singleton
+    this._container.registerSingleton(DI_TOKENS.EventRegistry, EventRegistry)
   }
 }

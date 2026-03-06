@@ -1,3 +1,6 @@
+import type { AuthService } from '@stratal/framework/auth'
+import { AUTH_SERVICE } from '@stratal/framework/auth'
+import { ActingAs } from '../../auth'
 import type { TestingModule } from '../testing-module'
 import { TestResponse } from './test-response'
 
@@ -14,10 +17,19 @@ import { TestResponse } from './test-response'
  *   .withHeaders({ 'X-Custom': 'value' })
  *   .send()
  * ```
+ *
+ * @example Authenticated request
+ * ```typescript
+ * const response = await module.http
+ *   .get('/api/v1/profile')
+ *   .actingAs({ id: user.id })
+ *   .send()
+ * ```
  */
 export class TestHttpRequest {
 	private body: unknown = null
 	private requestHeaders: Headers
+	private actingAsUser: { id: string } | null = null
 
 	constructor(
 		private readonly method: string,
@@ -56,11 +68,21 @@ export class TestHttpRequest {
 	}
 
 	/**
+	 * Authenticate the request as a specific user
+	 */
+	actingAs(user: { id: string }): this {
+		this.actingAsUser = user
+		return this
+	}
+
+	/**
 	 * Send the request and return response
 	 *
 	 * Calls module.fetch() - NOT SELF.fetch()
 	 */
 	async send(): Promise<TestResponse> {
+		await this.applyAuthentication()
+
 		// Auto-set Content-Type for body
 		if (this.body && !this.requestHeaders.has('Content-Type')) {
 			this.requestHeaders.set('Content-Type', 'application/json')
@@ -77,5 +99,19 @@ export class TestHttpRequest {
 		// Call module.fetch() - NO SELF.fetch()
 		const response = await this.module.fetch(request)
 		return new TestResponse(response)
+	}
+
+	private async applyAuthentication(): Promise<void> {
+		if (!this.actingAsUser) return
+
+		await this.module.runInRequestScope(async () => {
+			const authService = this.module.get<AuthService>(AUTH_SERVICE)
+			const actingAs = new ActingAs(authService)
+			const authHeaders = this.actingAsUser ? await actingAs.createSessionForUser(this.actingAsUser) : new Headers()
+
+			for (const [key, value] of authHeaders.entries()) {
+				this.requestHeaders.set(key, value)
+			}
+		})
 	}
 }

@@ -1,0 +1,23 @@
+{
+  "name": "stratal-example-11-auth",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "wrangler:types": "wrangler types"
+  },
+  "dependencies": {
+    "@better-auth/kysely-adapter": "^1.5.4",
+    "@stratal/framework": "latest",
+    "better-auth": "^1.5.4",
+    "kysely": "^0.28.11",
+    "kysely-d1": "^0.4.0",
+    "reflect-metadata": "^0.2.2",
+    "stratal": "latest"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260306.1",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.71.0"
+  }
+}

@@ -24,6 +24,8 @@ yarn install
 packages/
   core/       # stratal — core framework (DI, modules, routing, queues, storage, email, i18n)
   testing/    # @stratal/testing — test utilities, mocks, and factories
+  framework/  # @stratal/framework — auth, database ORM (ZenStack), RBAC (Casbin), guards
+  seeders/    # @stratal/seeders — CLI tool for database seeding
 ```
 
 ## Development Workflow
@@ -40,6 +42,8 @@ yarn lint:fix
 # Type check
 yarn workspace stratal typecheck
 yarn workspace @stratal/testing typecheck
+yarn workspace @stratal/framework typecheck
+yarn workspace @stratal/seeders typecheck
 
 # Run tests
 yarn workspace stratal test
@@ -64,7 +68,7 @@ The repo uses [husky](https://typicode.github.io/husky/) + [lint-staged](https:/
 
 2. **Follow existing patterns** — the codebase uses decorators, Symbol-based DI tokens, and a module-based architecture. Look at existing code for reference.
 
-3. **Add a changeset** — before committing, run:
+3. **Add a changeset** — every PR with user-facing changes **must** include a changeset. Run:
 
    ```bash
    yarn changeset
@@ -77,7 +81,10 @@ The repo uses [husky](https://typicode.github.io/husky/) + [lint-staged](https:/
    - **minor** — new features, new exports, non-breaking additions
    - **major** — breaking changes to public API
 
-   Changesets are consumed during the release process to automatically bump versions and generate changelogs.
+   **When a changeset is not needed:**
+   - Documentation-only changes
+   - CI/tooling changes that don't affect published packages
+   - Changes to private packages (e.g., the root `stratal-monorepo`)
 
 ## Code Style
 
@@ -104,7 +111,7 @@ The repo uses [husky](https://typicode.github.io/husky/) + [lint-staged](https:/
 ## Pull Requests
 
 - CI runs **lint**, **typecheck**, **test**, and **build** on every PR.
-- Include a changeset unless the change is docs-only or CI-only.
+- Include a changeset for any PR that affects published package code.
 - Keep PRs focused — one feature or fix per PR where possible.
 
 ## License

@@ -2,11 +2,12 @@ name: Publish
 
 on:
   push:
-    tags:
-      - "stratal@*"
-      - "@stratal/testing@*"
+    branches:
+      - main
 
-concurrency: ${{ github.workflow }}-${{ github.ref }}
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -17,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
       id-token: write
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -25,6 +27,8 @@ jobs:
           egress-policy: audit
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
 
       - name: Enable Corepack
         run: corepack enable
@@ -37,16 +41,16 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
-      - name: Build packages
-        run: |
-          yarn workspace stratal build
-          yarn workspace @stratal/testing build
+      - name: Build all packages
+        run: yarn workspaces foreach -At run build
 
-      - name: Publish to npm
-        id: changesets
-        uses: changesets/action@6a0a831ff30acef54f2c6aa1cbbc1096b066edaf # v1.7.0
+      - name: Create Release PR or Publish
+        uses: changesets/action@v1
         with:
+          version: yarn changeset version && yarn install
           publish: yarn release
           createGithubReleases: true
+          title: "chore: version packages"
+          commit: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

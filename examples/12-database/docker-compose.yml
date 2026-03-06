@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: stratal_database_example
+      POSTGRES_USER: stratal
+      POSTGRES_PASSWORD: stratal
+    ports:
+      - "6432:5432"
+    volumes:
+      - stratal-database-example-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stratal -d stratal_database_example"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  stratal-database-example-pgdata:
