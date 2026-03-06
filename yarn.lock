@@ -3794,7 +3794,7 @@ __metadata:
     wrangler: "npm:^4.51.0"
     yargs: "npm:^17.7.2"
   peerDependencies:
-    stratal: ^0.0.4
+    stratal: ^0.0.5
   bin:
     stratal-seed: ./bin/cli.js
   languageName: unknown
@@ -3814,9 +3814,9 @@ __metadata:
     typescript: "npm:^5.9.3"
     vitest: "npm:~3.2.0"
   peerDependencies:
-    "@stratal/framework": ^0.0.1
+    "@stratal/framework": ^0.0.5
     better-auth: ^1.4.9
-    stratal: ^0.0.4
+    stratal: ^0.0.5
     vitest: ^3.2.0
   peerDependenciesMeta:
     "@stratal/framework":
