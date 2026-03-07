@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
 import { container as tsyringeRootContainer, injectable, inject } from 'tsyringe'
 import type { DependencyContainer } from 'tsyringe'
-import type { StratalEnv } from '../../env'
 import { Container } from '../../di/container'
 import { DI_TOKENS } from '../../di/tokens'
 import { Scope } from '../../di/types'
@@ -21,8 +20,6 @@ describe('Event Listener Auto-Wiring (Application-level)', () => {
     vi.clearAllMocks()
     childContainer = tsyringeRootContainer.createChildContainer()
     container = new Container({
-      env: {} as StratalEnv,
-      ctx: createMock<ExecutionContext>() as unknown as ExecutionContext,
       container: childContainer,
     })
     mockLogger = createMock<LoggerService>()

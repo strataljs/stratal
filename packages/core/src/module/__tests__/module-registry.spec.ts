@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
 import { container as tsyringeRootContainer, injectable } from 'tsyringe'
 import type { DependencyContainer } from 'tsyringe'
-import type { StratalEnv } from '../../env'
 import type { Constructor } from '../../types'
 import { Container } from '../../di/container'
 import { Scope } from '../../di/types'
@@ -44,8 +43,6 @@ describe('ModuleRegistry', () => {
     vi.clearAllMocks()
     childContainer = tsyringeRootContainer.createChildContainer()
     container = new Container({
-      env: {} as StratalEnv,
-      ctx: createMock<ExecutionContext>() as unknown as ExecutionContext,
       container: childContainer,
     })
     mockLogger = createMock<LoggerService>()

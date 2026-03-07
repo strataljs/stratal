@@ -8,6 +8,7 @@ import { type StratalEnv } from './env'
 import { ApplicationError, GlobalErrorHandler } from './errors'
 import type { EventHandler } from './events'
 import { EventRegistry, getListenerHandlers } from './events'
+import type { StratalExecutionContext } from './execution-context'
 import { I18nModule } from './i18n/i18n.module'
 import { ConsoleTransport, JsonFormatter, LOGGER_TOKENS, LoggerService, LogLevel, PrettyFormatter } from './logger'
 import { ModuleRegistry } from './module/module-registry'
@@ -17,7 +18,8 @@ import { type ConsumerRegistry } from './queue/consumer-registry'
 import type { IQueueConsumer, QueueMessage } from './queue/queue-consumer'
 import { type QueueManager } from './queue/queue-manager'
 import { QueueModule } from './queue/queue.module'
-import { ROUTER_TOKENS, RouterService, type IController, type RouterContext } from './router'
+import { type IController, type RouterContext } from './router'
+import { HonoApp } from './router/hono-app'
 import type { Constructor } from './types'
 
 export interface ApplicationConfig {
@@ -32,7 +34,7 @@ export interface ApplicationConfig {
 
 export interface ApplicationOptions extends ApplicationConfig {
   env: StratalEnv
-  ctx: ExecutionContext
+  ctx: StratalExecutionContext
 }
 
 /**
@@ -42,19 +44,6 @@ export interface ApplicationOptions extends ApplicationConfig {
  * - Global Container: All services (singletons via tsyringe native)
  * - Request Container: Child of global, context-enriched instances per request
  *
- * **Architecture:**
- * ```
- * Container (manages global container internally)
- *        ↓
- *   All services registered via container.register()
- *   (auto-detects scope from decorators)
- *        ↓
- * Request Container (child, per request)
- *        ↓
- *   Context-enriched instances via
- *   container.runInRequestScope() or container.createRequestScope()
- * ```
- *
  * @example
  * ```typescript
  * const app = new Application({ module: AppModule, env, ctx })
@@ -63,7 +52,7 @@ export interface ApplicationOptions extends ApplicationConfig {
  * // Access container via getter
  * const service = app.container.resolve(MY_TOKEN)
  *
- * // Handle HTTP request (via RouterService middleware)
+ * // Handle HTTP request (via HonoApp)
  * // Handle queue batch
  * await app.handleQueue(batch, 'my-queue')
  * ```
@@ -71,40 +60,43 @@ export interface ApplicationOptions extends ApplicationConfig {
 export class Application {
   /**
    * Unified Container - manages all DI operations
-   * Use app.container to access registration and resolution methods
    */
   private _container: Container
 
+  private readonly honoApp: HonoApp
   private moduleRegistry: ModuleRegistry
   private consumerRegistry!: ConsumerRegistry
   private cronManager!: CronManager
   private initialized = false
 
   readonly env: StratalEnv
-  readonly ctx: ExecutionContext
   private readonly appConfig: ApplicationConfig
 
-  constructor(options: ApplicationOptions) {
-    this.env = options.env
-    this.ctx = options.ctx
-    this.appConfig = options
+  constructor({ env, ctx, ...config }: ApplicationOptions) {
+    this.env = env
+    this.appConfig = config
+
+    ApplicationError.captureStackTraces = env.ENVIRONMENT !== 'production'
 
     // Create unified Container with explicit child container
     this._container = new Container({
-      env: this.env,
-      ctx: this.ctx,
       container: tsyringeRootContainer.createChildContainer()
     })
 
-    // Register Application instance
+    // Register globally — env and ctx always available
     this._container.registerValue(DI_TOKENS.Application, this)
+    this._container.registerValue(DI_TOKENS.CloudflareEnv, env)
+    this._container.registerValue(DI_TOKENS.ExecutionContext, ctx)
 
     // Register core infrastructure inline
     this.registerLoggerService()
     this.registerCoreServices()
 
-    // Create ModuleRegistry with our Container
+    // Create HonoApp — owns request scope, global middleware, defaultHook, onError
     const logger = this._container.resolve<LoggerService>(LOGGER_TOKENS.LoggerService)
+    this.honoApp = new HonoApp(this._container, logger)
+
+    // Create ModuleRegistry with our Container
     this.moduleRegistry = new ModuleRegistry(this._container, logger)
 
     // Register ModuleRegistry in container so modules can access it in onInitialize
@@ -113,14 +105,16 @@ export class Application {
 
   /**
    * Get the Container instance
-   *
-   * Use for service registration and resolution:
-   * - app.container.register(ServiceClass)
-   * - app.container.resolve(TOKEN)
-   * - app.container.runInRequestScope(ctx, callback)
    */
   get container(): Container {
     return this._container
+  }
+
+  /**
+   * Get the HonoApp instance
+   */
+  get hono(): HonoApp {
+    return this.honoApp
   }
 
   async initialize(): Promise<void> {
@@ -128,14 +122,11 @@ export class Application {
       return
     }
 
-    // Disable stack trace capture in production (expensive and stripped from responses)
-    ApplicationError.captureStackTraces = this.env.ENVIRONMENT !== 'production'
-
     // Phase 1: Register core infrastructure modules (internal)
     this.moduleRegistry.registerAll([
       I18nModule,
-      OpenAPIModule,  // Before RouterService configuration
-      QueueModule,  // Before EmailModule which uses queues
+      OpenAPIModule,
+      QueueModule,
       CacheModule,
     ])
 
@@ -149,11 +140,12 @@ export class Application {
     this.consumerRegistry = this._container.resolve<ConsumerRegistry>(DI_TOKENS.ConsumerRegistry)
     this.cronManager = this._container.resolve<CronManager>(DI_TOKENS.Cron)
 
-    // Phase 5: Register RouterService
-    this._container.registerSingleton(ROUTER_TOKENS.RouterService, RouterService)
+    // Phase 5: Configure HonoApp — module middleware, OpenAPI, routes, 404
+    const middlewareConfigs = this.moduleRegistry.getAllMiddlewareConfigs()
+    const controllers = this.moduleRegistry.getAllControllers() as Constructor<IController>[]
+    this.honoApp.configure(middlewareConfigs, controllers)
 
-    // Phase 6: Configure routes, queues, cron jobs, and event listeners
-    this.registerRoutes()
+    // Phase 6: Configure queues, cron, events
     this.registerQueueConsumers()
     this.registerCronJobs()
     this.registerEventListeners()
@@ -163,9 +155,6 @@ export class Application {
 
   /**
    * Resolve a service from the container
-   *
-   * @param token - DI token for the service
-   * @returns Resolved service instance
    */
   resolve<T>(token: symbol): T {
     try {
@@ -179,25 +168,18 @@ export class Application {
 
   /**
    * Handle queue batch processing
-   *
-   * Creates a request scope with mock RouterContext and processes the batch.
-   * Queue name is passed for logging purposes; routing is by message type.
    */
   async handleQueue(batch: MessageBatch, queueName: string): Promise<void> {
-    // Extract locale from first message in batch
     const firstMessage = batch.messages[0]?.body as QueueMessage | undefined
     const locale = firstMessage?.metadata?.locale ?? 'en'
-
-    // Create mock RouterContext for queue context
     const mockRouterContext = this.createMockRouterContext(locale)
 
-    // Process batch within request scope
-    await this._container.runInRequestScope(mockRouterContext, async () => {
+    await this._container.runInRequestScope(mockRouterContext, async (requestContainer) => {
       try {
-        const queueManager = this._container.resolve<QueueManager>(DI_TOKENS.Queue)
+        const queueManager = requestContainer.resolve<QueueManager>(DI_TOKENS.Queue)
         await queueManager.processBatch(queueName, batch)
       } catch (error) {
-        const errorHandler = this._container.resolve<GlobalErrorHandler>(DI_TOKENS.ErrorHandler)
+        const errorHandler = requestContainer.resolve<GlobalErrorHandler>(DI_TOKENS.ErrorHandler)
         errorHandler.handle(error)
         throw error
       }
@@ -208,14 +190,13 @@ export class Application {
    * Handle scheduled cron trigger
    */
   async handleScheduled(controller: ScheduledController): Promise<void> {
-    const locale = 'en'
-    const mockRouterContext = this.createMockRouterContext(locale)
+    const mockRouterContext = this.createMockRouterContext('en')
 
-    await this._container.runInRequestScope(mockRouterContext, async () => {
+    await this._container.runInRequestScope(mockRouterContext, async (requestContainer) => {
       try {
         await this.cronManager.executeScheduled(controller)
       } catch (error) {
-        const errorHandler = this._container.resolve<GlobalErrorHandler>(DI_TOKENS.ErrorHandler)
+        const errorHandler = requestContainer.resolve<GlobalErrorHandler>(DI_TOKENS.ErrorHandler)
         errorHandler.handle(error)
         throw error
       }
@@ -224,11 +205,6 @@ export class Application {
 
   /**
    * Create mock RouterContext for queue/cron/seeder processing
-   *
-   * Use this when you need to create a request scope outside of HTTP context.
-   *
-   * @param locale - Locale for i18n (default: 'en')
-   * @returns Mock RouterContext suitable for runInRequestScope
    */
   createMockRouterContext(locale = 'en'): RouterContext {
     return {
@@ -239,16 +215,15 @@ export class Application {
   }
 
   async shutdown(): Promise<void> {
+    if (!this.initialized) return
+    this.initialized = false
+
     await this.moduleRegistry.shutdown()
-    await this._container.dispose();
-  }
 
-  private registerRoutes(): void {
-    const middlewareConfigs = this.moduleRegistry.getAllMiddlewareConfigs()
-    const controllers = this.moduleRegistry.getAllControllers() as Constructor<IController>[]
+    const logger = this._container.resolve<LoggerService>(LOGGER_TOKENS.LoggerService)
+    logger.info('Disposing container...')
 
-    const router = this._container.resolve<RouterService>(ROUTER_TOKENS.RouterService)
-    router.configure(middlewareConfigs, controllers)
+    await this._container.dispose()
   }
 
   private registerQueueConsumers(): void {
@@ -267,8 +242,6 @@ export class Application {
 
   /**
    * Auto-wire `@Listener()` classes with the EventRegistry.
-   *
-   * Reads `@On()` metadata from each listener and registers handlers.
    */
   private registerEventListeners(): void {
     const listeners = this.moduleRegistry.getAllListeners()
@@ -292,14 +265,11 @@ export class Application {
    * Register LoggerService and dependencies
    */
   private registerLoggerService(): void {
-    // Get logging config with defaults
     const logLevel = this.appConfig.logging?.level ?? LogLevel.INFO
     const formatter = this.appConfig.logging?.formatter ?? 'json'
 
-    // Register log level for injection
     this._container.registerValue(LOGGER_TOKENS.LogLevelOptions, logLevel)
 
-    // Conditional formatter registration
     this._container
       .when(() => formatter === 'pretty')
       .use(LOGGER_TOKENS.Formatter)
@@ -313,20 +283,10 @@ export class Application {
 
   /**
    * Register core services with explicit scope
-   *
-   * Scope is specified at registration time:
-   * - Singleton: Single instance shared globally
-   * - Request: New instance per request (container-scoped)
-   * - Transient: New instance per resolution (default)
    */
   private registerCoreServices(): void {
-    // Cron manager - singleton
     this._container.registerSingleton(DI_TOKENS.Cron, CronManager)
-
-    // Error handler - transient (fresh instance each time with current I18n)
     this._container.register(DI_TOKENS.ErrorHandler, GlobalErrorHandler)
-
-    // Event registry - singleton
     this._container.registerSingleton(DI_TOKENS.EventRegistry, EventRegistry)
   }
 }

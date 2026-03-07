@@ -1,17 +1,20 @@
 ---
 name: stratal
 description: >-
-  Build Cloudflare Workers apps with the Stratal framework — modular architecture,
-  dependency injection (tsyringe), Hono-based routing with automatic OpenAPI docs,
-  queue consumers, cron jobs, email, storage, caching, i18n, authentication (Better Auth),
-  database (ZenStack ORM), RBAC (Casbin), guards, factories, and seeders. Use when
-  creating, modifying, or testing a Stratal application, or when mentions of stratal,
-  Stratal, @Module, @Controller, @Route, IController, RouterContext, AuthModule,
-  DatabaseModule, RbacModule, AuthGuard, AuthContext, @InjectDB, DatabaseService,
-  CasbinService, Factory, Seeder, SeederRunner, @stratal/framework, @stratal/seeders appear.
+  Use this skill whenever working with the Stratal framework for Cloudflare Workers —
+  modular architecture, dependency injection (tsyringe), Hono-based routing with automatic
+  OpenAPI docs, queue consumers, cron jobs, email, storage, caching, i18n, authentication
+  (Better Auth), database (ZenStack ORM), RBAC (Casbin), guards, factories, seeders, events,
+  and middleware. Trigger on any of: stratal, Stratal, @Module, @Controller, @Route,
+  IController, RouterContext, HonoApp, @Transient, @inject, Transient, inject, Scope,
+  @Listener, @On, EventRegistry, CustomEventRegistry, AuthModule, DatabaseModule, RbacModule,
+  AuthGuard, AuthContext, @InjectDB, DatabaseService, CasbinService, Factory, Seeder,
+  SeederRunner, @stratal/framework, @stratal/seeders, @stratal/testing, TestingModule,
+  ApplicationError, StratalEnv, wrangler.jsonc, middleware, events.
+user-invocable: false
 license: MIT
 metadata:
-  author: strataljs
+  author: Temitayo Fadojutimi
   version: "1.0"
 ---
 
@@ -37,7 +40,7 @@ import { AppModule } from './app.module'
 export default new Stratal({ module: AppModule })
 ```
 
-`Stratal` lazily initializes the application on the first handler call (fetch, queue, or scheduled). It handles HTTP fetch, queue batches, and scheduled cron triggers automatically.
+`Stratal` starts its initialization promise at construction time, dynamically importing `cloudflare:workers` for `env` and `waitUntil`. The `fetch`, `queue`, and `scheduled` handlers call `ensureReady()` to await initialization before processing, using a lazy-await pattern.
 
 ### Root Module
 
@@ -115,8 +118,7 @@ const TOKENS = {
 Decorate injectable services with `@Transient()`:
 
 ```typescript
-import { Transient } from 'stratal/di'
-import { inject } from 'stratal/di'
+import { inject, Transient } from 'stratal/di'
 
 @Transient()
 export class UserService {
@@ -372,7 +374,7 @@ import { DatabaseModule } from '@stratal/framework/database'
   imports: [
     DatabaseModule.forRoot({
       default: 'main',
-      connections: [{ name: 'main', schema: mainSchema, dialect: pgDialect }],
+      connections: [{ name: 'main', schema: mainSchema, dialect: () => pgDialect }],
     }),
   ],
 })
@@ -431,9 +433,9 @@ Entry file: `SeederRunner.run(AppModule)` in `src/seeders/index.ts`.
 
 | Import | Exports |
 |--------|---------|
-| `stratal` | Stratal, Application, StratalEnv, Constructor, ApplicationConfig |
+| `stratal` | Stratal, Application, StratalEnv, StratalExecutionContext, Constructor, ApplicationConfig |
 | `stratal/di` | Container, inject, Transient, Scope, DI_TOKENS, CONTAINER_TOKEN |
-| `stratal/router` | Controller, Route, IController, RouterContext, UseGuards, ROUTER_TOKENS |
+| `stratal/router` | Controller, Route, IController, RouterContext, UseGuards, HonoApp, ROUTER_TOKENS |
 | `stratal/validation` | z (Zod), ZodType, ZodObject — always use this, not `zod` directly |
 | `stratal/errors` | ApplicationError, ErrorCode, ERROR_CODES |
 | `stratal/i18n` | I18nModule, I18nService, I18N_TOKENS, MessageKeys |
@@ -442,6 +444,7 @@ Entry file: `SeederRunner.run(AppModule)` in `src/seeders/index.ts`.
 | `stratal/logger` | LoggerService, LOGGER_TOKENS, LogLevel |
 | `stratal/queue` | QueueModule, IQueueConsumer, QueueMessage, QUEUE_TOKENS |
 | `stratal/cron` | CronJob |
+| `stratal/events` | EventRegistry, Listener, On, CustomEventRegistry |
 | `stratal/email` | EmailModule, EMAIL_TOKENS |
 | `stratal/storage` | StorageModule, StorageService, STORAGE_TOKENS |
 | `stratal/guards` | CanActivate, UseGuards |

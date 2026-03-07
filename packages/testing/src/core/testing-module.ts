@@ -3,7 +3,6 @@ import { connectionSymbol } from '@stratal/framework/database'
 import type { Application, StratalEnv } from 'stratal'
 import { DI_TOKENS, type Container } from 'stratal/di'
 import { type InjectionToken } from 'stratal/module'
-import { ROUTER_TOKENS, type RouterService } from 'stratal/router'
 import { STORAGE_TOKENS } from 'stratal/storage'
 import type { FakeStorageService } from '../storage'
 import type { Seeder } from '../types'
@@ -43,7 +42,8 @@ export class TestingModule {
 
   constructor(
     private readonly app: Application,
-    private readonly env: StratalEnv
+    private readonly env: StratalEnv,
+    private readonly ctx: ExecutionContext,
   ) { }
 
   /**
@@ -83,17 +83,16 @@ export class TestingModule {
   }
 
   /**
-   * Execute an HTTP request through RouterService
+   * Execute an HTTP request through HonoApp
    */
   async fetch(request: Request): Promise<Response> {
-    const router = this.get<RouterService>(ROUTER_TOKENS.RouterService)
-    return router.fetch(request, this.env, this.app.ctx)
+    return this.app.hono.fetch(request, this.env, this.ctx)
   }
 
   /**
    * Run callback in request scope (for DB operations, service access)
    */
-  async runInRequestScope<T>(callback: () => T | Promise<T>): Promise<T> {
+  async runInRequestScope<T>(callback: (container: Container) => T | Promise<T>): Promise<T> {
     const mockContext = this.app.createMockRouterContext()
     return this.app.container.runInRequestScope(mockContext, callback)
   }
@@ -104,9 +103,9 @@ export class TestingModule {
   async getDb(): Promise<DatabaseService>
   async getDb<K extends ConnectionName>(name: K): Promise<DatabaseService<K>>
   async getDb(name?: string): Promise<unknown> {
-    return this.runInRequestScope(() => {
+    return this.runInRequestScope((container) => {
       const token = name ? connectionSymbol(name) : DI_TOKENS.Database
-      return this.get(token)
+      return container.resolve(token)
     })
   }
 
@@ -114,9 +113,9 @@ export class TestingModule {
    * Truncate all non-prisma tables in the database
    */
   async truncateDb(name?: ConnectionName): Promise<void> {
-    await this.runInRequestScope(async () => {
+    await this.runInRequestScope(async (container) => {
       const token = name ? connectionSymbol(name) : DI_TOKENS.Database
-      const db = this.get<DatabaseService>(token)
+      const db = container.resolve<DatabaseService>(token)
       const tables = await db.$queryRaw<{ tablename: string }[]>`
         SELECT tablename::text as tablename FROM pg_tables
         WHERE schemaname = current_schema()
@@ -144,9 +143,9 @@ export class TestingModule {
       seeders = args as Seeder[]
     }
 
-    await this.runInRequestScope(async () => {
+    await this.runInRequestScope(async (container) => {
       const token = name ? connectionSymbol(name) : DI_TOKENS.Database
-      const db = this.get<DatabaseService>(token)
+      const db = container.resolve<DatabaseService>(token)
       await db.$transaction(async (tx) => {
         for (const seeder of seeders) {
           await seeder.run(tx as DatabaseService)
@@ -160,9 +159,9 @@ export class TestingModule {
    */
   async assertDatabaseHas(table: string, data: Record<string, unknown>, name?: ConnectionName): Promise<void> {
     const { expect } = await import('vitest')
-    await this.runInRequestScope(async () => {
+    await this.runInRequestScope(async (container) => {
       const token = name ? connectionSymbol(name) : DI_TOKENS.Database
-      const db = this.get<DatabaseService>(token)
+      const db = container.resolve<DatabaseService>(token)
       const model = (db as unknown as Record<string, unknown>)[table] as { findFirst: (opts: unknown) => Promise<unknown> }
       const result = await model.findFirst({ where: data })
       expect(result, `Expected ${table} with ${JSON.stringify(data)}`).not.toBeNull()
@@ -174,9 +173,9 @@ export class TestingModule {
    */
   async assertDatabaseMissing(table: string, data: Record<string, unknown>, name?: ConnectionName): Promise<void> {
     const { expect } = await import('vitest')
-    await this.runInRequestScope(async () => {
+    await this.runInRequestScope(async (container) => {
       const token = name ? connectionSymbol(name) : DI_TOKENS.Database
-      const db = this.get<DatabaseService>(token)
+      const db = container.resolve<DatabaseService>(token)
       const model = (db as unknown as Record<string, unknown>)[table] as { findFirst: (opts: unknown) => Promise<unknown> }
       const result = await model.findFirst({ where: data })
       expect(result, `Expected ${table} NOT to have ${JSON.stringify(data)}`).toBeNull()
@@ -188,9 +187,9 @@ export class TestingModule {
    */
   async assertDatabaseCount(table: string, expected: number, name?: ConnectionName): Promise<void> {
     const { expect } = await import('vitest')
-    await this.runInRequestScope(async () => {
+    await this.runInRequestScope(async (container) => {
       const token = name ? connectionSymbol(name) : DI_TOKENS.Database
-      const db = this.get<DatabaseService>(token)
+      const db = container.resolve<DatabaseService>(token)
       const model = (db as unknown as Record<string, unknown>)[table] as { count: () => Promise<number> }
       const actual = await model.count()
       expect(actual, `Expected ${table} count ${expected}, got ${actual}`).toBe(expected)

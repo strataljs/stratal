@@ -13,8 +13,7 @@ export const errors = {
   forbidden: 'Access denied',
 
   // Router errors
-  routerAlreadyConfigured: 'RouterService has already been configured and can only be configured once',
-  routerNotConfigured: 'RouterService.configure() must be called before handling requests',
+  honoAppAlreadyConfigured: 'HonoApp has already been configured and can only be configured once',
   routeNotFound: 'Route not found: {method} {path}',
   routeAccessDenied: 'Resource not found',
   controllerMethodNotFound: 'Method {methodName} not found on {controllerName}',
@@ -30,6 +29,7 @@ export const errors = {
 
   // Configuration errors
   configNotInitialized: 'Configuration service has not been initialized',
+  configModuleNotInitialized: 'ConfigModule.forRoot() was not called before module initialization',
 
   // Module errors
   moduleAlreadyRegistered: 'Module {moduleName} is already registered',

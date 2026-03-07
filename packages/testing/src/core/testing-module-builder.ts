@@ -38,37 +38,6 @@ export interface TestingModuleConfig extends ModuleOptions {
 
 /**
  * Builder for creating test modules with provider overrides
- *
- * Provides a NestJS-style fluent API for configuring test modules.
- * Supports all ModuleOptions properties (imports, providers, controllers, consumers, jobs).
- *
- * @example Basic usage
- * ```typescript
- * const module = await Test.createTestingModule({
- *   imports: [RegistrationModule],
- * }).compile()
- * ```
- *
- * @example Provider override
- * ```typescript
- * const module = await Test.createTestingModule({
- *   imports: [RegistrationModule, GeoModule],
- * })
- *   .overrideProvider(EMAIL_TOKENS.EmailService)
- *   .useValue(mockEmailService)
- *   .compile()
- * ```
- *
- * @example Full ModuleOptions
- * ```typescript
- * const module = await Test.createTestingModule({
- *   imports: [RegistrationModule],
- *   providers: [{ provide: MOCK_TOKEN, useValue: mockValue }],
- *   controllers: [TestController],
- *   consumers: [TestConsumer],
- *   jobs: [TestJob],
- * }).compile()
- * ```
  */
 export class TestingModuleBuilder {
   private overrides: ProviderOverrideConfig<object>[] = []
@@ -77,11 +46,6 @@ export class TestingModuleBuilder {
 
   /**
    * Override a provider with a custom implementation
-   *
-   * Returns a ProviderOverrideBuilder for specifying the override type.
-   *
-   * @param token - The injection token to override
-   * @returns ProviderOverrideBuilder for chaining useValue/useClass/useFactory
    */
   overrideProvider<T>(token: InjectionToken<T>): ProviderOverrideBuilder<T> {
     return new ProviderOverrideBuilder(this, token)
@@ -99,9 +63,6 @@ export class TestingModuleBuilder {
 
   /**
    * Merge additional environment bindings
-   *
-   * @param env - Partial environment to merge
-   * @returns This builder for chaining
    */
   withEnv(env: Partial<StratalEnv>): this {
     this.config.env = { ...this.config.env, ...env }
@@ -112,23 +73,15 @@ export class TestingModuleBuilder {
    * Compile the testing module
    *
    * Creates the Application, applies overrides, initializes, and returns TestingModule.
-   * The ModuleRegistry handles all module registrations automatically.
-   *
-   * @returns Promise<TestingModule> - The compiled testing module
    */
   async compile(): Promise<TestingModule> {
-    // 1. Create environment (cloudflare:test base + overrides)
     const env = getTestEnv(this.config.env)
-
-    // 2. Create ExecutionContext
     const ctx = createExecutionContext()
 
-    // 3. Build root module from config (supports all ModuleOptions)
+    // Build root module from config
     const baseModules = Test.getBaseModules()
-    const configImports = this.config.imports ?? []
-    const allImports = [...baseModules, ...configImports]
+    const allImports = [...baseModules, ...(this.config.imports ?? [])]
 
-    // Create root module with all config properties
     const rootModule = this.createTestRootModule({
       imports: allImports,
       providers: this.config.providers,
@@ -137,7 +90,6 @@ export class TestingModuleBuilder {
       jobs: this.config.jobs,
     })
 
-    // 4. Create Application
     const app = new Application({
       module: rootModule,
       logging: {
@@ -148,14 +100,10 @@ export class TestingModuleBuilder {
       ctx,
     })
 
-    // 7. Initialize application - ModuleRegistry handles all module registrations
-    await app.initialize()
-
-    // 5. Auto-register FakeStorageService as singleton (can be overridden by user)
-    // Must be singleton so files uploaded in setup are available when consumers run
+    // Auto-register FakeStorageService (can be overridden by user)
     app.container.registerSingleton(STORAGE_TOKENS.StorageService, FakeStorageService)
 
-    // 6. Apply user overrides BEFORE initialize
+    // Apply user overrides BEFORE initialize
     for (const override of this.overrides) {
       switch (override.type) {
         case 'value':
@@ -182,7 +130,9 @@ export class TestingModuleBuilder {
       }
     }
 
-    return new TestingModule(app, env)
+    await app.initialize()
+
+    return new TestingModule(app, env, ctx)
   }
 
   /**
