@@ -1,6 +1,6 @@
 {
   "name": "@stratal/framework",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "type": "module",
   "license": "MIT",
   "author": "Temitayo Fadojutimi",
@@ -78,7 +78,7 @@
     "better-auth": "^1.4.9",
     "casbin": "^5.41.0",
     "pg": "^8.0.0",
-    "stratal": "0.0.5"
+    "stratal": "0.0.6"
   },
   "peerDependenciesMeta": {
     "@better-auth/core": {

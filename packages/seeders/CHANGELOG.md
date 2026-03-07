@@ -1,5 +1,12 @@
 # @stratal/seeders
 
+## 0.0.6
+
+### Patch Changes
+
+- Updated dependencies [[`6542f78`](https://github.com/strataljs/stratal/commit/6542f78fda2bf851df7ee5d88d6f7c7d04ea6388)]:
+  - stratal@0.0.6
+
 ## 0.0.5
 
 ### Patch Changes

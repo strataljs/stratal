@@ -1,6 +1,6 @@
 {
   "name": "@stratal/testing",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Testing utilities and mocks for Stratal framework applications",
   "type": "module",
   "license": "MIT",
@@ -60,9 +60,9 @@
     "@golevelup/ts-vitest": "^2.2.0"
   },
   "peerDependencies": {
-    "@stratal/framework": "^0.0.5",
+    "@stratal/framework": "^0.0.6",
     "better-auth": "^1.4.9",
-    "stratal": "^0.0.5",
+    "stratal": "^0.0.6",
     "vitest": "^3.2.0"
   },
   "peerDependenciesMeta": {
