@@ -131,7 +131,7 @@ The project is ESM-only (`"type": "module"`). Output goes to `dist/` with `.js`,
 
 ### Worker Entry Point
 
-`packages/core/src/worker/stratal-worker.ts` — `StratalWorker` extends Cloudflare's `WorkerEntrypoint`. Handles HTTP fetch, queue batches, and scheduled cron triggers. Uses singleton Application pattern with concurrent initialization guard.
+`packages/core/src/stratal.ts` — `Stratal` is a Hono-style class that lazily initializes an `Application` on first handler call (fetch/queue/scheduled). Uses singleton pattern with concurrent initialization guard. `env` and `ctx` are provided per-invocation via Cloudflare Workers handler args.
 
 ### Routing
 

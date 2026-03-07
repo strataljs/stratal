@@ -9,6 +9,9 @@
     "url": "git+https://github.com/strataljs/stratal.git",
     "directory": "packages/framework"
   },
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "publishConfig": {
     "access": "public",
     "provenance": true

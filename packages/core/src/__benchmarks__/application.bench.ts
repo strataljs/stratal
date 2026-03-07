@@ -56,18 +56,18 @@ const config: ApplicationConfig = {
 
 describe('Application - Bootstrap', () => {
   bench('constructor only', () => {
-    new Application({} as StratalEnv, mockCtx, config)
+    new Application({ ...config, env: {} as StratalEnv, ctx: mockCtx })
   })
 
   bench('full initialize()', async () => {
-    const app = new Application({} as StratalEnv, mockCtx, config)
+    const app = new Application({ ...config, env: {} as StratalEnv, ctx: mockCtx })
     await app.initialize()
   })
 })
 
 describe('Application - Service Resolution', () => {
   bench('resolve service after bootstrap', async () => {
-    const app = new Application({} as StratalEnv, mockCtx, config)
+    const app = new Application({ ...config, env: {} as StratalEnv, ctx: mockCtx })
     await app.initialize()
     app.resolve(TOKEN_SVC)
   })

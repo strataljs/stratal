@@ -6,7 +6,7 @@ Thanks for your interest in contributing to Stratal! This guide will help you ge
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22+
 - [Corepack](https://nodejs.org/api/corepack.html) enabled (ships with Node.js)
 
 ### Setup

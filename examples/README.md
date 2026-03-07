@@ -38,7 +38,7 @@ Every example follows the same structure:
 ```
 examples/XX-name/
   src/
-    index.ts          # StratalWorker entry point
+    index.ts          # Stratal entry point
     app.module.ts     # Root module
     ...               # Feature modules, controllers, services
   package.json        # Standalone package

@@ -8,7 +8,7 @@ Cron job scheduling using the `CronJob` interface.
 - Optional `onError()` handler for failed jobs
 - Registering jobs in a module via `@Module({ jobs: [...] })`
 - Wrangler `triggers.crons` configuration
-- `StratalWorker.scheduled()` handler (inherited from base class)
+- `Stratal.scheduled()` handler
 
 ## Running
 

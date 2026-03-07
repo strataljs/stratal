@@ -54,9 +54,8 @@ npx skills add strataljs/stratal
 ## Quick Start
 
 ```typescript
+import { Stratal } from 'stratal'
 import { Module } from 'stratal/module'
-import { StratalWorker } from 'stratal/worker'
-import { type ApplicationConfig } from 'stratal'
 import { AuthModule } from '@stratal/framework/auth'
 import { DatabaseModule } from '@stratal/framework/database'
 import { RbacModule } from '@stratal/framework/rbac'
@@ -72,11 +71,7 @@ import { RbacModule } from '@stratal/framework/rbac'
 })
 class AppModule {}
 
-export default class Backend extends StratalWorker {
-  protected configure(): ApplicationConfig {
-    return { module: AppModule }
-  }
-}
+export default new Stratal({ module: AppModule })
 ```
 
 ## Documentation

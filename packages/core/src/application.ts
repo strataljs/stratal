@@ -30,6 +30,11 @@ export interface ApplicationConfig {
   }
 }
 
+export interface ApplicationOptions extends ApplicationConfig {
+  env: StratalEnv
+  ctx: ExecutionContext
+}
+
 /**
  * Application
  *
@@ -52,7 +57,7 @@ export interface ApplicationConfig {
  *
  * @example
  * ```typescript
- * const app = new Application(env, ctx, config)
+ * const app = new Application({ module: AppModule, env, ctx })
  * await app.initialize()
  *
  * // Access container via getter
@@ -75,15 +80,19 @@ export class Application {
   private cronManager!: CronManager
   private initialized = false
 
-  constructor(
-    readonly env: StratalEnv,
-    readonly ctx: ExecutionContext,
-    private readonly appConfig: ApplicationConfig
-  ) {
+  readonly env: StratalEnv
+  readonly ctx: ExecutionContext
+  private readonly appConfig: ApplicationConfig
+
+  constructor(options: ApplicationOptions) {
+    this.env = options.env
+    this.ctx = options.ctx
+    this.appConfig = options
+
     // Create unified Container with explicit child container
     this._container = new Container({
-      env,
-      ctx,
+      env: this.env,
+      ctx: this.ctx,
       container: tsyringeRootContainer.createChildContainer()
     })
 

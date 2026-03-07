@@ -138,12 +138,14 @@ export class TestingModuleBuilder {
     })
 
     // 4. Create Application
-    const app = new Application(env, ctx, {
+    const app = new Application({
       module: rootModule,
       logging: {
         level: this.config.logging?.level ?? LogLevel.ERROR,
         formatter: this.config.logging?.formatter ?? 'pretty',
       },
+      env,
+      ctx,
     })
 
     // 7. Initialize application - ModuleRegistry handles all module registrations
