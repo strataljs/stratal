@@ -37,6 +37,7 @@
     "prepare": "husky",
     "changeset": "changeset",
     "release": "changeset publish",
+    "version-packages": "changeset version && yarn install",
     "build": "yarn workspaces foreach -At --no-private exec run build",
     "docs": "typedoc",
     "docs:watch": "typedoc --watch"
