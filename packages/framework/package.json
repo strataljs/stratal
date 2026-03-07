@@ -98,24 +98,24 @@
     }
   },
   "devDependencies": {
-    "@better-auth/core": "^1.5.0",
-    "@cloudflare/vitest-pool-workers": "^0.12.18",
-    "@cloudflare/workers-types": "4.20260306.1",
+    "@better-auth/core": "^1.5.4",
+    "@cloudflare/vitest-pool-workers": "^0.12.20",
+    "@cloudflare/workers-types": "4.20260307.1",
     "@faker-js/faker": "^10.3.0",
     "@stratal/testing": "workspace:^",
-    "@types/node": "^22.19.13",
+    "@types/node": "^25.3.5",
     "@types/pg": "^8.18.0",
     "@vitest/coverage-istanbul": "3.2.4",
-    "@zenstackhq/better-auth": "^3.4.1",
-    "@zenstackhq/cli": "^3.4.1",
-    "@zenstackhq/orm": "^3.4.1",
-    "better-auth": "^1.5.0",
+    "@zenstackhq/better-auth": "^3.4.4",
+    "@zenstackhq/cli": "^3.4.4",
+    "@zenstackhq/orm": "^3.4.4",
+    "better-auth": "^1.5.4",
     "casbin": "^5.49.0",
-    "pg": "^8.19.0",
+    "pg": "^8.20.0",
     "reflect-metadata": "^0.2.2",
     "stratal": "workspace:*",
     "typescript": "^5.9.3",
     "vitest": "~3.2.0",
-    "wrangler": "^4.69.0"
+    "wrangler": "^4.71.0"
   }
 }
