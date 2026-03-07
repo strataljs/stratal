@@ -37,6 +37,10 @@ jobs:
         with:
           node-version: "22"
           cache: "yarn"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Update npm for trusted publishing
+        run: npm install -g npm@latest
 
       - name: Install dependencies
         run: yarn install --immutable
@@ -45,7 +49,7 @@ jobs:
         run: yarn workspaces foreach -At run build
 
       - name: Create Release PR or Publish
-        uses: changesets/action@v1
+        uses: changesets/action@6af4a7ec080d23ac6b304f69b67fd0aa92e089e7 # v1.7.0
         with:
           version: yarn version-packages
           publish: yarn release
@@ -54,3 +58,4 @@ jobs:
           commit: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
