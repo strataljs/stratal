@@ -40,7 +40,8 @@
     "version-packages": "changeset version && yarn install --no-immutable",
     "build": "yarn workspaces foreach -At --no-private exec run build",
     "docs": "typedoc",
-    "docs:watch": "typedoc --watch"
+    "docs:watch": "typedoc --watch",
+    "examples:install": "bash -c 'for dir in examples/*/; do (cd \"$dir\" && npm install); done'"
   },
   "lint-staged": {
     "*.{ts,mts}": [
