@@ -49,7 +49,7 @@ jobs:
         run: yarn workspaces foreach -At run build
 
       - name: Create Release PR or Publish
-        uses: changesets/action@6af4a7ec080d23ac6b304f69b67fd0aa92e089e7 # v1.7.0
+        uses: changesets/action@e87c8ed249971350e47fab7515075f44eb134e5b # v1.7.0
         with:
           version: yarn version-packages
           publish: yarn release
