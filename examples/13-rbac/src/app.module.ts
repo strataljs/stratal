@@ -21,7 +21,7 @@ import { RolesModule } from './roles/roles.module'
       inject: [DI_TOKENS.CloudflareEnv],
       useFactory: (env: StratalEnv) => createDatabaseConfig(env),
     }),
-    CoreAuthModule.withRootAsync({
+    CoreAuthModule.forRootAsync({
       inject: [DI_TOKENS.CloudflareEnv, DI_TOKENS.Database],
       useFactory: (env: StratalEnv, db: DatabaseService) => createAuthOptions(env, db),
     }),

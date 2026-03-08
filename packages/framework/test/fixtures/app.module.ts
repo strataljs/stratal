@@ -38,7 +38,7 @@ import { RBAC_MODEL } from './rbac-model'
         ],
       }),
     }),
-    AuthModule.withRootAsync({
+    AuthModule.forRootAsync({
       inject: [DI_TOKENS.Database],
       useFactory: (db: DatabaseService) =>
         createTestAuthOptions(db),

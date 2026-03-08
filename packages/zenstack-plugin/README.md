@@ -47,11 +47,9 @@ npx skills add strataljs/stratal
 
 ## Quick Start
 
-Import the plugin attribute and configure the plugin in your `schema.zmodel`:
+Configure the plugin in your `schema.zmodel`:
 
 ```zmodel
-import "@stratal/zenstack-plugin/plugin.zmodel"
-
 plugin stratal {
   provider = "@stratal/zenstack-plugin"
   output   = "./src/generated"

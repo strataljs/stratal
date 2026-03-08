@@ -2,13 +2,13 @@
  * Auth Module
  *
  * Provides configurable authentication using Better Auth.
- * Use `withRootAsync` to configure Better Auth options from the application layer.
+ * Use `forRootAsync` to configure Better Auth options from the application layer.
  *
  * @example
  * ```typescript
  * @Module({
  *   imports: [
- *     AuthModule.withRootAsync({
+ *     AuthModule.forRootAsync({
  *       inject: [DI_TOKENS.Database, CONFIG_TOKENS.ConfigService],
  *       useFactory: (db, config) => createAuthOptions(db, config)
  *     })
@@ -51,7 +51,7 @@ export class AuthModule implements MiddlewareConfigurable {
   /**
    * Configure AuthModule with async options factory
    */
-  static withRootAsync<TOptions extends BetterAuthOptions>(
+  static forRootAsync<TOptions extends BetterAuthOptions>(
     options: AsyncModuleOptions<TOptions>
   ): DynamicModule {
     return {

@@ -4,7 +4,7 @@ Session-based authentication with Better Auth and `@stratal/framework`.
 
 ## What it demonstrates
 
-- `AuthModule.withRootAsync({ inject, useFactory })` for configuring Better Auth
+- `AuthModule.forRootAsync({ inject, useFactory })` for configuring Better Auth
 - `AuthContext` injection via `DI_TOKENS.AuthContext` — `getUserId()`, `isAuthenticated()`, `requireUserId()`
 - `AuthGuard()` factory for protecting routes (returns 401 if unauthenticated)
 - Module augmentation for `StratalEnv` with `DB` and `BETTER_AUTH_SECRET`
@@ -73,6 +73,6 @@ curl http://localhost:8787/api/profile
 - [`src/auth/auth.config.ts`](src/auth/auth.config.ts) - Better Auth options factory
 - [`src/auth/auth.controller.ts`](src/auth/auth.controller.ts) - AuthController proxying requests to Better Auth handler
 - [`src/auth/auth.module.ts`](src/auth/auth.module.ts) - AuthModule registering the controller
-- [`src/app.module.ts`](src/app.module.ts) - `AuthModule.withRootAsync()` configuration
+- [`src/app.module.ts`](src/app.module.ts) - `AuthModule.forRootAsync()` configuration
 - [`src/profile/profile.controller.ts`](src/profile/profile.controller.ts) - Protected route using `AuthGuard()` and `AuthContext`
 - [`src/public/public.controller.ts`](src/public/public.controller.ts) - Unprotected route
