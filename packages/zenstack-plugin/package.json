@@ -4,6 +4,7 @@
   "description": "ZenStack CLI plugin for Stratal framework — generates connection types, slicing configs, and per-connection migration schemas",
   "type": "module",
   "license": "MIT",
+  "main": "./dist/index.js",
   "author": "Temitayo Fadojutimi",
   "homepage": "https://github.com/strataljs/stratal#readme",
   "repository": {
@@ -30,20 +31,21 @@
   },
   "files": [
     "dist",
-    "bin",
-    "src/plugin/plugin.zmodel"
+    "bin"
   ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./plugin.zmodel": "./dist/plugin.zmodel"
   },
   "bin": {
     "stratal-db": "./bin/cli.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && cp src/plugin/plugin.zmodel dist/plugin.zmodel",
     "typecheck": "tsc --noEmit",
     "lint": "npx eslint .",
     "lint:fix": "npx eslint --fix ."

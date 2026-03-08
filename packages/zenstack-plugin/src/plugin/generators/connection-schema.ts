@@ -2,14 +2,14 @@ import { ZModelCodeGenerator } from '@zenstackhq/language'
 import type { Model } from '@zenstackhq/language/ast'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { ConnectionInfo } from '../utils'
+import type { ConnectionInfo } from '../utils.js'
 import {
   getDatasource,
   getDatasourceProvider,
   getEnumsForModels,
   stripConnectionAttribute,
   toUpperSnakeCase,
-} from '../utils'
+} from '../utils.js'
 
 export function generateConnectionSchemas(
   outputDir: string,

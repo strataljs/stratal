@@ -1,7 +1,7 @@
 import yargs from 'yargs'
 import { hideBin } from 'yargs/helpers'
-import { migrateCommand } from './commands/migrate'
-import { pushCommand } from './commands/push'
+import { migrateCommand } from './commands/migrate.js'
+import { pushCommand } from './commands/push.js'
 
 export function run(): void {
   void yargs(hideBin(process.argv))

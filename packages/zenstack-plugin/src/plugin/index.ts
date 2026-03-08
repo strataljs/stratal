@@ -1,9 +1,9 @@
 import type { CliPlugin } from '@zenstackhq/sdk'
 import { dirname, isAbsolute, join } from 'node:path'
-import { generateConnectionSchemas } from './generators/connection-schema'
-import { generateSlicingFile } from './generators/slicing'
-import { generateTypesFile } from './generators/types'
-import { collectConnections, validateCrossConnectionRelations } from './utils'
+import { generateConnectionSchemas } from './generators/connection-schema.js'
+import { generateSlicingFile } from './generators/slicing.js'
+import { generateTypesFile } from './generators/types.js'
+import { collectConnections, validateCrossConnectionRelations } from './utils.js'
 
 const plugin: CliPlugin = {
   name: 'Stratal Connection Plugin',

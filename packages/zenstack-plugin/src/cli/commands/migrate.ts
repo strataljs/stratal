@@ -3,8 +3,8 @@ import { existsSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import chalk from 'chalk'
 import { loadDocument } from '@zenstackhq/language'
-import { collectConnections } from '../../plugin/utils'
-import { generateConnectionSchemas } from '../../plugin/generators/connection-schema'
+import { collectConnections } from '../../plugin/utils.js'
+import { generateConnectionSchemas } from '../../plugin/generators/connection-schema.js'
 
 export interface MigrateOptions {
   connection?: string
