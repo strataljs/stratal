@@ -1,6 +1,6 @@
-# 15 - ZenStack Plugin
+# 15 - Multi-Connection Database
 
-Multi-connection database with `@stratal/zenstack-plugin` for auto-generated type augmentations, connection slicing, and per-connection schema management.
+Multi-connection database setup with `@stratal/zenstack-plugin` for auto-generated type augmentations, connection slicing, and per-connection schema management.
 
 ## What it demonstrates
 
@@ -19,7 +19,7 @@ Multi-connection database with `@stratal/zenstack-plugin` for auto-generated typ
 2. Start the databases:
 
 ```bash
-cd examples/15-zenstack-plugin
+cd examples/15-multi-connection-database
 npm run db:up
 ```
 
@@ -34,13 +34,13 @@ npm run wrangler:types
 4. Push the schema to create tables in both databases:
 
 ```bash
-npm run db:push:all
+npm run db:push
 ```
 
 ## Running
 
 ```bash
-cd examples/15-zenstack-plugin
+cd examples/15-multi-connection-database
 npx wrangler dev
 ```
 
