@@ -1,5 +1,22 @@
 # @stratal/framework
 
+## 0.0.8
+
+### Patch Changes
+
+- [#84](https://github.com/strataljs/stratal/pull/84) [`3b38b81`](https://github.com/strataljs/stratal/commit/3b38b8184428dc0f79ffbe9dc55ba782d46dea03) Thanks [@adesege](https://github.com/adesege)! - Rename `AuthModule.withRootAsync` to `AuthModule.forRootAsync` for consistency with core framework naming conventions
+
+  ### Breaking Changes
+
+  - **@stratal/framework**: `AuthModule.withRootAsync()` has been renamed to `AuthModule.forRootAsync()`. Update all usages:
+    ```diff
+    - AuthModule.withRootAsync({ ... })
+    + AuthModule.forRootAsync({ ... })
+    ```
+
+- Updated dependencies []:
+  - stratal@0.0.8
+
 ## 0.0.7
 
 ### Patch Changes

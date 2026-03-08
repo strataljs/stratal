@@ -1,6 +1,6 @@
 {
   "name": "stratal",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "A modular Cloudflare Workers framework with dependency injection, queue-based events, and type-safe configuration",
   "type": "module",
   "license": "MIT",
