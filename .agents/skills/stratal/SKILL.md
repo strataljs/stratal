@@ -1,483 +1,291 @@
 ---
 name: stratal
 description: >-
-  Use this skill whenever working with the Stratal framework for Cloudflare Workers —
-  modular architecture, dependency injection (tsyringe), Hono-based routing with automatic
-  OpenAPI docs, queue consumers, cron jobs, email, storage, caching, i18n, authentication
-  (Better Auth), database (ZenStack ORM), RBAC (Casbin), guards, factories, seeders, events,
-  and middleware. Trigger on any of: stratal, Stratal, @Module, @Controller, @Route,
-  IController, RouterContext, HonoApp, @Transient, @inject, Transient, inject, Scope,
-  @Listener, @On, EventRegistry, CustomEventRegistry, AuthModule, DatabaseModule, RbacModule,
-  AuthGuard, AuthContext, @InjectDB, DatabaseService, CasbinService, Factory, Seeder,
-  SeederRunner, @stratal/framework, @stratal/seeders, @stratal/testing, TestingModule,
-  ApplicationError, StratalEnv, wrangler.jsonc, middleware, events.
+  Use when working with the Stratal core framework for Cloudflare Workers — modules,
+  dependency injection, controllers, routing, OpenAPI, queues, cron, email, storage,
+  caching, i18n, logging, guards, middleware, config, events, and error handling.
+  Trigger on: stratal, Stratal, StratalWorker, @Module, @Controller, @Route, IController,
+  RouterContext, @inject, Scope, @Listener, @On, queues, cron, email, storage, cache,
+  i18n, logging, guards, middleware, config, OpenAPIModule, ConfigModule, CacheModule,
+  EmailModule, StorageModule, QueueModule, I18nModule, ApplicationError, StratalEnv,
+  registerAs.
 user-invocable: false
 license: MIT
 metadata:
   author: Temitayo Fadojutimi
-  version: "1.0"
+  version: "2.0"
 ---
 
-# Stratal Framework
+# Stratal Core Framework
 
-Stratal is a modular Cloudflare Workers framework. It provides dependency injection (tsyringe), Hono-based routing with automatic OpenAPI 3.0 docs, queue consumers, cron jobs, email, storage, caching, and i18n.
+Stratal is a modular Cloudflare Workers framework with dependency injection (tsyringe), Hono-based routing with OpenAPI generation, queue consumers, cron jobs, i18n, caching, storage, and email. Full documentation at [stratal.dev](https://stratal.dev).
 
-**Key constraints:**
+## Key Constraints
+
 - ESM-only (`"type": "module"`)
 - Build with `tsc` only — **never** esbuild/tsup (tsyringe requires `emitDecoratorMetadata`)
 - `experimentalDecorators` and `emitDecoratorMetadata` must be enabled in tsconfig
-- Four packages: `stratal` (core), `@stratal/framework` (auth, database, RBAC, guards, factory), `@stratal/seeders` (database seeders), `@stratal/testing` (test utilities)
 - Always import Zod from `stratal/validation`, never from `zod` directly
+- Service classes can be used directly as DI tokens (`@inject(MyService)`). Only create Symbol tokens when the service needs to be replaceable or is part of a reusable library
+- Use constructor injection with `@inject()` decorators
 
-## Quick Start
+## Project Setup
 
-### Worker Entry Point
+Docs: [Installation](https://stratal.dev/getting-started/installation) · [Your First Worker](https://stratal.dev/getting-started/your-first-worker)
 
-```typescript
-import { Stratal } from 'stratal'
-import { AppModule } from './app.module'
+```ts
+// src/index.ts — Worker entry point
+import { Stratal } from 'stratal';
+import { AppModule } from './app.module';
 
-export default new Stratal({ module: AppModule })
+const app = new Stratal({ module: AppModule });
+
+export default app;
 ```
 
-`Stratal` starts its initialization promise at construction time, dynamically importing `cloudflare:workers` for `env` and `waitUntil`. The `fetch`, `queue`, and `scheduled` handlers call `ensureReady()` to await initialization before processing, using a lazy-await pattern.
+## Modules
 
-### Root Module
+Docs: [Modules](https://stratal.dev/core-concepts/modules) · [Lifecycle Hooks](https://stratal.dev/core-concepts/lifecycle-hooks)
 
-```typescript
-import { Module } from 'stratal/module'
-import { UsersModule } from './users/users.module'
-
+```ts
 @Module({
-  imports: [UsersModule],
+  imports: [OtherModule],
+  providers: [MyService],
+  controllers: [MyController],
+  consumers: [MyConsumer],
+  jobs: [MyCronJob],
 })
-export class AppModule {}
+export class AppModule implements OnInitialize {
+  onInitialize(ctx: ModuleContext) { /* setup logic */ }
+}
 ```
 
-### Controller
+Dynamic modules use `forRoot()` (sync) or `forRootAsync()` (async factory). Lifecycle hooks: `OnInitialize`, `OnShutdown`.
 
-```typescript
-import { Controller, Route, type IController, type RouterContext } from 'stratal/router'
-import { z } from 'stratal/validation'
-import { inject, Transient } from 'stratal/di'
+## Controllers and Routing
 
-const userSchema = z.object({ id: z.string().uuid(), name: z.string(), email: z.string().email() })
-const createUserSchema = z.object({ name: z.string().min(1), email: z.string().email() })
+Docs: [Controllers & Routing](https://stratal.dev/core-concepts/controllers-and-routing) · [OpenAPI](https://stratal.dev/openapi/overview)
 
+```ts
 @Controller('/api/v1/users', { tags: ['Users'] })
 export class UsersController implements IController {
-  constructor(@inject(USER_TOKENS.UserService) private readonly userService: UserService) {}
+  constructor(@inject(UsersService) private usersService: UsersService) {}
 
-  @Route({ response: z.array(userSchema) })
-  async index(ctx: RouterContext) {
-    const users = await this.userService.findAll()
-    return ctx.json(users)
-  }
-
-  @Route({ body: createUserSchema, response: userSchema })
+  @Route({ body: CreateUserSchema, response: UserSchema })
   async create(ctx: RouterContext) {
-    const body = await ctx.body<{ name: string; email: string }>()
-    const user = await this.userService.create(body)
-    return ctx.json(user, 201)
+    const data = await ctx.body<CreateUserInput>();
+    return ctx.json(await this.usersService.create(data));
   }
 }
 ```
 
-### Method Name to HTTP Mapping
+**Method → HTTP mapping:** `index` → GET, `show` → GET /:id, `create` → POST (201), `update` → PUT /:id, `patch` → PATCH /:id, `destroy` → DELETE /:id.
 
-| Method   | HTTP    | Path Suffix | Status |
-|----------|---------|-------------|--------|
-| `index`  | GET     | `/`         | 200    |
-| `show`   | GET     | `/:id`      | 200    |
-| `create` | POST    | `/`         | 201    |
-| `update` | PUT     | `/:id`      | 200    |
-| `patch`  | PATCH   | `/:id`      | 200    |
-| `destroy`| DELETE  | `/:id`      | 200    |
-
-Controllers must implement `IController`. Method names **must** match the table above — the framework auto-derives the HTTP method, path, and status code from the method name.
-
-For non-RESTful routes (wildcards, custom patterns), implement a `handle()` method instead.
-
-> [!reference] For full RouteConfig, ControllerOptions, RouterContext API, and OpenAPI setup, see [routing.md](references/routing.md)
+Use `await ctx.body<T>()` to get validated body — **not** `ctx.req.valid('json')`.
 
 ## Dependency Injection
 
-### Tokens
+Docs: [DI](https://stratal.dev/core-concepts/dependency-injection) · [Providers](https://stratal.dev/core-concepts/providers)
 
-Always use **Symbol-based** tokens, never string tokens:
-
-```typescript
-const TOKENS = {
-  UserService: Symbol.for('UserService'),
-  UserRepository: Symbol.for('UserRepository'),
-}
-```
-
-### Services
-
-Decorate injectable services with `@Transient()`:
-
-```typescript
-import { inject, Transient } from 'stratal/di'
-
+```ts
+// Simple: use class directly as token
 @Transient()
-export class UserService {
-  constructor(
-    @inject(TOKENS.UserRepository) private readonly repo: UserRepository,
-  ) {}
-}
+export class UsersService { /* ... */ }
+// inject with: @inject(UsersService)
+
+// Symbol tokens — only for replaceable abstractions
+const USER_REPO = Symbol.for('UserRepository');
+@Module({
+  providers: [
+    { provide: USER_REPO, useClass: PgUserRepository, scope: Scope.Request },
+  ],
+})
 ```
 
-### Provider Types
+| Scope | Behavior |
+|---|---|
+| `Scope.Transient` | New instance per resolution (default) |
+| `Scope.Singleton` | Single instance globally |
+| `Scope.Request` | New instance per HTTP request |
 
-Register in `@Module({ providers: [...] })`:
+**Provider types:** `useClass`, `useValue`, `useFactory` (with `inject` array), `useExisting`.
 
-```typescript
-providers: [UserService]                                                           // Class shorthand
-{ provide: TOKENS.UserService, useClass: UserService }                             // Class with token
-{ provide: TOKENS.UserService, useClass: UserService, scope: Scope.Singleton }     // Class with scope
-{ provide: TOKENS.Config, useValue: { apiUrl: 'https://...' } }                    // Value
-{ provide: TOKENS.Formatter, useFactory: (c) => new Formatter(c), inject: [TOKENS.Config] } // Factory
-{ provide: TOKENS.IUserService, useExisting: UserService }                         // Alias
-```
+## StratalEnv Augmentation
 
-### Scopes
+Docs: [Environment Typing](https://stratal.dev/guides/environment-typing)
 
-```typescript
-import { Scope } from 'stratal/di'
+```ts
+// 1. Generate wrangler types: npx wrangler types
+// 2. Extend StratalEnv with Cloudflare.Env:
+export {};
 
-Scope.Transient   // New instance per resolution (default)
-Scope.Singleton   // Single instance globally
-Scope.Request     // New instance per HTTP request
-```
-
-### StratalEnv Augmentation
-
-Run `npx wrangler types` to auto-generate `Cloudflare.Env` from your `wrangler.jsonc`, then extend it:
-
-```typescript
-// src/types/env.ts
 declare module 'stratal' {
   interface StratalEnv extends Cloudflare.Env {}
 }
 ```
 
-This keeps your env types in sync with `wrangler.jsonc` automatically. The base `StratalEnv` already includes `ENVIRONMENT: string` and `CACHE: KVNamespace`.
-
-> [!reference] For Container API, conditional bindings, request scope, and dynamic modules, see [modules-and-di.md](references/modules-and-di.md)
+Run `npx wrangler types` to generate `Cloudflare.Env` from your `wrangler.jsonc` bindings.
 
 ## Guards and Middleware
 
-### Guards
+Docs: [Guards](https://stratal.dev/guides/guards) · [Middleware](https://stratal.dev/guides/middleware)
 
-Guards implement `CanActivate` (return `boolean` from `canActivate(ctx)`). Apply with `@UseGuards()`:
-
-```typescript
-// Apply to entire controller
-@Controller('/api/v1/admin')
-@UseGuards(AuthGuard)
-export class AdminController implements IController { ... }
-
-// Apply to single route method
-@UseGuards(AuthGuard)
-async create(ctx: RouterContext) { ... }
+```ts
+// Guard — implements CanActivate
+@Transient()
+export class ApiKeyGuard implements CanActivate {
+  constructor(@inject(DI_TOKENS.CloudflareEnv) private env: StratalEnv) {}
+  canActivate(ctx: RouterContext): boolean {
+    return ctx.header('x-api-key') === this.env.API_KEY;
+  }
+}
+// Apply with @UseGuards(ApiKeyGuard) on controller or method
 ```
 
-### Middleware
+```ts
+// Middleware class — implements Middleware
+@Transient()
+export class LoggingMiddleware implements Middleware {
+  async handle(ctx: RouterContext, next: () => Promise<void>) {
+    console.log(`--> ${ctx.c.req.method} ${ctx.c.req.path}`);
+    await next();
+  }
+}
+```
 
-Modules implement `MiddlewareConfigurable`. Middleware classes implement `Middleware` with `handle(ctx, next)`:
-
-```typescript
-@Module()
+```ts
+// Middleware registration — module implements MiddlewareConfigurable
 export class AppModule implements MiddlewareConfigurable {
-  configure(consumer: MiddlewareConsumer): void {
-    consumer
-      .apply(LoggingMiddleware)
-      .exclude({ path: '/health', method: 'get' })
-      .forRoutes('*')
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(LoggingMiddleware).forRoutes('*');
+    consumer.apply(CorsMiddleware).exclude('/health').forRoutes(ApiController);
   }
 }
 ```
 
-`forRoutes()` accepts `'*'` (all), controller classes, or `{ path, method }` objects.
+## Configuration
 
-## Queue Consumers and Cron Jobs
+Docs: [Configuration](https://stratal.dev/core-concepts/configuration)
 
-### Queue Consumers
+```ts
+const databaseConfig = registerAs('database', (env: StratalEnv) => ({
+  url: env.DATABASE_URL,
+  poolSize: 10,
+}));
 
-```typescript
-import { Transient } from 'stratal/di'
-import { type IQueueConsumer, type QueueMessage } from 'stratal/queue'
+@Module({ providers: [databaseConfig.asProvider()] })
+export class AppModule {}
+// Inject with: @inject(databaseConfig.KEY) config: { url: string; poolSize: number }
+```
 
-interface OrderPayload {
-  orderId: string
-}
+## Events
 
-@Transient()
-export class OrderCreatedConsumer implements IQueueConsumer<OrderPayload> {
-  readonly messageTypes = ['order.created']
+Docs: [Events](https://stratal.dev/core-concepts/events)
 
-  async handle(message: QueueMessage<OrderPayload>): Promise<void> {
-    const { orderId } = message.payload
-    // Process the order
+```ts
+@Listener()
+export class UserCreatedListener {
+  @On('after.User.create')
+  async sendWelcomeEmail(context: EventContext<'after.User.create'>) {
+    // handle event
   }
 }
 ```
 
-Register consumers in `@Module({ consumers: [OrderCreatedConsumer] })`.
-
-### Cron Jobs
-
-```typescript
-import { Transient } from 'stratal/di'
-import { type CronJob } from 'stratal/cron'
-
-@Transient()
-export class DailyReportJob implements CronJob {
-  readonly schedule = '0 2 * * *' // Daily at 2 AM UTC
-
-  async execute(controller: ScheduledController): Promise<void> {
-    // Generate report
-  }
-}
-```
-
-Register jobs in `@Module({ jobs: [DailyReportJob] })`. Add matching cron triggers in `wrangler.jsonc`.
-
-> [!reference] For QueueMessage interface, QueueModule setup, EmailModule config, and dispatch patterns, see [queues-cron-email.md](references/queues-cron-email.md)
-
-## Built-in Modules
-
-| Module | Import | Setup | Purpose |
-|--------|--------|-------|---------|
-| OpenAPIModule | `stratal/openapi` | `.forRoot({ info, securitySchemes })` | Automatic API docs at `/api/docs` |
-| ConfigModule | `stratal/config` | `.forRoot({ load: [dbConfig] })` | Typed config with `registerAs()` |
-| CacheModule | `stratal/cache` | auto-registered | KV-backed caching via `CACHE` binding |
-| EmailModule | `stratal/email` | `.forRoot({ provider, from, queue })` | Resend or SMTP email |
-| StorageModule | `stratal/storage` | `.forRoot({ storage, defaultStorageDisk })` | S3-compatible file storage |
-| I18nModule | `stratal/i18n` | `.forRoot({ defaultLocale, messages })` | Type-safe translations |
-| QueueModule | `stratal/queue` | `.forRootAsync(...)` | Queue producer/consumer |
-| AuthModule | `@stratal/framework/auth` | `.forRootAsync(...)` | Better Auth integration |
-| DatabaseModule | `@stratal/framework/database` | `.forRoot(config)` / `.forRootAsync(...)` | ZenStack ORM multi-connection |
-| RbacModule | `@stratal/framework/rbac` | `.forRoot(options)` / `.forRootAsync(...)` | Casbin RBAC |
-
-> [!reference] For detailed module configuration, see [config-cache-storage-i18n.md](references/config-cache-storage-i18n.md)
+Augment `CustomEventRegistry` for type-safe custom events. Options: `priority` (number), `blocking` (boolean).
 
 ## Error Handling
 
-Stratal uses typed errors with numeric codes and i18n-translatable messages:
+Docs: [Error Handling](https://stratal.dev/guides/error-handling)
 
-```typescript
-import { ApplicationError, type ErrorCode } from 'stratal/errors'
+```ts
+import { ApplicationError, ERROR_CODES } from 'stratal/errors';
 
 export class UserNotFoundError extends ApplicationError {
   constructor(userId: string) {
-    super('errors.user.not_found', 4000, { userId })
+    super('errors.userNotFound', ERROR_CODES.RESOURCE.NOT_FOUND, { userId });
   }
 }
 ```
 
-Error code ranges by domain:
+`ApplicationError` provides structured JSON responses with i18n message keys, numeric error codes (from `ERROR_CODES`), and metadata.
 
-| Range | Domain |
-|-------|--------|
-| 1000-1999 | Validation |
-| 2000-2999 | Database |
-| 3000-3099 | Authentication |
-| 3100-3199 | Authorization |
-| 4000-4999 | Resource |
-| 9000-9999 | System/Internal |
+## Queue Consumers
 
-The built-in `GlobalErrorHandler` catches `ApplicationError` subclasses and returns structured JSON with translated messages. Throw from controllers or services — the handler will catch it.
+Docs: [Queues](https://stratal.dev/integrations/queues)
 
-## Testing
+```ts
+@Transient()
+export class EmailConsumer implements IQueueConsumer<EmailPayload> {
+  readonly messageTypes = ['email.send'];
 
-Install `@stratal/testing` as a dev dependency:
-
-```typescript
-import { Test, type TestingModule } from '@stratal/testing'
-
-describe('UsersController', () => {
-  let module: TestingModule
-
-  beforeEach(async () => {
-    module = await Test.createTestingModule({
-      imports: [UsersModule],
-    }).compile()
-  })
-
-  afterEach(async () => {
-    await module.close()
-  })
-
-  it('creates a user', async () => {
-    const response = await module.http
-      .post('/api/v1/users')
-      .withBody({ name: 'Alice', email: 'alice@example.com' })
-      .asJson()
-      .send()
-
-    response.assertCreated()
-    response.assertJsonPath('name', 'Alice')
-  })
-})
-```
-
-Override providers: `.overrideProvider(TOKEN).useValue(mock)` before `.compile()`. Resolve services: `module.get<T>(TOKEN)`.
-
-> [!reference] For TestHttpClient API, assertion methods, FakeStorageService, and test patterns, see [testing.md](references/testing.md)
-
-## @stratal/framework
-
-### Installation
-
-```bash
-npm install @stratal/framework
-# Then install peer deps for the features you use:
-npm install better-auth @better-auth/core    # for AuthModule
-npm install @zenstackhq/orm pg               # for DatabaseModule
-npm install casbin                           # for RbacModule
-npm install @faker-js/faker                  # for Factory
-```
-
-### Authentication
-
-Better Auth integration with session middleware and request-scoped `AuthContext`:
-
-```typescript
-import { AuthModule } from '@stratal/framework/auth'
-import { AuthContext } from '@stratal/framework/context'
-
-@Module({
-  imports: [
-    AuthModule.forRootAsync({
-      inject: [DI_TOKENS.Database, CONFIG_TOKENS.ConfigService],
-      useFactory: (db, config) => createAuthOptions(db, config),
-    }),
-  ],
-})
-export class AppModule {}
-```
-
-Access current user via `@inject(DI_TOKENS.AuthContext)` → `authContext.requireUserId()`.
-
-> [!reference] For AuthService API, middleware internals, AuthContext methods, error classes, and `wrapBetterAuth()`, see [framework-auth.md](references/framework-auth.md)
-
-### Database
-
-ZenStack ORM with multi-connection support. Inject via `@inject(DI_TOKENS.Database)`:
-
-```typescript
-import { DatabaseModule } from '@stratal/framework/database'
-
-@Module({
-  imports: [
-    DatabaseModule.forRoot({
-      default: 'main',
-      connections: [{ name: 'main', schema: mainSchema, dialect: () => pgDialect }],
-    }),
-  ],
-})
-export class AppModule {}
-
-// Required type augmentation
-declare module '@stratal/framework/database' {
-  interface DatabaseSchemaRegistry { main: typeof mainSchema }
-  interface DefaultDatabaseConnection { name: 'main' }
+  async handle(message: QueueMessage<EmailPayload>) {
+    // process message.payload
+  }
 }
 ```
 
-> [!reference] For plugins (ErrorHandler, EventEmitter, SchemaSwitcher), events, error hierarchy, and PostgreSQL error mapping, see [framework-database.md](references/framework-database.md)
+Register in module `consumers` array. Messages have `id`, `type`, `payload`, and optional `metadata`.
 
-### RBAC and Guards
+## Cron Jobs
 
-Casbin-based RBAC. Use `AuthGuard()` for auth-only, `AuthGuard({ scopes })` for permission checks:
+Docs: [Cron Jobs](https://stratal.dev/integrations/cron-jobs)
 
-```typescript
-@Controller('/admin')
-@UseGuards(AuthGuard({ scopes: ['admin:dashboard'] }))
-export class AdminController implements IController { ... }
+```ts
+@Transient()
+export class CleanupJob implements CronJob {
+  readonly schedule = '0 2 * * *';
+
+  async execute(controller: ScheduledController) {
+    // runs daily at 2 AM UTC
+  }
+}
 ```
 
-Setup: `RbacModule.forRoot({ model, defaultPolicies, roleHierarchy })` in module imports.
+Register in module `jobs` array. Schedule must match a trigger in `wrangler.jsonc`.
 
-> [!reference] For RbacModule config, CasbinService API, model format, policy storage, and examples, see [framework-rbac-guards.md](references/framework-rbac-guards.md)
+## Built-in Modules Quick Reference
 
-### Factories
-
-Test data generation with Faker.js. Extend `Factory<Model, CreateInput>`, override `definition()`:
-
-```typescript
-const user = await new UserFactory().create(db)
-const admins = await new UserFactory().admin().count(5).createManyAndReturn(db)
-```
-
-> [!reference] For Factory class API, `state()`, Sequence class, and full examples, see [framework-factory.md](references/framework-factory.md)
-
-### Seeders
-
-CLI-based database seeding. Extend `Seeder`, implement `run()`, register as bare class provider:
-
-```bash
-npx stratal-seed ./src/seeders/index.ts run user        # Run specific seeder
-npx stratal-seed ./src/seeders/index.ts run --all       # Run all seeders
-npx stratal-seed ./src/seeders/index.ts run user -d     # Dry run
-npx stratal-seed ./src/seeders/index.ts list            # List seeders
-```
-
-Entry file: `SeederRunner.run(AppModule)` in `src/seeders/index.ts`.
-
-> [!reference] For Seeder class, SeederRunner, discovery, registration, and dry-run mode, see [seeders.md](references/seeders.md)
+| Module | Import | Docs |
+|---|---|---|
+| `CacheModule` | `stratal/cache` | [Caching](https://stratal.dev/integrations/caching) |
+| `EmailModule` | `stratal/email` | [Email](https://stratal.dev/integrations/email) |
+| `StorageModule` | `stratal/storage` | [Storage](https://stratal.dev/integrations/storage) |
+| `I18nModule` | `stratal/i18n` | [i18n](https://stratal.dev/integrations/i18n) |
+| `OpenAPIModule` | `stratal/openapi` | [OpenAPI](https://stratal.dev/openapi/overview) |
+| `LoggerService` | `stratal/logger` | [Logging](https://stratal.dev/integrations/logging) |
+| `ConfigModule` | `stratal/config` | [Configuration](https://stratal.dev/core-concepts/configuration) |
+| `QueueModule` | `stratal/queue` | [Queues](https://stratal.dev/integrations/queues) |
 
 ## Sub-path Imports
 
-| Import | Exports |
-|--------|---------|
-| `stratal` | Stratal, Application, StratalEnv, StratalExecutionContext, Constructor, ApplicationConfig |
-| `stratal/di` | Container, inject, Transient, Scope, DI_TOKENS, CONTAINER_TOKEN |
-| `stratal/router` | Controller, Route, IController, RouterContext, UseGuards, HonoApp, ROUTER_TOKENS |
-| `stratal/validation` | z (Zod), ZodType, ZodObject — always use this, not `zod` directly |
-| `stratal/errors` | ApplicationError, ErrorCode, ERROR_CODES |
-| `stratal/i18n` | I18nModule, I18nService, I18N_TOKENS, MessageKeys |
-| `stratal/cache` | CacheModule, CacheService, CACHE_TOKENS |
-| `stratal/config` | ConfigModule, registerAs, InferConfigType, CONFIG_TOKENS |
-| `stratal/logger` | LoggerService, LOGGER_TOKENS, LogLevel |
-| `stratal/queue` | QueueModule, IQueueConsumer, QueueMessage, QUEUE_TOKENS |
-| `stratal/cron` | CronJob |
-| `stratal/events` | EventRegistry, Listener, On, CustomEventRegistry |
-| `stratal/email` | EmailModule, EMAIL_TOKENS |
-| `stratal/storage` | StorageModule, StorageService, STORAGE_TOKENS |
-| `stratal/guards` | CanActivate, UseGuards |
-| `stratal/middleware` | Middleware, MiddlewareConfigurable, MiddlewareConsumer |
-| `stratal/module` | Module, ModuleOptions, DynamicModule, OnInitialize, OnShutdown, ModuleContext |
-| `@stratal/framework` | Re-exports from all sub-paths |
-| `@stratal/framework/auth` | AuthModule, AuthService, AUTH_SERVICE, AUTH_OPTIONS, wrapBetterAuth, auth errors |
-| `@stratal/framework/context` | AuthContext, AuthInfo, UserNotAuthenticatedError, ContextNotInitializedError |
-| `@stratal/framework/database` | DatabaseModule, DatabaseService, InjectDB, DATABASE_TOKENS, connectionSymbol, plugins, errors, customPgTypes |
-| `@stratal/framework/factory` | Factory, Sequence |
-| `@stratal/framework/guards` | AuthGuard |
-| `@stratal/framework/rbac` | RbacModule, CasbinService, CasbinEnforcerService, RBAC_TOKENS, InsufficientPermissionsError |
-| `@stratal/seeders` | Seeder, SeederRunner |
+| Path | Key Exports |
+|---|---|
+| `stratal` | `Stratal`, `Application`, `@Module`, `StratalEnv` |
+| `stratal/di` | `Container`, `DI_TOKENS`, `Scope`, `inject`, `Transient` |
+| `stratal/router` | `@Controller`, `@Route`, `RouterContext`, `UseGuards`, `IController` |
+| `stratal/validation` | `z` (Zod), `ZodType`, validation utilities |
+| `stratal/errors` | `ApplicationError`, `ERROR_CODES`, built-in error classes |
+| `stratal/events` | `@Listener`, `@On`, `EventRegistry` |
+| `stratal/i18n` | `I18nModule`, `I18nService` |
+| `stratal/cache` | `CacheModule`, `CacheService` |
+| `stratal/email` | `EmailModule`, `EmailService` |
+| `stratal/storage` | `StorageModule`, `StorageService` |
+| `stratal/queue` | `QueueModule`, `QueueService`, `IQueueConsumer` |
+| `stratal/logger` | `LoggerService`, `LOGGER_TOKENS` |
+| `stratal/config` | `ConfigModule`, `registerAs` |
+| `stratal/openapi` | `OpenAPIModule` |
 
 ## Do's and Don'ts
 
-**Do:**
-- One module per domain feature (e.g., `UsersModule`, `OrdersModule`)
-- Symbol-based tokens: `Symbol.for('UserService')`, never string tokens
-- `@Transient()` on all injectable services — required for tsyringe metadata
-- Controllers implement `IController` — ensures type-safe method signatures
-- Zod schemas for all request/response — define once, get validation + OpenAPI docs
-- Use `registerAs()` for typed configuration namespaces
-- Use `AuthGuard()` for auth, `AuthGuard({ scopes })` for authorization
-- Augment `DatabaseSchemaRegistry` and `DefaultDatabaseConnection` for type-safe DB access
-- Register seeders as bare class providers: `@Module({ providers: [UserSeeder] })`
-
-**Don't:**
-- Use `ctx.req.valid('json')` — use `ctx.body<T>()` which returns pre-validated data
-- Import `zod` directly — use `stratal/validation` (OpenAPI compatibility layer)
-- Import Better Auth directly — use `AuthService` wrapper and `wrapBetterAuth()`
-- Register providers outside of modules — always use `@Module({ providers: [...] })`
-- Forget the `CACHE` KV binding in `wrangler.jsonc` when using `CacheService`
-- Forget `casbinRule` model in ZenStack schema when using RbacModule
-
-> [!reference] For project setup (wrangler.jsonc, tsconfig, env typing), see [project-setup.md](references/project-setup.md)
+- **Do** use class references as DI tokens for simple services (`@inject(MyService)`)
+- **Do** use Symbol tokens only for replaceable abstractions or reusable libraries
+- **Do** use `await ctx.body<T>()` for validated request bodies
+- **Do** import Zod from `stratal/validation`
+- **Do** use constructor injection with `@inject()`
+- **Do** add `@Transient()` to consumers, jobs, guards, middleware, and listeners
+- **Do** register consumers in `consumers` and jobs in `jobs` arrays
+- **Don't** use esbuild or tsup — only `tsc`
+- **Don't** use `ctx.req.valid('json')` — use `await ctx.body<T>()`
+- **Don't** import Zod from `zod` directly
+- **Don't** disable `emitDecoratorMetadata` in tsconfig
