@@ -1,8 +1,9 @@
 import { Module } from 'stratal/module'
 
-import { AnalyticsController } from './analytics.controller'
+import { EventsController } from './events.controller'
+import { PageViewsController } from './page-views.controller'
 
 @Module({
-  controllers: [AnalyticsController],
+  controllers: [PageViewsController, EventsController],
 })
 export class AnalyticsModule {}

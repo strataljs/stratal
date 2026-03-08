@@ -22,7 +22,7 @@ export function run(): void {
             type: 'string',
             describe: 'Connection name',
           })
-          .option('all', {
+          .option('all-connections', {
             type: 'boolean',
             describe: 'Run for all connections',
             default: false,
@@ -43,15 +43,15 @@ export function run(): void {
             default: true,
           })
           .check((argv) => {
-            if (!argv.connection && !argv.all) {
-              throw new Error('Specify --connection <name> or --all')
+            if (!argv.connection && !argv.allConnections) {
+              throw new Error('Specify --connection <name> or --all-connections')
             }
             return true
           }),
       async (argv) => {
         await migrateCommand(argv.subcommand, {
           connection: argv.connection,
-          all: argv.all,
+          allConnections: argv.allConnections,
           schema: argv.schema,
           name: argv.name,
           cleanup: argv.cleanup,
@@ -68,7 +68,7 @@ export function run(): void {
             type: 'string',
             describe: 'Connection name',
           })
-          .option('all', {
+          .option('all-connections', {
             type: 'boolean',
             describe: 'Run for all connections',
             default: false,
@@ -84,15 +84,15 @@ export function run(): void {
             default: true,
           })
           .check((argv) => {
-            if (!argv.connection && !argv.all) {
-              throw new Error('Specify --connection <name> or --all')
+            if (!argv.connection && !argv.allConnections) {
+              throw new Error('Specify --connection <name> or --all-connections')
             }
             return true
           }),
       async (argv) => {
         await pushCommand({
           connection: argv.connection,
-          all: argv.all,
+          allConnections: argv.allConnections,
           schema: argv.schema,
           cleanup: argv.cleanup,
         })

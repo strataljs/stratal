@@ -1,14 +1,14 @@
 import { execSync } from 'node:child_process'
 import { existsSync, rmSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { join } from 'node:path'
 import chalk from 'chalk'
 import { loadDocument } from '@zenstackhq/language'
-import { collectConnections } from '../../plugin/utils.js'
+import { collectConnections, getPluginOutputDir } from '../../plugin/utils.js'
 import { generateConnectionSchemas } from '../../plugin/generators/connection-schema.js'
 
 export interface PushOptions {
   connection?: string
-  all?: boolean
+  allConnections?: boolean
   schema?: string
   cleanup?: boolean
 }
@@ -32,30 +32,35 @@ export async function pushCommand(options: PushOptions): Promise<void> {
 
   const model = result.model
   const connections = collectConnections(model, 'main')
-  const outputDir = dirname(schemaPath)
+  const outputDir = getPluginOutputDir(model, schemaPath)
 
-  generateConnectionSchemas(outputDir, model, connections)
-
-  const connectionNames = options.all
+  const connectionNames = options.allConnections
     ? [...connections.keys()]
     : options.connection
       ? [options.connection]
       : []
 
   if (connectionNames.length === 0) {
-    console.error(chalk.red('Specify --connection <name> or --all'))
+    console.error(chalk.red('Specify --connection <name> or --all-connections'))
     process.exit(1)
   }
-
-  let hasError = false
 
   for (const connName of connectionNames) {
     if (!connections.has(connName)) {
       console.error(chalk.red(`Unknown connection: ${connName}`))
-      hasError = true
-      continue
+      process.exit(1)
     }
+  }
 
+  const targetConnections = new Map(
+    connectionNames.map(name => [name, connections.get(name)!]),
+  )
+
+  generateConnectionSchemas(outputDir, model, targetConnections)
+
+  let hasError = false
+
+  for (const connName of connectionNames) {
     const connSchemaPath = join(outputDir, 'connections', connName, 'schema.zmodel')
 
     console.log(chalk.blue(`\n[${connName}] Running db push...`))

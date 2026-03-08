@@ -42,9 +42,3 @@ export const eventResponseSchema = z.object({
   data: eventSchema,
 })
 
-export const eventCountSchema = z.object({
-  data: z.object({
-    name: z.string(),
-    count: z.number(),
-  }),
-})

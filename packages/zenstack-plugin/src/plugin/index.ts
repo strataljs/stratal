@@ -2,7 +2,6 @@ import type { CliPlugin } from '@zenstackhq/sdk'
 import { dirname, isAbsolute, join } from 'node:path'
 import { generateConnectionSchemas } from './generators/connection-schema.js'
 import { generateSlicingFile } from './generators/slicing.js'
-import { generateTypesFile } from './generators/types.js'
 import { collectConnections, validateCrossConnectionRelations } from './utils.js'
 
 const plugin: CliPlugin = {
@@ -13,10 +12,12 @@ const plugin: CliPlugin = {
     const { model, schemaFile, pluginOptions } = context
 
     const defaultConnection = (pluginOptions.default as string | undefined) ?? 'main'
-    const rawOutput = (pluginOptions.output as string | undefined) ?? './zenstack'
-    const outputDir = isAbsolute(rawOutput)
-      ? rawOutput
-      : join(dirname(schemaFile), rawOutput)
+    const rawOutput = pluginOptions.output as string | undefined
+    const outputDir = rawOutput
+      ? isAbsolute(rawOutput)
+        ? rawOutput
+        : join(dirname(schemaFile), rawOutput)
+      : context.defaultOutputPath
 
     const connections = collectConnections(model, defaultConnection)
 
@@ -29,8 +30,7 @@ const plugin: CliPlugin = {
       console.warn(`[stratal] Warning: ${warning}`)
     }
 
-    generateTypesFile(outputDir, connections, defaultConnection)
-    generateSlicingFile(outputDir, connections)
+    generateSlicingFile(outputDir, connections, defaultConnection)
     generateConnectionSchemas(outputDir, model, connections)
   },
 }

@@ -1,5 +1,6 @@
 import type { DataModel, DataSource, Enum, Model } from '@zenstackhq/language/ast'
 import { getAttribute, hasAttribute } from '@zenstackhq/language/utils'
+import { dirname, isAbsolute, join } from 'node:path'
 
 export interface ConnectionInfo {
   name: string
@@ -108,6 +109,33 @@ export function toUpperSnakeCase(name: string): string {
     .replace(/([a-z])([A-Z])/g, '$1_$2')
     .replace(/[-\s]+/g, '_')
     .toUpperCase()
+}
+
+export function getPluginOutputDir(model: Model, schemaPath: string): string {
+  for (const decl of model.declarations) {
+    if (decl.$type !== 'Plugin') continue
+
+    const plugin = decl as { fields: { name: string; value: { $type: string; value?: string } }[] }
+    let isStratalPlugin = false
+    let outputValue: string | undefined
+
+    for (const field of plugin.fields) {
+      if (field.name === 'provider' && field.value.$type === 'StringLiteral') {
+        if ((field.value as { value: string }).value === '@stratal/zenstack-plugin') {
+          isStratalPlugin = true
+        }
+      }
+      if (field.name === 'output' && field.value.$type === 'StringLiteral') {
+        outputValue = (field.value as { value: string }).value
+      }
+    }
+
+    if (isStratalPlugin && outputValue) {
+      return isAbsolute(outputValue) ? outputValue : join(dirname(schemaPath), outputValue)
+    }
+  }
+
+  return dirname(schemaPath)
 }
 
 export function validateCrossConnectionRelations(

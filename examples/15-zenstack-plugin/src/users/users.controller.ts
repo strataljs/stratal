@@ -3,10 +3,7 @@ import { z } from 'stratal/validation'
 import { InjectDB, type DatabaseService } from '@stratal/framework/database'
 
 import {
-  createPostSchema,
   createUserSchema,
-  postListSchema,
-  postResponseSchema,
   updateUserSchema,
   userListSchema,
   userResponseSchema,
@@ -80,36 +77,4 @@ export class UsersController implements IController {
     return ctx.json({ success: true })
   }
 
-  @Route({
-    path: '/:id/posts',
-    params: z.object({ id: z.string() }),
-    response: postListSchema,
-    summary: 'List posts for a user',
-  })
-  async posts(ctx: RouterContext) {
-    const posts = await this.db.post.findMany({
-      where: { userId: ctx.param('id') },
-      orderBy: { createdAt: 'desc' },
-    })
-    return ctx.json({ data: posts })
-  }
-
-  @Route({
-    path: '/:id/posts',
-    method: 'post',
-    params: z.object({ id: z.string() }),
-    body: createPostSchema,
-    response: postResponseSchema,
-    summary: 'Create a post for a user',
-  })
-  async createPost(ctx: RouterContext) {
-    const body = await ctx.body<{ title: string; content?: string; published?: boolean }>()
-    const post = await this.db.post.create({
-      data: {
-        ...body,
-        userId: ctx.param('id'),
-      },
-    })
-    return ctx.json({ data: post }, 201)
-  }
 }
