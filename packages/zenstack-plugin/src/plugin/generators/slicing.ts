@@ -33,9 +33,11 @@ export function generateSlicingFile(
   lines.push('')
 
   lines.push("declare module '@stratal/framework/database' {")
-  lines.push('  interface DatabaseSchema { type: SchemaType }')
-  lines.push('  interface DatabaseSlicingRegistry extends _ConnectionSlicing {}')
-  lines.push(`  interface DefaultDatabaseConnection { name: '${defaultConnection}' }`)
+  lines.push('  interface StratalDatabase {')
+  lines.push('    schema: SchemaType')
+  lines.push(`    defaultConnection: '${defaultConnection}'`)
+  lines.push('    slicing: _ConnectionSlicing')
+  lines.push('  }')
   lines.push('}')
   lines.push('')
 
