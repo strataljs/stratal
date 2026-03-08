@@ -1,6 +1,6 @@
 {
   "name": "@stratal/seeders",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Database seeder infrastructure for Stratal framework applications",
   "type": "module",
   "license": "MIT",
@@ -56,7 +56,7 @@
     "yargs": "^18.0.0"
   },
   "peerDependencies": {
-    "stratal": "^0.0.6"
+    "stratal": "^0.0.7"
   },
   "devDependencies": {
     "@swc/core": "^1.15.18",
