@@ -1,5 +1,4 @@
 import type { Context, MiddlewareHandler } from 'hono'
-import { cors } from 'hono/cors'
 import type { Container } from '../di/container'
 import { DI_TOKENS } from '../di/tokens'
 import { getHttpStatus, type GlobalErrorHandler } from '../errors'
@@ -130,7 +129,6 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
   }
 
   private setupGlobalMiddleware(): void {
-    this.nativeUse('*', cors() as MiddlewareHandler<RouterEnv>)
     this.nativeUse('*', createLoggerMiddleware(this._logger) as MiddlewareHandler<RouterEnv>)
     this.onError((err, c) => {
       const requestContainer = c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER)
