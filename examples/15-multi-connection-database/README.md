@@ -40,7 +40,6 @@ npm run db:push
 ## Running
 
 ```bash
-cd examples/15-multi-connection-database
 npx wrangler dev
 ```
 

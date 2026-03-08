@@ -21,6 +21,7 @@
  * ```
  */
 import { type DependencyContainer, type Lifecycle } from 'tsyringe'
+import { type DelayedConstructor } from 'tsyringe/dist/typings/lazy-helpers'
 import type InjectionToken from 'tsyringe/dist/typings/providers/injection-token'
 import type { RouterContext } from '../router/router-context'
 import { ROUTER_TOKENS } from '../router/router.tokens'
@@ -90,10 +91,10 @@ export class Container {
    * Register a service with optional explicit token and scope
    */
   register<T extends object>(serviceClass: Constructor<T>, scope?: Scope): void
-  register<T extends object>(token: InjectionToken<T>, serviceClass: Constructor<T>, scope?: Scope): void
+  register<T extends object>(token: InjectionToken<T>, serviceClass: Constructor<T> | DelayedConstructor<T>, scope?: Scope): void
   register<T extends object>(
     tokenOrClass: InjectionToken<T> | Constructor<T>,
-    serviceClassOrScope?: Constructor<T> | Scope,
+    serviceClassOrScope?: Constructor<T> | DelayedConstructor<T> | Scope,
     scope?: Scope
   ): void {
     let token: InjectionToken<T>
@@ -267,6 +268,6 @@ export class Container {
 }
 
 // Re-export tsyringe utilities for convenience
-export { container, inject, injectable, singleton } from 'tsyringe'
+export { container, delay, inject, injectable, singleton } from 'tsyringe'
 export type { DependencyContainer } from 'tsyringe'
 

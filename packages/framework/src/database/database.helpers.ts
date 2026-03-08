@@ -1,5 +1,6 @@
 import { ZenStackClient, type AnyPlugin } from '@zenstackhq/orm'
 import type { SchemaDef } from '@zenstackhq/schema'
+import { Transient } from 'stratal/di'
 import type { IEventRegistry } from 'stratal/events'
 import { z } from 'stratal/validation'
 import type { DatabaseConnectionConfig } from './database.module'
@@ -31,7 +32,7 @@ export function createDatabaseService(
   schema: SchemaDef,
   conn: DatabaseConnectionConfig,
   eventRegistry: IEventRegistry,
-) {
+): new () => InstanceType<typeof ZenStackClient> {
   const plugins: AnyPlugin[] = [
     new ErrorHandlerPlugin(),
     new EventEmitterPlugin({
@@ -39,6 +40,14 @@ export function createDatabaseService(
     }),
     ...(conn.plugins ?? []),
   ]
-  const dialect = conn.dialect()
-  return new ZenStackClient(schema, { dialect, plugins, slicing: conn.slicing })
+
+  @Transient()
+  class DatabaseClient extends ZenStackClient<typeof schema> {
+    constructor() {
+      const dialect = conn.dialect()
+      super(schema, { dialect, plugins, slicing: conn.slicing })
+    }
+  }
+
+  return DatabaseClient
 }

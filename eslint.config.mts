@@ -48,7 +48,7 @@ export default defineConfig([
       ],
       "@typescript-eslint/no-unnecessary-type-parameters": "off",
       "@typescript-eslint/no-extraneous-class": "off",
-      "@typescript-eslint/no-non-null-assertion": "warn",
+      "@typescript-eslint/no-non-null-assertion": "off",
       "@typescript-eslint/no-unsafe-argument": "warn",
       "@typescript-eslint/no-unsafe-assignment": "error",
       "@typescript-eslint/no-unsafe-member-access": "warn",

@@ -1,11 +1,10 @@
+import { DatabaseModule } from '@stratal/framework/database'
 import type { StratalEnv } from 'stratal'
 import { DI_TOKENS } from 'stratal/di'
 import { Module } from 'stratal/module'
-import { DatabaseModule } from '@stratal/framework/database'
 
-import { createDatabaseConfig } from './database/database.config'
-import '../db/zenstack/database.types'
 import { AnalyticsModule } from './analytics/analytics.module'
+import { createDatabaseConfig } from './database/database.config'
 import { ListenersModule } from './listeners/listeners.module'
 import { UsersModule } from './users/users.module'
 
@@ -20,4 +19,4 @@ import { UsersModule } from './users/users.module'
     ListenersModule,
   ],
 })
-export class AppModule {}
+export class AppModule { }

@@ -26,7 +26,7 @@ describe('Database Module', () => {
 
   describe('CRUD Operations', () => {
     it('creates a user via factory', async () => {
-      const db = await module.getDb()
+      const db = module.getDb()
       const user = await new UserFactory().create(db)
 
       expect(user).toBeDefined()
@@ -39,7 +39,7 @@ describe('Database Module', () => {
     })
 
     it('reads a user by ID', async () => {
-      const db = await module.getDb()
+      const db = module.getDb()
       const created = await new UserFactory().withEmail('read@test.com').create(db)
 
       const found = await db.user.findUnique({ where: { id: created.id } })
@@ -49,7 +49,7 @@ describe('Database Module', () => {
     })
 
     it('updates a user', async () => {
-      const db = await module.getDb()
+      const db = module.getDb()
       const user = await new UserFactory().create(db)
 
       await db.user.update({
@@ -61,7 +61,7 @@ describe('Database Module', () => {
     })
 
     it('deletes a user', async () => {
-      const db = await module.getDb()
+      const db = module.getDb()
       const user = await new UserFactory().create(db)
 
       await db.user.delete({ where: { id: user.id } })
@@ -70,7 +70,7 @@ describe('Database Module', () => {
     })
 
     it('creates multiple users via factory', async () => {
-      const db = await module.getDb()
+      const db = module.getDb()
       const users = await new UserFactory().count(3).createManyAndReturn(db)
 
       expect(users).toHaveLength(3)
@@ -78,7 +78,7 @@ describe('Database Module', () => {
     })
 
     it('creates a post with author relationship', async () => {
-      const db = await module.getDb()
+      const db = module.getDb()
       const user = await new UserFactory().create(db)
       const post = await new PostFactory().forAuthor(user.id).create(db)
 
@@ -89,7 +89,7 @@ describe('Database Module', () => {
 
   describe('Transactions', () => {
     it('commits a successful transaction', async () => {
-      const db = await module.getDb()
+      const db = module.getDb()
 
       await db.$transaction(async (tx) => {
         await tx.user.create({
@@ -107,7 +107,7 @@ describe('Database Module', () => {
     })
 
     it('rolls back a failed transaction', async () => {
-      const db = await module.getDb()
+      const db = module.getDb()
 
       try {
         await db.$transaction(async (tx) => {
@@ -132,7 +132,7 @@ describe('Database Module', () => {
 
   describe('Database Assertions', () => {
     it('assertDatabaseHas finds existing record', async () => {
-      const db = await module.getDb()
+      const db = module.getDb()
       await new UserFactory().withEmail('exists@test.com').create(db)
 
       await module.assertDatabaseHas('user', { email: 'exists@test.com' })
@@ -143,7 +143,7 @@ describe('Database Module', () => {
     })
 
     it('assertDatabaseCount matches expected count', async () => {
-      const db = await module.getDb()
+      const db = module.getDb()
       await new UserFactory().count(5).createManyAndReturn(db)
 
       await module.assertDatabaseCount('user', 5)
@@ -152,7 +152,7 @@ describe('Database Module', () => {
 
   describe('Error Handling', () => {
     it('throws on duplicate email (unique constraint)', async () => {
-      const db = await module.getDb()
+      const db = module.getDb()
       await new UserFactory().withEmail('duplicate@test.com').create(db)
 
       await expect(
@@ -161,7 +161,7 @@ describe('Database Module', () => {
     })
 
     it('throws on invalid foreign key (authorId)', async () => {
-      const db = await module.getDb()
+      const db = module.getDb()
 
       await expect(
         new PostFactory().forAuthor('nonexistent-user-id').create(db)
@@ -169,7 +169,7 @@ describe('Database Module', () => {
     })
 
     it('throws when record not found', async () => {
-      const db = await module.getDb()
+      const db = module.getDb()
 
       await expect(
         db.user.findUniqueOrThrow({ where: { id: 'nonexistent-id' } })
@@ -179,7 +179,7 @@ describe('Database Module', () => {
 
   describe('Truncation', () => {
     it('truncateDb clears all tables', async () => {
-      const db = await module.getDb()
+      const db = module.getDb()
       await new UserFactory().count(3).createManyAndReturn(db)
       await module.assertDatabaseCount('user', 3)
 

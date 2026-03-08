@@ -1,9 +1,9 @@
 import { Test, type TestingModule } from '@stratal/testing'
 import { afterAll, beforeAll, describe, it } from 'vitest'
-import { TestAppModule } from '../fixtures/app.module'
-import { UserSeeder, ADMIN_USER_ID, REGULAR_USER_ID } from '../seeders/user.seeder'
-import { RbacSeeder } from '../seeders/rbac.seeder'
 import { PostFactory } from '../factories/post.factory'
+import { TestAppModule } from '../fixtures/app.module'
+import { RbacSeeder } from '../seeders/rbac.seeder'
+import { ADMIN_USER_ID, REGULAR_USER_ID, UserSeeder } from '../seeders/user.seeder'
 
 describe('Guards', () => {
   let module: TestingModule
@@ -43,7 +43,7 @@ describe('Guards', () => {
 
   describe('AuthGuard({ scopes }) - with scopes', () => {
     it('allows admin user to update a post (admin has posts:* with .*)', async () => {
-      const db = await module.getDb()
+      const db = module.getDb()
       const post = await new PostFactory().forAuthor(ADMIN_USER_ID).create(db)
 
       const response = await module.http
@@ -57,7 +57,7 @@ describe('Guards', () => {
     })
 
     it('rejects regular user from updating a post (no posts:update scope)', async () => {
-      const db = await module.getDb()
+      const db = module.getDb()
       const post = await new PostFactory().forAuthor(REGULAR_USER_ID).create(db)
 
       const response = await module.http
@@ -119,7 +119,7 @@ describe('Guards', () => {
     })
 
     it('posts delete has scoped method-level guard', async () => {
-      const db = await module.getDb()
+      const db = module.getDb()
       const post = await new PostFactory().forAuthor(REGULAR_USER_ID).create(db)
 
       // Regular user can't delete (no posts:delete scope)
@@ -132,7 +132,7 @@ describe('Guards', () => {
     })
 
     it('admin can delete posts (admin has posts:* with .*)', async () => {
-      const db = await module.getDb()
+      const db = module.getDb()
       const post = await new PostFactory().forAuthor(ADMIN_USER_ID).create(db)
 
       const response = await module.http

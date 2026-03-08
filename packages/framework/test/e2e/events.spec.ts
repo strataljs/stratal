@@ -18,7 +18,7 @@ describe('Event System', () => {
   })
 
   afterEach(async () => {
-    const db = await module.getDb()
+    const db = module.getDb()
     await db.post.deleteMany({})
   })
 
