@@ -22,9 +22,6 @@ Use this template:
 ## Summary
 <!-- 2-4 sentences explaining WHAT changed and WHY -->
 
-## Changes
-<!-- Bulleted list of key changes grouped by category -->
-
 ## How to Test
 <!-- Steps a reviewer can follow to verify the changes -->
 
@@ -35,7 +32,7 @@ Use this template:
 ## Rules
 - Be concise and succinct. Prefer short, punchy bullets over long sentences. No fluff.
 - The summary should be 1-2 sentences max.
-- Bullet points in Changes and How to Test should each be a single short line — no wrapping.
+- Bullet points in How to Test should each be a single short line — no wrapping.
 - Focus on the **why**, not just the **what** — reviewers can read the diff for the what.
 - Group related changes together under a single bullet when possible.
 - If there are breaking changes, always include the "Breaking Changes" section with migration steps.
