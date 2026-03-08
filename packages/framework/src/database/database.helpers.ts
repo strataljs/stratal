@@ -1,4 +1,6 @@
 import { ZenStackClient, type AnyPlugin } from '@zenstackhq/orm'
+import type { SchemaDef } from '@zenstackhq/schema'
+import { Transient } from 'stratal/di'
 import type { IEventRegistry } from 'stratal/events'
 import { z } from 'stratal/validation'
 import type { DatabaseConnectionConfig } from './database.module'
@@ -6,12 +8,13 @@ import { ErrorHandlerPlugin, EventEmitterPlugin } from './plugins'
 
 const databaseConnectionSchema = z.object({
   name: z.string().min(1, 'Connection name is required'),
-  schema: z.object({}).loose(),
   dialect: z.function(),
   plugins: z.array(z.object({}).loose()).optional(),
+  slicing: z.object({}).loose().optional(),
 })
 
 export const databaseModuleConfigSchema = z.object({
+  schema: z.object({}).loose(),
   default: z.string().min(1, 'Default connection name is required'),
   connections: z.array(databaseConnectionSchema).min(1, 'At least one connection is required'),
 }).refine(
@@ -26,9 +29,10 @@ export const databaseModuleConfigSchema = z.object({
 )
 
 export function createDatabaseService(
+  schema: SchemaDef,
   conn: DatabaseConnectionConfig,
   eventRegistry: IEventRegistry,
-) {
+): new () => InstanceType<typeof ZenStackClient> {
   const plugins: AnyPlugin[] = [
     new ErrorHandlerPlugin(),
     new EventEmitterPlugin({
@@ -36,6 +40,14 @@ export function createDatabaseService(
     }),
     ...(conn.plugins ?? []),
   ]
-  const dialect = conn.dialect()
-  return new ZenStackClient(conn.schema, { dialect, plugins })
+
+  @Transient()
+  class DatabaseClient extends ZenStackClient<typeof schema> {
+    constructor() {
+      const dialect = conn.dialect()
+      super(schema, { dialect, plugins, slicing: conn.slicing })
+    }
+  }
+
+  return DatabaseClient
 }

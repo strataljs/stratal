@@ -28,7 +28,7 @@
  * Augmentable event registry.
  * Maps event name -> full context type.
  *
- * Framework's database module augments this with `DatabaseEvents<K>`.
+ * Framework's database module augments this with `DatabaseEvents`.
  * Users augment for custom events using `CustomEventContext<TData>`.
  *
  * @example

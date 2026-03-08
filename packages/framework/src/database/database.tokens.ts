@@ -3,6 +3,8 @@ export const DATABASE_TOKENS = {
   Services: Symbol.for('DatabaseServices'),
 } as const
 
-export function connectionSymbol(name: string): symbol {
+import type { ConnectionName } from './types'
+
+export function connectionSymbol(name: ConnectionName): symbol {
   return Symbol.for(`DatabaseConnection:${name}`)
 }

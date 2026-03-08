@@ -39,18 +39,22 @@ import { TestHttpClient } from './http/test-http-client'
  */
 export class TestingModule {
   private _http: TestHttpClient | null = null
+  private readonly _requestContainer: Container
 
   constructor(
     private readonly app: Application,
     private readonly env: StratalEnv,
     private readonly ctx: ExecutionContext,
-  ) { }
+  ) {
+    const mockContext = this.app.createMockRouterContext()
+    this._requestContainer = this.app.container.createRequestScope(mockContext)
+  }
 
   /**
    * Resolve a service from the container
    */
   get<T>(token: InjectionToken<T>): T {
-    return this.app.container.resolve(token)
+    return this._requestContainer.resolve(token)
   }
 
   /**
@@ -76,10 +80,10 @@ export class TestingModule {
   }
 
   /**
-   * Get DI Container
+   * Get DI Container (request-scoped)
    */
   get container(): Container {
-    return this.app.container
+    return this._requestContainer
   }
 
   /**
@@ -100,31 +104,26 @@ export class TestingModule {
   /**
    * Get database service instance (resolved in request scope)
    */
-  async getDb(): Promise<DatabaseService>
-  async getDb<K extends ConnectionName>(name: K): Promise<DatabaseService<K>>
-  async getDb(name?: string): Promise<unknown> {
-    return this.runInRequestScope((container) => {
-      const token = name ? connectionSymbol(name) : DI_TOKENS.Database
-      return container.resolve(token)
-    })
+  getDb(): DatabaseService
+  getDb<K extends ConnectionName>(name: K): DatabaseService<K>
+  getDb(name?: string): unknown {
+    const token = name ? connectionSymbol(name) : DI_TOKENS.Database
+    return this._requestContainer.resolve(token)
   }
 
   /**
    * Truncate all non-prisma tables in the database
    */
   async truncateDb(name?: ConnectionName): Promise<void> {
-    await this.runInRequestScope(async (container) => {
-      const token = name ? connectionSymbol(name) : DI_TOKENS.Database
-      const db = container.resolve<DatabaseService>(token)
-      const tables = await db.$queryRaw<{ tablename: string }[]>`
-        SELECT tablename::text as tablename FROM pg_tables
-        WHERE schemaname = current_schema()
-        AND tablename NOT LIKE '_prisma%'
-      `
-      if (tables.length === 0) return
-      const tableList = tables.map((t) => `"${t.tablename}"`).join(', ')
-      await db.$executeRawUnsafe(`TRUNCATE ${tableList} RESTART IDENTITY CASCADE`)
-    })
+    const db = this.getDb(name!)
+    const tables = await db.$queryRaw<{ tablename: string }[]>`
+      SELECT tablename::text as tablename FROM pg_tables
+      WHERE schemaname = current_schema()
+      AND tablename NOT LIKE '_prisma%'
+    `
+    if (tables.length === 0) return
+    const tableList = tables.map((t) => `"${t.tablename}"`).join(', ')
+    await db.$executeRawUnsafe(`TRUNCATE ${tableList} RESTART IDENTITY CASCADE`)
   }
 
   /**
@@ -143,14 +142,11 @@ export class TestingModule {
       seeders = args as Seeder[]
     }
 
-    await this.runInRequestScope(async (container) => {
-      const token = name ? connectionSymbol(name) : DI_TOKENS.Database
-      const db = container.resolve<DatabaseService>(token)
-      await db.$transaction(async (tx) => {
-        for (const seeder of seeders) {
-          await seeder.run(tx as DatabaseService)
-        }
-      })
+    const db = this.getDb(name!)
+    await db.$transaction(async (tx) => {
+      for (const seeder of seeders) {
+        await seeder.run(tx as DatabaseService)
+      }
     })
   }
 
@@ -159,13 +155,10 @@ export class TestingModule {
    */
   async assertDatabaseHas(table: string, data: Record<string, unknown>, name?: ConnectionName): Promise<void> {
     const { expect } = await import('vitest')
-    await this.runInRequestScope(async (container) => {
-      const token = name ? connectionSymbol(name) : DI_TOKENS.Database
-      const db = container.resolve<DatabaseService>(token)
-      const model = (db as unknown as Record<string, unknown>)[table] as { findFirst: (opts: unknown) => Promise<unknown> }
-      const result = await model.findFirst({ where: data })
-      expect(result, `Expected ${table} with ${JSON.stringify(data)}`).not.toBeNull()
-    })
+    const db = this.getDb(name!)
+    const model = (db as unknown as Record<string, unknown>)[table] as { findFirst: (opts: unknown) => Promise<unknown> }
+    const result = await model.findFirst({ where: data })
+    expect(result, `Expected ${table} with ${JSON.stringify(data)}`).not.toBeNull()
   }
 
   /**
@@ -173,13 +166,10 @@ export class TestingModule {
    */
   async assertDatabaseMissing(table: string, data: Record<string, unknown>, name?: ConnectionName): Promise<void> {
     const { expect } = await import('vitest')
-    await this.runInRequestScope(async (container) => {
-      const token = name ? connectionSymbol(name) : DI_TOKENS.Database
-      const db = container.resolve<DatabaseService>(token)
-      const model = (db as unknown as Record<string, unknown>)[table] as { findFirst: (opts: unknown) => Promise<unknown> }
-      const result = await model.findFirst({ where: data })
-      expect(result, `Expected ${table} NOT to have ${JSON.stringify(data)}`).toBeNull()
-    })
+    const db = this.getDb(name!)
+    const model = (db as unknown as Record<string, unknown>)[table] as { findFirst: (opts: unknown) => Promise<unknown> }
+    const result = await model.findFirst({ where: data })
+    expect(result, `Expected ${table} NOT to have ${JSON.stringify(data)}`).toBeNull()
   }
 
   /**
@@ -187,19 +177,17 @@ export class TestingModule {
    */
   async assertDatabaseCount(table: string, expected: number, name?: ConnectionName): Promise<void> {
     const { expect } = await import('vitest')
-    await this.runInRequestScope(async (container) => {
-      const token = name ? connectionSymbol(name) : DI_TOKENS.Database
-      const db = container.resolve<DatabaseService>(token)
-      const model = (db as unknown as Record<string, unknown>)[table] as { count: () => Promise<number> }
-      const actual = await model.count()
-      expect(actual, `Expected ${table} count ${expected}, got ${actual}`).toBe(expected)
-    })
+    const db = this.getDb(name!)
+    const model = (db as unknown as Record<string, unknown>)[table] as { count: () => Promise<number> }
+    const actual = await model.count()
+    expect(actual, `Expected ${table} count ${expected}, got ${actual}`).toBe(expected)
   }
 
   /**
    * Cleanup - call in afterAll
    */
   async close(): Promise<void> {
+    await this._requestContainer.dispose()
     await this.app.shutdown()
   }
 }

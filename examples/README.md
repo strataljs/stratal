@@ -30,6 +30,7 @@ npx wrangler dev
 | 12 | [database](12-database/) | ZenStack ORM with Hyperdrive and database event listeners |
 | 13 | [rbac](13-rbac/) | Role-based access control with Casbin, Auth, and Database integration |
 | 14 | [factories](14-factories/) | Test data factories with Faker.js, state modifiers, and `Sequence` |
+| 15 | [multi-connection-database](15-multi-connection-database/) | Multi-connection database with `@stratal/zenstack-plugin`, cross-connection events, and per-connection schema management |
 
 ## Shared patterns
 

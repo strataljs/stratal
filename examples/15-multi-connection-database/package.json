@@ -1,0 +1,30 @@
+{
+  "name": "stratal-example-15-multi-connection-database",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "generate": "zenstack generate --schema db/schema.zmodel -o db/zenstack",
+    "wrangler:types": "wrangler types",
+    "db:up": "docker compose up -d",
+    "db:push": "dotenv -- npx stratal-db push --all-connections --schema db/schema.zmodel",
+    "db:push:main": "dotenv -- npx stratal-db push --connection main --schema db/schema.zmodel",
+    "db:push:analytics": "dotenv -- npx stratal-db push --connection analytics --schema db/schema.zmodel"
+  },
+  "dependencies": {
+    "@stratal/framework": "file:../../packages/framework",
+    "@stratal/zenstack-plugin": "file:../../packages/zenstack-plugin",
+    "@zenstackhq/cli": "^3.4.5",
+    "@zenstackhq/orm": "^3.4.4",
+    "pg": "^8.20.0",
+    "reflect-metadata": "^0.2.2",
+    "stratal": "file:../../packages/core"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260307.1",
+    "@types/pg": "^8.18.0",
+    "dotenv-cli": "^11.0.0",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.71.0"
+  }
+}

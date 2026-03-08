@@ -154,7 +154,7 @@ describe('Cross-Module Integration', () => {
       await module.seed(new UserSeeder())
       await module.seed(new RbacSeeder())
 
-      const db = await module.getDb()
+      const db = module.getDb()
       const post = await new PostFactory().forAuthor(ADMIN_USER_ID).published().create(db)
 
       // Admin can update

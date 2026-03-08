@@ -1,9 +1,10 @@
-import type { AnyPlugin } from '@zenstackhq/orm'
+import type { AnyPlugin, SlicingOptions } from '@zenstackhq/orm'
 import type { SchemaDef } from '@zenstackhq/schema'
 import type { Dialect } from 'kysely'
-import { DI_TOKENS } from 'stratal/di'
+import { DI_TOKENS, Scope, delay } from 'stratal/di'
 import type { IEventRegistry } from 'stratal/events'
 import {
+  InjectionToken,
   Module,
   type AsyncModuleOptions,
   type DynamicModule,
@@ -11,21 +12,24 @@ import {
   type OnInitialize,
   type OnShutdown,
 } from 'stratal/module'
-import { instanceCachingFactory } from 'tsyringe'
 import { createDatabaseService } from './database.helpers'
 import { DATABASE_TOKENS, connectionSymbol } from './database.tokens'
-import { DatabaseConfigError } from './errors/database-config.error'
+import type { ConnectionName, DefaultConnectionName } from './types'
 
-export interface DatabaseConnectionConfig {
-  name: string
-  schema: SchemaDef
+export interface DatabaseConnectionConfig<
+  Schema extends SchemaDef = SchemaDef,
+  Name extends ConnectionName = ConnectionName,
+> {
+  name: Name
   dialect: () => Dialect
   plugins?: AnyPlugin[]
+  slicing?: SlicingOptions<Schema>
 }
 
-export interface DatabaseModuleConfig {
-  default: string
-  connections: DatabaseConnectionConfig[]
+export interface DatabaseModuleConfig<Schema extends SchemaDef = SchemaDef> {
+  schema: Schema
+  default: DefaultConnectionName
+  connections: DatabaseConnectionConfig<Schema>[]
 }
 
 @Module({})
@@ -54,24 +58,16 @@ export class DatabaseModule implements OnInitialize, OnShutdown {
 
   onInitialize(context: ModuleContext): void {
     const config = context.container.resolve<DatabaseModuleConfig>(DATABASE_TOKENS.Options)
-    const container = context.container.getTsyringeContainer()
+    const eventRegistry = context.container.resolve<IEventRegistry>(DI_TOKENS.EventRegistry)
+    const container = context.container.getTsyringeContainer();
 
     for (const conn of config.connections) {
-      container.register(connectionSymbol(conn.name), {
-        useFactory: instanceCachingFactory((c) => {
-          const resolvedConfig = c.resolve<DatabaseModuleConfig>(DATABASE_TOKENS.Options)
-          const resolvedConn = resolvedConfig.connections.find(
-            connection => connection.name === conn.name
-          )
+      const Service = createDatabaseService(config.schema, conn, eventRegistry)
 
-          if (!resolvedConn) {
-            throw new DatabaseConfigError('Connection not found');
-          }
-
-          const eventRegistry = c.resolve<IEventRegistry>(DI_TOKENS.EventRegistry)
-          return createDatabaseService(resolvedConn, eventRegistry)
-        })
-      })
+      container.register(connectionSymbol(conn.name) as InjectionToken<symbol>,
+        // @ts-expect-error Overload error
+        delay(() => Service),
+        { lifecycle: Scope.Request })
     }
 
     context.container.registerExisting(DI_TOKENS.Database, connectionSymbol(config.default))

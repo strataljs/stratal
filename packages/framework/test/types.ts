@@ -1,11 +1,10 @@
 import type { SchemaType } from './zenstack/schema'
 
 declare module '@stratal/framework/database' {
-  interface DatabaseSchemaRegistry {
-    main: SchemaType
-  }
-  interface DefaultDatabaseConnection {
-    name: 'main'
+  interface StratalDatabase {
+    schema: SchemaType
+    defaultConnection: 'main'
+    slicing: { main: { includedModels: readonly string[] } }
   }
 }
 

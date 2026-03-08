@@ -1,0 +1,4 @@
+.wrangler
+.env
+db/*
+!db/schema.zmodel

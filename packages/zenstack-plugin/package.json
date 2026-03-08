@@ -1,0 +1,69 @@
+{
+  "name": "@stratal/zenstack-plugin",
+  "version": "0.0.1",
+  "description": "ZenStack CLI plugin for Stratal framework — generates connection types, slicing configs, and per-connection migration schemas",
+  "type": "module",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "author": "Temitayo Fadojutimi",
+  "homepage": "https://github.com/strataljs/stratal#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/strataljs/stratal.git",
+    "directory": "packages/zenstack-plugin"
+  },
+  "bugs": {
+    "url": "https://github.com/strataljs/stratal/issues"
+  },
+  "keywords": [
+    "stratal",
+    "zenstack",
+    "database",
+    "cloudflare-workers",
+    "plugin"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./plugin.zmodel": "./dist/plugin.zmodel"
+  },
+  "bin": {
+    "stratal-db": "./bin/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && cp src/plugin/plugin.zmodel dist/plugin.zmodel",
+    "typecheck": "tsc --noEmit",
+    "lint": "npx eslint .",
+    "lint:fix": "npx eslint --fix ."
+  },
+  "dependencies": {
+    "chalk": "^5.6.2",
+    "yargs": "^18.0.0"
+  },
+  "peerDependencies": {
+    "@zenstackhq/language": "^3.4.0",
+    "@zenstackhq/sdk": "^3.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.5",
+    "@types/yargs": "^17.0.35",
+    "@zenstackhq/language": "^3.4.0",
+    "@zenstackhq/sdk": "^3.4.0",
+    "typescript": "^5.9.3"
+  }
+}

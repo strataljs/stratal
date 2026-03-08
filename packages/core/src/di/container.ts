@@ -267,6 +267,6 @@ export class Container {
 }
 
 // Re-export tsyringe utilities for convenience
-export { container, inject, injectable, singleton } from 'tsyringe'
+export { container, delay, inject, injectable, singleton } from 'tsyringe'
 export type { DependencyContainer } from 'tsyringe'
 

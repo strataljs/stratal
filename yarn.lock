@@ -3787,6 +3787,25 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@stratal/zenstack-plugin@workspace:packages/zenstack-plugin":
+  version: 0.0.0-use.local
+  resolution: "@stratal/zenstack-plugin@workspace:packages/zenstack-plugin"
+  dependencies:
+    "@types/node": "npm:^25.3.5"
+    "@types/yargs": "npm:^17.0.35"
+    "@zenstackhq/language": "npm:^3.4.0"
+    "@zenstackhq/sdk": "npm:^3.4.0"
+    chalk: "npm:^5.6.2"
+    typescript: "npm:^5.9.3"
+    yargs: "npm:^18.0.0"
+  peerDependencies:
+    "@zenstackhq/language": ^3.4.0
+    "@zenstackhq/sdk": ^3.4.0
+  bin:
+    stratal-db: ./bin/cli.js
+  languageName: unknown
+  linkType: soft
+
 "@swc-node/core@npm:^1.14.1":
   version: 1.14.1
   resolution: "@swc-node/core@npm:1.14.1"
@@ -4481,7 +4500,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@zenstackhq/language@npm:3.4.4":
+"@zenstackhq/language@npm:3.4.4, @zenstackhq/language@npm:^3.4.0":
   version: 3.4.4
   resolution: "@zenstackhq/language@npm:3.4.4"
   dependencies:
@@ -4541,7 +4560,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@zenstackhq/sdk@npm:3.4.4":
+"@zenstackhq/sdk@npm:3.4.4, @zenstackhq/sdk@npm:^3.4.0":
   version: 3.4.4
   resolution: "@zenstackhq/sdk@npm:3.4.4"
   dependencies:

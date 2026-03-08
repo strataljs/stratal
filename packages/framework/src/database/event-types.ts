@@ -1,7 +1,7 @@
 /**
  * Database Event Types
  *
- * All ZenStack-dependent event types, parameterized by connection name.
+ * All ZenStack-dependent event types derived from the shared database schema.
  * These types power the auto-complete and type-safe event contexts for
  * database events like `after.User.create`.
  *
@@ -28,7 +28,7 @@ import type {
   UpsertArgs,
 } from '@zenstackhq/orm'
 import type { SchemaDef } from '@zenstackhq/schema'
-import type { ConnectionName, InferConnectionSchema } from './types'
+import type { InferDatabaseSchema } from './types'
 
 // ============================================================================
 // Core Types
@@ -45,11 +45,11 @@ export type EventPhase = 'before' | 'after'
 export type DatabaseOperation = AllCrudOperations
 
 /**
- * Model names derived from a connection's schema.
- * Falls back to `never` if no schemas are registered.
+ * Model names derived from the shared database schema.
+ * Falls back to `never` if no schema is registered.
  */
-export type ModelName<K extends ConnectionName = ConnectionName> =
-  InferConnectionSchema<K> extends { models: infer M }
+export type ModelName =
+  InferDatabaseSchema extends { models: infer M }
   ? Extract<keyof M, string>
   : never
 
@@ -58,16 +58,16 @@ export type ModelName<K extends ConnectionName = ConnectionName> =
 // ============================================================================
 
 /**
- * Database event names with all supported patterns, parameterized by connection.
+ * Database event names with all supported patterns.
  */
-export type DatabaseEventName<K extends ConnectionName = ConnectionName> =
-  | `${EventPhase}.${ModelName<K>}.${DatabaseOperation}`
-  | `${EventPhase}.${ModelName<K>}`
+export type DatabaseEventName =
+  | `${EventPhase}.${ModelName}.${DatabaseOperation}`
+  | `${EventPhase}.${ModelName}`
   | `${EventPhase}.${DatabaseOperation}`
   | EventPhase
 
 // ============================================================================
-// Args & Result Mapping (parameterized by connection)
+// Args & Result Mapping
 // ============================================================================
 
 /**
@@ -94,27 +94,27 @@ type OperationArgsMap<
   never
 
 /**
- * Extract the data/where property from operation args for a connection.
+ * Extract the data/where property from operation args.
  */
-export type GetData<K extends ConnectionName, M extends ModelName<K>, O extends DatabaseOperation> =
-  M extends Extract<keyof InferConnectionSchema<K>['models'], string>
-  ? OperationArgsMap<InferConnectionSchema<K>, M, O> extends { data: infer D }
+export type GetData<M extends ModelName, O extends DatabaseOperation> =
+  M extends Extract<keyof InferDatabaseSchema['models'], string>
+  ? OperationArgsMap<InferDatabaseSchema, M, O> extends { data: infer D }
   ? D
-  : OperationArgsMap<InferConnectionSchema<K>, M, O> extends { where: infer W }
+  : OperationArgsMap<InferDatabaseSchema, M, O> extends { where: infer W }
   ? W
-  : OperationArgsMap<InferConnectionSchema<K>, M, O>
+  : OperationArgsMap<InferDatabaseSchema, M, O>
   : unknown
 
 /**
- * Extract result type for a model operation on a connection.
+ * Extract result type for a model operation.
  */
-export type GetResult<K extends ConnectionName, M extends ModelName<K>, O extends DatabaseOperation> =
-  M extends Extract<keyof InferConnectionSchema<K>['models'], string>
+export type GetResult<M extends ModelName, O extends DatabaseOperation> =
+  M extends Extract<keyof InferDatabaseSchema['models'], string>
   ? O extends 'findMany' | 'createMany' | 'updateMany' | 'deleteMany'
-  ? ModelResult<InferConnectionSchema<K>, M>[]
+  ? ModelResult<InferDatabaseSchema, M>[]
   : O extends 'count'
   ? number
-  : ModelResult<InferConnectionSchema<K>, M>
+  : ModelResult<InferDatabaseSchema, M>
   : unknown
 
 // ============================================================================
@@ -124,11 +124,11 @@ export type GetResult<K extends ConnectionName, M extends ModelName<K>, O extend
 /**
  * Parse event string into structured type for discriminated unions
  */
-export type ParseEvent<K extends ConnectionName, E extends string> =
-  E extends `${infer Phase extends EventPhase}.${infer Model extends ModelName<K>}.${infer Op extends DatabaseOperation}`
+export type ParseEvent<E extends string> =
+  E extends `${infer Phase extends EventPhase}.${infer Model extends ModelName}.${infer Op extends DatabaseOperation}`
   ? { phase: Phase; model: Model; operation: Op; type: 'exact' }
   : E extends `${infer Phase extends EventPhase}.${infer Second}`
-  ? Second extends ModelName<K>
+  ? Second extends ModelName
   ? { phase: Phase; model: Second; type: 'model-wildcard' }
   : Second extends DatabaseOperation
   ? { phase: Phase; operation: Second; type: 'operation-wildcard' }
@@ -147,13 +147,12 @@ interface BaseEventContext {
 
 /** Context for exact database events (e.g., "after.User.create") */
 interface ExactDatabaseEventContext<
-  K extends ConnectionName,
-  M extends ModelName<K>,
+  M extends ModelName,
   O extends DatabaseOperation,
   Phase extends EventPhase
 > extends BaseEventContext {
-  data: Phase extends 'before' ? GetData<K, M, O> : Readonly<GetData<K, M, O>>
-  result: Phase extends 'after' ? GetResult<K, M, O> : undefined
+  data: Phase extends 'before' ? GetData<M, O> : Readonly<GetData<M, O>>
+  result: Phase extends 'after' ? GetResult<M, O> : undefined
 }
 
 /** Context for model wildcard events (e.g., "after.User") */
@@ -167,20 +166,18 @@ interface ModelWildcardEventContext<
 
 /** Context for operation wildcard events (e.g., "after.create") */
 interface OperationWildcardEventContext<
-  K extends ConnectionName,
   Phase extends EventPhase
 > extends BaseEventContext {
-  model: ModelName<K>
+  model: ModelName
   data: Phase extends 'before' ? unknown : Readonly<unknown>
   result: Phase extends 'after' ? unknown : undefined
 }
 
 /** Context for phase wildcard events (e.g., "after" or "before") */
 interface PhaseWildcardEventContext<
-  K extends ConnectionName,
   Phase extends EventPhase
 > extends BaseEventContext {
-  model: ModelName<K>
+  model: ModelName
   operation: DatabaseOperation
   data: Phase extends 'before' ? unknown : Readonly<unknown>
   result: Phase extends 'after' ? unknown : undefined
@@ -191,30 +188,30 @@ interface PhaseWildcardEventContext<
 // ============================================================================
 
 /**
- * Type-safe event context with discriminated unions, parameterized by connection.
+ * Type-safe event context with discriminated unions.
  */
-type DatabaseEventContext<K extends ConnectionName, E extends string> =
-  ParseEvent<K, E> extends {
+type DatabaseEventContext<E extends string> =
+  ParseEvent<E> extends {
     phase: infer P extends EventPhase
-    model: infer M extends ModelName<K>
+    model: infer M extends ModelName
     operation: infer O extends DatabaseOperation
     type: 'exact'
   }
-  ? ExactDatabaseEventContext<K, M, O, P>
-  : ParseEvent<K, E> extends {
+  ? ExactDatabaseEventContext<M, O, P>
+  : ParseEvent<E> extends {
     phase: infer P extends EventPhase
-    model: infer _M extends ModelName<K>
+    model: infer _M extends ModelName
     type: 'model-wildcard'
   }
   ? ModelWildcardEventContext<P>
-  : ParseEvent<K, E> extends {
+  : ParseEvent<E> extends {
     phase: infer P extends EventPhase
     operation: infer _O extends DatabaseOperation
     type: 'operation-wildcard'
   }
-  ? OperationWildcardEventContext<K, P>
-  : ParseEvent<K, E> extends { phase: infer P extends EventPhase; type: 'phase-wildcard' }
-  ? PhaseWildcardEventContext<K, P>
+  ? OperationWildcardEventContext<P>
+  : ParseEvent<E> extends { phase: infer P extends EventPhase; type: 'phase-wildcard' }
+  ? PhaseWildcardEventContext<P>
   : BaseEventContext
 
 // ============================================================================
@@ -222,26 +219,19 @@ type DatabaseEventContext<K extends ConnectionName, E extends string> =
 // ============================================================================
 
 /**
- * Mapped type that produces all database event name → context pairs for a connection.
+ * Mapped type that produces all database event name to context pairs.
  *
  * Used to augment core's `CustomEventRegistry`:
  *
- * @example Augment with all connections (default)
+ * @example
  * ```typescript
  * declare module 'stratal/events' {
  *   interface CustomEventRegistry extends DatabaseEvents {}
  * }
  * ```
- *
- * @example Narrow to a specific connection
- * ```typescript
- * declare module 'stratal/events' {
- *   interface CustomEventRegistry extends DatabaseEvents<'main'> {}
- * }
- * ```
  */
-export type DatabaseEvents<K extends ConnectionName = ConnectionName> = {
-  [E in DatabaseEventName<K>]: DatabaseEventContext<K, E>
+export type DatabaseEvents = {
+  [E in DatabaseEventName]: DatabaseEventContext<E>
 }
 
 // ============================================================================
