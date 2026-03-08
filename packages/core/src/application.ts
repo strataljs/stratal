@@ -63,7 +63,7 @@ export class Application {
    */
   private _container: Container
 
-  private readonly honoApp: HonoApp
+  private honoApp!: HonoApp
   private moduleRegistry: ModuleRegistry
   private consumerRegistry!: ConsumerRegistry
   private cronManager!: CronManager
@@ -92,11 +92,8 @@ export class Application {
     this.registerLoggerService()
     this.registerCoreServices()
 
-    // Create HonoApp — owns request scope, global middleware, defaultHook, onError
-    const logger = this._container.resolve<LoggerService>(LOGGER_TOKENS.LoggerService)
-    this.honoApp = new HonoApp(this._container, logger)
-
     // Create ModuleRegistry with our Container
+    const logger = this._container.resolve<LoggerService>(LOGGER_TOKENS.LoggerService)
     this.moduleRegistry = new ModuleRegistry(this._container, logger)
 
     // Register ModuleRegistry in container so modules can access it in onInitialize
@@ -140,7 +137,9 @@ export class Application {
     this.consumerRegistry = this._container.resolve<ConsumerRegistry>(DI_TOKENS.ConsumerRegistry)
     this.cronManager = this._container.resolve<CronManager>(DI_TOKENS.Cron)
 
-    // Phase 5: Configure HonoApp — module middleware, OpenAPI, routes, 404
+    // Phase 5: Create & configure HonoApp
+    const logger = this._container.resolve<LoggerService>(LOGGER_TOKENS.LoggerService)
+    this.honoApp = new HonoApp(this._container, logger)
     const middlewareConfigs = this.moduleRegistry.getAllMiddlewareConfigs()
     const controllers = this.moduleRegistry.getAllControllers() as Constructor<IController>[]
     this.honoApp.configure(middlewareConfigs, controllers)
