@@ -12,13 +12,13 @@
     "db:push:analytics": "dotenv -- npx stratal-db push --connection analytics --schema db/schema.zmodel"
   },
   "dependencies": {
-    "@stratal/framework": "file:../../packages/framework",
-    "@stratal/zenstack-plugin": "file:../../packages/zenstack-plugin",
+    "@stratal/framework": "latest",
+    "@stratal/zenstack-plugin": "latest",
     "@zenstackhq/cli": "^3.4.5",
     "@zenstackhq/orm": "^3.4.4",
     "pg": "^8.20.0",
     "reflect-metadata": "^0.2.2",
-    "stratal": "file:../../packages/core"
+    "stratal": "latest"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260307.1",

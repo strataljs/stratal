@@ -7,10 +7,10 @@
     "wrangler:types": "wrangler types"
   },
   "dependencies": {
-    "@faker-js/faker": "^9.0.0",
-    "@stratal/framework": "file:../../packages/framework",
+    "@faker-js/faker": "^10.3.0",
+    "@stratal/framework": "latest",
     "reflect-metadata": "^0.2.2",
-    "stratal": "file:../../packages/core"
+    "stratal": "latest"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20251014.0",
