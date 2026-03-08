@@ -1,0 +1,1 @@
+attribute @@connection(_ name: String, _ provider: String?)

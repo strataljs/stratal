@@ -1,8 +1,9 @@
 import type { SchemaType } from './zenstack/schema'
 
 declare module '@stratal/framework/database' {
-  interface DatabaseSchemaRegistry {
-    main: SchemaType
+  interface DatabaseSchema { type: SchemaType }
+  interface DatabaseSlicingRegistry {
+    main: { includedModels: readonly string[] }
   }
   interface DefaultDatabaseConnection {
     name: 'main'
