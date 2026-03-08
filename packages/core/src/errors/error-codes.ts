@@ -169,6 +169,8 @@ export const ERROR_CODES = {
     INVALID_ERROR_CODE_RANGE: 9105,
     /** Invalid module provider configuration */
     INVALID_MODULE_PROVIDER: 9106,
+    /** ConfigModule.forRoot() was not called */
+    CONFIG_MODULE_NOT_INITIALIZED: 9107,
 
     // Infrastructure Errors (9200-9299)
     /** Generic infrastructure error */

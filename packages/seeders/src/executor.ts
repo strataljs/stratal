@@ -21,8 +21,8 @@ export async function executeSeeder(
   try {
     const mockContext = app.createMockRouterContext('en')
 
-    await app.container.runInRequestScope(mockContext, async () => {
-      const seeder = app.container.resolve<Seeder>(SeederClass)
+    await app.container.runInRequestScope(mockContext, async (requestContainer) => {
+      const seeder = requestContainer.resolve<Seeder>(SeederClass)
       await seeder.run()
     })
 

@@ -10,23 +10,18 @@ import type { ILogTransport } from '../transports/transport.interface'
 /**
  * Logger Service
  *
- * Main logging facade with optional request context enrichment.
- * Singleton service that can be enriched with request context via `withContext()`.
+ * Main logging facade.
  *
  * **Features:**
- * - Optional request context enrichment (userId) via `withContext()`
  * - Async logging via ctx.waitUntil() for non-blocking performance
  * - Multi-transport support (console, future Sentry/Cloudflare Analytics)
  * - Configurable formatters (JSON production, Pretty development)
  * - Log level filtering based on environment
  *
  * **Architecture:**
- * - Singleton service (available during initialization and request handling)
- * - RouterContext optionally set via `withContext()` method
- * - Uses ConfigService for all configuration (NEVER process.env)
  * - Transports and formatters injected via DI
  *
- * @example Basic usage (no request context)
+ * @example Basic usage
  * ```typescript
  * @Transient()
  * export class UserService {
@@ -39,14 +34,6 @@ import type { ILogTransport } from '../transports/transport.interface'
  *     this.logger.info('Creating user', { email: input.email })
  *   }
  * }
- * ```
- *
- * @example With request context (in request container)
- * ```typescript
- * // In RequestScopeService
- * const baseLogger = globalContainer.resolve<LoggerService>(LOGGER_TOKENS.LoggerService)
- * const requestLogger = baseLogger.withContext(routerContext)
- * requestContainer.register(LOGGER_TOKENS.LoggerService, { useValue: requestLogger })
  * ```
  */
 @Transient()
@@ -139,7 +126,14 @@ export class LoggerService {
     )
 
     // Use waitUntil to ensure logs complete even after response sent
-    this.executionContext.waitUntil(Promise.all(writePromises))
+    const allWrites = Promise.all(writePromises)
+    try {
+      this.executionContext.waitUntil(allWrites)
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes('global scope')) {
+        throw error
+      }
+    }
   }
 
   /**

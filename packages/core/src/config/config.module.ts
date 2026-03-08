@@ -1,4 +1,5 @@
 import type { z } from '../i18n/validation'
+import { ConfigModuleNotInitializedError } from './errors'
 import { DI_TOKENS } from '../di/tokens'
 import { Scope } from '../di/types'
 import { Module } from '../module'
@@ -115,7 +116,7 @@ export class ConfigModule implements OnInitialize {
    */
   onInitialize(context: ModuleContext): void {
     if (!moduleOptions) {
-      throw new Error('ConfigModule.forRoot() was not called')
+      throw new ConfigModuleNotInitializedError()
     }
 
     const env = context.container.resolve<unknown>(DI_TOKENS.CloudflareEnv)

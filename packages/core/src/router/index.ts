@@ -1,3 +1,6 @@
+// eslint-disable-next-line @typescript-eslint/triple-slash-reference
+/// <reference path="./hono-middleware-augment.d.ts" />
+
 // Core router types
 export type { IController } from './controller'
 export type { Middleware } from './middleware.interface'
@@ -9,12 +12,11 @@ export { HTTP_METHODS, ROUTE_METADATA_KEYS, ROUTER_CONTEXT_KEYS, SECURITY_SCHEME
 // Router context
 export { RouterContext } from './router-context'
 
-// Router service
-export { RouterService } from './router.service'
+// HonoApp
+export { HonoApp } from './hono-app'
 
 // Router services
 export {
-  RequestScopeService,
   RouteRegistrationService
 } from './services'
 
@@ -32,6 +34,5 @@ export * from './schemas'
 
 // Errors
 export {
-  ControllerRegistrationError, OpenAPIRouteRegistrationError, OpenAPIValidationError, RouteNotFoundError
+  ControllerRegistrationError, HonoAppAlreadyConfiguredError, OpenAPIRouteRegistrationError, OpenAPIValidationError, RouteNotFoundError
 } from './errors'
-

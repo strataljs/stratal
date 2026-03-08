@@ -7,7 +7,7 @@ import { ErrorHandlerPlugin, EventEmitterPlugin } from './plugins'
 const databaseConnectionSchema = z.object({
   name: z.string().min(1, 'Connection name is required'),
   schema: z.object({}).loose(),
-  dialect: z.object({}).loose(),
+  dialect: z.function(),
   plugins: z.array(z.object({}).loose()).optional(),
 })
 
@@ -36,5 +36,6 @@ export function createDatabaseService(
     }),
     ...(conn.plugins ?? []),
   ]
-  return new ZenStackClient(conn.schema, { dialect: conn.dialect, plugins })
+  const dialect = conn.dialect()
+  return new ZenStackClient(conn.schema, { dialect, plugins })
 }

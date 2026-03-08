@@ -1,6 +1,5 @@
 import { injectable, container as tsyringeRootContainer } from 'tsyringe'
 import { bench, describe } from 'vitest'
-import type { StratalEnv } from '../../env'
 import { Container } from '../container'
 
 // Test fixtures
@@ -18,19 +17,8 @@ const TOKEN_B = Symbol('BenchTokenB')
 const TOKEN_C = Symbol('BenchTokenC')
 const TOKEN_COND = Symbol('BenchTokenCond')
 
-const mockCtx = {
-  waitUntil: () => {
-    //
-  },
-  passThroughOnException: () => {
-    //
-  },
-} as unknown as ExecutionContext
-
 function createContainer(): Container {
   return new Container({
-    env: {} as StratalEnv,
-    ctx: mockCtx,
     container: tsyringeRootContainer.createChildContainer(),
   })
 }

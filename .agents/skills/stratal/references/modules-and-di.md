@@ -149,8 +149,8 @@ export class MyModule implements OnInitialize {
 Automatic lifecycle management:
 
 ```typescript
-await container.runInRequestScope(routerContext, async () => {
-  const i18n = container.resolve(I18N_TOKENS.I18nService)
+await container.runInRequestScope(routerContext, async (requestContainer) => {
+  const i18n = requestContainer.resolve(I18N_TOKENS.I18nService)
   // i18n is scoped to this request
 })
 ```
@@ -158,10 +158,13 @@ await container.runInRequestScope(routerContext, async () => {
 Manual lifecycle management:
 
 ```typescript
-const reqContainer = container.createRequestScope(routerContext)
-await reqContainer.runWithContextStore(async () => {
-  // Use reqContainer for resolutions
-})
+const requestContainer = container.createRequestScope(routerContext)
+try {
+  const i18n = requestContainer.resolve(I18N_TOKENS.I18nService)
+  // Use requestContainer for resolutions
+} finally {
+  await requestContainer.dispose()
+}
 ```
 
 ## Built-in DI Tokens
@@ -284,7 +287,7 @@ export class DatabaseModule implements OnInitialize, OnShutdown {
 1. All modules registered (providers added to DI container)
 2. `onInitialize()` hooks called on all modules
 3. Managers resolved (ConsumerRegistry, CronManager)
-4. RouterService registered
+4. HonoApp configured (module middleware, OpenAPI, routes, 404)
 5. Routes, queues, and cron jobs configured
 
 ## Module Patterns

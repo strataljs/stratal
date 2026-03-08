@@ -197,6 +197,7 @@ The augmented type flows automatically through:
 
 ```typescript
 // src/index.ts
+import 'reflect-metadata'
 import { Stratal } from 'stratal'
 import { LogLevel } from 'stratal/logger'
 import { AppModule } from './app.module'
@@ -209,6 +210,10 @@ export default new Stratal({
   },
 })
 ```
+
+`reflect-metadata` **must be imported once at the top of the entry point** before any other imports — tsyringe depends on it for constructor parameter type reflection. Without it, dependency injection will silently fail.
+
+`Stratal` starts its initialization promise at construction time, dynamically importing `cloudflare:workers` for `env` and `waitUntil`. The `fetch`, `queue`, and `scheduled` handlers call `ensureReady()` to await initialization before processing, using a lazy-await pattern.
 
 ### ApplicationConfig
 

@@ -2,7 +2,6 @@ import type { DependencyContainer } from 'tsyringe'
 import { injectable, container as tsyringeRootContainer } from 'tsyringe'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createMock } from '@stratal/testing/mocks'
-import { type StratalEnv } from '../../env'
 import { Container } from '../../di/container'
 import { Scope } from '../../di/types'
 import type { LoggerService } from '../../logger'
@@ -33,8 +32,6 @@ describe('ExistingProvider', () => {
     // Create a fresh child container for each test
     childContainer = tsyringeRootContainer.createChildContainer()
     container = new Container({
-      env: {} as StratalEnv,
-      ctx: createMock<ExecutionContext>() as unknown as ExecutionContext,
       container: childContainer,
     })
   })

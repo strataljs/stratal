@@ -143,7 +143,7 @@ class TestingModule {
   async fetch(request: Request): Promise<Response>
 
   // Run code in request scope
-  async runInRequestScope<T>(callback: () => T | Promise<T>): Promise<T>
+  async runInRequestScope<T>(callback: (container: Container) => T | Promise<T>): Promise<T>
 
   // Cleanup the module
   async close(): Promise<void>

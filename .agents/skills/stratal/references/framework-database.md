@@ -15,7 +15,7 @@ npm install @zenstackhq/orm pg               # required peer deps for database
 interface DatabaseConnectionConfig {
   name: string           // Connection identifier (must be unique)
   schema: SchemaDef      // ZenStack schema definition
-  dialect: Dialect       // Kysely dialect (e.g., PostgresDialect)
+  dialect: () => Dialect  // Factory that returns a Kysely dialect — defers I/O (e.g., Pool creation) to first use
   plugins?: AnyPlugin[]  // Optional ZenStack plugins
 }
 
@@ -38,7 +38,7 @@ import { DatabaseModule } from '@stratal/framework/database'
         {
           name: 'main',
           schema: mainSchema,
-          dialect: new PostgresDialect({ pool }),
+          dialect: () => new PostgresDialect({ pool }),
         },
       ],
     }),
@@ -62,7 +62,7 @@ import { DatabaseModule } from '@stratal/framework/database'
           {
             name: 'main',
             schema: mainSchema,
-            dialect: new PostgresDialect({
+            dialect: () => new PostgresDialect({
               pool: new Pool({ connectionString: config.get('DATABASE_URL') }),
             }),
           },
@@ -164,7 +164,7 @@ import { SchemaSwitcherPlugin } from '@stratal/framework/database'
 const config: DatabaseConnectionConfig = {
   name: 'tenant',
   schema: tenantSchema,
-  dialect: tenantDialect,
+  dialect: () => tenantDialect,
   plugins: [new SchemaSwitcherPlugin({ schemaName: 'tenant_123' })],
 }
 ```

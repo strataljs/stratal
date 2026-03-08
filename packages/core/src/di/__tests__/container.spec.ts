@@ -1,13 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createMock } from '@stratal/testing/mocks'
-import { container as tsyringeRootContainer, injectable, Lifecycle } from 'tsyringe'
 import type { DependencyContainer } from 'tsyringe'
-import type { StratalEnv } from '../../env'
+import { injectable, Lifecycle, container as tsyringeRootContainer } from 'tsyringe'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RouterContext } from '../../router/router-context'
 import { Container } from '../container'
+import { RequestScopeOperationNotAllowedError } from '../errors/request-scope-operation-not-allowed.error'
 import { CONTAINER_TOKEN, DI_TOKENS } from '../tokens'
 import { Scope } from '../types'
-import { RequestScopeOperationNotAllowedError } from '../errors/request-scope-operation-not-allowed.error'
 
 // Test services
 @injectable()
@@ -30,18 +28,12 @@ const ALIAS_TOKEN = Symbol('AliasToken')
 describe('Container', () => {
   let childContainer: DependencyContainer
   let container: Container
-  let mockEnv: StratalEnv
-  let mockCtx: ExecutionContext
 
   beforeEach(() => {
     vi.clearAllMocks()
     childContainer = tsyringeRootContainer.createChildContainer()
-    mockEnv = {} as StratalEnv
-    mockCtx = createMock<ExecutionContext>() as unknown as ExecutionContext
 
     container = new Container({
-      env: mockEnv,
-      ctx: mockCtx,
       container: childContainer,
     })
   })
@@ -165,34 +157,19 @@ describe('Container', () => {
   })
 
   describe('constructor token registration', () => {
-    it('should register CloudflareEnv, ExecutionContext, and CONTAINER_TOKEN for global container', () => {
-      expect(container.isRegistered(DI_TOKENS.CloudflareEnv)).toBe(true)
-      expect(container.isRegistered(DI_TOKENS.ExecutionContext)).toBe(true)
+    it('should register CONTAINER_TOKEN for global container', () => {
       expect(container.isRegistered(CONTAINER_TOKEN)).toBe(true)
     })
 
-    it('should resolve CloudflareEnv to the provided env', () => {
-      const resolvedEnv = container.resolve(DI_TOKENS.CloudflareEnv)
-      expect(resolvedEnv).toBe(mockEnv)
-    })
-
-    it('should resolve ExecutionContext to the provided ctx', () => {
-      const resolvedCtx = container.resolve(DI_TOKENS.ExecutionContext)
-      expect(resolvedCtx).toBe(mockCtx)
-    })
-
-    it('should NOT register env/ctx tokens for request-scoped container', () => {
+    it('should NOT register CONTAINER_TOKEN for request-scoped container', () => {
       const reqChildContainer = tsyringeRootContainer.createChildContainer()
       const _reqContainer = new Container({
-        env: mockEnv,
-        ctx: mockCtx,
         container: reqChildContainer,
         isRequestScoped: true,
       })
 
       // Should not be registered in this specific container
-      // (they may be inherited from parent, but not registered directly)
-      expect(reqChildContainer.isRegistered(DI_TOKENS.CloudflareEnv, true)).toBe(false)
+      expect(reqChildContainer.isRegistered(CONTAINER_TOKEN, true)).toBe(false)
     })
   })
 
@@ -200,8 +177,6 @@ describe('Container', () => {
     it('should throw RequestScopeOperationNotAllowedError for runInRequestScope on request-scoped container', async () => {
       const reqChildContainer = tsyringeRootContainer.createChildContainer()
       const reqContainer = new Container({
-        env: mockEnv,
-        ctx: mockCtx,
         container: reqChildContainer,
         isRequestScoped: true,
       })
@@ -216,8 +191,6 @@ describe('Container', () => {
     it('should throw RequestScopeOperationNotAllowedError for createRequestScope on request-scoped container', () => {
       const reqChildContainer = tsyringeRootContainer.createChildContainer()
       const reqContainer = new Container({
-        env: mockEnv,
-        ctx: mockCtx,
         container: reqChildContainer,
         isRequestScoped: true,
       })
@@ -226,13 +199,29 @@ describe('Container', () => {
         RequestScopeOperationNotAllowedError
       )
     })
+  })
 
-    it('should throw RequestScopeOperationNotAllowedError for runWithContextStore on global container', async () => {
-      await expect(
-        container.runWithContextStore(async () => {
-          // noop
-        })
-      ).rejects.toThrow(RequestScopeOperationNotAllowedError)
+  describe('runInRequestScope()', () => {
+    it('should pass requestContainer to callback', async () => {
+      // Need to register logger tokens for Container.dispose() to work
+      container.registerValue(DI_TOKENS.ExecutionContext, { waitUntil: vi.fn() })
+
+      const mockRouterContext = {
+        getLocale: () => 'en',
+        setLocale: () => {
+          // no op
+        },
+        getContainer: () => container,
+      } as unknown as RouterContext
+
+      let receivedContainer: Container | undefined
+
+      await container.runInRequestScope(mockRouterContext, (reqContainer) => {
+        receivedContainer = reqContainer
+      })
+
+      expect(receivedContainer).toBeDefined()
+      expect(receivedContainer).not.toBe(container)
     })
   })
 

@@ -2,7 +2,6 @@ import { injectable, container as tsyringeRootContainer } from 'tsyringe'
 import { bench, describe } from 'vitest'
 import { Container } from '../../di/container'
 import { Scope } from '../../di/types'
-import type { StratalEnv } from '../../env'
 import type { LoggerService } from '../../logger'
 import { ModuleRegistry } from '../module-registry'
 import { Module } from '../module.decorator'
@@ -72,15 +71,8 @@ const noopLogger = {
   debug: () => null,
 } as unknown as LoggerService
 
-const mockCtx = {
-  waitUntil: () => null,
-  passThroughOnException: () => null,
-} as unknown as ExecutionContext
-
 function createFreshContainer(): Container {
   return new Container({
-    env: {} as StratalEnv,
-    ctx: mockCtx,
     container: tsyringeRootContainer.createChildContainer(),
   })
 }

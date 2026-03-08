@@ -2,11 +2,10 @@ import { afterAll, beforeAll, bench, describe } from 'vitest'
 import { Application, type ApplicationConfig } from '../../src/application'
 import type { StratalEnv } from '../../src/env'
 import { LogLevel } from '../../src/logger/contracts'
-import type { RouterService } from '../../src/router/router.service'
-import { ROUTER_TOKENS } from '../../src/router/router.tokens'
+import type { HonoApp } from '../../src/router/hono-app'
 import { BenchAppModule } from '../fixtures/app.module'
 
-let router: RouterService
+let hono: HonoApp
 let env: StratalEnv
 let ctx: ExecutionContext
 let app: Application
@@ -32,9 +31,9 @@ beforeAll(async () => {
     logging: { level: LogLevel.ERROR },
   }
 
-  app = new Application({ ...config, env, ctx })
+  app = new Application({ ...config, env, ctx: { waitUntil: ctx.waitUntil.bind(ctx) } })
   await app.initialize()
-  router = app.resolve<RouterService>(ROUTER_TOKENS.RouterService)
+  hono = app.hono
 })
 
 afterAll(async () => {
@@ -43,15 +42,15 @@ afterAll(async () => {
 
 describe('Request/Response', () => {
   bench('simple GET - 200', async () => {
-    await router.fetch(new Request('http://localhost/api/bench'), env, ctx)
+    await hono.fetch(new Request('http://localhost/api/bench'), env, ctx)
   })
 
   bench('GET with route params - 200', async () => {
-    await router.fetch(new Request('http://localhost/api/bench/items/123'), env, ctx)
+    await hono.fetch(new Request('http://localhost/api/bench/items/123'), env, ctx)
   })
 
   bench('POST with JSON body - 201', async () => {
-    await router.fetch(
+    await hono.fetch(
       new Request('http://localhost/api/bench/items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -63,7 +62,7 @@ describe('Request/Response', () => {
   })
 
   bench('POST invalid body - validation error', async () => {
-    await router.fetch(
+    await hono.fetch(
       new Request('http://localhost/api/bench/items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,6 +74,6 @@ describe('Request/Response', () => {
   })
 
   bench('GET unknown route - 404', async () => {
-    await router.fetch(new Request('http://localhost/api/bench/nonexistent'), env, ctx)
+    await hono.fetch(new Request('http://localhost/api/bench/nonexistent'), env, ctx)
   })
 })

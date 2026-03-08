@@ -12,7 +12,7 @@ export function createDatabaseConfig(env: StratalEnv): DatabaseModuleConfig {
       {
         name: 'main',
         schema,
-        dialect: new PostgresDialect({
+        dialect: () => new PostgresDialect({
           pool: new Pool({
             connectionString: env.DB.connectionString,
             max: 1,
