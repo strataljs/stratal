@@ -1,6 +1,6 @@
 {
   "name": "@stratal/zenstack-plugin",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "ZenStack CLI plugin for Stratal framework — generates connection types, slicing configs, and per-connection migration schemas",
   "type": "module",
   "license": "MIT",

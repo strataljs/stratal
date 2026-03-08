@@ -1,5 +1,15 @@
 # stratal
 
+## 0.0.9
+
+### Patch Changes
+
+- [#86](https://github.com/strataljs/stratal/pull/86) [`c0d9313`](https://github.com/strataljs/stratal/commit/c0d9313b30272eece8a4596718b7d4c1b442c221) Thanks [@adesege](https://github.com/adesege)! - Remove default CORS middleware from HonoApp
+
+  ### Breaking Changes
+
+  - **stratal**: `HonoApp` no longer applies `cors()` middleware by default. If your application relies on the built-in CORS handling, add it explicitly via a custom middleware in your module's `configure()` method or by registering it globally.
+
 ## 0.0.8
 
 ## 0.0.7
