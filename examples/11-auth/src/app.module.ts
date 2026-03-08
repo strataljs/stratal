@@ -10,7 +10,7 @@ import { PublicModule } from './public/public.module'
 
 @Module({
   imports: [
-    CoreAuthModule.withRootAsync({
+    CoreAuthModule.forRootAsync({
       inject: [DI_TOKENS.CloudflareEnv],
       useFactory: (env: StratalEnv) => createAuthOptions(env),
     }),

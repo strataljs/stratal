@@ -9,7 +9,7 @@ npm install better-auth @better-auth/core    # required peer deps for auth
 
 ## AuthModule Setup
 
-`AuthModule.withRootAsync()` registers the Better Auth integration:
+`AuthModule.forRootAsync()` registers the Better Auth integration:
 
 ```typescript
 import { AuthModule } from '@stratal/framework/auth'
@@ -19,7 +19,7 @@ import { type BetterAuthOptions } from 'better-auth'
 
 @Module({
   imports: [
-    AuthModule.withRootAsync({
+    AuthModule.forRootAsync({
       inject: [DI_TOKENS.Database, CONFIG_TOKENS.ConfigService],
       useFactory: (db, config) => createAuthOptions(db, config),
     }),
@@ -31,7 +31,7 @@ export class AppModule {}
 **Signature:**
 
 ```typescript
-static withRootAsync<TOptions extends BetterAuthOptions>(
+static forRootAsync<TOptions extends BetterAuthOptions>(
   options: AsyncModuleOptions<TOptions>
 ): DynamicModule
 ```

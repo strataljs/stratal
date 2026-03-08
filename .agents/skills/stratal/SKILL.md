@@ -257,7 +257,7 @@ Register jobs in `@Module({ jobs: [DailyReportJob] })`. Add matching cron trigge
 | StorageModule | `stratal/storage` | `.forRoot({ storage, defaultStorageDisk })` | S3-compatible file storage |
 | I18nModule | `stratal/i18n` | `.forRoot({ defaultLocale, messages })` | Type-safe translations |
 | QueueModule | `stratal/queue` | `.forRootAsync(...)` | Queue producer/consumer |
-| AuthModule | `@stratal/framework/auth` | `.withRootAsync(...)` | Better Auth integration |
+| AuthModule | `@stratal/framework/auth` | `.forRootAsync(...)` | Better Auth integration |
 | DatabaseModule | `@stratal/framework/database` | `.forRoot(config)` / `.forRootAsync(...)` | ZenStack ORM multi-connection |
 | RbacModule | `@stratal/framework/rbac` | `.forRoot(options)` / `.forRootAsync(...)` | Casbin RBAC |
 
@@ -350,7 +350,7 @@ import { AuthContext } from '@stratal/framework/context'
 
 @Module({
   imports: [
-    AuthModule.withRootAsync({
+    AuthModule.forRootAsync({
       inject: [DI_TOKENS.Database, CONFIG_TOKENS.ConfigService],
       useFactory: (db, config) => createAuthOptions(db, config),
     }),

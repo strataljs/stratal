@@ -65,7 +65,10 @@ import { RbacModule } from '@stratal/framework/rbac'
     DatabaseModule.forRoot({
       connections: [{ name: 'default', connectionString: 'DATABASE_URL' }],
     }),
-    AuthModule.forRoot(),
+    AuthModule.forRootAsync({
+      inject: [],
+      useFactory: () => ({ /* Better Auth options */ }),
+    }),
     RbacModule.forRoot({ model: MODEL }),
   ],
 })

@@ -9,7 +9,7 @@ import { getErrorHandlerConfig } from '../utils'
  * AuthService
  *
  * Base authentication service using Better Auth.
- * Configured via AuthModule.withRootAsync() from the application layer.
+ * Configured via AuthModule.forRootAsync() from the application layer.
  *
  * **Extensibility:**
  * Extend this class in application layer to add custom methods.

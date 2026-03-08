@@ -140,7 +140,7 @@ The project is ESM-only (`"type": "module"`). Output goes to `dist/` with `.js`,
 ### Framework Modules (`packages/framework`)
 
 - **DatabaseModule** — ZenStack ORM with multiple named connections, plugin system (ErrorHandler, EventEmitter, SchemaSwitcher), and augmentable `DatabaseSchemaRegistry`/`DefaultDatabaseConnection` interfaces for type-safe access. Uses `@InjectDB(name)` decorator for named connection injection.
-- **AuthModule** — Better Auth integration with session verification middleware pipeline. Provides `AuthContext` (request-scoped) and `AuthService`. Configured via `AuthModule.withRootAsync()`.
+- **AuthModule** — Better Auth integration with session verification middleware pipeline. Provides `AuthContext` (request-scoped) and `AuthService`. Configured via `AuthModule.forRootAsync()`.
 - **RbacModule** — Casbin-based RBAC with ZenStack database adapter. Provides `CasbinService` (request-scoped) for permission checks, role management, and `getPermissionsForUserAsCasbinJs()` for frontend.
 - **AuthGuard** — Guard factory for authentication and scoped authorization. Checks `AuthContext.isAuthenticated()` and optionally `CasbinService.hasAnyPermission()`.
 - **Factory** — Abstract base class for test data factories with `@faker-js/faker` integration and `Sequence` generator.
