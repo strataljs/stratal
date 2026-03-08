@@ -41,6 +41,16 @@ npm install stratal
 yarn add stratal
 ```
 
+## Packages
+
+| Package | npm | Description |
+|---|---|---|
+| `stratal` | [![npm](https://img.shields.io/npm/v/stratal)](https://www.npmjs.com/package/stratal) | Core framework — modules, DI, routing, OpenAPI, queues, cron, storage, email, i18n |
+| `@stratal/testing` | [![npm](https://img.shields.io/npm/v/@stratal/testing)](https://www.npmjs.com/package/@stratal/testing) | Testing utilities and mocks |
+| `@stratal/framework` | [![npm](https://img.shields.io/npm/v/@stratal/framework)](https://www.npmjs.com/package/@stratal/framework) | Auth (Better Auth), database ORM (ZenStack), RBAC (Casbin), guards, factories |
+| `@stratal/seeders` | [![npm](https://img.shields.io/npm/v/@stratal/seeders)](https://www.npmjs.com/package/@stratal/seeders) | Database seeder CLI and infrastructure |
+| `@stratal/zenstack-plugin` | [![npm](https://img.shields.io/npm/v/@stratal/zenstack-plugin)](https://www.npmjs.com/package/@stratal/zenstack-plugin) | ZenStack CLI plugin for multi-connection schema slicing and migrations |
+
 ### AI Agent Skills
 
 Stratal provides [Agent Skills](https://agentskills.io) for AI coding assistants like Claude Code and Cursor. Install to give your AI agent knowledge of Stratal patterns, conventions, and APIs:
@@ -48,6 +58,14 @@ Stratal provides [Agent Skills](https://agentskills.io) for AI coding assistants
 ```bash
 npx skills add strataljs/stratal
 ```
+
+| Skill | Description |
+|---|---|
+| `stratal` | Core framework — modules, DI, controllers, routing, OpenAPI, queues, cron, email, storage, caching, i18n, logging, guards, middleware, config, events, and error handling |
+| `stratal-testing` | Testing — TestingModule, HTTP testing, mocks, fakes, and auth testing utilities |
+| `stratal-framework` | Framework modules — authentication (Better Auth), database (ZenStack ORM), RBAC (Casbin), AuthGuard, and test data factories |
+| `stratal-seeders` | Database seeders — writing seeders, CLI usage, and seeder registration |
+| `stratal-zenstack-plugin` | ZenStack plugin — multi-connection schema slicing, database migrations, and the stratal-db CLI |
 
 ## Quick Start
 
@@ -93,44 +111,75 @@ Full request lifecycle: DI resolution → middleware → routing → validation 
 
 | Benchmark | ops/sec | ±% | Median | P99 |
 |---|--:|--:|--:|--:|
-| simple GET - 200 | 75,043 | ±0.54% | 13.3 µs | 22.8 µs |
-| GET with route params - 200 | 66,872 | ±0.38% | 15.0 µs | 19.7 µs |
-| POST with JSON body - 201 | 41,461 | ±0.54% | 24.1 µs | 35.1 µs |
-| POST invalid body - validation error | 20,164 | ±3.40% | 49.6 µs | 111 µs |
-| GET unknown route - 404 | 36,809 | ±0.71% | 27.2 µs | 40.4 µs |
+| simple GET - 200 | 99,191 | ±0.73% | 10.1 µs | 17.8 µs |
+| GET with route params - 200 | 80,096 | ±0.74% | 12.5 µs | 19.5 µs |
+| POST with JSON body - 201 | 49,954 | ±0.74% | 20.0 µs | 31.9 µs |
+| POST invalid body - validation error | 23,587 | ±3.19% | 42.4 µs | 71.8 µs |
+| GET unknown route - 404 | 43,228 | ±0.69% | 23.1 µs | 34.8 µs |
 
-### DI Container
-
-| Benchmark | ops/sec | ±% | Median | P99 |
-|---|--:|--:|--:|--:|
-| register class provider | 3,201,646 | ±1.42% | 0.31 µs | 0.54 µs |
-| registerSingleton | 3,234,158 | ±1.25% | 0.31 µs | 0.46 µs |
-| resolve class token | 1,798,438 | ±0.48% | 0.56 µs | 0.75 µs |
-| resolve singleton token | 1,696,615 | ±1.50% | 0.59 µs | 0.83 µs |
-| isRegistered check | 2,107,301 | ±0.62% | 0.47 µs | 0.67 µs |
-
-### Module Registry
+### DI Container - Registration
 
 | Benchmark | ops/sec | ±% | Median | P99 |
 |---|--:|--:|--:|--:|
-| register single module | 2,305,528 | ±0.77% | 0.43 µs | 0.58 µs |
-| register 3-level module tree | 1,308,145 | ±0.49% | 0.76 µs | 1.00 µs |
-| initialize with lifecycle hooks | 1,624,482 | ±0.47% | 0.62 µs | 0.79 µs |
+| register class provider | 5,396,472 | ±0.91% | 0.20 µs | 0.30 µs |
+| registerSingleton | 5,061,380 | ±0.63% | 0.20 µs | 0.30 µs |
+| registerValue | 5,264,393 | ±0.58% | 0.20 µs | 0.30 µs |
+| registerFactory | 4,966,905 | ±0.67% | 0.20 µs | 0.30 µs |
+
+### DI Container - Resolution
+
+| Benchmark | ops/sec | ±% | Median | P99 |
+|---|--:|--:|--:|--:|
+| resolve class token | 2,259,399 | ±0.73% | 0.40 µs | 0.60 µs |
+| resolve symbol token | 2,085,313 | ±0.88% | 0.50 µs | 0.70 µs |
+| resolve value token | 2,252,901 | ±0.45% | 0.40 µs | 0.60 µs |
+| resolve singleton token | 2,180,625 | ±0.53% | 0.50 µs | 0.60 µs |
+| isRegistered check | 2,786,645 | ±0.51% | 0.40 µs | 0.50 µs |
+
+### DI Container - Conditional Binding
+
+| Benchmark | ops/sec | ±% | Median | P99 |
+|---|--:|--:|--:|--:|
+| when().use().give().otherwise() | 1,545,062 | ±3.07% | 0.50 µs | 1.10 µs |
+| when() with cached predicate | 1,630,576 | ±2.65% | 0.50 µs | 1.00 µs |
+
+### Module Registry - Registration
+
+| Benchmark | ops/sec | ±% | Median | P99 |
+|---|--:|--:|--:|--:|
+| register single module | 2,155,261 | ±0.95% | 0.50 µs | 0.60 µs |
+| register 3-level module tree | 1,028,422 | ±0.41% | 1.00 µs | 1.30 µs |
+| register dynamic module (forRoot) | 2,107,991 | ±1.60% | 0.50 µs | 1.00 µs |
+
+### Module Registry - Initialization
+
+| Benchmark | ops/sec | ±% | Median | P99 |
+|---|--:|--:|--:|--:|
+| initialize with lifecycle hooks | 1,657,987 | ±0.12% | 0.60 µs | 0.80 µs |
+
+### Module Registry - Collection
+
+| Benchmark | ops/sec | ±% | Median | P99 |
+|---|--:|--:|--:|--:|
+| getAllControllers | 983,234 | ±0.72% | 1.00 µs | 2.30 µs |
+| getAllConsumers | 1,000,669 | ±0.46% | 1.00 µs | 1.30 µs |
+| getAllJobs | 1,003,687 | ±0.46% | 1.00 µs | 1.30 µs |
 
 ### Route Registration
 
 | Benchmark | ops/sec | ±% | Median | P99 |
 |---|--:|--:|--:|--:|
-| controller with 5 OpenAPI routes | 45,595 | ±4.10% | 21.9 µs | 42.2 µs |
-| single-route controller | 209,296 | ±3.43% | 4.78 µs | 7.83 µs |
+| controller with 5 OpenAPI routes | 42,263 | ±4.73% | 21.9 µs | 42.2 µs |
+| single-route controller | 215,349 | ±3.33% | 4.60 µs | 8.00 µs |
+| register multiple controllers | 38,840 | ±3.69% | 19.8 µs | 51.8 µs |
 
 ### Application
 
 | Benchmark | ops/sec | ±% | Median | P99 |
 |---|--:|--:|--:|--:|
-| constructor only | 362,866 | ±1.45% | 2.76 µs | 5.71 µs |
-| full initialize() | 50,679 | ±5.27% | 19.7 µs | 39.8 µs |
-| resolve service after bootstrap | 48,779 | ±5.38% | 20.5 µs | 39.4 µs |
+| constructor only | 312,943 | ±1.69% | 2.70 µs | 7.70 µs |
+| full initialize() | 48,051 | ±4.92% | 16.3 µs | 43.1 µs |
+| resolve service after bootstrap | 45,913 | ±5.33% | 16.2 µs | 42.7 µs |
 
 > Benchmarks ran on: Apple M3 Max (16-core), 48 GB RAM, macOS 26.2, Node.js v22.12.0
 
