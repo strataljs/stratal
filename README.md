@@ -65,13 +65,14 @@ npx skills add strataljs/stratal
 | `stratal-testing` | Testing — TestingModule, HTTP testing, mocks, fakes, and auth testing utilities |
 | `stratal-framework` | Framework modules — authentication (Better Auth), database (ZenStack ORM), RBAC (Casbin), AuthGuard, and test data factories |
 | `stratal-seeders` | Database seeders — writing seeders, CLI usage, and seeder registration |
-| `stratal-zenstack-plugin` | ZenStack plugin — multi-connection schema slicing, database migrations, and the stratal-db CLI |
+| `stratal-incremental-adoption` | Incremental adoption — mounting Stratal into an existing Hono app, gradual migration, coexisting queue consumers and cron jobs |
 
 ## Quick Start
 
 Define a module with a controller and wire it up as a Cloudflare Worker:
 
 ```typescript
+import 'reflect-metadata'
 import { Stratal } from 'stratal'
 import { Module } from 'stratal/module'
 import { Controller, Route, type RouterContext } from 'stratal/router'
