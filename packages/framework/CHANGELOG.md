@@ -1,5 +1,12 @@
 # @stratal/framework
 
+## 0.0.10
+
+### Patch Changes
+
+- Updated dependencies [[`3329d20`](https://github.com/strataljs/stratal/commit/3329d20658ea6a6f7cadbbb3efb7630b1cca9ad2)]:
+  - stratal@0.0.10
+
 ## 0.0.9
 
 ### Patch Changes
