@@ -1,5 +1,5 @@
 ---
-"stratal": minor
+"stratal": patch
 ---
 
 Add worker base classes (`StratalDurableObject`, `StratalWorkerEntrypoint`, `StratalWorkflow`) with DI support and request-scoped containers
