@@ -31,17 +31,17 @@ export class Stratal<Env extends StratalEnv = StratalEnv> {
   }
 
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const app = await this.ensureReady()
+    const app = await this.getApplication()
     return app.hono.fetch(request, env, ctx)
   }
 
   async queue(batch: MessageBatch): Promise<void> {
-    const app = await this.ensureReady()
+    const app = await this.getApplication()
     return app.handleQueue(batch, batch.queue)
   }
 
   async scheduled(controller: ScheduledController): Promise<void> {
-    const app = await this.ensureReady()
+    const app = await this.getApplication()
     return app.handleScheduled(controller)
   }
 
@@ -57,7 +57,14 @@ export class Stratal<Env extends StratalEnv = StratalEnv> {
     }
   }
 
-  private async ensureReady(): Promise<Application> {
+  /**
+   * Get the initialized Application instance.
+   *
+   * Used internally by fetch/queue/scheduled handlers, and externally by
+   * Durable Objects, Workflows, and WorkerEntrypoints to access the DI container
+   * via `ctx.exports.default`.
+   */
+  async getApplication(): Promise<Application> {
     this.app ??= await this.initPromise;
     return this.app
   }

@@ -25,6 +25,10 @@ export const DI_TOKENS = {
    * AuthContext: Use for services that need user authentication (userId).
    */
   AuthContext: Symbol.for('AuthContext'),
+
+  // Workers
+  DurableObjectState: Symbol.for('DurableObjectState'),
+  DurableObjectId: Symbol.for('DurableObjectId'),
 } as const
 
 export type DIToken = typeof DI_TOKENS[keyof typeof DI_TOKENS]
