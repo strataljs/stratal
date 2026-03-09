@@ -1,5 +1,18 @@
 # stratal
 
+## 0.0.10
+
+### Patch Changes
+
+- [#88](https://github.com/strataljs/stratal/pull/88) [`3329d20`](https://github.com/strataljs/stratal/commit/3329d20658ea6a6f7cadbbb3efb7630b1cca9ad2) Thanks [@adesege](https://github.com/adesege)! - Add worker base classes (`StratalDurableObject`, `StratalWorkerEntrypoint`, `StratalWorkflow`) with DI support and request-scoped containers
+
+  ### Details
+
+  - Introduce `stratal/workers` sub-path export with `StratalDurableObject`, `StratalWorkerEntrypoint`, `StratalWorkflow`, and `runInScope` helper
+  - Add `Stratal.resolveApplication()` static method for worker classes to access the DI container
+  - Add `StratalNotInitializedError` for when `resolveApplication()` is called before Stratal is instantiated
+  - Add `DurableObjectState` and `DurableObjectId` DI tokens for Durable Object context injection
+
 ## 0.0.9
 
 ### Patch Changes
