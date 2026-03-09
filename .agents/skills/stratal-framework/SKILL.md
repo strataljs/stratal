@@ -5,7 +5,9 @@ description: >-
   (ZenStack ORM), RBAC (Casbin), AuthGuard, and test data factories. Trigger on:
   auth, AuthModule, AuthService, AuthContext, AuthGuard, Better Auth, database,
   DatabaseModule, DatabaseService, @InjectDB, ZenStack, RBAC, RbacModule,
-  CasbinService, Casbin, Factory, Sequence, @stratal/framework.
+  CasbinService, Casbin, Factory, Sequence, @stratal/framework, zenstack-plugin,
+  @@connection, stratal-db, migrations, multi-connection, slicing,
+  @stratal/zenstack-plugin.
 user-invocable: false
 license: MIT
 metadata:
@@ -79,6 +81,54 @@ declare module '@stratal/framework/database' {
 Inject with `@inject(DI_TOKENS.Database)` (default connection) or `@InjectDB('name')` (named). Plugins: `EventEmitterPlugin`, `SchemaSwitcherPlugin`, `ErrorHandlerPlugin`.
 
 **Database events** follow the pattern `{phase}.{Model}.{operation}` — e.g., `after.User.create`. Augment `CustomEventRegistry` with `DatabaseEvents<ConnectionName>` for type safety.
+
+### Multi-Connection Schema Slicing (@stratal/zenstack-plugin)
+
+The `@stratal/zenstack-plugin` splits a single `.zmodel` schema into per-connection schemas using the `@@connection` attribute, enabling connection-specific migrations.
+
+**Plugin setup** in `.zmodel`:
+
+```zmodel
+plugin stratal {
+  provider = '@stratal/zenstack-plugin'
+  output = './zenstack'
+  default = 'main'
+}
+
+model User {
+  id String @id @default(cuid())
+  @@connection('main')
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+  @@connection('analytics')
+}
+```
+
+Models without `@@connection` are assigned to the `default` connection.
+
+**Generated output** after `npx zenstack generate`:
+
+- `slicing.ts` — Export map used by `DatabaseModule` for connection-aware query routing
+- Per-connection schemas — Separate Prisma schemas for each connection (used for migrations)
+
+**CLI: stratal-db**
+
+| Command | Description |
+|---|---|
+| `stratal-db migrate dev --connection <name> --name <name>` | Create a new migration |
+| `stratal-db migrate deploy --connection <name>` | Apply pending migrations |
+| `stratal-db migrate reset --connection <name>` | Reset database and re-apply migrations |
+| `stratal-db push --connection <name>` | Push schema changes without migration files |
+| `stratal-db migrate dev --all-connections` | Run migration on all connections at once |
+
+**Conventions:**
+
+- Always set a `default` connection in the plugin config
+- Run `npx zenstack generate` before `stratal-db` commands to update schemas
+- The generated `slicing.ts` integrates directly with `DatabaseModule.forRoot()` via the `slicing` option on each connection
+- Cross-connection relations are validated at generation time — models in different connections cannot have direct relations
 
 ## RBAC (RbacModule)
 
