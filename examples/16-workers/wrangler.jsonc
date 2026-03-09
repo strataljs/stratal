@@ -1,0 +1,41 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "stratal-example-16-workers",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-02-25",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "vars": {
+    "ENVIRONMENT": "development"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "CACHE",
+      "id": "placeholder"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "TASK_COUNTER",
+        "class_name": "TaskCounter"
+      }
+    ]
+  },
+  "workflows": [
+    {
+      "name": "task-workflow",
+      "binding": "TASK_WORKFLOW",
+      "class_name": "TaskWorkflow"
+    }
+  ],
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": [
+        "TaskCounter"
+      ]
+    }
+  ]
+}

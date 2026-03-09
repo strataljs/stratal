@@ -8,7 +8,8 @@ description: >-
   RouterContext, @inject, Scope, @Listener, @On, queues, cron, email, storage, cache,
   i18n, logging, guards, middleware, config, OpenAPIModule, ConfigModule, CacheModule,
   EmailModule, StorageModule, QueueModule, I18nModule, ApplicationError, StratalEnv,
-  registerAs.
+  registerAs, StratalDurableObject, StratalWorkerEntrypoint, StratalWorkflow, runInScope,
+  stratal/workers, DurableObject, Workflow, WorkerEntrypoint, Service Binding, RPC.
 user-invocable: false
 license: MIT
 metadata:
@@ -244,6 +245,68 @@ export class CleanupJob implements CronJob {
 
 Register in module `jobs` array. Schedule must match a trigger in `wrangler.jsonc`.
 
+## Workers
+
+Docs: [Durable Objects](https://stratal.dev/integrations/durable-objects) · [Service Bindings](https://stratal.dev/integrations/service-bindings) · [Workflows](https://stratal.dev/integrations/workflows)
+
+Stratal provides base classes for Cloudflare Workers primitives (Durable Objects, Service Bindings/RPC, Workflows) with built-in DI support. Each class exposes a `runInScope()` method that creates a request-scoped DI container from the static Stratal singleton.
+
+```ts
+// src/index.ts — MUST export Stratal as default + worker classes as named exports
+export { Counter } from './counter';
+export { AuthRpc } from './auth-rpc';
+export { MyWorkflow } from './my-workflow';
+export default new Stratal({ module: AppModule });
+```
+
+### StratalDurableObject
+
+Extends `DurableObject`. `runInScope` auto-registers `DI_TOKENS.DurableObjectState` and `DI_TOKENS.DurableObjectId`.
+
+```ts
+export class Counter extends StratalDurableObject {
+  async increment() {
+    return this.runInScope(async (container) => {
+      const counterService = container.resolve<CounterService>(CounterService)
+
+      counterService.increment();
+    });
+  }
+}
+```
+
+### StratalWorkerEntrypoint
+
+Extends `WorkerEntrypoint` for RPC / Service Bindings.
+
+```ts
+export class AuthRpc extends StratalWorkerEntrypoint {
+  async verifyToken(token: string) {
+    return this.runInScope(async (container) => {
+      const auth = container.resolve(AuthService);
+      return auth.verify(token);
+    });
+  }
+}
+```
+
+### StratalWorkflow
+
+Extends `WorkflowEntrypoint` with generic `Env` and `Params` types.
+
+```ts
+export class MyWorkflow extends StratalWorkflow<Env, { orderId: string }> {
+  async run(event: WorkflowEvent<{ orderId: string }>, step: WorkflowStep) {
+    await step.do('process', () =>
+      this.runInScope(async (container) => {
+        const svc = container.resolve(OrderService);
+        return svc.validate(event.payload.orderId);
+      })
+    );
+  }
+}
+```
+
 ## Built-in Modules Quick Reference
 
 | Module | Import | Docs |
@@ -275,6 +338,7 @@ Register in module `jobs` array. Schedule must match a trigger in `wrangler.json
 | `stratal/logger` | `LoggerService`, `LOGGER_TOKENS` |
 | `stratal/config` | `ConfigModule`, `registerAs` |
 | `stratal/openapi` | `OpenAPIModule` |
+| `stratal/workers` | `StratalDurableObject`, `StratalWorkerEntrypoint`, `StratalWorkflow`, `runInScope` |
 
 ## Do's and Don'ts
 
@@ -288,4 +352,7 @@ Register in module `jobs` array. Schedule must match a trigger in `wrangler.json
 - **Don't** use esbuild or tsup — only `tsc`
 - **Don't** use `ctx.req.valid('json')` — use `await ctx.body<T>()`
 - **Don't** import Zod from `zod` directly
+- **Do** export the `Stratal` instance as the default export (required for the static singleton used by worker classes)
+- **Do** use `runInScope` for each method/workflow step that needs DI — each call gets a fresh request-scoped container
+- **Don't** cache container references across `runInScope` calls — the container is only valid within the callback
 - **Don't** disable `emitDecoratorMetadata` in tsconfig

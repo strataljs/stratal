@@ -30,6 +30,7 @@ export const errors = {
   // Configuration errors
   configNotInitialized: 'Configuration service has not been initialized',
   configModuleNotInitialized: 'ConfigModule.forRoot() was not called before module initialization',
+  stratalNotInitialized: 'Stratal has not been instantiated. Ensure you export a Stratal instance as the default export.',
 
   // Module errors
   moduleAlreadyRegistered: 'Module {moduleName} is already registered',
