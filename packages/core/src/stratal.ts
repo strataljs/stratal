@@ -1,6 +1,7 @@
 import 'reflect-metadata'
 
 import { Application, type ApplicationConfig } from './application'
+import { StratalNotInitializedError } from './errors'
 import type { StratalEnv } from './env'
 import type { HonoApp } from './router/hono-app'
 
@@ -22,26 +23,29 @@ export class Stratal<Env extends StratalEnv = StratalEnv> {
   private app: Application | null = null
   private initPromise: Promise<Application>
 
+  private static _application: Promise<Application> | null = null
+
   constructor(config: ApplicationConfig) {
     this.fetch = this.fetch.bind(this)
     this.queue = this.queue.bind(this)
     this.scheduled = this.scheduled.bind(this)
 
     this.initPromise = this.prepareApp(config)
+    Stratal._application = this.initPromise
   }
 
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const app = await this.getApplication()
+    const app = await this.ensureReady()
     return app.hono.fetch(request, env, ctx)
   }
 
   async queue(batch: MessageBatch): Promise<void> {
-    const app = await this.getApplication()
+    const app = await this.ensureReady()
     return app.handleQueue(batch, batch.queue)
   }
 
   async scheduled(controller: ScheduledController): Promise<void> {
-    const app = await this.getApplication()
+    const app = await this.ensureReady()
     return app.handleScheduled(controller)
   }
 
@@ -58,13 +62,19 @@ export class Stratal<Env extends StratalEnv = StratalEnv> {
   }
 
   /**
-   * Get the initialized Application instance.
-   *
-   * Used internally by fetch/queue/scheduled handlers, and externally by
-   * Durable Objects, Workflows, and WorkerEntrypoints to access the DI container
-   * via `ctx.exports.default`.
+   * @internal
+   * Resolves the Application instance from the static singleton.
+   * Used by worker base classes (DurableObject, Workflow, WorkerEntrypoint)
+   * to access the DI container without going through Cloudflare RPC.
    */
-  async getApplication(): Promise<Application> {
+  static resolveApplication(): Promise<Application> {
+    if (!Stratal._application) {
+      throw new StratalNotInitializedError()
+    }
+    return Stratal._application
+  }
+
+  private async ensureReady(): Promise<Application> {
     this.app ??= await this.initPromise;
     return this.app
   }

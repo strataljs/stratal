@@ -5,6 +5,8 @@ import { Scope } from '../../di/types'
 import type { StratalEnv } from '../../env'
 import { LogLevel } from '../../logger'
 import { Module } from '../../module/module.decorator'
+import { Stratal } from '../../stratal'
+import { runInScope } from '../run-in-scope'
 
 const TOKEN = Symbol('TestSvc')
 
@@ -34,6 +36,7 @@ describe('runInScope', () => {
   beforeEach(async () => {
     app = createTestApp()
     await app.initialize()
+    vi.spyOn(Stratal, 'resolveApplication').mockResolvedValue(app)
   })
 
   afterEach(async () => {
@@ -42,37 +45,20 @@ describe('runInScope', () => {
   })
 
   it('should create a request-scoped container and invoke the callback', async () => {
-    const mockStratal = { getApplication: vi.fn().mockResolvedValue(app) }
-
-    vi.doMock('cloudflare:workers', () => ({
-      exports: { default: mockStratal },
-    }))
-
-    // Re-import to pick up the mock
-    const { runInScope: mockedRunInScope } = await import('../run-in-scope')
-
     let receivedContainer: Container | undefined
-    const result = await mockedRunInScope((container) => {
+    const result = await runInScope((container) => {
       receivedContainer = container
       return container.resolve<TestService>(TOKEN).getValue()
     })
 
     expect(result).toBe('from-run-in-scope')
     expect(receivedContainer).toBeDefined()
-    expect(mockStratal.getApplication).toHaveBeenCalledOnce()
+    expect(Stratal.resolveApplication).toHaveBeenCalledOnce()
   })
 
   it('should dispose the request container after callback completes', async () => {
-    const mockStratal = { getApplication: vi.fn().mockResolvedValue(app) }
-
-    vi.doMock('cloudflare:workers', () => ({
-      exports: { default: mockStratal },
-    }))
-
-    const { runInScope: mockedRunInScope } = await import('../run-in-scope')
-
     let capturedContainer: Container | undefined
-    await mockedRunInScope((container) => {
+    await runInScope((container) => {
       capturedContainer = container
     })
 
@@ -81,16 +67,8 @@ describe('runInScope', () => {
   })
 
   it('should propagate errors from the callback', async () => {
-    const mockStratal = { getApplication: vi.fn().mockResolvedValue(app) }
-
-    vi.doMock('cloudflare:workers', () => ({
-      exports: { default: mockStratal },
-    }))
-
-    const { runInScope: mockedRunInScope } = await import('../run-in-scope')
-
     await expect(
-      mockedRunInScope(() => {
+      runInScope(() => {
         throw new Error('callback-error')
       })
     ).rejects.toThrow('callback-error')

@@ -6,6 +6,7 @@ import { Scope } from '../../di/types'
 import type { StratalEnv } from '../../env'
 import { LogLevel } from '../../logger'
 import { Module } from '../../module/module.decorator'
+import { Stratal } from '../../stratal'
 
 const TOKEN = Symbol('TestSvc')
 
@@ -35,6 +36,7 @@ describe('StratalDurableObject', () => {
   beforeEach(async () => {
     app = createTestApp()
     await app.initialize()
+    vi.spyOn(Stratal, 'resolveApplication').mockResolvedValue(app)
   })
 
   afterEach(async () => {
@@ -48,9 +50,8 @@ describe('StratalDurableObject', () => {
       storage: {},
       waitUntil: vi.fn(),
     }
-    const mockStratal = { getApplication: vi.fn().mockResolvedValue(app) }
 
-    // Mock cloudflare:workers with both DurableObject base class and exports
+    // Mock cloudflare:workers for the DurableObject base class only
     vi.doMock('cloudflare:workers', () => ({
       DurableObject: class {
         ctx: unknown
@@ -60,7 +61,6 @@ describe('StratalDurableObject', () => {
           this.env = env
         }
       },
-      exports: { default: mockStratal },
     }))
 
     const { StratalDurableObject } = await import('../stratal-durable-object')
@@ -90,7 +90,6 @@ describe('StratalDurableObject', () => {
       storage: {},
       waitUntil: vi.fn(),
     }
-    const mockStratal = { getApplication: vi.fn().mockResolvedValue(app) }
 
     vi.doMock('cloudflare:workers', () => ({
       DurableObject: class {
@@ -101,7 +100,6 @@ describe('StratalDurableObject', () => {
           this.env = env
         }
       },
-      exports: { default: mockStratal },
     }))
 
     const { StratalDurableObject } = await import('../stratal-durable-object')

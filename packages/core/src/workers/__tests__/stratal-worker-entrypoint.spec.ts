@@ -5,6 +5,7 @@ import { Scope } from '../../di/types'
 import type { StratalEnv } from '../../env'
 import { LogLevel } from '../../logger'
 import { Module } from '../../module/module.decorator'
+import { Stratal } from '../../stratal'
 
 const TOKEN = Symbol('TestSvc')
 
@@ -34,6 +35,7 @@ describe('StratalWorkerEntrypoint', () => {
   beforeEach(async () => {
     app = createTestApp()
     await app.initialize()
+    vi.spyOn(Stratal, 'resolveApplication').mockResolvedValue(app)
   })
 
   afterEach(async () => {
@@ -42,8 +44,6 @@ describe('StratalWorkerEntrypoint', () => {
   })
 
   it('should create a request-scoped container and invoke the callback', async () => {
-    const mockStratal = { getApplication: vi.fn().mockResolvedValue(app) }
-
     vi.doMock('cloudflare:workers', () => ({
       WorkerEntrypoint: class {
         ctx: unknown
@@ -53,7 +53,6 @@ describe('StratalWorkerEntrypoint', () => {
           this.env = env
         }
       },
-      exports: { default: mockStratal },
     }))
 
     const { StratalWorkerEntrypoint } = await import('../stratal-worker-entrypoint')
@@ -70,12 +69,10 @@ describe('StratalWorkerEntrypoint', () => {
     const result = await entrypoint.testRunInScope()
 
     expect(result).toBe('from-worker-entrypoint')
-    expect(mockStratal.getApplication).toHaveBeenCalledOnce()
+    expect(Stratal.resolveApplication).toHaveBeenCalledOnce()
   })
 
   it('should dispose the request container after callback completes', async () => {
-    const mockStratal = { getApplication: vi.fn().mockResolvedValue(app) }
-
     vi.doMock('cloudflare:workers', () => ({
       WorkerEntrypoint: class {
         ctx: unknown
@@ -85,7 +82,6 @@ describe('StratalWorkerEntrypoint', () => {
           this.env = env
         }
       },
-      exports: { default: mockStratal },
     }))
 
     const { StratalWorkerEntrypoint } = await import('../stratal-worker-entrypoint')
