@@ -1,9 +1,0 @@
-/**
- * Assigns a model to a named database connection for multi-connection setups.
- *
- * @param name - The connection name (e.g. "main", "analytics"). Models sharing the
- *   same name are grouped into a single connection schema and slicing entry.
- * @param provider - Optional datasource provider override (e.g. "postgresql", "mysql").
- *   Defaults to the datasource provider defined in the schema.
- */
-attribute @@connection(_ name: String, _ provider: String?)
