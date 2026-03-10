@@ -1,3 +1,3 @@
 export const CONFIG_TOKENS = {
-	ConfigService: Symbol.for('ConfigService'),
+	ConfigService: Symbol.for('stratal:config:service'),
 } as const

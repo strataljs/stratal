@@ -3,9 +3,9 @@ import { DI_TOKENS } from '../../di/tokens'
 import { registerAs } from '../register-as'
 
 describe('registerAs', () => {
-  it('should return object with KEY = Symbol.for("CONFIG:namespace")', () => {
+  it('should return object with KEY = Symbol.for("stratal:config:namespace")', () => {
     const config = registerAs('database', () => ({ url: 'test' }))
-    expect(config.KEY).toBe(Symbol.for('CONFIG:database'))
+    expect(config.KEY).toBe(Symbol.for('stratal:config:database'))
   })
 
   it('should set namespace property', () => {
@@ -24,8 +24,8 @@ describe('registerAs', () => {
     const dbConfig = registerAs('database', () => ({}))
     const emailConfig = registerAs('email', () => ({}))
     expect(dbConfig.KEY).not.toBe(emailConfig.KEY)
-    expect(dbConfig.KEY).toBe(Symbol.for('CONFIG:database'))
-    expect(emailConfig.KEY).toBe(Symbol.for('CONFIG:email'))
+    expect(dbConfig.KEY).toBe(Symbol.for('stratal:config:database'))
+    expect(emailConfig.KEY).toBe(Symbol.for('stratal:config:email'))
   })
 
   describe('asProvider()', () => {
@@ -35,7 +35,7 @@ describe('registerAs', () => {
       const provider = config.asProvider()
 
       expect(provider).toEqual({
-        provide: Symbol.for('CONFIG:database'),
+        provide: Symbol.for('stratal:config:database'),
         useFactory: factory,
         inject: [DI_TOKENS.CloudflareEnv],
       })

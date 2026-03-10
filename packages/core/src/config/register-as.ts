@@ -6,7 +6,7 @@ import type { FactoryProvider } from '../module/types'
  * Configuration namespace registration result
  */
 export interface ConfigNamespace<TKey extends string, TEnv, TConfig extends object> {
-  /** Auto-derived injection token (e.g., 'database' -> Symbol('CONFIG:database')) */
+  /** Auto-derived injection token (e.g., 'database' -> Symbol('stratal:config:database')) */
   readonly KEY: InjectionToken<TConfig>
   /** The namespace key */
   readonly namespace: TKey
@@ -35,7 +35,7 @@ export interface ConfigNamespace<TKey extends string, TEnv, TConfig extends obje
  *   maxConnections: parseInt(env.DATABASE_MAX_CONNECTIONS || '10'),
  * }))
  *
- * // Auto-generates: databaseConfig.KEY = Symbol('CONFIG:database')
+ * // Auto-generates: databaseConfig.KEY = Symbol('stratal:config:database')
  *
  * // Usage in module:
  * // Option 1: Manual provider
@@ -54,7 +54,7 @@ export function registerAs<TKey extends string, TEnv, TConfig extends object>(
   namespace: TKey,
   factory: (env: TEnv) => TConfig
 ): ConfigNamespace<TKey, TEnv, TConfig> {
-  const KEY = Symbol.for(`CONFIG:${namespace}`) as InjectionToken<TConfig>
+  const KEY = Symbol.for(`stratal:config:${namespace}`) as InjectionToken<TConfig>
 
   return {
     KEY,
