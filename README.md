@@ -49,7 +49,6 @@ yarn add stratal
 | `@stratal/testing` | [![npm](https://img.shields.io/npm/v/@stratal/testing)](https://www.npmjs.com/package/@stratal/testing) | Testing utilities and mocks |
 | `@stratal/framework` | [![npm](https://img.shields.io/npm/v/@stratal/framework)](https://www.npmjs.com/package/@stratal/framework) | Auth (Better Auth), database ORM (ZenStack), RBAC (Casbin), guards, factories |
 | `@stratal/seeders` | [![npm](https://img.shields.io/npm/v/@stratal/seeders)](https://www.npmjs.com/package/@stratal/seeders) | Database seeder CLI and infrastructure |
-| `@stratal/zenstack-plugin` | [![npm](https://img.shields.io/npm/v/@stratal/zenstack-plugin)](https://www.npmjs.com/package/@stratal/zenstack-plugin) | ZenStack CLI plugin for multi-connection schema slicing and migrations |
 
 ### AI Agent Skills
 
