@@ -3,7 +3,7 @@
  * Using Symbol-based tokens to avoid magic strings
  */
 export const STORAGE_TOKENS = {
-  Options: Symbol.for('StorageModuleOptions'),
-  StorageService: Symbol.for('StorageService'),
-  StorageManager: Symbol.for('StorageManager'),
+  Options: Symbol.for('stratal:storage:options'),
+  StorageService: Symbol.for('stratal:storage:service'),
+  StorageManager: Symbol.for('stratal:storage:manager'),
 } as const

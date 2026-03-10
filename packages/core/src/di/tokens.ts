@@ -2,33 +2,33 @@
  * Token for the Container instance
  * Used for injecting the Container into services that need dynamic resolution
  */
-export const CONTAINER_TOKEN = Symbol.for('di:Container')
+export const CONTAINER_TOKEN = Symbol.for('stratal:di:container')
 
 export const DI_TOKENS = {
   // Cloudflare
-  CloudflareEnv: Symbol.for('CloudflareEnv'),
-  ExecutionContext: Symbol.for('ExecutionContext'),
+  CloudflareEnv: Symbol.for('stratal:cloudflare:env'),
+  ExecutionContext: Symbol.for('stratal:execution:context'),
 
   // Infrastructure
   Container: CONTAINER_TOKEN,
-  Application: Symbol.for('Application'),
-  ModuleRegistry: Symbol.for('ModuleRegistry'),
-  ErrorHandler: Symbol.for('ErrorHandler'),
-  Database: Symbol.for('DatabaseService'),
-  Queue: Symbol.for('QueueManager'),
-  ConsumerRegistry: Symbol.for('ConsumerRegistry'),
-  Cron: Symbol.for('CronManager'),
-  EventRegistry: Symbol.for('EventRegistry'),
+  Application: Symbol.for('stratal:application'),
+  ModuleRegistry: Symbol.for('stratal:module:registry'),
+  ErrorHandler: Symbol.for('stratal:error:handler'),
+  Database: Symbol.for('stratal:database:service'),
+  Queue: Symbol.for('stratal:queue:manager'),
+  ConsumerRegistry: Symbol.for('stratal:consumer:registry'),
+  Cron: Symbol.for('stratal:cron:manager'),
+  EventRegistry: Symbol.for('stratal:event:registry'),
 
   // Context
   /**
    * AuthContext: Use for services that need user authentication (userId).
    */
-  AuthContext: Symbol.for('AuthContext'),
+  AuthContext: Symbol.for('stratal:auth:context'),
 
   // Workers
-  DurableObjectState: Symbol.for('DurableObjectState'),
-  DurableObjectId: Symbol.for('DurableObjectId'),
+  DurableObjectState: Symbol.for('stratal:durable:object:state'),
+  DurableObjectId: Symbol.for('stratal:durable:object:id'),
 } as const
 
 export type DIToken = typeof DI_TOKENS[keyof typeof DI_TOKENS]

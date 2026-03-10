@@ -5,9 +5,9 @@
 
 export const I18N_TOKENS = {
   /** MessageLoaderService - loads and caches locale messages */
-  MessageLoader: Symbol.for('I18nModule.MessageLoader'),
+  MessageLoader: Symbol.for('stratal:i18n:message:loader'),
   /** I18nService - request-scoped translation service */
-  I18nService: Symbol.for('I18nModule.I18nService'),
+  I18nService: Symbol.for('stratal:i18n:service'),
   /** I18nModuleOptions - configuration options from forRoot() */
-  Options: Symbol.for('I18nModule.Options')
+  Options: Symbol.for('stratal:i18n:options')
 } as const
