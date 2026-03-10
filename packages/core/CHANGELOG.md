@@ -1,5 +1,11 @@
 # stratal
 
+## 0.0.11
+
+### Patch Changes
+
+- [#92](https://github.com/strataljs/stratal/pull/92) [`bae01ef`](https://github.com/strataljs/stratal/commit/bae01eff7cb7f520ad00206377d9f5f4968076b6) Thanks [@adesege](https://github.com/adesege)! - Update symbol tokens to use 'stratal' namespace for consistency across modules
+
 ## 0.0.10
 
 ### Patch Changes
