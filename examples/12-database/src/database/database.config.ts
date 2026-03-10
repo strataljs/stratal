@@ -7,11 +7,11 @@ import { schema } from '../../db/zenstack/schema'
 
 export function createDatabaseConfig(env: StratalEnv): DatabaseModuleConfig {
   return {
-    schema,
     default: 'main',
     connections: [
       {
         name: 'main',
+        schema,
         dialect: () => new PostgresDialect({
           pool: new Pool({
             connectionString: env.DB.connectionString,

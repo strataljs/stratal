@@ -1,4 +1,5 @@
 .wrangler
 .env
-db/*
-!db/schema.zmodel
+db/zenstack/
+db/main/*.ts
+db/analytics/*.ts
