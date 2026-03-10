@@ -1,16 +1,15 @@
 # 15 - Multi-Connection Database
 
-Multi-connection database setup with `@stratal/zenstack-plugin` for auto-generated type augmentations, connection slicing, and per-connection schema management.
+Multi-connection database setup with per-connection ZenStack schemas for independent schema management and type-safe access.
 
 ## What it demonstrates
 
-- `@stratal/zenstack-plugin` for generating connection types, slicing configs, and per-connection migration schemas
-- `@@connection("name")` annotations in a single `schema.zmodel` to assign models to different databases
-- Auto-generated `database.types.ts` (type augmentation), `slicing.ts` (runtime config), and per-connection schemas
-- Multi-connection `DatabaseModule.forRootAsync()` with `connectionSlicing` from generated output
+- Per-connection `.zmodel` files — each connection has its own schema under `db/{name}/`
+- Per-connection `zenstack generate` for independent schema generation
+- Manual `StratalDatabase` type augmentation with `schemas` map for per-connection type safety
+- Multi-connection `DatabaseModule.forRootAsync()` with per-connection `schema` in connection config
 - `@InjectDB('main')` and `@InjectDB('analytics')` for typed access to separate databases
 - Cross-connection event listeners: main database events trigger analytics writes
-- `stratal-db push` CLI for per-connection schema management
 
 ## Prerequisites
 
@@ -34,7 +33,8 @@ npm run wrangler:types
 4. Push the schema to create tables in both databases:
 
 ```bash
-npm run db:push
+npm run db:push:main
+npm run db:push:analytics
 ```
 
 ## Running
@@ -97,8 +97,10 @@ Watch the wrangler console to see `[UserAnalyticsListener]` log output from the 
 ## Key files
 
 - [`docker-compose.yml`](docker-compose.yml) - Two PostgreSQL 16 Alpine containers (main + analytics)
-- [`db/schema.zmodel`](db/schema.zmodel) - Unified schema with `@@connection` annotations and `plugin stratal`
-- [`src/database/database.config.ts`](src/database/database.config.ts) - Multi-connection config using generated `connectionSlicing`
+- [`db/main/schema.zmodel`](db/main/schema.zmodel) - Main connection schema (User, Post)
+- [`db/analytics/schema.zmodel`](db/analytics/schema.zmodel) - Analytics connection schema (PageView, Event)
+- [`src/database/database.config.ts`](src/database/database.config.ts) - Multi-connection config with per-connection schemas
+- [`src/database/database.types.ts`](src/database/database.types.ts) - `StratalDatabase` type augmentation with per-connection schemas
 - [`src/users/users.controller.ts`](src/users/users.controller.ts) - Users CRUD controller using `@InjectDB('main')`
 - [`src/users/user-posts.controller.ts`](src/users/user-posts.controller.ts) - Nested user posts controller using `@InjectDB('main')`
 - [`src/analytics/page-views.controller.ts`](src/analytics/page-views.controller.ts) - Page views controller using `@InjectDB('analytics')`

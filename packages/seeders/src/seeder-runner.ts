@@ -58,7 +58,6 @@ async function main(module: Constructor): Promise<void> {
           return
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         const seederName = argv.seeder!
 
         if (!(seederName in seeders)) {

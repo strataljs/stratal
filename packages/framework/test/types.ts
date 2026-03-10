@@ -2,9 +2,8 @@ import type { SchemaType } from './zenstack/schema'
 
 declare module '@stratal/framework/database' {
   interface StratalDatabase {
-    schema: SchemaType
+    schemas: { main: SchemaType }
     defaultConnection: 'main'
-    slicing: { main: { includedModels: readonly string[] } }
   }
 }
 

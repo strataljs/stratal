@@ -1,10 +1,10 @@
 import type { ClientContract, ClientOptions } from '@zenstackhq/orm'
-import type { ConnectionName, DefaultConnectionName, InferConnectionSlicing, InferDatabaseSchema } from './types'
+import type { ConnectionName, DefaultConnectionName, InferConnectionSchema } from './types'
 
 /**
  * DatabaseService type
  *
- * All connections share a single schema. Slicing narrows the available models per connection.
+ * Each connection has its own schema. The service is typed to the connection's schema.
  *
  * @example
  * ```typescript
@@ -18,6 +18,6 @@ import type { ConnectionName, DefaultConnectionName, InferConnectionSlicing, Inf
 export type DatabaseService<
   K extends ConnectionName = DefaultConnectionName,
 > = ClientContract<
-  InferDatabaseSchema,
-  ClientOptions<InferDatabaseSchema> & { slicing: InferConnectionSlicing<K> }
+  InferConnectionSchema<K>,
+  ClientOptions<InferConnectionSchema<K>>
 >

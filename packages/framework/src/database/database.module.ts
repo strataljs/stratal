@@ -1,4 +1,4 @@
-import type { AnyPlugin, SlicingOptions } from '@zenstackhq/orm'
+import type { AnyPlugin } from '@zenstackhq/orm'
 import type { SchemaDef } from '@zenstackhq/schema'
 import type { Dialect } from 'kysely'
 import { DI_TOKENS, Scope, delay } from 'stratal/di'
@@ -21,15 +21,14 @@ export interface DatabaseConnectionConfig<
   Name extends ConnectionName = ConnectionName,
 > {
   name: Name
+  schema: Schema
   dialect: () => Dialect
   plugins?: AnyPlugin[]
-  slicing?: SlicingOptions<Schema>
 }
 
-export interface DatabaseModuleConfig<Schema extends SchemaDef = SchemaDef> {
-  schema: Schema
+export interface DatabaseModuleConfig {
   default: DefaultConnectionName
-  connections: DatabaseConnectionConfig<Schema>[]
+  connections: DatabaseConnectionConfig[]
 }
 
 @Module({})
@@ -62,7 +61,7 @@ export class DatabaseModule implements OnInitialize, OnShutdown {
     const container = context.container.getTsyringeContainer();
 
     for (const conn of config.connections) {
-      const Service = createDatabaseService(config.schema, conn, eventRegistry)
+      const Service = createDatabaseService(conn, eventRegistry)
 
       container.register(connectionSymbol(conn.name) as InjectionToken<symbol>,
         // @ts-expect-error Overload error

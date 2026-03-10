@@ -11,9 +11,8 @@ describe('Lazy Database Service Creation', () => {
     module = await Test.createTestingModule({
       imports: [
         DatabaseModule.forRoot({
-          schema,
           default: 'main',
-          connections: [{ name: 'main', dialect: dialectSpy }],
+          connections: [{ name: 'main', schema, dialect: dialectSpy }],
         }),
       ],
     }).compile()

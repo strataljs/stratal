@@ -21,11 +21,11 @@ import { RBAC_MODEL } from './rbac-model'
     DatabaseModule.forRootAsync({
       inject: [DI_TOKENS.CloudflareEnv],
       useFactory: (env: StratalEnv) => ({
-        schema,
         default: 'main',
         connections: [
           {
             name: 'main',
+            schema,
             dialect: () => new PostgresDialect({
               pool: new Pool({
                 connectionString: env.DB.connectionString,

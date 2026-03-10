@@ -4,16 +4,16 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "generate": "zenstack generate --schema db/schema.zmodel -o db/zenstack",
+    "generate:main": "zenstack generate --schema db/main/schema.zmodel -o db/main",
+    "generate:analytics": "zenstack generate --schema db/analytics/schema.zmodel -o db/analytics",
+    "generate": "npm run generate:main && npm run generate:analytics",
     "wrangler:types": "wrangler types",
     "db:up": "docker compose up -d",
-    "db:push": "dotenv -- npx stratal-db push --all-connections --schema db/schema.zmodel",
-    "db:push:main": "dotenv -- npx stratal-db push --connection main --schema db/schema.zmodel",
-    "db:push:analytics": "dotenv -- npx stratal-db push --connection analytics --schema db/schema.zmodel"
+    "db:push:main": "dotenv -- npx zenstack db push --schema db/main/schema.zmodel",
+    "db:push:analytics": "dotenv -- npx zenstack db push --schema db/analytics/schema.zmodel"
   },
   "dependencies": {
     "@stratal/framework": "latest",
-    "@stratal/zenstack-plugin": "latest",
     "@zenstackhq/cli": "^3.4.5",
     "@zenstackhq/orm": "^3.4.4",
     "pg": "^8.20.0",
