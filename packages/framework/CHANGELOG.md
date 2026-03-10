@@ -1,5 +1,50 @@
 # @stratal/framework
 
+## 0.0.11
+
+### Patch Changes
+
+- [#90](https://github.com/strataljs/stratal/pull/90) [`87581af`](https://github.com/strataljs/stratal/commit/87581af263eb74c059966650fbd5c1b849d36dfc) Thanks [@adesege](https://github.com/adesege)! - Refactor database module to use per-connection schemas instead of a shared schema with slicing
+
+  ### Breaking Changes
+
+  **@stratal/framework**
+
+  - `DatabaseModuleConfig` no longer accepts a top-level `schema` property. Each connection in `connections` now requires its own `schema` property.
+  - `DatabaseConnectionConfig` no longer accepts `slicing`. Each connection defines its own schema, making slicing unnecessary.
+  - `StratalDatabase` augmentation interface changed: replace `schema` and `slicing` with `schemas` (a map of connection name to schema type).
+
+    ```typescript
+    // Before
+    interface StratalDatabase {
+      schema: SchemaType;
+      defaultConnection: "main";
+      slicing: {
+        main: { includedModels: readonly ["User", "Post"] };
+        analytics: { includedModels: readonly ["AnalyticsEvent"] };
+      };
+    }
+
+    // After
+    interface StratalDatabase {
+      schemas: {
+        main: MainSchemaType;
+        analytics: AnalyticsSchemaType;
+      };
+      defaultConnection: "main";
+    }
+    ```
+
+  - Removed type exports: `InferDatabaseSchema`, `InferConnectionSlicing`
+  - Added type exports: `InferConnectionSchema<K>`, `InferAnySchema`
+  - Removed `@stratal/zenstack-plugin` package (no longer needed with per-connection schemas)
+  - Removed `slicing` support from database connections. Slicing will be re-added in a future release.
+
+- [#92](https://github.com/strataljs/stratal/pull/92) [`bae01ef`](https://github.com/strataljs/stratal/commit/bae01eff7cb7f520ad00206377d9f5f4968076b6) Thanks [@adesege](https://github.com/adesege)! - Update symbol tokens to use 'stratal' namespace for consistency across modules
+
+- Updated dependencies [[`bae01ef`](https://github.com/strataljs/stratal/commit/bae01eff7cb7f520ad00206377d9f5f4968076b6)]:
+  - stratal@0.0.11
+
 ## 0.0.10
 
 ### Patch Changes
