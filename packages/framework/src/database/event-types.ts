@@ -28,7 +28,7 @@ import type {
   UpsertArgs,
 } from '@zenstackhq/orm'
 import type { SchemaDef } from '@zenstackhq/schema'
-import type { InferDatabaseSchema } from './types'
+import type { InferAnySchema } from './types'
 
 // ============================================================================
 // Core Types
@@ -49,7 +49,7 @@ export type DatabaseOperation = AllCrudOperations
  * Falls back to `never` if no schema is registered.
  */
 export type ModelName =
-  InferDatabaseSchema extends { models: infer M }
+  InferAnySchema extends { models: infer M }
   ? Extract<keyof M, string>
   : never
 
@@ -97,24 +97,24 @@ type OperationArgsMap<
  * Extract the data/where property from operation args.
  */
 export type GetData<M extends ModelName, O extends DatabaseOperation> =
-  M extends Extract<keyof InferDatabaseSchema['models'], string>
-  ? OperationArgsMap<InferDatabaseSchema, M, O> extends { data: infer D }
+  M extends Extract<keyof InferAnySchema['models'], string>
+  ? OperationArgsMap<InferAnySchema, M, O> extends { data: infer D }
   ? D
-  : OperationArgsMap<InferDatabaseSchema, M, O> extends { where: infer W }
+  : OperationArgsMap<InferAnySchema, M, O> extends { where: infer W }
   ? W
-  : OperationArgsMap<InferDatabaseSchema, M, O>
+  : OperationArgsMap<InferAnySchema, M, O>
   : unknown
 
 /**
  * Extract result type for a model operation.
  */
 export type GetResult<M extends ModelName, O extends DatabaseOperation> =
-  M extends Extract<keyof InferDatabaseSchema['models'], string>
+  M extends Extract<keyof InferAnySchema['models'], string>
   ? O extends 'findMany' | 'createMany' | 'updateMany' | 'deleteMany'
-  ? ModelResult<InferDatabaseSchema, M>[]
+  ? ModelResult<InferAnySchema, M>[]
   : O extends 'count'
   ? number
-  : ModelResult<InferDatabaseSchema, M>
+  : ModelResult<InferAnySchema, M>
   : unknown
 
 // ============================================================================
