@@ -1,18 +1,9 @@
-import { defineWorkersConfig } from '@cloudflare/vitest-pool-workers/config'
-import { resolve } from 'node:path'
+import { stratalTest } from '@stratal/testing/vitest-plugin'
+import { defineConfig } from 'vitest/config'
 
-export default defineWorkersConfig({
-  resolve: {
-    alias: {
-      tslib: resolve(import.meta.dirname, 'node_modules/tsyringe/node_modules/tslib/tslib.es6.js'),
-    },
-  },
+export default defineConfig({
+  plugins: [stratalTest({ wrangler: { configPath: './wrangler.jsonc' } })],
   test: {
     setupFiles: ['./vitest.setup.ts'],
-    poolOptions: {
-      workers: {
-        wrangler: { configPath: './wrangler.jsonc' },
-      },
-    },
   },
 })

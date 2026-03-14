@@ -134,7 +134,7 @@
     "@aws-sdk/client-s3": "3.1004.0",
     "@aws-sdk/lib-storage": "^3.1004.0",
     "@aws-sdk/s3-request-presigner": "3.1004.0",
-    "@cloudflare/vitest-pool-workers": "^0.12.20",
+    "@cloudflare/vitest-pool-workers": "patch:@cloudflare/vitest-pool-workers@npm%3A0.13.0#~/.yarn/patches/@cloudflare-vitest-pool-workers-npm-0.13.0-47105599c6.patch",
     "@cloudflare/workers-types": "4.20260307.1",
     "@react-email/components": "^1.0.8",
     "@stratal/testing": "workspace:*",
@@ -144,11 +144,13 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitest/coverage-v8": "^4.0.18",
+    "@vitest/runner": "~4.1.0",
+    "@vitest/snapshot": "~4.1.0",
     "nodemailer": "^8.0.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "resend": "^6.9.3",
     "typescript": "^5.9.3",
-    "vitest": "~3.2.0"
+    "vitest": "~4.1.0"
   }
 }

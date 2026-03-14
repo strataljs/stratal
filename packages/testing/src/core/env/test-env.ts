@@ -1,5 +1,5 @@
 import { type StratalEnv } from 'stratal'
-import { env as cloudflareEnv } from 'cloudflare:test'
+import { env as cloudflareEnv } from 'cloudflare:workers'
 
 /**
  * Get test environment with optional overrides

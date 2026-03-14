@@ -48,6 +48,10 @@
     "./mocks/zenstack-language": {
       "types": "./dist/mocks/zenstack-language.d.ts",
       "import": "./dist/mocks/zenstack-language.js"
+    },
+    "./vitest-plugin": {
+      "types": "./dist/vitest-plugin/index.d.ts",
+      "import": "./dist/vitest-plugin/index.js"
     }
   },
   "scripts": {
@@ -57,13 +61,15 @@
     "lint:fix": "npx eslint --fix ."
   },
   "dependencies": {
-    "@golevelup/ts-vitest": "^2.2.0"
+    "@cloudflare/vitest-pool-workers": "patch:@cloudflare/vitest-pool-workers@npm%3A0.13.0#~/.yarn/patches/@cloudflare-vitest-pool-workers-npm-0.13.0-47105599c6.patch",
+    "@golevelup/ts-vitest": "^2.2.0",
+    "msw": "^2.7.5"
   },
   "peerDependencies": {
     "@stratal/framework": "^0.0.11",
     "better-auth": "^1.4.9",
     "stratal": "^0.0.11",
-    "vitest": "^3.2.0"
+    "vitest": "^4.1.0"
   },
   "peerDependenciesMeta": {
     "@stratal/framework": {
@@ -74,13 +80,14 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.12.20",
     "@cloudflare/workers-types": "4.20260307.1",
     "@stratal/framework": "workspace:*",
     "@types/node": "^25.3.5",
+    "@vitest/runner": "~4.1.0",
+    "@vitest/snapshot": "~4.1.0",
     "better-auth": "^1.5.4",
     "stratal": "workspace:*",
     "typescript": "^5.9.3",
-    "vitest": "~3.2.0"
+    "vitest": "~4.1.0"
   }
 }
