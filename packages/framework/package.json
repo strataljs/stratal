@@ -98,26 +98,26 @@
     }
   },
   "devDependencies": {
-    "@better-auth/core": "^1.5.4",
+    "@better-auth/core": "^1.5.5",
     "@cloudflare/vitest-pool-workers": "patch:@cloudflare/vitest-pool-workers@npm%3A0.13.0#~/.yarn/patches/@cloudflare-vitest-pool-workers-npm-0.13.0-47105599c6.patch",
-    "@cloudflare/workers-types": "4.20260307.1",
+    "@cloudflare/workers-types": "4.20260313.1",
     "@faker-js/faker": "^10.3.0",
     "@stratal/testing": "workspace:^",
-    "@types/node": "^25.3.5",
+    "@types/node": "^25.5.0",
     "@types/pg": "^8.18.0",
     "@vitest/coverage-istanbul": "~4.1.0",
     "@vitest/runner": "~4.1.0",
     "@vitest/snapshot": "~4.1.0",
-    "@zenstackhq/better-auth": "^3.4.4",
-    "@zenstackhq/cli": "^3.4.4",
-    "@zenstackhq/orm": "^3.4.4",
-    "better-auth": "^1.5.4",
+    "@zenstackhq/better-auth": "^3.4.6",
+    "@zenstackhq/cli": "^3.4.6",
+    "@zenstackhq/orm": "^3.4.6",
+    "better-auth": "^1.5.5",
     "casbin": "^5.49.0",
     "pg": "^8.20.0",
     "reflect-metadata": "^0.2.2",
     "stratal": "workspace:*",
     "typescript": "^5.9.3",
     "vitest": "~4.1.0",
-    "wrangler": "^4.71.0"
+    "wrangler": "^4.73.0"
   }
 }

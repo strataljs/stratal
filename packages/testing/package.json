@@ -63,7 +63,7 @@
   "dependencies": {
     "@cloudflare/vitest-pool-workers": "patch:@cloudflare/vitest-pool-workers@npm%3A0.13.0#~/.yarn/patches/@cloudflare-vitest-pool-workers-npm-0.13.0-47105599c6.patch",
     "@golevelup/ts-vitest": "^2.2.0",
-    "msw": "^2.7.5"
+    "msw": "^2.12.10"
   },
   "peerDependencies": {
     "@stratal/framework": "^0.0.11",
@@ -80,12 +80,12 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "4.20260307.1",
+    "@cloudflare/workers-types": "4.20260313.1",
     "@stratal/framework": "workspace:*",
-    "@types/node": "^25.3.5",
+    "@types/node": "^25.5.0",
     "@vitest/runner": "~4.1.0",
     "@vitest/snapshot": "~4.1.0",
-    "better-auth": "^1.5.4",
+    "better-auth": "^1.5.5",
     "stratal": "workspace:*",
     "typescript": "^5.9.3",
     "vitest": "~4.1.0"
