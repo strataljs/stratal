@@ -11,11 +11,11 @@
     "stratal": "latest"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.12.18",
-    "@cloudflare/workers-types": "^4.20251014.0",
+    "@cloudflare/vitest-pool-workers": "^0.12.21",
+    "@cloudflare/workers-types": "^4.20260313.1",
     "@stratal/testing": "latest",
     "typescript": "^5.9.3",
     "vitest": "~3.2.0",
-    "wrangler": "^4.0.0"
+    "wrangler": "^4.73.0"
   }
 }
