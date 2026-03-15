@@ -9,12 +9,13 @@ description: >-
   i18n, logging, guards, middleware, config, OpenAPIModule, ConfigModule, CacheModule,
   EmailModule, StorageModule, QueueModule, I18nModule, ApplicationError, StratalEnv,
   registerAs, StratalDurableObject, StratalWorkerEntrypoint, StratalWorkflow, runInScope,
-  stratal/workers, DurableObject, Workflow, WorkerEntrypoint, Service Binding, RPC.
+  stratal/workers, DurableObject, Workflow, WorkerEntrypoint, Service Binding, RPC,
+  @Get, @Post, @Put, @Patch, @Delete, @All, HttpRouteMetadata, RouteConfig.
 user-invocable: false
 license: MIT
 metadata:
   author: Temitayo Fadojutimi
-  version: "2.0"
+  version: "3.0"
 ---
 
 # Stratal Core Framework
@@ -80,9 +81,53 @@ export class UsersController implements IController {
 }
 ```
 
-**Method → HTTP mapping:** `index` → GET, `show` → GET /:id, `create` → POST (201), `update` → PUT /:id, `patch` → PATCH /:id, `destroy` → DELETE /:id.
+**Method → HTTP mapping (convention-based):** `index` → GET, `show` → GET /:id, `create` → POST (201), `update` → PUT /:id, `patch` → PATCH /:id, `destroy` → DELETE /:id.
 
 Use `await ctx.body<T>()` to get validated body — **not** `ctx.req.valid('json')`.
+
+### HTTP Method Decorators
+
+As an alternative to convention-based `@Route()`, use explicit HTTP method decorators for full control over method and path:
+
+```ts
+import { Controller, Get, Post, All } from 'stratal/router';
+
+@Controller('/api/v1/users', { tags: ['Users'] })
+export class UsersController implements IController {
+  constructor(@inject(UsersService) private usersService: UsersService) {}
+
+  @Get('/', { response: UsersListSchema })
+  async list(ctx: RouterContext) {
+    return ctx.json(await this.usersService.findAll());
+  }
+
+  @Post('/', { body: CreateUserSchema, response: UserSchema, statusCode: 201 })
+  async create(ctx: RouterContext) {
+    const data = await ctx.body<CreateUserInput>();
+    return ctx.json(await this.usersService.create(data), 201);
+  }
+
+  @Get('/:id', { params: z.object({ id: z.string().uuid() }), response: UserSchema })
+  async show(ctx: RouterContext) {
+    const { id } = ctx.params<{ id: string }>();
+    return ctx.json(await this.usersService.findById(id));
+  }
+
+  @All('/:path{.+}', { response: z.object({ message: z.string() }) })
+  async catchAll(ctx: RouterContext) {
+    return ctx.json({ message: 'Not found' }, 404);
+  }
+}
+```
+
+**Available decorators:** `@Get(path, config?)`, `@Post(path, config?)`, `@Put(path, config?)`, `@Patch(path, config?)`, `@Delete(path, config?)`, `@All(path, config?)`.
+
+**`RouteConfig` options:** `body`, `params`, `query`, `response` (required), `tags`, `security`, `description`, `summary`, `statusCode`, `hideFromDocs`.
+
+**Key rules:**
+- HTTP method decorators and `@Route()` **cannot be mixed** in the same controller — use one pattern or the other
+- Default status code is `200` for all methods; use `statusCode: 201` explicitly for POST create endpoints
+- `@All` routes are **automatically hidden** from OpenAPI docs (OpenAPI doesn't support catch-all HTTP methods)
 
 ## Dependency Injection
 
@@ -326,7 +371,7 @@ export class MyWorkflow extends StratalWorkflow<Env, { orderId: string }> {
 |---|---|
 | `stratal` | `Stratal`, `Application`, `@Module`, `StratalEnv` |
 | `stratal/di` | `Container`, `DI_TOKENS`, `Scope`, `inject`, `Transient` |
-| `stratal/router` | `@Controller`, `@Route`, `RouterContext`, `UseGuards`, `IController` |
+| `stratal/router` | `@Controller`, `@Route`, `@Get`, `@Post`, `@Put`, `@Patch`, `@Delete`, `@All`, `RouteConfig`, `RouterContext`, `UseGuards`, `IController` |
 | `stratal/validation` | `z` (Zod), `ZodType`, validation utilities |
 | `stratal/errors` | `ApplicationError`, `ERROR_CODES`, built-in error classes |
 | `stratal/events` | `@Listener`, `@On`, `EventRegistry` |
