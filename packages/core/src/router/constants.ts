@@ -62,4 +62,4 @@ export const METHOD_STATUS_CODES = {
  * Sentinel symbol to opt a controller out of versioning.
  * When used as the version, no prefix is applied even when defaultVersion is set.
  */
-export const VERSION_NEUTRAL: unique symbol = Symbol.for('stratal:version:neutral')
+export const VERSION_NEUTRAL = Symbol.for('stratal:version:neutral')
