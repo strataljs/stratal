@@ -38,6 +38,7 @@ export function stratalTest(options: CloudflareTestOptions = {}): Plugin[] {
             '@zenstackhq/language/ast': '@stratal/testing/mocks/zenstack-language',
             '@zenstackhq/language/utils': '@stratal/testing/mocks/zenstack-language',
             '@zenstackhq/language': '@stratal/testing/mocks/zenstack-language',
+            nodemailer: '@stratal/testing/mocks/nodemailer',
           },
         },
         ssr: {
