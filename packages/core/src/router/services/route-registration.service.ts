@@ -1,5 +1,4 @@
 import type { Context, MiddlewareHandler } from 'hono'
-import { upgradeWebSocket } from 'hono/cloudflare-workers'
 import type { WSContext, WSEvents } from 'hono/ws'
 import { type Container, getMethodInjections } from '../../di'
 import {
@@ -67,10 +66,10 @@ export class RouteRegistrationService {
    * @param app - OpenAPIHono application instance
    * @param controllers - Array of controller classes from modules
    */
-  configure(
+  async configure(
     app: OpenAPIHono<RouterEnv>,
     controllers: Constructor<IController>[]
-  ): void {
+  ): Promise<void> {
     this.logger.info('Registering controllers', {
       controllerCount: controllers.length,
     })
@@ -86,17 +85,25 @@ export class RouteRegistrationService {
       return 0 // maintain relative order
     })
 
-    // Partition gateways from regular controllers
-    const gatewayClasses = sortedControllers.filter(c => isGateway(c))
-    const controllerClasses = sortedControllers.filter(c => !isGateway(c))
+    // Single-pass partition: gateways vs regular controllers
+    const gateways: Constructor<IController>[] = []
+    const regulars: Constructor<IController>[] = []
+
+    for (const c of sortedControllers) {
+      if (isGateway(c)) {
+        gateways.push(c)
+      } else {
+        regulars.push(c)
+      }
+    }
 
     // Register WebSocket gateways
-    for (const GatewayClass of gatewayClasses) {
-      this.registerGateway(app, GatewayClass)
+    for (const GatewayClass of gateways) {
+      await this.registerGateway(app, GatewayClass)
     }
 
     // Register controllers
-    for (const ControllerClass of controllerClasses) {
+    for (const ControllerClass of regulars) {
       this.registerController(app, ControllerClass)
     }
 
@@ -107,7 +114,7 @@ export class RouteRegistrationService {
    * Register a WebSocket gateway
    * Applies versioning and guards, then registers an upgradeWebSocket handler
    */
-  private registerGateway(app: OpenAPIHono<RouterEnv>, GatewayClass: Constructor<IController>): void {
+  private async registerGateway(app: OpenAPIHono<RouterEnv>, GatewayClass: Constructor<IController>): Promise<void> {
     const route = getControllerRoute(GatewayClass)
 
     if (!route) {
@@ -123,20 +130,28 @@ export class RouteRegistrationService {
       : [route]
 
     for (const fullPath of paths) {
-      this.registerGatewayRoute(app, GatewayClass, fullPath)
+      await this.registerGatewayRoute(app, GatewayClass, fullPath)
     }
   }
 
   /**
    * Register a single WebSocket gateway route
    */
-  private registerGatewayRoute(
+  private async registerGatewayRoute(
     app: OpenAPIHono<RouterEnv>,
     GatewayClass: Constructor<IController>,
     fullPath: string
-  ): void {
+  ): Promise<void> {
     // Collect class-level guards
     const controllerGuards = getControllerGuards(GatewayClass)?.guards ?? []
+
+    // Dynamic import: only load hono/cloudflare-workers when gateways exist
+    const { upgradeWebSocket } = await import('hono/cloudflare-workers')
+
+    // Cache WS metadata once at registration time (not per-connection)
+    const onMsgMethod = getWsOnMessageMethod(GatewayClass)
+    const onCloseMethod = getWsOnCloseMethod(GatewayClass)
+    const onErrMethod = getWsOnErrorMethod(GatewayClass)
 
     const wsHandler: MiddlewareHandler<RouterEnv> = upgradeWebSocket((c) => {
       const routerCtx = new RouterContext(c as Context<RouterEnv>)
@@ -147,7 +162,6 @@ export class RouteRegistrationService {
       // the upgrade callback itself serves as the open context.
       const events: Omit<WSEvents, 'onOpen'> = {}
 
-      const onMsgMethod = getWsOnMessageMethod(GatewayClass)
       if (onMsgMethod) {
         events.onMessage = (evt: MessageEvent, ws: WSContext) => {
           const ctx = new GatewayContext(c as Context<RouterEnv>, ws);
@@ -155,7 +169,6 @@ export class RouteRegistrationService {
         }
       }
 
-      const onCloseMethod = getWsOnCloseMethod(GatewayClass)
       if (onCloseMethod) {
         events.onClose = (evt: CloseEvent, ws: WSContext) => {
           const ctx = new GatewayContext(c as Context<RouterEnv>, ws);
@@ -163,7 +176,6 @@ export class RouteRegistrationService {
         }
       }
 
-      const onErrMethod = getWsOnErrorMethod(GatewayClass)
       if (onErrMethod) {
         events.onError = (evt: Event, ws: WSContext) => {
           const ctx = new GatewayContext(c as Context<RouterEnv>, ws);

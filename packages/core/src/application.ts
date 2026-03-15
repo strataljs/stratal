@@ -148,7 +148,7 @@ export class Application {
     this.honoApp = new HonoApp(this._container, logger)
     const middlewareConfigs = this.moduleRegistry.getAllMiddlewareConfigs()
     const controllers = this.moduleRegistry.getAllControllers() as Constructor<IController>[]
-    this.honoApp.configure(middlewareConfigs, controllers, this.appConfig.versioning)
+    await this.honoApp.configure(middlewareConfigs, controllers, this.appConfig.versioning)
 
     // Phase 6: Configure queues, cron, events
     this.registerQueueConsumers()
