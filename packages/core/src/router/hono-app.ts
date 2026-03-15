@@ -94,11 +94,11 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
    * Configure module middleware, OpenAPI endpoints, controller routes, and 404 handler.
    * Called once by Application.initialize().
    */
-  configure(
+  async configure(
     middlewareConfigs: MiddlewareConfigEntry[],
     controllers: Constructor<IController>[],
     versioningOptions?: VersioningOptions | null,
-  ): void {
+  ): Promise<void> {
     if (this.configured) throw new HonoAppAlreadyConfiguredError()
 
     // Module middleware
@@ -111,7 +111,7 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
 
     // Controller routes
     const routeRegistrationService = new RouteRegistrationService(this._logger, versioningOptions ?? null)
-    routeRegistrationService.configure(this, controllers)
+    await routeRegistrationService.configure(this, controllers)
 
     // 404 handler (must be last)
     this.notFound((c) => { throw new RouteNotFoundError(c.req.path, c.req.method) })

@@ -1,4 +1,5 @@
-import type { Context } from 'hono'
+import type { Context, MiddlewareHandler } from 'hono'
+import type { WSContext, WSEvents } from 'hono/ws'
 import { type Container, getMethodInjections } from '../../di'
 import {
   type Guard,
@@ -10,7 +11,9 @@ import type { OpenAPIHono } from '../../i18n/validation'
 import { createRoute } from '../../i18n/validation'
 import { type LoggerService } from '../../logger'
 import type { Constructor } from '../../types'
-import { DEFAULT_CONTENT_TYPE, HTTP_METHODS, METHOD_STATUS_CODES, SECURITY_SCHEMES } from '../constants'
+import { getWsOnCloseMethod, getWsOnErrorMethod, getWsOnMessageMethod, isGateway } from '../../websocket/decorators'
+import { GatewayContext } from '../../websocket/gateway-context'
+import { DEFAULT_CONTENT_TYPE, HTTP_METHODS, METHOD_STATUS_CODES, SECURITY_SCHEMES, VERSION_NEUTRAL } from '../constants'
 import type { IController } from '../controller'
 import {
   getControllerOptions,
@@ -18,7 +21,7 @@ import {
   getDecoratedMethods,
   getHttpDecoratedMethods,
   getHttpRouteMetadata,
-  getRouteConfig
+  getRouteConfig,
 } from '../decorators'
 import {
   ControllerMethodNotFoundError,
@@ -37,7 +40,14 @@ import type {
   SecuritySchemeRecord,
   VersioningOptions,
 } from '../types'
-import { VERSION_NEUTRAL } from '../constants'
+
+const invokeHandler = (instance: Record<string, (...args: unknown[]) => unknown>, method: string, ...args: unknown[]): Promise<unknown> => {
+  try {
+    return Promise.resolve(instance[method](...args))
+  } catch (err: unknown) {
+    return Promise.reject(err as Error)
+  }
+}
 
 /**
  * Route registration service
@@ -64,10 +74,10 @@ export class RouteRegistrationService {
    * @param app - OpenAPIHono application instance
    * @param controllers - Array of controller classes from modules
    */
-  configure(
+  async configure(
     app: OpenAPIHono<RouterEnv>,
     controllers: Constructor<IController>[]
-  ): void {
+  ): Promise<void> {
     this.logger.info('Registering controllers', {
       controllerCount: controllers.length,
     })
@@ -83,12 +93,132 @@ export class RouteRegistrationService {
       return 0 // maintain relative order
     })
 
+    // Single-pass partition: gateways vs regular controllers
+    const gateways: Constructor<IController>[] = []
+    const regulars: Constructor<IController>[] = []
+
+    for (const c of sortedControllers) {
+      if (isGateway(c)) {
+        gateways.push(c)
+      } else {
+        regulars.push(c)
+      }
+    }
+
+    // Register WebSocket gateways
+    for (const GatewayClass of gateways) {
+      await this.registerGateway(app, GatewayClass)
+    }
+
     // Register controllers
-    for (const ControllerClass of sortedControllers) {
+    for (const ControllerClass of regulars) {
       this.registerController(app, ControllerClass)
     }
 
     this.logger.info('Controller registration complete')
+  }
+
+  /**
+   * Register a WebSocket gateway
+   * Applies versioning and guards, then registers an upgradeWebSocket handler
+   */
+  private async registerGateway(app: OpenAPIHono<RouterEnv>, GatewayClass: Constructor<IController>): Promise<void> {
+    const route = getControllerRoute(GatewayClass)
+
+    if (!route) {
+      throw new ControllerRegistrationError(
+        GatewayClass.name,
+        'Missing @Gateway decorator or route metadata'
+      )
+    }
+
+    const controllerOpts = getControllerOptions(GatewayClass)
+    const paths = this.versioningOptions
+      ? this.resolveVersionedPaths(route, controllerOpts)
+      : [route]
+
+    for (const fullPath of paths) {
+      await this.registerGatewayRoute(app, GatewayClass, fullPath)
+    }
+  }
+
+  /**
+   * Register a single WebSocket gateway route
+   */
+  private async registerGatewayRoute(
+    app: OpenAPIHono<RouterEnv>,
+    GatewayClass: Constructor<IController>,
+    fullPath: string
+  ): Promise<void> {
+    // Collect class-level guards
+    const controllerGuards = getControllerGuards(GatewayClass)?.guards ?? []
+
+    // Dynamic import: only load hono/cloudflare-workers when gateways exist
+    const { upgradeWebSocket } = await import('hono/cloudflare-workers')
+
+    // Cache WS metadata once at registration time (not per-connection)
+    const onMsgMethod = getWsOnMessageMethod(GatewayClass)
+    const onCloseMethod = getWsOnCloseMethod(GatewayClass)
+    const onErrMethod = getWsOnErrorMethod(GatewayClass)
+
+    const wsHandler: MiddlewareHandler<RouterEnv> = upgradeWebSocket((c) => {
+      const routerCtx = new RouterContext(c as Context<RouterEnv>)
+      const container = routerCtx.getContainer()
+      const gateway = container.resolve(GatewayClass)
+
+      // Cloudflare Workers doesn't support the `onOpen` WebSocket event;
+      // the upgrade callback itself serves as the open context.
+      const events: Omit<WSEvents, 'onOpen'> = {}
+
+      const bindWsHandler = (
+        method: string,
+        onCatch?: (err: unknown, ws: WSContext) => void
+      ) => {
+        return (evt: MessageEvent | CloseEvent | Event, ws: WSContext) => {
+          const ctx = new GatewayContext(c as Context<RouterEnv>, ws)
+          c.executionCtx.waitUntil(
+            invokeHandler(gateway as Record<string, (...args: unknown[]) => unknown>, method, evt, ctx).catch((err: unknown) => {
+              this.logger.error(`WebSocket ${method} handler error`, { gateway: GatewayClass.name, error: err instanceof Error ? err.message : String(err) })
+              onCatch?.(err, ws)
+            })
+          )
+        }
+      }
+
+      if (onMsgMethod) {
+        events.onMessage = bindWsHandler(onMsgMethod, (_err, ws) => ws.close(1011, 'Internal Error'))
+      }
+      if (onCloseMethod) {
+        events.onClose = bindWsHandler(onCloseMethod)
+      }
+      if (onErrMethod) {
+        events.onError = bindWsHandler(onErrMethod)
+      }
+
+      return events
+    }) as MiddlewareHandler<RouterEnv>
+
+    this.logger.info('Registering WebSocket gateway', {
+      gateway: GatewayClass.name,
+      path: fullPath,
+    })
+
+    const handlers: MiddlewareHandler<RouterEnv>[] = []
+
+    if (controllerGuards.length > 0) {
+      this.logger.info('Gateway guards', {
+        gateway: GatewayClass.name,
+        path: fullPath,
+        guardCount: controllerGuards.length,
+      })
+      handlers.push(this.createGuardMiddleware(controllerGuards))
+    }
+
+    handlers.push(wsHandler)
+
+    // Type assertion needed because Hono's overloaded .get() signatures
+    // don't accept a spread of MiddlewareHandler[] alongside upgradeWebSocket's output type
+    app.get(fullPath, ...(handlers as [MiddlewareHandler<RouterEnv>]))
   }
 
   /**

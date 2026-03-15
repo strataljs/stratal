@@ -11,6 +11,15 @@ export { TestHttpClient } from './core/http/test-http-client'
 export { TestHttpRequest } from './core/http/test-http-request'
 export { TestResponse } from './core/http/test-response'
 
+// WebSocket Testing
+export { TestWsRequest } from './core/ws/test-ws-request'
+export { TestWsConnection } from './core/ws/test-ws-connection'
+
+// SSE Testing
+export { TestSseRequest } from './core/sse/test-sse-request'
+export { TestSseConnection } from './core/sse/test-sse-connection'
+export type { TestSseEvent } from './core/sse/test-sse-connection'
+
 // Re-export MSW utilities for convenience
 export { http, HttpResponse } from 'msw'
 

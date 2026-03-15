@@ -1,0 +1,80 @@
+language: en-US
+early_access: true
+
+reviews:
+  auto_review:
+    enabled: true
+    drafts: false
+  request_changes_workflow: true
+  high_level_summary: true
+  poem: false
+  collapse_walkthrough: false
+  sequence_diagrams: true
+  changed_files_summary: true
+  labeling_instructions:
+    - label: core
+      instructions: Apply when changes affect `packages/core/`
+    - label: testing
+      instructions: Apply when changes affect `packages/testing/`
+    - label: framework
+      instructions: Apply when changes affect `packages/framework/`
+    - label: seeders
+      instructions: Apply when changes affect `packages/seeders/`
+  path_instructions:
+    - path: packages/core/src/di/**
+      instructions: >
+        DI container using tsyringe. Pay attention to singleton vs request scope.
+        Ensure correct use of @inject decorators and Symbol-based tokens.
+    - path: packages/core/src/router/**
+      instructions: >
+        Hono-based routing with OpenAPI generation via @hono/zod-openapi.
+        Check zod schema consistency and proper use of @Controller/@Route decorators.
+    - path: packages/core/src/module/**
+      instructions: >
+        Module system with NestJS-style @Module() decorator pattern.
+        Check lifecycle hooks (OnInitialize, OnShutdown), imports, and provider declarations.
+    - path: packages/framework/src/database/**
+      instructions: >
+        ZenStack ORM with multiple named connections and plugin system.
+        Check plugin ordering, schema registry augmentation, and @InjectDB usage.
+    - path: packages/framework/src/auth/**
+      instructions: >
+        Better Auth integration with session verification middleware pipeline.
+        Check AuthContext, AuthService, and middleware ordering.
+    - path: packages/framework/src/rbac/**
+      instructions: >
+        Casbin-based RBAC with ZenStack database adapter.
+        Check permission model consistency and CasbinService usage.
+    - path: .agents/**
+      instructions: >
+        AI agent skill definitions for Stratal packages. Ensure instructions
+        are accurate to the framework's actual API and conventions.
+    - path: .github/workflows/**
+      instructions: >
+        CI/CD workflows. Ensure pinned action versions (use SHA, not tags),
+        minimal permissions, and security best practices.
+  path_filters:
+    - "!**/node_modules/**"
+    - "!**/dist/**"
+    - "!**/coverage/**"
+    - "!**/.yarn/**"
+    - "!**/*.tsbuildinfo"
+    - "!examples/**"
+    - "!docs/**"
+    - "!packages/framework/test/zenstack/**"
+    - "!**/*.lock"
+    - "!yarn.lock"
+  tools:
+    eslint:
+      enabled: true
+    biome:
+      enabled: false
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  learnings:
+    scope: auto
+  issues:
+    scope: auto

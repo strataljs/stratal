@@ -4,9 +4,12 @@ import type { Application, StratalEnv } from 'stratal'
 import { DI_TOKENS, type Container } from 'stratal/di'
 import { type InjectionToken } from 'stratal/module'
 import { STORAGE_TOKENS } from 'stratal/storage'
+import { expect } from 'vitest'
 import type { FakeStorageService } from '../storage'
 import type { Seeder } from '../types'
 import { TestHttpClient } from './http/test-http-client'
+import { TestSseRequest } from './sse/test-sse-request'
+import { TestWsRequest } from './ws/test-ws-request'
 
 /**
  * TestingModule
@@ -70,6 +73,20 @@ export class TestingModule {
    */
   get storage(): FakeStorageService {
     return this.get<FakeStorageService>(STORAGE_TOKENS.StorageService)
+  }
+
+  /**
+   * Create a WebSocket test request builder for the given path
+   */
+  ws(path: string): TestWsRequest {
+    return new TestWsRequest(path, this)
+  }
+
+  /**
+   * Create an SSE test request builder for the given path
+   */
+  sse(path: string): TestSseRequest {
+    return new TestSseRequest(path, this)
   }
 
   /**
@@ -154,7 +171,6 @@ export class TestingModule {
    * Assert that a record exists in the database
    */
   async assertDatabaseHas(table: string, data: Record<string, unknown>, name?: ConnectionName): Promise<void> {
-    const { expect } = await import('vitest')
     const db = this.getDb(name!)
     const model = (db as unknown as Record<string, unknown>)[table] as { findFirst: (opts: unknown) => Promise<unknown> }
     const result = await model.findFirst({ where: data })
@@ -165,7 +181,6 @@ export class TestingModule {
    * Assert that a record does not exist in the database
    */
   async assertDatabaseMissing(table: string, data: Record<string, unknown>, name?: ConnectionName): Promise<void> {
-    const { expect } = await import('vitest')
     const db = this.getDb(name!)
     const model = (db as unknown as Record<string, unknown>)[table] as { findFirst: (opts: unknown) => Promise<unknown> }
     const result = await model.findFirst({ where: data })
@@ -176,7 +191,6 @@ export class TestingModule {
    * Assert the number of records in a table
    */
   async assertDatabaseCount(table: string, expected: number, name?: ConnectionName): Promise<void> {
-    const { expect } = await import('vitest')
     const db = this.getDb(name!)
     const model = (db as unknown as Record<string, unknown>)[table] as { count: () => Promise<number> }
     const actual = await model.count()

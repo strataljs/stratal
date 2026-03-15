@@ -83,22 +83,22 @@ class SimpleController {
 }
 
 describe('RouteRegistration - Configure', () => {
-  bench('register controller with 5 OpenAPI routes', () => {
+  bench('register controller with 5 OpenAPI routes', async () => {
     const service = new RouteRegistrationService(noopLogger)
     const app = new OpenAPIHono<RouterEnv>()
-    service.configure(app, [ItemsController as unknown as Constructor<IController>])
+    await service.configure(app, [ItemsController as unknown as Constructor<IController>])
   })
 
-  bench('register single-route controller', () => {
+  bench('register single-route controller', async () => {
     const service = new RouteRegistrationService(noopLogger)
     const app = new OpenAPIHono<RouterEnv>()
-    service.configure(app, [SimpleController as unknown as Constructor<IController>])
+    await service.configure(app, [SimpleController as unknown as Constructor<IController>])
   })
 
-  bench('register multiple controllers', () => {
+  bench('register multiple controllers', async () => {
     const service = new RouteRegistrationService(noopLogger)
     const app = new OpenAPIHono<RouterEnv>()
-    service.configure(app, [
+    await service.configure(app, [
       ItemsController as unknown as Constructor<IController>,
       SimpleController as unknown as Constructor<IController>,
     ])
