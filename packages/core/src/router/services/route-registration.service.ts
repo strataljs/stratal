@@ -170,38 +170,29 @@ export class RouteRegistrationService {
       // the upgrade callback itself serves as the open context.
       const events: Omit<WSEvents, 'onOpen'> = {}
 
+      const bindWsHandler = (
+        method: string,
+        onCatch?: (err: unknown, ws: WSContext) => void
+      ) => {
+        return (evt: MessageEvent | CloseEvent | Event, ws: WSContext) => {
+          const ctx = new GatewayContext(c as Context<RouterEnv>, ws)
+          c.executionCtx.waitUntil(
+            invokeHandler(gateway as Record<string, (...args: unknown[]) => unknown>, method, evt, ctx).catch((err: unknown) => {
+              this.logger.error(`WebSocket ${method} handler error`, { gateway: GatewayClass.name, error: err instanceof Error ? err.message : String(err) })
+              onCatch?.(err, ws)
+            })
+          )
+        }
+      }
+
       if (onMsgMethod) {
-        events.onMessage = (evt: MessageEvent, ws: WSContext) => {
-          const ctx = new GatewayContext(c as Context<RouterEnv>, ws)
-          c.executionCtx.waitUntil(
-            invokeHandler(gateway as Record<string, (...args: unknown[]) => unknown>, onMsgMethod, evt, ctx).catch((err: unknown) => {
-              this.logger.error('WebSocket onMessage handler error', { gateway: GatewayClass.name, error: err instanceof Error ? err.message : String(err) })
-              ws.close(1011, 'Internal Error')
-            })
-          )
-        }
+        events.onMessage = bindWsHandler(onMsgMethod, (_err, ws) => ws.close(1011, 'Internal Error'))
       }
-
       if (onCloseMethod) {
-        events.onClose = (evt: CloseEvent, ws: WSContext) => {
-          const ctx = new GatewayContext(c as Context<RouterEnv>, ws)
-          c.executionCtx.waitUntil(
-            invokeHandler(gateway as Record<string, (...args: unknown[]) => unknown>, onCloseMethod, evt, ctx).catch((err: unknown) => {
-              this.logger.error('WebSocket onClose handler error', { gateway: GatewayClass.name, error: err instanceof Error ? err.message : String(err) })
-            })
-          )
-        }
+        events.onClose = bindWsHandler(onCloseMethod)
       }
-
       if (onErrMethod) {
-        events.onError = (evt: Event, ws: WSContext) => {
-          const ctx = new GatewayContext(c as Context<RouterEnv>, ws)
-          c.executionCtx.waitUntil(
-            invokeHandler(gateway as Record<string, (...args: unknown[]) => unknown>, onErrMethod, evt, ctx).catch((err: unknown) => {
-              this.logger.error('WebSocket onError handler error', { gateway: GatewayClass.name, error: err instanceof Error ? err.message : String(err) })
-            })
-          )
-        }
+        events.onError = bindWsHandler(onErrMethod)
       }
 
       return events
