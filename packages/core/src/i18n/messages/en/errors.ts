@@ -21,6 +21,7 @@ export const errors = {
 
   // WebSocket errors
   websocketBodyNotAvailable: 'body() is not available in WebSocket gateways. Use WebSocket messages instead.',
+  websocketDuplicateEventHandler: '@{decorator}() is already applied to \'{existingMethod}\'. Only one method per gateway can handle this event.',
 
   // Context errors
   contextNotInitialized: 'Context has not been initialized',

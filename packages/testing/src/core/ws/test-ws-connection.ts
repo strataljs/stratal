@@ -62,16 +62,18 @@ export class TestWsConnection {
 		}
 
 		return new Promise<string | ArrayBuffer>((resolve, reject) => {
+			const waiter = (data: string | ArrayBuffer) => {
+				clearTimeout(timer)
+				resolve(data)
+			}
+
 			const timer = setTimeout(() => {
-				const index = this.messageWaiters.indexOf(resolve)
+				const index = this.messageWaiters.indexOf(waiter)
 				if (index !== -1) this.messageWaiters.splice(index, 1)
 				reject(new Error(`WebSocket: no message received within ${timeout}ms`))
 			}, timeout)
 
-			this.messageWaiters.push((data) => {
-				clearTimeout(timer)
-				resolve(data)
-			})
+			this.messageWaiters.push(waiter)
 		})
 	}
 
@@ -84,14 +86,18 @@ export class TestWsConnection {
 		}
 
 		return new Promise<{ code?: number; reason?: string }>((resolve, reject) => {
+			const waiter = (event: { code?: number; reason?: string }) => {
+				clearTimeout(timer)
+				resolve(event)
+			}
+
 			const timer = setTimeout(() => {
+				const index = this.closeWaiters.indexOf(waiter)
+				if (index !== -1) this.closeWaiters.splice(index, 1)
 				reject(new Error(`WebSocket: connection did not close within ${timeout}ms`))
 			}, timeout)
 
-			this.closeWaiters.push((event) => {
-				clearTimeout(timer)
-				resolve(event)
-			})
+			this.closeWaiters.push(waiter)
 		})
 	}
 

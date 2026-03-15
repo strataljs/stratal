@@ -181,11 +181,11 @@ const sse = await module.sse('/streaming/sse')
   .withHeaders({ 'X-Custom': 'value' })
   .connect();
 
-// Collect all events
-const events = await sse.collectEvents();
-
 // Assert JSON event data
 await sse.assertJsonEventData({ status: 'complete', count: 42 });
+
+// Collect all remaining events
+const events = await sse.collectEvents();
 ```
 
 ## FakeStorageService

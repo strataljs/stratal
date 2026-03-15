@@ -16,6 +16,7 @@ import {
   getWsOnMessageMethod,
 } from '../decorators/ws-event.decorator'
 import { WebSocketBodyNotAvailableError } from '../errors/websocket-body-not-available.error'
+import { WebSocketDuplicateEventHandlerError } from '../errors/websocket-duplicate-event-handler.error'
 import { GatewayContext } from '../gateway-context'
 
 describe('WebSocket Support', () => {
@@ -145,17 +146,17 @@ describe('WebSocket Support', () => {
       expect(getWsOnErrorMethod(TestGateway)).toBeUndefined()
     })
 
-    it('last decorator wins when multiple methods use the same event', () => {
-      @Gateway('/ws/test')
-      class TestGateway {
-        @OnMessage()
-        firstHandler() { /* noop */ }
+    it('should throw when multiple methods use the same event decorator', () => {
+      expect(() => {
+        @Gateway('/ws/test')
+        class _TestGateway {
+          @OnMessage()
+          firstHandler() { /* noop */ }
 
-        @OnMessage()
-        secondHandler() { /* noop */ }
-      }
-
-      expect(getWsOnMessageMethod(TestGateway)).toBe('secondHandler')
+          @OnMessage()
+          secondHandler() { /* noop */ }
+        }
+      }).toThrow(WebSocketDuplicateEventHandlerError)
     })
   })
 

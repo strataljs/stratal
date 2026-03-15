@@ -45,16 +45,18 @@ export class TestSseConnection {
 		}
 
 		return new Promise<TestSseEvent>((resolve, reject) => {
+			const waiter = (event: TestSseEvent) => {
+				clearTimeout(timer)
+				resolve(event)
+			}
+
 			const timer = setTimeout(() => {
-				const index = this.eventWaiters.indexOf(resolve)
+				const index = this.eventWaiters.indexOf(waiter)
 				if (index !== -1) this.eventWaiters.splice(index, 1)
 				reject(new Error(`SSE: no event received within ${timeout}ms`))
 			}, timeout)
 
-			this.eventWaiters.push((event) => {
-				clearTimeout(timer)
-				resolve(event)
-			})
+			this.eventWaiters.push(waiter)
 		})
 	}
 
@@ -65,14 +67,18 @@ export class TestSseConnection {
 		if (this.streamEnded) return
 
 		return new Promise<void>((resolve, reject) => {
+			const waiter = () => {
+				clearTimeout(timer)
+				resolve()
+			}
+
 			const timer = setTimeout(() => {
+				const index = this.endWaiters.indexOf(waiter)
+				if (index !== -1) this.endWaiters.splice(index, 1)
 				reject(new Error(`SSE: stream did not end within ${timeout}ms`))
 			}, timeout)
 
-			this.endWaiters.push(() => {
-				clearTimeout(timer)
-				resolve()
-			})
+			this.endWaiters.push(waiter)
 		})
 	}
 
@@ -87,13 +93,6 @@ export class TestSseConnection {
 		}
 
 		return new Promise<TestSseEvent[]>((resolve, reject) => {
-			const timer = setTimeout(() => {
-				reject(new Error(`SSE: stream did not end within ${timeout}ms`))
-			}, timeout)
-
-			// Drain any queued events first
-			events.push(...this.eventQueue.splice(0))
-
 			// Listen for new events until stream ends
 			const originalDispatch = this.dispatchEvent.bind(this)
 			this.dispatchEvent = (event: TestSseEvent) => {
@@ -101,11 +100,23 @@ export class TestSseConnection {
 				originalDispatch(event)
 			}
 
-			this.endWaiters.push(() => {
+			const endWaiter = () => {
 				clearTimeout(timer)
 				this.dispatchEvent = originalDispatch
 				resolve(events)
-			})
+			}
+
+			const timer = setTimeout(() => {
+				this.dispatchEvent = originalDispatch
+				const index = this.endWaiters.indexOf(endWaiter)
+				if (index !== -1) this.endWaiters.splice(index, 1)
+				reject(new Error(`SSE: stream did not end within ${timeout}ms`))
+			}, timeout)
+
+			// Drain any queued events first
+			events.push(...this.eventQueue.splice(0))
+
+			this.endWaiters.push(endWaiter)
 		})
 	}
 

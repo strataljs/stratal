@@ -164,22 +164,35 @@ export class RouteRegistrationService {
 
       if (onMsgMethod) {
         events.onMessage = (evt: MessageEvent, ws: WSContext) => {
-          const ctx = new GatewayContext(c as Context<RouterEnv>, ws);
-          (gateway as Record<string, (...args: unknown[]) => void>)[onMsgMethod](evt, ctx);
+          const ctx = new GatewayContext(c as Context<RouterEnv>, ws)
+          c.executionCtx.waitUntil(
+            Promise.resolve((gateway as Record<string, (...args: unknown[]) => unknown>)[onMsgMethod](evt, ctx)).catch((err: unknown) => {
+              this.logger.error('WebSocket onMessage handler error', { gateway: GatewayClass.name, error: err instanceof Error ? err.message : String(err) })
+              ws.close(1011, 'Internal Error')
+            })
+          )
         }
       }
 
       if (onCloseMethod) {
         events.onClose = (evt: CloseEvent, ws: WSContext) => {
-          const ctx = new GatewayContext(c as Context<RouterEnv>, ws);
-          (gateway as Record<string, (...args: unknown[]) => void>)[onCloseMethod](evt, ctx)
+          const ctx = new GatewayContext(c as Context<RouterEnv>, ws)
+          c.executionCtx.waitUntil(
+            Promise.resolve((gateway as Record<string, (...args: unknown[]) => unknown>)[onCloseMethod](evt, ctx)).catch((err: unknown) => {
+              this.logger.error('WebSocket onClose handler error', { gateway: GatewayClass.name, error: err instanceof Error ? err.message : String(err) })
+            })
+          )
         }
       }
 
       if (onErrMethod) {
         events.onError = (evt: Event, ws: WSContext) => {
-          const ctx = new GatewayContext(c as Context<RouterEnv>, ws);
-          (gateway as Record<string, (...args: unknown[]) => void>)[onErrMethod](evt, ctx)
+          const ctx = new GatewayContext(c as Context<RouterEnv>, ws)
+          c.executionCtx.waitUntil(
+            Promise.resolve((gateway as Record<string, (...args: unknown[]) => unknown>)[onErrMethod](evt, ctx)).catch((err: unknown) => {
+              this.logger.error('WebSocket onError handler error', { gateway: GatewayClass.name, error: err instanceof Error ? err.message : String(err) })
+            })
+          )
         }
       }
 

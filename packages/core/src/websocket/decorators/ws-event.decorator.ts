@@ -1,9 +1,22 @@
 import { ROUTE_METADATA_KEYS } from '../../router/constants'
 import type { Constructor } from '../../types'
+import { WebSocketDuplicateEventHandlerError } from '../errors/websocket-duplicate-event-handler.error'
 
 const WS_ON_MESSAGE_KEY = ROUTE_METADATA_KEYS.WS_ON_MESSAGE
 const WS_ON_CLOSE_KEY = ROUTE_METADATA_KEYS.WS_ON_CLOSE
 const WS_ON_ERROR_KEY = ROUTE_METADATA_KEYS.WS_ON_ERROR
+
+/**
+ * Define a single-handler metadata key on the prototype.
+ * Throws if a different method already owns this key (prevents silent override).
+ */
+function defineSingleHandlerMetadata(key: string | symbol, propertyKey: string | symbol, target: object, decoratorName: string): void {
+  const existing = Reflect.getMetadata(key, target) as string | symbol | undefined
+  if (existing !== undefined && existing !== propertyKey) {
+    throw new WebSocketDuplicateEventHandlerError(decoratorName, String(existing))
+  }
+  Reflect.defineMetadata(key, propertyKey, target)
+}
 
 /**
  * Marks a method as the WebSocket message handler
@@ -23,7 +36,7 @@ export function OnMessage(): MethodDecorator {
   // `_target` is the class prototype (method decorator convention).
   // The getter functions below read from `target.prototype` symmetrically.
   return (_target: object, propertyKey: string | symbol) => {
-    Reflect.defineMetadata(WS_ON_MESSAGE_KEY, propertyKey as string, _target)
+    defineSingleHandlerMetadata(WS_ON_MESSAGE_KEY, propertyKey, _target, 'OnMessage')
   }
 }
 
@@ -43,7 +56,7 @@ export function OnMessage(): MethodDecorator {
  */
 export function OnClose(): MethodDecorator {
   return (_target: object, propertyKey: string | symbol) => {
-    Reflect.defineMetadata(WS_ON_CLOSE_KEY, propertyKey as string, _target)
+    defineSingleHandlerMetadata(WS_ON_CLOSE_KEY, propertyKey, _target, 'OnClose')
   }
 }
 
@@ -63,7 +76,7 @@ export function OnClose(): MethodDecorator {
  */
 export function OnError(): MethodDecorator {
   return (_target: object, propertyKey: string | symbol) => {
-    Reflect.defineMetadata(WS_ON_ERROR_KEY, propertyKey as string, _target)
+    defineSingleHandlerMetadata(WS_ON_ERROR_KEY, propertyKey, _target, 'OnError')
   }
 }
 
