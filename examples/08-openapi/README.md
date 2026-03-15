@@ -1,6 +1,6 @@
 # 08 - OpenAPI
 
-OpenAPI documentation with Scalar UI and richly documented routes.
+OpenAPI documentation with Swagger UI and richly documented routes.
 
 ## What it demonstrates
 
@@ -8,7 +8,7 @@ OpenAPI documentation with Scalar UI and richly documented routes.
 - Zod schemas with `.openapi('SchemaName')` for named OpenAPI components
 - `@Route()` with `summary`, `description`, and `tags` fields
 - `@Controller()` with `tags` option for grouping routes
-- Scalar UI for interactive API exploration
+- Swagger UI for interactive API exploration
 
 ## Running
 
@@ -21,7 +21,7 @@ npx wrangler dev
 
 | URL                          | Description             |
 |------------------------------|-------------------------|
-| http://localhost:8787/api/docs         | Scalar UI              |
+| http://localhost:8787/api/docs         | Swagger UI              |
 | http://localhost:8787/api/openapi.json | Raw OpenAPI spec       |
 | http://localhost:8787/api/users        | Users CRUD API         |
 

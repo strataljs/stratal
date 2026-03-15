@@ -53,7 +53,7 @@ export class OpenAPIConfigService implements IOpenAPIConfigService {
     // Start with base options and defaults
     let effective: OpenAPIEffectiveConfig = {
       jsonPath: this.baseOptions?.jsonPath ?? '/api/openapi.json',
-      docsPath: this.baseOptions?.docsPath ?? '/api/docs',
+      ui: this.baseOptions?.ui,
       info: {
         title: this.baseOptions?.info?.title ?? 'API',
         version: this.baseOptions?.info?.version ?? '1.0.0',

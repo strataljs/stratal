@@ -11,6 +11,9 @@ export type {
   OpenAPIEffectiveConfig,
   OpenAPIInfo,
   OpenAPIModuleOptions,
+  OpenAPIUIContext,
+  OpenAPIUIOptions,
+  OpenAPIUIRenderer,
   RouteFilterFn
 } from './types'
 

@@ -56,7 +56,7 @@ Available templates:
 | `middleware` | Middleware configuration with apply/exclude/forRoutes | [Source](https://github.com/strataljs/stratal/tree/main/examples/05-middleware) |
 | `queues` | Queue producer/consumer pattern with Cloudflare Queues | [Source](https://github.com/strataljs/stratal/tree/main/examples/06-queues) |
 | `scheduled-tasks` | Cron job scheduling with the CronJob interface | [Source](https://github.com/strataljs/stratal/tree/main/examples/07-scheduled-tasks) |
-| `openapi` | OpenAPI docs with Scalar UI and Zod schema integration | [Source](https://github.com/strataljs/stratal/tree/main/examples/08-openapi) |
+| `openapi` | OpenAPI docs with Swagger UI and Zod schema integration | [Source](https://github.com/strataljs/stratal/tree/main/examples/08-openapi) |
 
 For benchmarks, see the [main README](https://github.com/strataljs/stratal#benchmarks).
 
