@@ -3797,7 +3797,7 @@ __metadata:
     better-auth: ^1.4.9
     casbin: ^5.41.0
     pg: ^8.0.0
-    stratal: 0.0.11
+    stratal: 0.0.12
   peerDependenciesMeta:
     "@better-auth/core":
       optional: true
@@ -3827,7 +3827,7 @@ __metadata:
     wrangler: "npm:^4.73.0"
     yargs: "npm:^18.0.0"
   peerDependencies:
-    stratal: ^0.0.11
+    stratal: ^0.0.12
   bin:
     stratal-seed: ./bin/cli.js
   languageName: unknown
@@ -3850,9 +3850,9 @@ __metadata:
     typescript: "npm:^5.9.3"
     vitest: "npm:~4.1.0"
   peerDependencies:
-    "@stratal/framework": ^0.0.11
+    "@stratal/framework": ^0.0.12
     better-auth: ^1.4.9
-    stratal: ^0.0.11
+    stratal: ^0.0.12
     vitest: ^4.1.0
   peerDependenciesMeta:
     "@stratal/framework":
