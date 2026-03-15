@@ -3,22 +3,41 @@ name: stratal-testing
 description: >-
   Use when writing tests for Stratal applications — TestingModule, HTTP testing,
   mocks, fakes, and auth testing utilities. Trigger on: test, TestingModule,
-  TestHttpClient, TestResponse, mock, fake, FakeStorageService, createFetchMock,
-  createMock, ActingAs, @stratal/testing.
+  TestHttpClient, TestResponse, mock, fake, FakeStorageService, createMockFetch,
+  MockFetch, msw, stratalTest, createMock, ActingAs, @stratal/testing.
 user-invocable: false
 license: MIT
 metadata:
   author: Temitayo Fadojutimi
-  version: "2.0"
+  version: "3.0"
 ---
 
 # @stratal/testing
 
-Test utilities for Stratal applications: module compilation with provider overrides, fluent HTTP client, storage fakes, fetch mocking, and auth testing helpers. Full documentation at [stratal.dev/testing](https://stratal.dev/testing/overview).
+Test utilities for Stratal applications: module compilation with provider overrides, fluent HTTP client, storage fakes, fetch mocking (MSW-based), and auth testing helpers. Full documentation at [stratal.dev/testing](https://stratal.dev/testing/overview).
 
 ## Setup
 
 Docs: [Overview](https://stratal.dev/testing/overview)
+
+### Vitest Plugin
+
+For e2e tests running in the Cloudflare Workers (workerd) environment, use the `stratalTest()` Vite plugin. It wraps `cloudflareTest` and applies Stratal-specific defaults (tslib alias for tsyringe, ZenStack language mocks, SSR externals).
+
+```ts
+// vitest.config.ts
+import { stratalTest } from '@stratal/testing/vitest-plugin'
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  plugins: [stratalTest({ wrangler: { configPath: './wrangler.jsonc' } })],
+  test: {
+    include: ['test/e2e/**/*.spec.ts'],
+  },
+})
+```
+
+### Setup File
 
 ```ts
 // vitest.setup.ts
@@ -82,19 +101,40 @@ Docs: [Mocks & Fakes](https://stratal.dev/testing/mocks-and-fakes)
 
 Auto-registered in test modules. Access via `module.storage`. Assertions: `assertExists(path)`, `assertMissing(path)`, `assertEmpty()`, `assertCount(n)`. Utility: `getStoredPaths()`, `getFile(path)`, `clear()`.
 
-## Fetch Mocking
+## Fetch Mocking (MSW)
 
 Docs: [Mocks & Fakes](https://stratal.dev/testing/mocks-and-fakes)
 
+Built on MSW (Mock Service Worker). `http` and `HttpResponse` are re-exported from `@stratal/testing` for convenience.
+
 ```ts
-import { createFetchMock } from '@stratal/testing';
+import { createMockFetch } from '@stratal/testing';
 
-const mock = createFetchMock();
-// In beforeEach: mock.activate(); mock.disableNetConnect()
-// In afterEach:  mock.reset()
+const mock = createMockFetch();
 
+beforeAll(() => mock.listen());
+afterEach(() => mock.reset());
+afterAll(() => mock.close());
+
+// Convenience helpers
 mock.mockJsonResponse('https://api.example.com/data', { result: 'ok' });
 mock.mockError('https://api.example.com/fail', 503, 'Service Unavailable');
+```
+
+For advanced per-test handlers, use `mock.use()` with MSW request handlers:
+
+```ts
+import { createMockFetch, http, HttpResponse } from '@stratal/testing';
+
+const mock = createMockFetch();
+
+it('handles custom response', () => {
+  mock.use(
+    http.get('https://api.example.com/custom', () =>
+      HttpResponse.json({ custom: true }, { status: 201 })
+    )
+  );
+});
 ```
 
 ## Deep Mocks

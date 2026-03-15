@@ -4,33 +4,32 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('@aws-sdk/client-s3', () => {
   const mockSend = vi.fn()
   return {
-    S3Client: vi.fn().mockImplementation(() => ({ send: mockSend })),
-    ListMultipartUploadsCommand: vi.fn(),
+    S3Client: class { send = mockSend },
+    ListMultipartUploadsCommand: class { },
     // Stub other commands referenced by the module
-    AbortMultipartUploadCommand: vi.fn(),
-    CompleteMultipartUploadCommand: vi.fn(),
-    CreateMultipartUploadCommand: vi.fn(),
-    DeleteObjectCommand: vi.fn(),
-    DeleteObjectsCommand: vi.fn(),
-    GetObjectCommand: vi.fn(),
-    HeadObjectCommand: vi.fn(),
-    ListPartsCommand: vi.fn(),
-    PutObjectCommand: vi.fn(),
-    UploadPartCommand: vi.fn(),
+    AbortMultipartUploadCommand: class { },
+    CompleteMultipartUploadCommand: class { },
+    CreateMultipartUploadCommand: class { },
+    DeleteObjectCommand: class { },
+    DeleteObjectsCommand: class { },
+    GetObjectCommand: class { },
+    HeadObjectCommand: class { },
+    ListPartsCommand: class { },
+    PutObjectCommand: class { },
+    UploadPartCommand: class { },
   }
 })
 
 vi.mock('@aws-sdk/lib-storage', () => ({
-  Upload: vi.fn(),
+  Upload: class { },
 }))
 
 vi.mock('@aws-sdk/s3-request-presigner', () => ({
   getSignedUrl: vi.fn(),
 }))
 
-import { S3Client } from '@aws-sdk/client-s3'
-import type { StorageEntry } from '../types'
 import { S3StorageProvider } from '../providers/s3-storage.provider'
+import type { StorageEntry } from '../types'
 
 describe('S3StorageProvider', () => {
   const config: StorageEntry = {
@@ -60,10 +59,10 @@ describe('S3StorageProvider', () => {
         IsTruncated: false,
       })
 
-      // Get the mock client instance and set its send method
+      // Create provider and override the send method on the client instance
       const provider = new S3StorageProvider(config)
-      const clientInstance = (S3Client as unknown as ReturnType<typeof vi.fn>).mock.results.at(-1)?.value
-      clientInstance.send = mockSend
+        // Access the internal client and override send
+        ; (provider as unknown as { client: { send: typeof mockSend } }).client.send = mockSend
 
       const result = await provider.listMultipartUploads()
 

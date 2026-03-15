@@ -5,14 +5,14 @@ import { ResendProvider } from '../providers/resend.provider'
 
 // Mock the Resend SDK
 vi.mock('resend', () => ({
-  Resend: vi.fn().mockImplementation(() => ({
-    emails: {
+  Resend: class {
+    emails = {
       send: vi.fn().mockResolvedValue({
         data: { id: 'test-message-id' },
         error: null,
       }),
-    },
-  })),
+    }
+  },
 }))
 
 describe('ResendProvider', () => {

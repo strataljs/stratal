@@ -5,11 +5,14 @@ export { TestingModule } from './core/testing-module'
 export { TestingModuleBuilder, type TestingModuleConfig } from './core/testing-module-builder'
 
 // HTTP Testing
-export { createFetchMock, FetchMock } from './core/http/fetch-mock'
+export { createMockFetch, MockFetch } from './core/http/mock-fetch'
 export type { MockErrorOptions, MockJsonOptions } from './core/http/fetch-mock.types'
 export { TestHttpClient } from './core/http/test-http-client'
 export { TestHttpRequest } from './core/http/test-http-request'
 export { TestResponse } from './core/http/test-response'
+
+// Re-export MSW utilities for convenience
+export { http, HttpResponse } from 'msw'
 
 // Auth
 export { ActingAs } from './auth'

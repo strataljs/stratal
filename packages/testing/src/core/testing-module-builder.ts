@@ -1,4 +1,4 @@
-import { createExecutionContext } from 'cloudflare:test'
+import { waitUntil } from 'cloudflare:workers'
 import {
   Application,
   ApplicationConfig,
@@ -76,7 +76,7 @@ export class TestingModuleBuilder {
    */
   async compile(): Promise<TestingModule> {
     const env = getTestEnv(this.config.env)
-    const ctx = createExecutionContext()
+    const ctx = { waitUntil } as ExecutionContext
 
     // Build root module from config
     const baseModules = Test.getBaseModules()

@@ -69,19 +69,26 @@ The project is ESM-only (`"type": "module"`). Output goes to `dist/` with `.js`,
 
 ### Core (`packages/core`)
 
-- Framework: Vitest
+- Framework: Vitest with `stratalTest()` plugin from `@stratal/testing/vitest-plugin` for workerd environment config
 - Test file convention: `src/**/__tests__/**/*.spec.ts`
 - Setup file (`vitest.setup.ts`) imports `reflect-metadata` — required for tsyringe decorator metadata
 - Coverage excludes: `__tests__/`, `*.spec.ts`, `index.ts`, `types.ts`, `tokens.ts`
 
 ### Framework (`packages/framework`)
 
-- Framework: Vitest with two projects: **unit** (node environment) and **e2e** (Cloudflare Workers via `@cloudflare/vitest-pool-workers`)
+- Framework: Vitest with two projects: **unit** (node environment) and **e2e** (Cloudflare Workers via `stratalTest()` plugin, which wraps `@cloudflare/vitest-pool-workers`)
 - Unit tests: `src/**/__tests__/**/*.spec.ts`; E2E tests: `test/e2e/**/*.spec.ts`
 - **Pretest required**: `yarn workspace @stratal/framework pretest` runs ZenStack schema generation + Wrangler type generation before tests
 - E2E tests require Docker Postgres on port 5438 (`yarn workspace @stratal/framework test:db`)
 - Coverage provider: `istanbul`
 - E2E pool options: Miniflare with Hyperdrive configured to PostgreSQL
+
+### Testing (`packages/testing`)
+
+- Provides `stratalTest()` Vite plugin (`@stratal/testing/vitest-plugin`) — wraps `cloudflareTest` with Stratal defaults (tslib alias, ZenStack mocks, SSR externals)
+- Fetch mocking uses MSW (Mock Service Worker) via `createMockFetch`/`MockFetch` — lifecycle: `listen()`, `reset()`, `close()`
+- Re-exports `http` and `HttpResponse` from `msw` for convenience
+- Vitest peer dependency: `^4.1.0`
 
 ### Seeders (`packages/seeders`)
 
@@ -168,6 +175,8 @@ The framework extends core's event system for database operations:
 ### Sub-path Exports
 
 **Core (`stratal`)**: `stratal/errors`, `stratal/i18n`, `stratal/i18n/messages/en`, `stratal/validation`, plus wildcard `./*` mapping to `./dist/*/index.js` (covers `stratal/di`, `stratal/router`, `stratal/cache`, `stratal/logger`, `stratal/events`, etc.)
+
+**Testing (`@stratal/testing`)**: `@stratal/testing` (main), `@stratal/testing/mocks`, `@stratal/testing/mocks/nodemailer`, `@stratal/testing/mocks/zenstack-language`, `@stratal/testing/vitest-plugin`
 
 **Framework (`@stratal/framework`)**: `@stratal/framework/auth`, `@stratal/framework/context`, `@stratal/framework/database`, `@stratal/framework/factory`, `@stratal/framework/guards`, `@stratal/framework/rbac`
 
