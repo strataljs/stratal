@@ -4,7 +4,8 @@
  */
 export const ROUTER_CONTEXT_KEYS = {
   REQUEST_CONTAINER: 'requestContainer',
-  LOCALE: 'locale'
+  LOCALE: 'locale',
+  CURRENT_CONTROLLER: 'currentController'
 } as const satisfies Record<string, string>
 
 /**

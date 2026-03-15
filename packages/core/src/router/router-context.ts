@@ -6,7 +6,9 @@ import type { StreamingApi } from 'hono/utils/stream'
 import type { Container } from '../di/container'
 import { RequestContainerNotInitializedError } from '../errors'
 import { ROUTER_CONTEXT_KEYS } from './constants'
-import type { RouterEnv } from './types'
+import { LinkBuilder } from './hypermedia/link-builder.service'
+import type { CollectionResponseOptions, PaginationLinkContext, ResourceResponseOptions } from './hypermedia/types'
+import type { RouterEnv, VersioningOptions } from './types'
 
 export type ContextQueryResult<R extends Record<string, unknown> | undefined, K extends string | undefined> = K extends string ? string : R extends undefined ? Record<string, unknown> : R
 
@@ -40,13 +42,54 @@ export type ContextQueryResult<R extends Record<string, unknown> | undefined, K 
  * ```
  */
 export class RouterContext<T extends RouterEnv = RouterEnv> {
+  private _links?: LinkBuilder
+
   /**
    * Native Hono context
    * Access for advanced use cases not covered by helper methods
    */
   constructor(
-    public readonly c: Context<T>
+    public readonly c: Context<T>,
+    private readonly versioningOptions: VersioningOptions | null = null,
   ) { }
+
+  /**
+   * LinkBuilder for constructing hypermedia links
+   * Lazily created on first access
+   */
+  get links(): LinkBuilder {
+    this._links ??= new LinkBuilder(this as unknown as RouterContext, this.versioningOptions)
+    return this._links
+  }
+
+  /**
+   * Return a resource envelope response
+   *
+   * @param data - Resource data
+   * @param options - Links, meta, and status options
+   */
+  resource<D>(data: D, options?: ResourceResponseOptions): Response {
+    const body: Record<string, unknown> = { data }
+    if (options?.links) body._links = options.links
+    if (options?.meta) body._meta = options.meta
+    return this.c.json(body, options?.status)
+  }
+
+  /**
+   * Return a paginated collection envelope response
+   * Auto-applies pagination meta and pagination links with optional overrides
+   *
+   * @param data - Array of items
+   * @param pagination - Pagination context (page, limit, total, totalPages)
+   * @param options - Additional links, meta overrides, and status
+   */
+  collection<D>(data: D[], pagination: PaginationLinkContext, options?: CollectionResponseOptions): Response {
+    return this.resource(data, {
+      meta: { ...pagination, ...options?.meta },
+      links: { ...this.links.collection(pagination), ...options?.links },
+      status: options?.status,
+    })
+  }
 
   /**
    * Get request-scoped DI container
