@@ -41,6 +41,14 @@ import type {
   VersioningOptions,
 } from '../types'
 
+const invokeHandler = (instance: Record<string, (...args: unknown[]) => unknown>, method: string, ...args: unknown[]): Promise<unknown> => {
+  try {
+    return Promise.resolve(instance[method](...args))
+  } catch (err: unknown) {
+    return Promise.reject(err as Error)
+  }
+}
+
 /**
  * Route registration service
  * Manages controller and route registration with OpenAPI support
@@ -166,7 +174,7 @@ export class RouteRegistrationService {
         events.onMessage = (evt: MessageEvent, ws: WSContext) => {
           const ctx = new GatewayContext(c as Context<RouterEnv>, ws)
           c.executionCtx.waitUntil(
-            Promise.resolve((gateway as Record<string, (...args: unknown[]) => unknown>)[onMsgMethod](evt, ctx)).catch((err: unknown) => {
+            invokeHandler(gateway as Record<string, (...args: unknown[]) => unknown>, onMsgMethod, evt, ctx).catch((err: unknown) => {
               this.logger.error('WebSocket onMessage handler error', { gateway: GatewayClass.name, error: err instanceof Error ? err.message : String(err) })
               ws.close(1011, 'Internal Error')
             })
@@ -178,7 +186,7 @@ export class RouteRegistrationService {
         events.onClose = (evt: CloseEvent, ws: WSContext) => {
           const ctx = new GatewayContext(c as Context<RouterEnv>, ws)
           c.executionCtx.waitUntil(
-            Promise.resolve((gateway as Record<string, (...args: unknown[]) => unknown>)[onCloseMethod](evt, ctx)).catch((err: unknown) => {
+            invokeHandler(gateway as Record<string, (...args: unknown[]) => unknown>, onCloseMethod, evt, ctx).catch((err: unknown) => {
               this.logger.error('WebSocket onClose handler error', { gateway: GatewayClass.name, error: err instanceof Error ? err.message : String(err) })
             })
           )
@@ -189,7 +197,7 @@ export class RouteRegistrationService {
         events.onError = (evt: Event, ws: WSContext) => {
           const ctx = new GatewayContext(c as Context<RouterEnv>, ws)
           c.executionCtx.waitUntil(
-            Promise.resolve((gateway as Record<string, (...args: unknown[]) => unknown>)[onErrMethod](evt, ctx)).catch((err: unknown) => {
+            invokeHandler(gateway as Record<string, (...args: unknown[]) => unknown>, onErrMethod, evt, ctx).catch((err: unknown) => {
               this.logger.error('WebSocket onError handler error', { gateway: GatewayClass.name, error: err instanceof Error ? err.message : String(err) })
             })
           )
