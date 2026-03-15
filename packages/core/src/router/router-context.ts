@@ -1,5 +1,8 @@
 import type { Context } from 'hono'
-import { type ContentfulStatusCode, type RedirectStatusCode } from 'hono/utils/http-status'
+import { stream as honoStream, streamText as honoStreamText, streamSSE as honoStreamSSE } from 'hono/streaming'
+import type { SSEStreamingApi } from 'hono/streaming'
+import type { ContentfulStatusCode, RedirectStatusCode } from 'hono/utils/http-status'
+import type { StreamingApi } from 'hono/utils/stream'
 import type { Container } from '../di/container'
 import { RequestContainerNotInitializedError } from '../errors'
 import { ROUTER_CONTEXT_KEYS } from './constants'
@@ -157,5 +160,41 @@ export class RouterContext<T extends RouterEnv = RouterEnv> {
    */
   redirect(url: string, status?: RedirectStatusCode): Response {
     return this.c.redirect(url, status)
+  }
+
+  /**
+   * Return a streaming response (binary/generic)
+   *
+   * @param callback - Async function that writes to the stream
+   * @param onError - Optional error handler called if an error occurs during streaming
+   */
+  stream(callback: (stream: StreamingApi) => Promise<void>, onError?: (err: Error, stream: StreamingApi) => Promise<void>): Response {
+    return honoStream(this.c, callback, onError)
+  }
+
+  /**
+   * Return a streaming text response
+   *
+   * Automatically sets `Content-Encoding: Identity` for Cloudflare Workers compatibility.
+   *
+   * @param callback - Async function that writes text to the stream
+   * @param onError - Optional error handler called if an error occurs during streaming
+   */
+  streamText(callback: (stream: StreamingApi) => Promise<void>, onError?: (err: Error, stream: StreamingApi) => Promise<void>): Response {
+    this.c.header('Content-Encoding', 'Identity')
+    return honoStreamText(this.c, callback, onError)
+  }
+
+  /**
+   * Return a Server-Sent Events (SSE) streaming response
+   *
+   * Automatically sets `Content-Encoding: Identity` for Cloudflare Workers compatibility.
+   *
+   * @param callback - Async function that writes SSE events to the stream
+   * @param onError - Optional error handler called if an error occurs during streaming
+   */
+  streamSSE(callback: (stream: SSEStreamingApi) => Promise<void>, onError?: (err: Error, stream: SSEStreamingApi) => Promise<void>): Response {
+    this.c.header('Content-Encoding', 'Identity')
+    return honoStreamSSE(this.c, callback, onError)
   }
 }
