@@ -1,5 +1,74 @@
 # stratal
 
+## 0.0.13
+
+### Patch Changes
+
+- [#120](https://github.com/strataljs/stratal/pull/120) [`8d0df50`](https://github.com/strataljs/stratal/commit/8d0df506411bc725ef4e4eaf4efdb314b3384d98) Thanks [@adesege](https://github.com/adesege)! - Add WebSocket gateway support with `@Gateway`, `@OnMessage`, `@OnClose`, and `@OnError` decorators
+
+  ### Details
+
+  - `@Gateway(path, options?)` decorator marks a class as a WebSocket gateway, reusing controller route metadata for middleware compatibility. Accepts optional `GatewayOptions` with `version` support (single, array, or `VERSION_NEUTRAL`)
+  - `@OnMessage()`, `@OnClose()`, `@OnError()` method decorators wire handler methods to WebSocket events
+  - `GatewayContext` extends `RouterContext` with WebSocket-specific methods (`send()`, `close()`, `readyState`)
+  - `GatewayContext` overrides `param()` and `query()` to use raw Hono request methods (no OpenAPI validation for WebSocket upgrade requests)
+  - `GatewayContext.body()` throws `WebSocketBodyNotAvailableError` — WebSocket upgrade requests have no body
+  - Gateways support versioning and class-level guards
+  - New `stratal/websocket` sub-path export with `GatewayOptions` type
+
+- [#117](https://github.com/strataljs/stratal/pull/117) [`527f675`](https://github.com/strataljs/stratal/commit/527f675ea3b4cdb98165cbe1f81e820fa9e79490) Thanks [@adesege](https://github.com/adesege)! - Add configurable content type support for request and response bodies in route definitions
+
+  ### Details
+
+  - Add `RouteBodyObject` and `RouteResponseObject` types with optional `contentType` field
+  - Support `{ schema, contentType }` object form for `body` and `response` in `@Route()` config
+  - Bare `ZodType` values default to `application/json` (backward-compatible)
+  - Export new types: `RouteBody`, `RouteBodyObject`, `RouteResponseObject`
+  - Add `DEFAULT_CONTENT_TYPE` constant
+  - Error response schemas always use `application/json` regardless of route content type
+
+- [#115](https://github.com/strataljs/stratal/pull/115) [`bb99119`](https://github.com/strataljs/stratal/commit/bb991196dbcc55963d16ee1a6f5db580c18c796a) Thanks [@adesege](https://github.com/adesege)! - Replace Scalar with Swagger UI as the default OpenAPI docs renderer and add pluggable UI support
+
+  ### Details
+
+  - Replace `@scalar/hono-api-reference` dependency with `@hono/swagger-ui`
+  - Add `OpenAPIUIRenderer` type for custom docs UI renderers
+  - Add `ui` option to `OpenAPIModuleOptions` with `path` and `renderer` fields
+  - Support disabling docs UI entirely by setting `ui: false`
+  - Remove `docsPath` option in favor of `ui.path` (default remains `/api/docs`)
+
+  ### Breaking Changes
+
+  - The `docsPath` option in `OpenAPIModuleOptions` has been removed. Use `ui.path` instead:
+
+    ```ts
+    // Before
+    OpenAPIModule.forRoot({ docsPath: "/docs" });
+
+    // After
+    OpenAPIModule.forRoot({ ui: { path: "/docs" } });
+    ```
+
+  - The default docs UI is now Swagger UI instead of Scalar. To use a custom renderer (e.g., Scalar), provide a `ui.renderer` function.
+
+- [#119](https://github.com/strataljs/stratal/pull/119) [`957de6e`](https://github.com/strataljs/stratal/commit/957de6e88684344bf26e95d03187345bf77f4f52) Thanks [@adesege](https://github.com/adesege)! - Remove redundant `i18nKey` property from `ApplicationError` and use `Error.message` instead
+
+  ### Details
+
+  - Remove `i18nKey` property — the i18n key is already stored in `Error.message` via `super(i18nKey)`
+  - `toErrorResponse()` now uses `this.message` for fallback and stack trace rewriting
+  - `GlobalErrorHandler.translateError()` casts `error.message as MessageKeys` for i18n lookup
+  - Stack traces in development mode now rewrite the first line with the translated message for readable debugging
+
+- [#118](https://github.com/strataljs/stratal/pull/118) [`0ade941`](https://github.com/strataljs/stratal/commit/0ade94162f9058e9230039fa72efbbf3e57cf572) Thanks [@adesege](https://github.com/adesege)! - Add streaming response methods (`stream`, `streamText`, `streamSSE`) to RouterContext
+
+  ### Details
+
+  - `stream()` — generic/binary streaming via Hono's `stream` helper
+  - `streamText()` — text streaming with automatic `Content-Encoding: Identity` for Cloudflare Workers compatibility
+  - `streamSSE()` — Server-Sent Events streaming with automatic `Content-Encoding: Identity` for Cloudflare Workers compatibility
+  - Re-export `StreamingApi`, `SSEStreamingApi`, and `SSEMessage` types from `stratal/router`
+
 ## 0.0.12
 
 ### Patch Changes
