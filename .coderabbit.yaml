@@ -45,6 +45,10 @@ reviews:
       instructions: >
         Casbin-based RBAC with ZenStack database adapter.
         Check permission model consistency and CasbinService usage.
+    - path: .agents/**
+      instructions: >
+        AI agent skill definitions for Stratal packages. Ensure instructions
+        are accurate to the framework's actual API and conventions.
     - path: .github/workflows/**
       instructions: >
         CI/CD workflows. Ensure pinned action versions (use SHA, not tags),
