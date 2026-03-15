@@ -134,26 +134,36 @@ export class RouteRegistrationService {
       )
     }
 
-    // Dispatch route registration for a single path
-    const registerForPath = (path: string): void => {
-      if (httpDecoratedMethods.length > 0) {
-        this.registerHttpRoutes(app, ControllerClass, path, httpDecoratedMethods, controllerOpts)
-      } else if (decoratedMethods.length > 0) {
-        this.registerOpenAPIRoutes(app, ControllerClass, path, decoratedMethods, controllerOpts)
-      } else {
-        this.registerRESTfulRoutes(app, ControllerClass, path, prototype)
-      }
-    }
-
-    // Fast path: no versioning — skip array allocation and loop
+    // Fast path: no versioning — inline dispatch, no array allocation, no loop
     if (!this.versioningOptions) {
-      registerForPath(route)
+      this.dispatchRoutes(app, ControllerClass, route, decoratedMethods, httpDecoratedMethods, controllerOpts, prototype)
       return
     }
 
     // Versioning path: resolve versioned paths and register each
     for (const versionedRoute of this.resolveVersionedPaths(route, controllerOpts)) {
-      registerForPath(versionedRoute)
+      this.dispatchRoutes(app, ControllerClass, versionedRoute, decoratedMethods, httpDecoratedMethods, controllerOpts, prototype)
+    }
+  }
+
+  /**
+   * Dispatch route registration based on decorator type
+   */
+  private dispatchRoutes(
+    app: OpenAPIHono<RouterEnv>,
+    ControllerClass: Constructor<IController>,
+    path: string,
+    decoratedMethods: string[],
+    httpDecoratedMethods: string[],
+    controllerOpts: ControllerOptions | undefined,
+    prototype: IController
+  ): void {
+    if (httpDecoratedMethods.length > 0) {
+      this.registerHttpRoutes(app, ControllerClass, path, httpDecoratedMethods, controllerOpts)
+    } else if (decoratedMethods.length > 0) {
+      this.registerOpenAPIRoutes(app, ControllerClass, path, decoratedMethods, controllerOpts)
+    } else {
+      this.registerRESTfulRoutes(app, ControllerClass, path, prototype)
     }
   }
 
