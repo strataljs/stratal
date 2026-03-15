@@ -110,38 +110,50 @@ export class RouteRegistrationService {
     const prototype = ControllerClass.prototype as IController
     const controllerOpts = getControllerOptions(ControllerClass)
 
-    // Resolve versioned paths
-    const versionedPaths = this.resolveVersionedPaths(route, controllerOpts)
-
-    for (const versionedRoute of versionedPaths) {
-      // Handle wildcard routes (non-RESTful controllers)
-      if (prototype.handle) {
-        this.registerWildcardRoute(app, ControllerClass, versionedRoute)
-        continue
-      }
-
-      // Check for both decorator types
-      const decoratedMethods = getDecoratedMethods(ControllerClass)
-      const httpDecoratedMethods = getHttpDecoratedMethods(ControllerClass)
-
-      // Enforce mutual exclusivity: a controller cannot mix @Route() with HTTP method decorators
-      if (decoratedMethods.length > 0 && httpDecoratedMethods.length > 0) {
-        throw new ControllerRegistrationError(
-          ControllerClass.name,
-          'Cannot mix @Route() with HTTP method decorators (@Get, @Post, etc.) in the same controller. Use one pattern or the other.'
-        )
-      }
-
-      if (httpDecoratedMethods.length > 0) {
-        // Register explicit HTTP method routes (@Get, @Post, etc.)
-        this.registerHttpRoutes(app, ControllerClass, versionedRoute, httpDecoratedMethods, controllerOpts)
-      } else if (decoratedMethods.length > 0) {
-        // Register OpenAPI routes (@Route with convention-based method names)
-        this.registerOpenAPIRoutes(app, ControllerClass, versionedRoute, decoratedMethods, controllerOpts)
+    // Handle wildcard routes (non-RESTful controllers) — check once, not per version
+    if (prototype.handle) {
+      if (!this.versioningOptions) {
+        this.registerWildcardRoute(app, ControllerClass, route)
       } else {
-        // Fallback to traditional RESTful method registration (no OpenAPI)
-        this.registerRESTfulRoutes(app, ControllerClass, versionedRoute, prototype)
+        for (const versionedRoute of this.resolveVersionedPaths(route, controllerOpts)) {
+          this.registerWildcardRoute(app, ControllerClass, versionedRoute)
+        }
       }
+      return
+    }
+
+    // Compute decorated methods once (loop-invariant)
+    const decoratedMethods = getDecoratedMethods(ControllerClass)
+    const httpDecoratedMethods = getHttpDecoratedMethods(ControllerClass)
+
+    // Enforce mutual exclusivity once
+    if (decoratedMethods.length > 0 && httpDecoratedMethods.length > 0) {
+      throw new ControllerRegistrationError(
+        ControllerClass.name,
+        'Cannot mix @Route() with HTTP method decorators (@Get, @Post, etc.) in the same controller. Use one pattern or the other.'
+      )
+    }
+
+    // Dispatch route registration for a single path
+    const registerForPath = (path: string): void => {
+      if (httpDecoratedMethods.length > 0) {
+        this.registerHttpRoutes(app, ControllerClass, path, httpDecoratedMethods, controllerOpts)
+      } else if (decoratedMethods.length > 0) {
+        this.registerOpenAPIRoutes(app, ControllerClass, path, decoratedMethods, controllerOpts)
+      } else {
+        this.registerRESTfulRoutes(app, ControllerClass, path, prototype)
+      }
+    }
+
+    // Fast path: no versioning — skip array allocation and loop
+    if (!this.versioningOptions) {
+      registerForPath(route)
+      return
+    }
+
+    // Versioning path: resolve versioned paths and register each
+    for (const versionedRoute of this.resolveVersionedPaths(route, controllerOpts)) {
+      registerForPath(versionedRoute)
     }
   }
 

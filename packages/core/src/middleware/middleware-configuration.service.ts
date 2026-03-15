@@ -94,8 +94,13 @@ export class MiddlewareConfigurationService {
         }
       } else {
         // RouteInfo object - resolve version if present
-        const resolved = this.resolveVersionedRouteInfo(target)
-        patterns.push(...resolved)
+        if (!this.versioningOptions || !target.version) {
+          // Fast path: no versioning or no version on target — push directly
+          patterns.push(target)
+        } else {
+          const resolved = this.resolveVersionedRouteInfo(target)
+          patterns.push(...resolved)
+        }
       }
     }
 
