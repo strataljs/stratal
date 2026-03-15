@@ -21,7 +21,7 @@ describe('ApplicationError', () => {
   })
 
   describe('constructor', () => {
-    it('should set code, message (messageKey), timestamp, metadata, and name', () => {
+    it('should set code, message, timestamp, metadata, and name', () => {
       const metadata = { userId: '123' }
       const error = new TestError('errors.testError', ERROR_CODES.VALIDATION.GENERIC, metadata)
 
@@ -57,7 +57,7 @@ describe('ApplicationError', () => {
       const response = error.toErrorResponse('production')
 
       expect(response.code).toBe(ERROR_CODES.VALIDATION.GENERIC)
-      expect(response.message).toBe('errors.test')
+      expect(response.message).toBe('errors.test') // falls back to message when no translatedMessage
       expect(response.timestamp).toBe(error.timestamp)
       expect(response.stack).toBeUndefined()
     })
@@ -77,11 +77,28 @@ describe('ApplicationError', () => {
       expect(response.message).toBe('Translated message')
     })
 
-    it('should fall back to messageKey when no translatedMessage', () => {
+    it('should fall back to message when no translatedMessage', () => {
       const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC)
       const response = error.toErrorResponse('production')
 
       expect(response.message).toBe('errors.test')
+    })
+
+    it('should rewrite stack trace first line with translated message in development', () => {
+      const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC)
+      const response = error.toErrorResponse('development', 'A test error occurred')
+
+      expect(response.stack).toBeDefined()
+      expect(response.stack).toContain('A test error occurred')
+      expect(response.stack).not.toContain('errors.test')
+    })
+
+    it('should keep i18n key in stack when no translatedMessage in development', () => {
+      const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC)
+      const response = error.toErrorResponse('development')
+
+      expect(response.stack).toBeDefined()
+      expect(response.stack).toContain('errors.test')
     })
   })
 
@@ -155,7 +172,7 @@ describe('ApplicationError', () => {
       const json = error.toJSON()
 
       expect(json.code).toBe(ERROR_CODES.VALIDATION.GENERIC)
-      expect(json.message).toBe('errors.test')
+      expect(json.message).toBe('errors.test') // falls back to message
       expect(json.stack).toBeDefined()
     })
   })
