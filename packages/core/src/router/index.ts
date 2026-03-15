@@ -4,10 +4,10 @@
 // Core router types
 export type { IController } from './controller'
 export type { Middleware } from './middleware.interface'
-export type { ControllerOptions, HttpRouteMetadata, RouteConfig, RouterEnv, RouteResponse, RouterVariables, SecurityScheme } from './types'
+export type { ControllerOptions, HttpRouteMetadata, RouteConfig, RouterEnv, RouteResponse, RouterVariables, SecurityScheme, VersioningOptions } from './types'
 
 // Router constants
-export { HTTP_METHODS, ROUTE_METADATA_KEYS, ROUTER_CONTEXT_KEYS, SECURITY_SCHEMES } from './constants'
+export { HTTP_METHODS, ROUTE_METADATA_KEYS, ROUTER_CONTEXT_KEYS, SECURITY_SCHEMES, VERSION_NEUTRAL } from './constants'
 
 // Router context
 export { RouterContext } from './router-context'
@@ -25,7 +25,7 @@ export { ROUTER_TOKENS } from './router.tokens'
 
 // Decorators
 export {
-  Controller, getControllerOptions, getControllerRoute
+  Controller, getControllerOptions, getControllerRoute, getControllerVersion
 } from './decorators/controller.decorator'
 export { All, Delete, Get, getHttpDecoratedMethods, getHttpRouteMetadata, Patch, Post, Put } from './decorators/http-method.decorator'
 export { getDecoratedMethods, getRouteConfig, Route } from './decorators/route.decorator'

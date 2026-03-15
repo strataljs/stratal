@@ -34,7 +34,9 @@ import type {
   RouteConfig,
   RouterEnv,
   SecuritySchemeRecord,
+  VersioningOptions,
 } from '../types'
+import { VERSION_NEUTRAL } from '../constants'
 
 /**
  * Route registration service
@@ -51,7 +53,8 @@ export class RouteRegistrationService {
   private controllerClasses = new Map<string, Constructor<IController>>()
 
   constructor(
-    private logger: LoggerService
+    private logger: LoggerService,
+    private versioningOptions: VersioningOptions | null = null,
   ) { }
 
   /**
@@ -107,34 +110,79 @@ export class RouteRegistrationService {
     const prototype = ControllerClass.prototype as IController
     const controllerOpts = getControllerOptions(ControllerClass)
 
-    // Handle wildcard routes (non-RESTful controllers)
-    if (prototype.handle) {
-      this.registerWildcardRoute(app, ControllerClass, route)
-      return
+    // Resolve versioned paths
+    const versionedPaths = this.resolveVersionedPaths(route, controllerOpts)
+
+    for (const versionedRoute of versionedPaths) {
+      // Handle wildcard routes (non-RESTful controllers)
+      if (prototype.handle) {
+        this.registerWildcardRoute(app, ControllerClass, versionedRoute)
+        continue
+      }
+
+      // Check for both decorator types
+      const decoratedMethods = getDecoratedMethods(ControllerClass)
+      const httpDecoratedMethods = getHttpDecoratedMethods(ControllerClass)
+
+      // Enforce mutual exclusivity: a controller cannot mix @Route() with HTTP method decorators
+      if (decoratedMethods.length > 0 && httpDecoratedMethods.length > 0) {
+        throw new ControllerRegistrationError(
+          ControllerClass.name,
+          'Cannot mix @Route() with HTTP method decorators (@Get, @Post, etc.) in the same controller. Use one pattern or the other.'
+        )
+      }
+
+      if (httpDecoratedMethods.length > 0) {
+        // Register explicit HTTP method routes (@Get, @Post, etc.)
+        this.registerHttpRoutes(app, ControllerClass, versionedRoute, httpDecoratedMethods, controllerOpts)
+      } else if (decoratedMethods.length > 0) {
+        // Register OpenAPI routes (@Route with convention-based method names)
+        this.registerOpenAPIRoutes(app, ControllerClass, versionedRoute, decoratedMethods, controllerOpts)
+      } else {
+        // Fallback to traditional RESTful method registration (no OpenAPI)
+        this.registerRESTfulRoutes(app, ControllerClass, versionedRoute, prototype)
+      }
+    }
+  }
+
+  /**
+   * Resolve versioned paths for a controller based on versioning configuration.
+   *
+   * @param basePath - The base path from @Controller decorator
+   * @param controllerOpts - Controller options (may contain version)
+   * @returns Array of resolved paths (with version prefix if applicable)
+   */
+  private resolveVersionedPaths(basePath: string, controllerOpts?: ControllerOptions): string[] {
+    // Versioning disabled — always return base path
+    if (!this.versioningOptions) {
+      return [basePath]
     }
 
-    // Check for both decorator types
-    const decoratedMethods = getDecoratedMethods(ControllerClass)
-    const httpDecoratedMethods = getHttpDecoratedMethods(ControllerClass)
+    const version = controllerOpts?.version
 
-    // Enforce mutual exclusivity: a controller cannot mix @Route() with HTTP method decorators
-    if (decoratedMethods.length > 0 && httpDecoratedMethods.length > 0) {
-      throw new ControllerRegistrationError(
-        ControllerClass.name,
-        'Cannot mix @Route() with HTTP method decorators (@Get, @Post, etc.) in the same controller. Use one pattern or the other.'
-      )
+    // VERSION_NEUTRAL — explicitly opt out of versioning
+    if (version === VERSION_NEUTRAL) {
+      return [basePath]
     }
 
-    if (httpDecoratedMethods.length > 0) {
-      // Register explicit HTTP method routes (@Get, @Post, etc.)
-      this.registerHttpRoutes(app, ControllerClass, route, httpDecoratedMethods, controllerOpts)
-    } else if (decoratedMethods.length > 0) {
-      // Register OpenAPI routes (@Route with convention-based method names)
-      this.registerOpenAPIRoutes(app, ControllerClass, route, decoratedMethods, controllerOpts)
-    } else {
-      // Fallback to traditional RESTful method registration (no OpenAPI)
-      this.registerRESTfulRoutes(app, ControllerClass, route, prototype)
+    const prefix = this.versioningOptions.prefix ?? 'v'
+
+    // Explicit version(s) on the controller
+    if (version !== undefined) {
+      const versions = Array.isArray(version) ? version : [version]
+      return versions.map(v => `/${prefix}${v}${basePath}`)
     }
+
+    // No explicit version — apply defaultVersion if set
+    if (this.versioningOptions.defaultVersion !== undefined) {
+      const defaults = Array.isArray(this.versioningOptions.defaultVersion)
+        ? this.versioningOptions.defaultVersion
+        : [this.versioningOptions.defaultVersion]
+      return defaults.map(v => `/${prefix}${v}${basePath}`)
+    }
+
+    // Versioning enabled but no version and no default — no prefix
+    return [basePath]
   }
 
   /**

@@ -6,7 +6,7 @@ import type { IController } from '../router/controller'
 import { getControllerRoute } from '../router/decorators/controller.decorator'
 import type { Middleware } from '../router/middleware.interface'
 import { RouterContext } from '../router/router-context'
-import type { HttpMethod, RouterEnv } from '../router/types'
+import type { HttpMethod, RouterEnv, VersioningOptions } from '../router/types'
 import type { Constructor } from '../types'
 import type { MiddlewareConfigEntry, RouteInfo } from './types'
 
@@ -17,7 +17,10 @@ import type { MiddlewareConfigEntry, RouteInfo } from './types'
  * appropriate middleware handlers with route matching.
  */
 export class MiddlewareConfigurationService {
-  constructor(private readonly logger: LoggerService) { }
+  constructor(
+    private readonly logger: LoggerService,
+    private readonly versioningOptions: VersioningOptions | null = null,
+  ) { }
 
   /**
    * Apply middleware configurations to the Hono app
@@ -90,12 +93,37 @@ export class MiddlewareConfigurationService {
           this.logger.warn('Controller has no route metadata', { controller: target.name })
         }
       } else {
-        // RouteInfo object - use directly
-        patterns.push(target)
+        // RouteInfo object - resolve version if present
+        const resolved = this.resolveVersionedRouteInfo(target)
+        patterns.push(...resolved)
       }
     }
 
     return patterns
+  }
+
+  /**
+   * Resolve a RouteInfo with version into versioned path(s).
+   * If versioning is disabled or no version is specified, returns the RouteInfo as-is.
+   */
+  private resolveVersionedRouteInfo(routeInfo: RouteInfo): RouteInfo[] {
+    if (!this.versioningOptions || !routeInfo.version) {
+      return [routeInfo]
+    }
+
+    const prefix = this.versioningOptions.prefix ?? 'v'
+    const versions = Array.isArray(routeInfo.version) ? routeInfo.version : [routeInfo.version]
+    const results: RouteInfo[] = []
+
+    for (const v of versions) {
+      const versionedPath = `/${prefix}${v}${routeInfo.path}`
+      // Add exact path match
+      results.push({ path: versionedPath, method: routeInfo.method })
+      // Add wildcard match for sub-paths
+      results.push({ path: `${versionedPath}/*`, method: routeInfo.method })
+    }
+
+    return results
   }
 
   /**

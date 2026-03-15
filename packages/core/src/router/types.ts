@@ -1,7 +1,7 @@
 import type { ZodObject, ZodPipe, ZodType, RouteConfig as OpenAPIRouteConfig } from '../i18n/validation'
 import { type StratalEnv } from '../env'
 import type { Container } from '../di'
-import { type HTTP_METHODS, type ROUTER_CONTEXT_KEYS, type SECURITY_SCHEMES } from './constants'
+import { type HTTP_METHODS, type ROUTER_CONTEXT_KEYS, type SECURITY_SCHEMES, type VERSION_NEUTRAL } from './constants'
 
 /**
  * Route parameter type for OpenAPI
@@ -162,4 +162,32 @@ export interface ControllerOptions {
    * Useful for internal-only controllers, debug endpoints, or utilities
    */
   hideFromDocs?: boolean
+
+  /**
+   * API version(s) for this controller.
+   * When versioning is enabled, routes are prefixed with the version (e.g., /v1/users).
+   * Use VERSION_NEUTRAL to opt out of versioning (no prefix applied).
+   * Can be a single version string, array of versions, or VERSION_NEUTRAL symbol.
+   */
+  version?: string | string[] | typeof VERSION_NEUTRAL
 }
+
+/**
+ * Versioning configuration for the application.
+ * Enables URI-based API versioning when provided to Stratal config.
+ */
+export interface VersioningOptions {
+  /**
+   * Prefix for version segments in the URL.
+   * @default 'v'
+   * @example 'v' produces /v1, /v2; 'api/v' produces /api/v1, /api/v2
+   */
+  prefix?: string
+
+  /**
+   * Default version applied to controllers without explicit version.
+   * Controllers with VERSION_NEUTRAL are not affected.
+   */
+  defaultVersion?: string | string[]
+}
+

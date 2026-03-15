@@ -20,6 +20,7 @@ import { type QueueManager } from './queue/queue-manager'
 import { QueueModule } from './queue/queue.module'
 import { type IController, type RouterContext } from './router'
 import { HonoApp } from './router/hono-app'
+import type { VersioningOptions } from './router/types'
 import type { Constructor } from './types'
 
 export interface ApplicationConfig {
@@ -30,6 +31,11 @@ export interface ApplicationConfig {
     level?: LogLevel
     formatter?: 'json' | 'pretty'
   }
+  /**
+   * API versioning configuration.
+   * When provided, enables URI-based versioning for controllers.
+   */
+  versioning?: VersioningOptions
 }
 
 export interface ApplicationOptions extends ApplicationConfig {
@@ -142,7 +148,7 @@ export class Application {
     this.honoApp = new HonoApp(this._container, logger)
     const middlewareConfigs = this.moduleRegistry.getAllMiddlewareConfigs()
     const controllers = this.moduleRegistry.getAllControllers() as Constructor<IController>[]
-    this.honoApp.configure(middlewareConfigs, controllers)
+    this.honoApp.configure(middlewareConfigs, controllers, this.appConfig.versioning)
 
     // Phase 6: Configure queues, cron, events
     this.registerQueueConsumers()
