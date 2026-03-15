@@ -48,7 +48,6 @@ import type { OpenAPIModuleOptions } from './types'
 /** Default options when none provided */
 const DEFAULT_OPTIONS: OpenAPIModuleOptions = {
   jsonPath: '/api/openapi.json',
-  docsPath: '/api/docs',
   info: {
     title: 'API',
     version: '1.0.0'

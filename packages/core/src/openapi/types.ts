@@ -1,4 +1,6 @@
+import type { MiddlewareHandler } from 'hono/types'
 import type { PathItemObject } from '../i18n/validation'
+import type { RouterEnv } from '../router/types'
 
 /**
  * OpenAPI Info section configuration
@@ -10,20 +12,44 @@ export interface OpenAPIInfo {
 }
 
 /**
+ * Context passed to a custom OpenAPI UI renderer
+ */
+export interface OpenAPIUIContext {
+  specUrl: string
+  title: string
+}
+
+/**
+ * Custom UI renderer function
+ * Returns a Hono middleware handler that serves the docs UI
+ */
+export type OpenAPIUIRenderer = (context: OpenAPIUIContext) => MiddlewareHandler<RouterEnv>
+
+/**
+ * Options for the docs UI
+ */
+export interface OpenAPIUIOptions {
+  /** Path for docs UI (default: '/api/docs') */
+  path?: string
+  /** Custom UI renderer (default: swagger UI) */
+  renderer?: OpenAPIUIRenderer
+}
+
+/**
  * Static module configuration (provided via forRoot)
  */
 export interface OpenAPIModuleOptions {
   /** Path for OpenAPI JSON spec (default: '/api/openapi.json') */
   jsonPath?: string
 
-  /** Path for Swagger UI docs (default: '/api/docs') */
-  docsPath?: string
-
   /** Default info section for spec */
   info?: OpenAPIInfo
 
   /** Security schemes definition */
   securitySchemes?: Record<string, object>
+
+  /** Docs UI configuration. Set to false to disable. (default: swagger UI at /api/docs) */
+  ui?: OpenAPIUIOptions | false
 }
 
 /**
@@ -48,10 +74,10 @@ export interface OpenAPIConfigOverride {
  */
 export interface OpenAPIEffectiveConfig {
   jsonPath: string
-  docsPath: string
   info: OpenAPIInfo
   securitySchemes?: Record<string, object>
   routeFilter?: RouteFilterFn
+  ui?: OpenAPIUIOptions | false
 }
 
 /**

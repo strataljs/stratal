@@ -23,7 +23,7 @@ npx wrangler dev
 | 05 | [middleware](05-middleware/) | Middleware configuration with `MiddlewareConfigurable` |
 | 06 | [queues](06-queues/) | Queue producer/consumer pattern with Cloudflare Queues |
 | 07 | [scheduled-tasks](07-scheduled-tasks/) | Cron job scheduling with the `CronJob` interface |
-| 08 | [openapi](08-openapi/) | OpenAPI documentation with Scalar UI |
+| 08 | [openapi](08-openapi/) | OpenAPI documentation with Swagger UI |
 | 09 | [seeders](09-seeders/) | Database seeding with `@stratal/seeders` and the `stratal-seed` CLI |
 | 10 | [events](10-events/) | Type-safe event system with `@Listener` and `@On` decorators |
 | 11 | [auth](11-auth/) | Session-based authentication with Better Auth and `AuthGuard` |

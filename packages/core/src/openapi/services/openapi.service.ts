@@ -1,4 +1,4 @@
-import { Scalar } from '@scalar/hono-api-reference'
+import { swaggerUI } from '@hono/swagger-ui'
 import { inject } from 'tsyringe'
 import { Transient } from '../../di/decorators'
 import type { II18nService } from '../../i18n'
@@ -96,21 +96,26 @@ export class OpenAPIService {
       return c.json(fullSpec)
     })
 
-    // Swagger UI endpoint
-    app.get(config.docsPath, (c, next) => {
-      const requestContainer = c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER)
-      const requestConfigService = requestContainer.resolve<IOpenAPIConfigService>(
-        OPENAPI_TOKENS.ConfigService
-      )
-      const effectiveConfig = requestConfigService.getEffectiveConfig()
+    // Docs UI endpoint
+    if (config.ui !== false) {
+      const uiPath = config.ui?.path ?? '/api/docs'
+      const uiRenderer = config.ui?.renderer
 
-      return Scalar<RouterEnv>({
-        url: effectiveConfig.jsonPath,
-        pageTitle: effectiveConfig.info.title,
-        telemetry: false,
-        theme: 'deepSpace',
-      })(c, next)
-    })
+      app.get(uiPath, (c, next) => {
+        const requestContainer = c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER)
+        const requestConfigService = requestContainer.resolve<IOpenAPIConfigService>(
+          OPENAPI_TOKENS.ConfigService
+        )
+        const effectiveConfig = requestConfigService.getEffectiveConfig()
+        const uiContext = { specUrl: effectiveConfig.jsonPath, title: effectiveConfig.info.title }
+
+        if (uiRenderer) {
+          return uiRenderer(uiContext)(c, next)
+        }
+
+        return swaggerUI<RouterEnv>({ url: uiContext.specUrl })(c, next)
+      })
+    }
   }
 
   /**
