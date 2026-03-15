@@ -2,15 +2,16 @@
 name: stratal-testing
 description: >-
   Use when writing tests for Stratal applications — TestingModule, HTTP testing,
-  WebSocket testing, mocks, fakes, and auth testing utilities. Trigger on: test, TestingModule,
+  WebSocket testing, SSE testing, mocks, fakes, and auth testing utilities. Trigger on: test, TestingModule,
   TestHttpClient, TestResponse, mock, fake, FakeStorageService, createMockFetch,
   MockFetch, msw, stratalTest, createMock, ActingAs, @stratal/testing,
-  TestWsRequest, TestWsConnection, ws, WebSocket, websocket, module.ws.
+  TestWsRequest, TestWsConnection, ws, WebSocket, websocket, module.ws,
+  TestSseRequest, TestSseConnection, TestSseEvent, sse, SSE, Server-Sent Events, module.sse.
 user-invocable: false
 license: MIT
 metadata:
   author: Temitayo Fadojutimi
-  version: "3.1"
+  version: "3.2"
 ---
 
 # @stratal/testing
@@ -136,6 +137,55 @@ const ws = await module.ws('/ws/chat')
   .actingAs({ id: user.id })
   .withHeaders({ 'X-Custom': 'value' })
   .connect();
+```
+
+## SSE Testing
+
+Docs: [SSE Testing](https://stratal.dev/testing/sse-testing)
+
+Use `module.sse(path)` to create an SSE test request builder (`TestSseRequest`). Call `.connect()` to perform the request and get a `TestSseConnection`.
+
+```ts
+const sse = await module.sse('/streaming/sse').connect();
+
+// Assert individual events
+await sse.assertEvent({ event: 'message', data: 'hello' });
+await sse.assertEventData('world');
+
+// Wait for stream to end
+await sse.waitForEnd();
+```
+
+**`TestSseRequest`** (builder pattern):
+- `.withHeaders(headers)` — add custom headers to the request
+- `.actingAs({ id })` — authenticate the SSE connection as a user
+- `.connect()` — send the request, returns `TestSseConnection`
+
+**`TestSseConnection`** methods:
+- `waitForEvent(timeout?)` — wait for and return the next `TestSseEvent`
+- `waitForEnd(timeout?)` — wait for the stream to end
+- `collectEvents(timeout?)` — collect all remaining events until the stream ends
+- `raw` — access the underlying `Response`
+
+**`TestSseConnection`** assertions:
+- `assertEvent(expected, timeout?)` — assert the next event matches a partial `TestSseEvent`
+- `assertEventData(expected, timeout?)` — assert the next event's data equals the expected string
+- `assertJsonEventData(expected, timeout?)` — assert the next event's data is JSON matching the expected value
+
+**`TestSseEvent`** interface: `{ data: string, event?: string, id?: string, retry?: number }`
+
+```ts
+// Authenticated SSE with custom headers
+const sse = await module.sse('/streaming/sse')
+  .actingAs({ id: user.id })
+  .withHeaders({ 'X-Custom': 'value' })
+  .connect();
+
+// Collect all events
+const events = await sse.collectEvents();
+
+// Assert JSON event data
+await sse.assertJsonEventData({ status: 'complete', count: 42 });
 ```
 
 ## FakeStorageService

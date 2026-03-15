@@ -57,25 +57,22 @@ describe('Streaming', () => {
 
   describe('streamSSE()', () => {
     it('should set Content-Encoding to Identity', async () => {
-      const response = await module.http.get('/streaming/sse').send()
-
-      response.assertHeader('Content-Encoding', 'Identity')
+      const sse = await module.sse('/streaming/sse').connect()
+      expect(sse.raw.headers.get('Content-Encoding')).toBe('Identity')
+      await sse.waitForEnd()
     })
 
-    it('should produce SSE-formatted output', async () => {
-      const response = await module.http.get('/streaming/sse').send()
-
-      const text = await response.raw.text()
-      expect(text.includes('event: message')).toBe(true)
-      expect(text.includes('data: hello')).toBe(true)
-      expect(text.includes('id: 1')).toBe(true)
+    it('should produce SSE-formatted events', async () => {
+      const sse = await module.sse('/streaming/sse').connect()
+      await sse.assertEvent({ event: 'message', data: 'hello', id: '1' })
+      await sse.waitForEnd()
     })
 
     it('should set Content-Type to text/event-stream', async () => {
-      const response = await module.http.get('/streaming/sse').send()
-
-      const contentType = response.headers.get('Content-Type') ?? ''
+      const sse = await module.sse('/streaming/sse').connect()
+      const contentType = sse.raw.headers.get('Content-Type') ?? ''
       expect(contentType.includes('text/event-stream')).toBe(true)
+      await sse.waitForEnd()
     })
   })
 })

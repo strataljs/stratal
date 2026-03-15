@@ -1,3 +1,5 @@
+import { expect } from "vitest";
+
 /**
  * TestWsConnection
  *
@@ -97,7 +99,6 @@ export class TestWsConnection {
 	 * Assert that the next message equals the expected value
 	 */
 	async assertMessage(expected: string, timeout = 5000): Promise<void> {
-		const { expect } = await import('vitest')
 		const data = await this.waitForMessage(timeout)
 		const message = typeof data === 'string' ? data : '[ArrayBuffer]'
 		expect(message, `Expected WebSocket message "${expected}", got "${message}"`).toBe(expected)
@@ -107,7 +108,6 @@ export class TestWsConnection {
 	 * Assert that the connection closes, optionally with an expected code
 	 */
 	async assertClosed(expectedCode?: number, timeout = 5000): Promise<void> {
-		const { expect } = await import('vitest')
 		const event = await this.waitForClose(timeout)
 		if (expectedCode !== undefined) {
 			expect(event.code, `Expected close code ${expectedCode}, got ${event.code}`).toBe(expectedCode)

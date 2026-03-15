@@ -3,27 +3,26 @@ import { AUTH_SERVICE } from '@stratal/framework/auth'
 import { expect } from 'vitest'
 import { ActingAs } from '../../auth'
 import type { TestingModule } from '../testing-module'
-import { TestWsConnection } from './test-ws-connection'
+import { TestSseConnection } from './test-sse-connection'
 
 /**
- * TestWsRequest
+ * TestSseRequest
  *
- * Builder for WebSocket upgrade requests. Follows the TestHttpRequest pattern.
+ * Builder for SSE connection requests. Follows the TestWsRequest pattern.
  *
  * @example
  * ```typescript
- * const ws = await module.ws('/ws/chat').connect()
- * ws.send('hello')
- * await ws.assertMessage('echo:hello')
- * ws.close()
+ * const sse = await module.sse('/streaming/sse').connect()
+ * await sse.assertEvent({ event: 'message', data: 'hello' })
+ * await sse.waitForEnd()
  * ```
  *
- * @example Authenticated WebSocket
+ * @example Authenticated SSE
  * ```typescript
- * const ws = await module.ws('/ws/chat').actingAs({ id: user.id }).connect()
+ * const sse = await module.sse('/streaming/sse').actingAs({ id: user.id }).connect()
  * ```
  */
-export class TestWsRequest {
+export class TestSseRequest {
 	private requestHeaders: Headers = new Headers()
 	private actingAsUser: { id: string } | null = null
 
@@ -33,7 +32,7 @@ export class TestWsRequest {
 	) { }
 
 	/**
-	 * Add custom headers to the upgrade request
+	 * Add custom headers to the request
 	 */
 	withHeaders(headers: Record<string, string>): this {
 		for (const [key, value] of Object.entries(headers)) {
@@ -43,7 +42,7 @@ export class TestWsRequest {
 	}
 
 	/**
-	 * Authenticate the WebSocket connection as a specific user
+	 * Authenticate the SSE connection as a specific user
 	 */
 	actingAs(user: { id: string }): this {
 		this.actingAsUser = user
@@ -51,15 +50,12 @@ export class TestWsRequest {
 	}
 
 	/**
-	 * Send the upgrade request and return a live WebSocket connection
+	 * Send the request and return a live SSE connection
 	 */
-	async connect(): Promise<TestWsConnection> {
+	async connect(): Promise<TestSseConnection> {
 		await this.applyAuthentication()
 
-		this.requestHeaders.set('Upgrade', 'websocket')
-		this.requestHeaders.set('Connection', 'Upgrade')
-		this.requestHeaders.set('Sec-WebSocket-Key', 'dGhlIHNhbXBsZSBub25jZQ==')
-		this.requestHeaders.set('Sec-WebSocket-Version', '13')
+		this.requestHeaders.set('Accept', 'text/event-stream')
 
 		const url = new URL(this.path, 'http://localhost')
 		const request = new Request(url.toString(), {
@@ -70,17 +66,16 @@ export class TestWsRequest {
 
 		expect(
 			response.status,
-			`Expected status 101 (Switching Protocols), got ${response.status}`,
-		).toBe(101)
+			`Expected status 200, got ${response.status}`,
+		).toBe(200)
 
-		const ws = (response as Response & { webSocket: WebSocket | null }).webSocket
-		if (!ws) {
-			throw new Error('Response did not include a WebSocket connection')
-		}
+		const contentType = response.headers.get('content-type') ?? ''
+		expect(
+			contentType.includes('text/event-stream'),
+			`Expected content-type "text/event-stream", got "${contentType}"`,
+		).toBe(true)
 
-		ws.accept()
-
-		return new TestWsConnection(ws)
+		return new TestSseConnection(response)
 	}
 
 	private async applyAuthentication(): Promise<void> {
