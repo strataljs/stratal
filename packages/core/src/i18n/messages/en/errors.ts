@@ -19,6 +19,9 @@ export const errors = {
   controllerMethodNotFound: 'Method {methodName} not found on {controllerName}',
   controllerRegistration: 'Failed to register controller {controllerName}: {reason}',
 
+  // WebSocket errors
+  websocketBodyNotAvailable: 'body() is not available in WebSocket gateways. Use WebSocket messages instead.',
+
   // Context errors
   contextNotInitialized: 'Context has not been initialized',
   userNotAuthenticated: 'User is not authenticated',

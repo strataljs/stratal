@@ -185,6 +185,8 @@ export const ERROR_CODES = {
     CRON_EXECUTION_FAILED: 9204,
     /** Queue provider not supported */
     QUEUE_PROVIDER_NOT_SUPPORTED: 9205,
+    /** body() called on WebSocket gateway context */
+    WEBSOCKET_BODY_NOT_AVAILABLE: 9206,
   },
 } as const
 

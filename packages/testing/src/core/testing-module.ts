@@ -7,6 +7,7 @@ import { STORAGE_TOKENS } from 'stratal/storage'
 import type { FakeStorageService } from '../storage'
 import type { Seeder } from '../types'
 import { TestHttpClient } from './http/test-http-client'
+import { TestWsRequest } from './ws/test-ws-request'
 
 /**
  * TestingModule
@@ -70,6 +71,13 @@ export class TestingModule {
    */
   get storage(): FakeStorageService {
     return this.get<FakeStorageService>(STORAGE_TOKENS.StorageService)
+  }
+
+  /**
+   * Create a WebSocket test request builder for the given path
+   */
+  ws(path: string): TestWsRequest {
+    return new TestWsRequest(path, this)
   }
 
   /**

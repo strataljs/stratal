@@ -58,6 +58,10 @@
       "types": "./dist/i18n/validation/index.d.ts",
       "import": "./dist/i18n/validation/index.js"
     },
+    "./websocket": {
+      "types": "./dist/websocket/index.d.ts",
+      "import": "./dist/websocket/index.js"
+    },
     "./*": {
       "types": "./dist/*/index.d.ts",
       "import": "./dist/*/index.js"

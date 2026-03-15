@@ -13,8 +13,8 @@ export { HTTP_METHODS, ROUTE_METADATA_KEYS, ROUTER_CONTEXT_KEYS, SECURITY_SCHEME
 export { RouterContext } from './router-context'
 
 // Streaming types
+export type { SSEMessage, SSEStreamingApi } from 'hono/streaming'
 export type { StreamingApi } from 'hono/utils/stream'
-export type { SSEStreamingApi, SSEMessage } from 'hono/streaming'
 
 // HonoApp
 export { HonoApp } from './hono-app'

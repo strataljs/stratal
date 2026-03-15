@@ -11,6 +11,10 @@ export { TestHttpClient } from './core/http/test-http-client'
 export { TestHttpRequest } from './core/http/test-http-request'
 export { TestResponse } from './core/http/test-response'
 
+// WebSocket Testing
+export { TestWsRequest } from './core/ws/test-ws-request'
+export { TestWsConnection } from './core/ws/test-ws-connection'
+
 // Re-export MSW utilities for convenience
 export { http, HttpResponse } from 'msw'
 

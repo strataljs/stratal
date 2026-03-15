@@ -1,6 +1,6 @@
 import type { Context } from 'hono'
-import { stream as honoStream, streamText as honoStreamText, streamSSE as honoStreamSSE } from 'hono/streaming'
 import type { SSEStreamingApi } from 'hono/streaming'
+import { stream as honoStream, streamSSE as honoStreamSSE, streamText as honoStreamText } from 'hono/streaming'
 import type { ContentfulStatusCode, RedirectStatusCode } from 'hono/utils/http-status'
 import type { StreamingApi } from 'hono/utils/stream'
 import type { Container } from '../di/container'
@@ -8,7 +8,7 @@ import { RequestContainerNotInitializedError } from '../errors'
 import { ROUTER_CONTEXT_KEYS } from './constants'
 import type { RouterEnv } from './types'
 
-type ContextQueryResult<R extends Record<string, unknown> | undefined, K extends string | undefined> = K extends string ? string : R
+export type ContextQueryResult<R extends Record<string, unknown> | undefined, K extends string | undefined> = K extends string ? string : R extends undefined ? Record<string, unknown> : R
 
 /**
  * Router context wrapper with helper methods

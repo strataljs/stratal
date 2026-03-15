@@ -1,4 +1,6 @@
-import type { Context } from 'hono'
+import type { Context, MiddlewareHandler } from 'hono'
+import { upgradeWebSocket } from 'hono/cloudflare-workers'
+import type { WSContext, WSEvents } from 'hono/ws'
 import { type Container, getMethodInjections } from '../../di'
 import {
   type Guard,
@@ -10,7 +12,9 @@ import type { OpenAPIHono } from '../../i18n/validation'
 import { createRoute } from '../../i18n/validation'
 import { type LoggerService } from '../../logger'
 import type { Constructor } from '../../types'
-import { DEFAULT_CONTENT_TYPE, HTTP_METHODS, METHOD_STATUS_CODES, SECURITY_SCHEMES } from '../constants'
+import { getWsOnCloseMethod, getWsOnErrorMethod, getWsOnMessageMethod, isGateway } from '../../websocket/decorators'
+import { GatewayContext } from '../../websocket/gateway-context'
+import { DEFAULT_CONTENT_TYPE, HTTP_METHODS, METHOD_STATUS_CODES, SECURITY_SCHEMES, VERSION_NEUTRAL } from '../constants'
 import type { IController } from '../controller'
 import {
   getControllerOptions,
@@ -18,7 +22,7 @@ import {
   getDecoratedMethods,
   getHttpDecoratedMethods,
   getHttpRouteMetadata,
-  getRouteConfig
+  getRouteConfig,
 } from '../decorators'
 import {
   ControllerMethodNotFoundError,
@@ -37,7 +41,6 @@ import type {
   SecuritySchemeRecord,
   VersioningOptions,
 } from '../types'
-import { VERSION_NEUTRAL } from '../constants'
 
 /**
  * Route registration service
@@ -83,12 +86,115 @@ export class RouteRegistrationService {
       return 0 // maintain relative order
     })
 
+    // Partition gateways from regular controllers
+    const gatewayClasses = sortedControllers.filter(c => isGateway(c))
+    const controllerClasses = sortedControllers.filter(c => !isGateway(c))
+
+    // Register WebSocket gateways
+    for (const GatewayClass of gatewayClasses) {
+      this.registerGateway(app, GatewayClass)
+    }
+
     // Register controllers
-    for (const ControllerClass of sortedControllers) {
+    for (const ControllerClass of controllerClasses) {
       this.registerController(app, ControllerClass)
     }
 
     this.logger.info('Controller registration complete')
+  }
+
+  /**
+   * Register a WebSocket gateway
+   * Applies versioning and guards, then registers an upgradeWebSocket handler
+   */
+  private registerGateway(app: OpenAPIHono<RouterEnv>, GatewayClass: Constructor<IController>): void {
+    const route = getControllerRoute(GatewayClass)
+
+    if (!route) {
+      throw new ControllerRegistrationError(
+        GatewayClass.name,
+        'Missing @Gateway decorator or route metadata'
+      )
+    }
+
+    const controllerOpts = getControllerOptions(GatewayClass)
+    const paths = this.versioningOptions
+      ? this.resolveVersionedPaths(route, controllerOpts)
+      : [route]
+
+    for (const fullPath of paths) {
+      this.registerGatewayRoute(app, GatewayClass, fullPath)
+    }
+  }
+
+  /**
+   * Register a single WebSocket gateway route
+   */
+  private registerGatewayRoute(
+    app: OpenAPIHono<RouterEnv>,
+    GatewayClass: Constructor<IController>,
+    fullPath: string
+  ): void {
+    // Collect class-level guards
+    const controllerGuards = getControllerGuards(GatewayClass)?.guards ?? []
+
+    const wsHandler: MiddlewareHandler<RouterEnv> = upgradeWebSocket((c) => {
+      const routerCtx = new RouterContext(c as Context<RouterEnv>)
+      const container = routerCtx.getContainer()
+      const gateway = container.resolve(GatewayClass)
+
+      // Cloudflare Workers doesn't support the `onOpen` WebSocket event;
+      // the upgrade callback itself serves as the open context.
+      const events: Omit<WSEvents, 'onOpen'> = {}
+
+      const onMsgMethod = getWsOnMessageMethod(GatewayClass)
+      if (onMsgMethod) {
+        events.onMessage = (evt: MessageEvent, ws: WSContext) => {
+          const ctx = new GatewayContext(c as Context<RouterEnv>, ws);
+          (gateway as Record<string, (...args: unknown[]) => void>)[onMsgMethod](evt, ctx);
+        }
+      }
+
+      const onCloseMethod = getWsOnCloseMethod(GatewayClass)
+      if (onCloseMethod) {
+        events.onClose = (evt: CloseEvent, ws: WSContext) => {
+          const ctx = new GatewayContext(c as Context<RouterEnv>, ws);
+          (gateway as Record<string, (...args: unknown[]) => void>)[onCloseMethod](evt, ctx)
+        }
+      }
+
+      const onErrMethod = getWsOnErrorMethod(GatewayClass)
+      if (onErrMethod) {
+        events.onError = (evt: Event, ws: WSContext) => {
+          const ctx = new GatewayContext(c as Context<RouterEnv>, ws);
+          (gateway as Record<string, (...args: unknown[]) => void>)[onErrMethod](evt, ctx)
+        }
+      }
+
+      return events
+    }) as MiddlewareHandler<RouterEnv>
+
+    this.logger.info('Registering WebSocket gateway', {
+      gateway: GatewayClass.name,
+      path: fullPath,
+    })
+
+    const handlers: MiddlewareHandler<RouterEnv>[] = []
+
+    if (controllerGuards.length > 0) {
+      this.logger.info('Gateway guards', {
+        gateway: GatewayClass.name,
+        path: fullPath,
+        guardCount: controllerGuards.length,
+      })
+      handlers.push(this.createGuardMiddleware(controllerGuards))
+    }
+
+    handlers.push(wsHandler)
+
+    // Type assertion needed because Hono's overloaded .get() signatures
+    // don't accept a spread of MiddlewareHandler[] alongside upgradeWebSocket's output type
+    app.get(fullPath, ...(handlers as [MiddlewareHandler<RouterEnv>]))
   }
 
   /**

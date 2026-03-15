@@ -3,7 +3,7 @@ name: stratal
 description: >-
   Use when working with the Stratal core framework for Cloudflare Workers — modules,
   dependency injection, controllers, routing, OpenAPI, queues, cron, email, storage,
-  caching, i18n, logging, guards, middleware, config, events, and error handling.
+  caching, i18n, logging, guards, middleware, config, events, SSE, streaming, and error handling.
   Trigger on: stratal, Stratal, StratalWorker, @Module, @Controller, @Route, IController,
   RouterContext, @inject, Scope, @Listener, @On, queues, cron, email, storage, cache,
   i18n, logging, guards, middleware, config, OpenAPIModule, ConfigModule, CacheModule,
@@ -13,12 +13,15 @@ description: >-
   @Get, @Post, @Put, @Patch, @Delete, @All, HttpRouteMetadata, RouteConfig,
   versioning, VERSION_NEUTRAL, VersioningOptions, defaultVersion, version prefix, API versioning,
   RouteBody, RouteBodyObject, RouteResponse, RouteResponseObject, contentType, content type,
-  multipart/form-data, application/octet-stream, DEFAULT_CONTENT_TYPE.
+  multipart/form-data, application/octet-stream, DEFAULT_CONTENT_TYPE,
+  @Gateway, @OnMessage, @OnClose, @OnError, GatewayContext, WebSocket, websocket, gateway,
+  stratal/websocket, streamSSE, SSEStreamingApi, SSEMessage, StreamingApi, stream, streamText,
+  text/event-stream, SSE, streaming, Server-Sent Events.
 user-invocable: false
 license: MIT
 metadata:
   author: Temitayo Fadojutimi
-  version: "3.0"
+  version: "3.1"
 ---
 
 # Stratal Core Framework
@@ -150,6 +153,119 @@ Types: `RouteBody = ZodType | RouteBodyObject`, `RouteResponse = ZodType | Route
 - HTTP method decorators and `@Route()` **cannot be mixed** in the same controller — use one pattern or the other
 - Default status code is `200` for all methods; use `statusCode: 201` explicitly for POST create endpoints
 - `@All` routes are **automatically hidden** from OpenAPI docs (OpenAPI doesn't support catch-all HTTP methods)
+
+## WebSocket Gateways
+
+Docs: [WebSocket](https://stratal.dev/integrations/websocket)
+
+Use `@Gateway(path, options?)` to create WebSocket endpoints. Gateways are registered in the module's `controllers` array (not a separate array). The `@Gateway` decorator auto-applies `@Transient()`. Accepts optional `GatewayOptions` (from `stratal/websocket`) with `version` support — same as `@Controller`.
+
+```ts
+import { Gateway, OnMessage, OnClose, OnError } from 'stratal/websocket';
+import type { GatewayContext } from 'stratal/websocket';
+
+@Gateway('/ws/chat', { version: '1' })
+export class ChatGateway {
+  constructor(@inject(ChatService) private chatService: ChatService) {}
+
+  @OnMessage()
+  handleMessage(evt: MessageEvent, ctx: GatewayContext) {
+    ctx.send(`echo:${evt.data as string}`);
+  }
+
+  @OnClose()
+  handleClose(evt: CloseEvent, ctx: GatewayContext) {
+    console.log('Connection closed');
+  }
+
+  @OnError()
+  handleError(evt: Event, ctx: GatewayContext) {
+    console.error('WebSocket error', evt);
+  }
+}
+```
+
+```ts
+@Module({
+  controllers: [ChatGateway], // gateways go in controllers array
+  providers: [ChatService],
+})
+export class ChatModule {}
+```
+
+**Method decorators:** `@OnMessage()`, `@OnClose()`, `@OnError()` — each marks exactly one method per gateway.
+
+**`GatewayContext`** extends `RouterContext` with:
+- `send(data)` — send a string, ArrayBuffer, or Uint8Array through the WebSocket
+- `close(code?, reason?)` — close the WebSocket connection
+- `readyState` — current WebSocket ready state
+- `ws` — raw Hono `WSContext`
+- Inherits `header()`, `getContainer()`, `getLocale()` from `RouterContext`
+- Overrides `param()` and `query()` to use raw Hono request methods (no OpenAPI validation, since WebSocket upgrades bypass OpenAPI)
+- `body()` throws `WebSocketBodyNotAvailableError` — WebSocket upgrade requests have no body
+
+**Guards** work on the upgrade request via `@UseGuards()` — applied the same way as on controllers.
+
+**Note:** Hono's `onOpen` event is not supported on Cloudflare Workers (the connection is already open when the server receives it).
+
+## Streaming & SSE
+
+Docs: [Streaming](https://stratal.dev/core-concepts/streaming)
+
+`RouterContext` provides three streaming methods that wrap Hono's streaming utilities:
+
+### `ctx.stream()` — Generic/binary streaming
+
+```ts
+@Get('/download', { response: { schema: z.any(), contentType: 'application/octet-stream' } })
+async download(ctx: RouterContext) {
+  return ctx.stream(async (stream) => {
+    await stream.write(new Uint8Array([1, 2, 3]));
+    await stream.close();
+  });
+}
+```
+
+**Signature:** `stream(callback: (stream: StreamingApi) => Promise<void>, onError?: (err: Error, stream: StreamingApi) => Promise<void>): Response`
+
+### `ctx.streamText()` — Text streaming
+
+Automatically sets `Content-Encoding: Identity` for Cloudflare Workers compatibility.
+
+```ts
+@Get('/generate', { response: { schema: z.any(), contentType: 'text/plain' } })
+async generate(ctx: RouterContext) {
+  return ctx.streamText(async (stream) => {
+    await stream.write('Hello ');
+    await stream.write('World');
+    await stream.close();
+  });
+}
+```
+
+**Signature:** `streamText(callback: (stream: StreamingApi) => Promise<void>, onError?: (err: Error, stream: StreamingApi) => Promise<void>): Response`
+
+### `ctx.streamSSE()` — Server-Sent Events
+
+Automatically sets `Content-Encoding: Identity` for Cloudflare Workers compatibility.
+
+```ts
+import type { SSEStreamingApi } from 'stratal/router';
+
+@Get('/events', { response: { schema: z.any(), contentType: 'text/event-stream' } })
+async events(ctx: RouterContext) {
+  return ctx.streamSSE(async (stream) => {
+    await stream.writeSSE({ data: JSON.stringify({ status: 'connected' }), event: 'open', id: '1' });
+    await stream.writeSSE({ data: JSON.stringify({ message: 'hello' }), event: 'message', id: '2' });
+  });
+}
+```
+
+**Signature:** `streamSSE(callback: (stream: SSEStreamingApi) => Promise<void>, onError?: (err: Error, stream: SSEStreamingApi) => Promise<void>): Response`
+
+**SSE message format:** `writeSSE({ data: string, event?: string, id?: string })` — the `data` field is required, `event` and `id` are optional.
+
+**Exported types from `stratal/router`:** `SSEStreamingApi`, `SSEMessage`, `StreamingApi`.
 
 ## API Versioning
 
@@ -439,7 +555,7 @@ export class MyWorkflow extends StratalWorkflow<Env, { orderId: string }> {
 |---|---|
 | `stratal` | `Stratal`, `Application`, `@Module`, `StratalEnv` |
 | `stratal/di` | `Container`, `DI_TOKENS`, `Scope`, `inject`, `Transient` |
-| `stratal/router` | `@Controller`, `@Route`, `@Get`, `@Post`, `@Put`, `@Patch`, `@Delete`, `@All`, `RouteConfig`, `RouteBody`, `RouteBodyObject`, `RouteResponse`, `RouteResponseObject`, `RouterContext`, `UseGuards`, `IController`, `VERSION_NEUTRAL`, `VersioningOptions` |
+| `stratal/router` | `@Controller`, `@Route`, `@Get`, `@Post`, `@Put`, `@Patch`, `@Delete`, `@All`, `RouteConfig`, `RouteBody`, `RouteBodyObject`, `RouteResponse`, `RouteResponseObject`, `RouterContext`, `UseGuards`, `IController`, `VERSION_NEUTRAL`, `VersioningOptions`, `SSEStreamingApi`, `SSEMessage`, `StreamingApi` |
 | `stratal/validation` | `z` (Zod), `ZodType`, validation utilities |
 | `stratal/errors` | `ApplicationError`, `ERROR_CODES`, built-in error classes |
 | `stratal/events` | `@Listener`, `@On`, `EventRegistry` |
@@ -451,6 +567,7 @@ export class MyWorkflow extends StratalWorkflow<Env, { orderId: string }> {
 | `stratal/logger` | `LoggerService`, `LOGGER_TOKENS` |
 | `stratal/config` | `ConfigModule`, `registerAs` |
 | `stratal/openapi` | `OpenAPIModule` |
+| `stratal/websocket` | `@Gateway`, `@OnMessage`, `@OnClose`, `@OnError`, `GatewayContext` |
 | `stratal/workers` | `StratalDurableObject`, `StratalWorkerEntrypoint`, `StratalWorkflow`, `runInScope` |
 
 ## Do's and Don'ts
@@ -471,4 +588,6 @@ export class MyWorkflow extends StratalWorkflow<Env, { orderId: string }> {
 - **Do** use separate controllers for different API versions when behavior diverges
 - **Do** use `VERSION_NEUTRAL` for version-agnostic endpoints (health checks, OpenAPI docs, etc.)
 - **Don't** mix versioned and unversioned controllers for the same path without `VERSION_NEUTRAL`
+- **Do** register gateways in the `controllers` array (not a separate array)
+- **Don't** mix `@Gateway` with `@Controller` on the same class
 - **Don't** disable `emitDecoratorMetadata` in tsconfig

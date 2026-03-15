@@ -2,14 +2,15 @@
 name: stratal-testing
 description: >-
   Use when writing tests for Stratal applications — TestingModule, HTTP testing,
-  mocks, fakes, and auth testing utilities. Trigger on: test, TestingModule,
+  WebSocket testing, mocks, fakes, and auth testing utilities. Trigger on: test, TestingModule,
   TestHttpClient, TestResponse, mock, fake, FakeStorageService, createMockFetch,
-  MockFetch, msw, stratalTest, createMock, ActingAs, @stratal/testing.
+  MockFetch, msw, stratalTest, createMock, ActingAs, @stratal/testing,
+  TestWsRequest, TestWsConnection, ws, WebSocket, websocket, module.ws.
 user-invocable: false
 license: MIT
 metadata:
   author: Temitayo Fadojutimi
-  version: "3.0"
+  version: "3.1"
 ---
 
 # @stratal/testing
@@ -94,6 +95,48 @@ await response.assertJsonPath('data.email', 'test@example.com');
 ```
 
 Assertion methods: `assertOk()`, `assertCreated()`, `assertNotFound()`, `assertUnauthorized()`, `assertForbidden()`, `assertStatus(code)`, `assertJsonPath(path, value)`, `assertJsonStructure(shape)`.
+
+## WebSocket Testing
+
+Docs: [WebSocket Testing](https://stratal.dev/testing/websocket-testing)
+
+Use `module.ws(path)` to create a WebSocket test request builder (`TestWsRequest`). Call `.connect()` to perform the upgrade and get a `TestWsConnection`.
+
+```ts
+const ws = await module.ws('/ws/chat').connect();
+
+// Send a message and assert the response
+ws.send('hello');
+await ws.assertMessage('echo:hello');
+
+// Close and assert
+ws.close();
+await ws.assertClosed();
+```
+
+**`TestWsRequest`** (builder pattern):
+- `.withHeaders(headers)` — add custom headers to the upgrade request
+- `.actingAs({ id })` — authenticate the WebSocket connection as a user
+- `.connect()` — send the upgrade request, returns `TestWsConnection`
+
+**`TestWsConnection`** methods:
+- `send(data)` — send a string, ArrayBuffer, or Uint8Array
+- `close(code?, reason?)` — close the connection
+- `raw` — access the underlying WebSocket
+
+**`TestWsConnection`** assertions:
+- `assertMessage(expected, timeout?)` — assert the next message equals `expected`
+- `assertClosed(expectedCode?, timeout?)` — assert the connection closes
+- `waitForMessage(timeout?)` — wait for and return the next message
+- `waitForClose(timeout?)` — wait for the connection to close
+
+```ts
+// Authenticated WebSocket
+const ws = await module.ws('/ws/chat')
+  .actingAs({ id: user.id })
+  .withHeaders({ 'X-Custom': 'value' })
+  .connect();
+```
 
 ## FakeStorageService
 
