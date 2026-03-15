@@ -1,7 +1,7 @@
 import { Transient } from '../../di/decorators'
 import { type Constructor } from '../../types'
 import { ROUTE_METADATA_KEYS } from '../constants'
-import type { ControllerOptions } from '../types'
+import { type ControllerOptions } from '../types'
 
 const CONTROLLER_ROUTE_KEY = ROUTE_METADATA_KEYS.CONTROLLER_ROUTE
 
@@ -65,4 +65,15 @@ export function getControllerRoute(target: object): string | undefined {
 export function getControllerOptions(target: object): ControllerOptions | undefined {
   const metadataTarget = typeof target === 'function' ? target : (target as { constructor: object }).constructor
   return Reflect.getMetadata(ROUTE_METADATA_KEYS.CONTROLLER_OPTIONS, metadataTarget) as ControllerOptions | undefined
+}
+
+/**
+ * Get the version from controller class metadata
+ *
+ * @param target - Controller class or instance
+ * @returns Version string, array, VERSION_NEUTRAL symbol, or undefined if not set
+ */
+export function getControllerVersion(target: object): ControllerOptions['version'] {
+  const options = getControllerOptions(target)
+  return options?.version
 }

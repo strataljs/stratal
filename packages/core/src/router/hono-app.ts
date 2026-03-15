@@ -19,7 +19,7 @@ import { createLoggerMiddleware } from './middleware'
 import type { Middleware } from './middleware.interface'
 import { RouterContext } from './router-context'
 import { RouteRegistrationService } from './services/route-registration.service'
-import type { RouterEnv } from './types'
+import type { RouterEnv, VersioningOptions } from './types'
 
 const isMiddlewareClass = (arg: unknown): arg is Constructor<Middleware> =>
   // eslint-disable-next-line @typescript-eslint/no-unsafe-return
@@ -94,11 +94,15 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
    * Configure module middleware, OpenAPI endpoints, controller routes, and 404 handler.
    * Called once by Application.initialize().
    */
-  configure(middlewareConfigs: MiddlewareConfigEntry[], controllers: Constructor<IController>[]): void {
+  configure(
+    middlewareConfigs: MiddlewareConfigEntry[],
+    controllers: Constructor<IController>[],
+    versioningOptions?: VersioningOptions | null,
+  ): void {
     if (this.configured) throw new HonoAppAlreadyConfiguredError()
 
     // Module middleware
-    const middlewareConfigService = new MiddlewareConfigurationService(this._logger)
+    const middlewareConfigService = new MiddlewareConfigurationService(this._logger, versioningOptions ?? null)
     middlewareConfigService.applyMiddlewares(this, middlewareConfigs, controllers, this._container)
 
     // OpenAPI endpoints
@@ -106,7 +110,7 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
     openAPIService.setupEndpoints(this, controllers)
 
     // Controller routes
-    const routeRegistrationService = new RouteRegistrationService(this._logger)
+    const routeRegistrationService = new RouteRegistrationService(this._logger, versioningOptions ?? null)
     routeRegistrationService.configure(this, controllers)
 
     // 404 handler (must be last)

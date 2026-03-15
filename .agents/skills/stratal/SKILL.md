@@ -10,7 +10,8 @@ description: >-
   EmailModule, StorageModule, QueueModule, I18nModule, ApplicationError, StratalEnv,
   registerAs, StratalDurableObject, StratalWorkerEntrypoint, StratalWorkflow, runInScope,
   stratal/workers, DurableObject, Workflow, WorkerEntrypoint, Service Binding, RPC,
-  @Get, @Post, @Put, @Patch, @Delete, @All, HttpRouteMetadata, RouteConfig.
+  @Get, @Post, @Put, @Patch, @Delete, @All, HttpRouteMetadata, RouteConfig,
+  versioning, VERSION_NEUTRAL, VersioningOptions, defaultVersion, version prefix, API versioning.
 user-invocable: false
 license: MIT
 metadata:
@@ -40,7 +41,14 @@ Docs: [Installation](https://stratal.dev/getting-started/installation) · [Your 
 import { Stratal } from 'stratal';
 import { AppModule } from './app.module';
 
+// Without versioning
 const app = new Stratal({ module: AppModule });
+
+// With URI-based API versioning
+const app = new Stratal({
+  module: AppModule,
+  versioning: { prefix: 'v', defaultVersion: '1' },
+});
 
 export default app;
 ```
@@ -128,6 +136,52 @@ export class UsersController implements IController {
 - HTTP method decorators and `@Route()` **cannot be mixed** in the same controller — use one pattern or the other
 - Default status code is `200` for all methods; use `statusCode: 201` explicitly for POST create endpoints
 - `@All` routes are **automatically hidden** from OpenAPI docs (OpenAPI doesn't support catch-all HTTP methods)
+
+## API Versioning
+
+Docs: [API Versioning](https://stratal.dev/core-concepts/versioning/)
+
+Stratal supports URI-based API versioning. Enable it via `Stratal` config:
+
+```ts
+import { Stratal } from 'stratal';
+
+const app = new Stratal({
+  module: AppModule,
+  versioning: { prefix: 'v', defaultVersion: '1' },
+});
+```
+
+**Controller-level version:**
+
+```ts
+import { Controller, VERSION_NEUTRAL } from 'stratal/router';
+
+// Single version — routes served at /v1/users
+@Controller('/users', { version: '1' })
+export class UsersV1Controller implements IController { /* ... */ }
+
+// Multiple versions — routes served at both /v1/users and /v2/users
+@Controller('/users', { version: ['1', '2'] })
+export class UsersController implements IController { /* ... */ }
+
+// Version-neutral — routes served at /health (no version prefix)
+@Controller('/health', { version: VERSION_NEUTRAL })
+export class HealthController implements IController { /* ... */ }
+```
+
+**`defaultVersion` behavior:** When `defaultVersion` is set (e.g., `'1'`), controllers without an explicit `version` option are automatically assigned that version. Controllers with `VERSION_NEUTRAL` are not affected — they always remain unversioned.
+
+**Middleware version targeting:**
+
+```ts
+export class AppModule implements MiddlewareConfigurable {
+  configure(consumer: MiddlewareConsumer) {
+    // Target middleware to a specific API version
+    consumer.apply(V1DeprecationMiddleware).forRoutes({ path: '/users', version: '1' });
+  }
+}
+```
 
 ## Dependency Injection
 
@@ -371,7 +425,7 @@ export class MyWorkflow extends StratalWorkflow<Env, { orderId: string }> {
 |---|---|
 | `stratal` | `Stratal`, `Application`, `@Module`, `StratalEnv` |
 | `stratal/di` | `Container`, `DI_TOKENS`, `Scope`, `inject`, `Transient` |
-| `stratal/router` | `@Controller`, `@Route`, `@Get`, `@Post`, `@Put`, `@Patch`, `@Delete`, `@All`, `RouteConfig`, `RouterContext`, `UseGuards`, `IController` |
+| `stratal/router` | `@Controller`, `@Route`, `@Get`, `@Post`, `@Put`, `@Patch`, `@Delete`, `@All`, `RouteConfig`, `RouterContext`, `UseGuards`, `IController`, `VERSION_NEUTRAL`, `VersioningOptions` |
 | `stratal/validation` | `z` (Zod), `ZodType`, validation utilities |
 | `stratal/errors` | `ApplicationError`, `ERROR_CODES`, built-in error classes |
 | `stratal/events` | `@Listener`, `@On`, `EventRegistry` |
@@ -400,4 +454,7 @@ export class MyWorkflow extends StratalWorkflow<Env, { orderId: string }> {
 - **Do** export the `Stratal` instance as the default export (required for the static singleton used by worker classes)
 - **Do** use `runInScope` for each method/workflow step that needs DI — each call gets a fresh request-scoped container
 - **Don't** cache container references across `runInScope` calls — the container is only valid within the callback
+- **Do** use separate controllers for different API versions when behavior diverges
+- **Do** use `VERSION_NEUTRAL` for version-agnostic endpoints (health checks, OpenAPI docs, etc.)
+- **Don't** mix versioned and unversioned controllers for the same path without `VERSION_NEUTRAL`
 - **Don't** disable `emitDecoratorMetadata` in tsconfig

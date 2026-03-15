@@ -11,6 +11,8 @@ export interface RouteInfo {
   path: string
   /** HTTP method(s) to match. If omitted, matches all methods */
   method?: HttpMethod | HttpMethod[]
+  /** API version(s) to target. When versioning is enabled, resolves to versioned path. */
+  version?: string | string[]
 }
 
 /**

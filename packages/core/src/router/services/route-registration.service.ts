@@ -34,7 +34,9 @@ import type {
   RouteConfig,
   RouterEnv,
   SecuritySchemeRecord,
+  VersioningOptions,
 } from '../types'
+import { VERSION_NEUTRAL } from '../constants'
 
 /**
  * Route registration service
@@ -51,7 +53,8 @@ export class RouteRegistrationService {
   private controllerClasses = new Map<string, Constructor<IController>>()
 
   constructor(
-    private logger: LoggerService
+    private logger: LoggerService,
+    private versioningOptions: VersioningOptions | null = null,
   ) { }
 
   /**
@@ -107,17 +110,23 @@ export class RouteRegistrationService {
     const prototype = ControllerClass.prototype as IController
     const controllerOpts = getControllerOptions(ControllerClass)
 
-    // Handle wildcard routes (non-RESTful controllers)
+    // Handle wildcard routes (non-RESTful controllers) — check once, not per version
     if (prototype.handle) {
-      this.registerWildcardRoute(app, ControllerClass, route)
+      if (!this.versioningOptions) {
+        this.registerWildcardRoute(app, ControllerClass, route)
+      } else {
+        for (const versionedRoute of this.resolveVersionedPaths(route, controllerOpts)) {
+          this.registerWildcardRoute(app, ControllerClass, versionedRoute)
+        }
+      }
       return
     }
 
-    // Check for both decorator types
+    // Compute decorated methods once (loop-invariant)
     const decoratedMethods = getDecoratedMethods(ControllerClass)
     const httpDecoratedMethods = getHttpDecoratedMethods(ControllerClass)
 
-    // Enforce mutual exclusivity: a controller cannot mix @Route() with HTTP method decorators
+    // Enforce mutual exclusivity once
     if (decoratedMethods.length > 0 && httpDecoratedMethods.length > 0) {
       throw new ControllerRegistrationError(
         ControllerClass.name,
@@ -125,16 +134,77 @@ export class RouteRegistrationService {
       )
     }
 
-    if (httpDecoratedMethods.length > 0) {
-      // Register explicit HTTP method routes (@Get, @Post, etc.)
-      this.registerHttpRoutes(app, ControllerClass, route, httpDecoratedMethods, controllerOpts)
-    } else if (decoratedMethods.length > 0) {
-      // Register OpenAPI routes (@Route with convention-based method names)
-      this.registerOpenAPIRoutes(app, ControllerClass, route, decoratedMethods, controllerOpts)
-    } else {
-      // Fallback to traditional RESTful method registration (no OpenAPI)
-      this.registerRESTfulRoutes(app, ControllerClass, route, prototype)
+    // Fast path: no versioning — inline dispatch, no array allocation, no loop
+    if (!this.versioningOptions) {
+      this.dispatchRoutes(app, ControllerClass, route, decoratedMethods, httpDecoratedMethods, controllerOpts, prototype)
+      return
     }
+
+    // Versioning path: resolve versioned paths and register each
+    for (const versionedRoute of this.resolveVersionedPaths(route, controllerOpts)) {
+      this.dispatchRoutes(app, ControllerClass, versionedRoute, decoratedMethods, httpDecoratedMethods, controllerOpts, prototype)
+    }
+  }
+
+  /**
+   * Dispatch route registration based on decorator type
+   */
+  private dispatchRoutes(
+    app: OpenAPIHono<RouterEnv>,
+    ControllerClass: Constructor<IController>,
+    path: string,
+    decoratedMethods: string[],
+    httpDecoratedMethods: string[],
+    controllerOpts: ControllerOptions | undefined,
+    prototype: IController
+  ): void {
+    if (httpDecoratedMethods.length > 0) {
+      this.registerHttpRoutes(app, ControllerClass, path, httpDecoratedMethods, controllerOpts)
+    } else if (decoratedMethods.length > 0) {
+      this.registerOpenAPIRoutes(app, ControllerClass, path, decoratedMethods, controllerOpts)
+    } else {
+      this.registerRESTfulRoutes(app, ControllerClass, path, prototype)
+    }
+  }
+
+  /**
+   * Resolve versioned paths for a controller based on versioning configuration.
+   *
+   * @param basePath - The base path from @Controller decorator
+   * @param controllerOpts - Controller options (may contain version)
+   * @returns Array of resolved paths (with version prefix if applicable)
+   */
+  private resolveVersionedPaths(basePath: string, controllerOpts?: ControllerOptions): string[] {
+    // Versioning disabled — always return base path
+    if (!this.versioningOptions) {
+      return [basePath]
+    }
+
+    const version = controllerOpts?.version
+
+    // VERSION_NEUTRAL — explicitly opt out of versioning
+    if (version === VERSION_NEUTRAL) {
+      return [basePath]
+    }
+
+    const prefix = this.versioningOptions.prefix ?? 'v'
+
+    // Explicit version(s) on the controller
+    if (version !== undefined) {
+      const versions = Array.isArray(version) ? version : [version]
+      return versions.map(v => `/${prefix}${v}${basePath}`)
+    }
+
+    // No explicit version — apply defaultVersion if set
+    if (this.versioningOptions.defaultVersion !== undefined) {
+      const defaults = Array.isArray(this.versioningOptions.defaultVersion)
+        ? this.versioningOptions.defaultVersion
+        : [this.versioningOptions.defaultVersion]
+      return defaults.map(v => `/${prefix}${v}${basePath}`)
+    }
+
+    // Versioning enabled but no version and no default — no prefix
+    return [basePath]
   }
 
   /**

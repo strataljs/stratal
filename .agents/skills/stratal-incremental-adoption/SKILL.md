@@ -83,6 +83,11 @@ app.route('/api/v2', stratalHono)
 app.get('/api/v1/reports', (c) => c.json({ reports: [] }))
 app.post('/api/v1/webhooks', (c) => c.json({ received: true }))
 
+// TIP: Instead of manually embedding version prefixes in app.route(),
+// you can use Stratal's built-in versioning (see stratal skill):
+//   new Stratal({ module: AppModule, versioning: { prefix: 'v', defaultVersion: '2' } })
+// Then mount at /api and let versioning handle the /v2 prefix automatically.
+
 export default {
   fetch: app.fetch,
   async queue(batch: MessageBatch) {
