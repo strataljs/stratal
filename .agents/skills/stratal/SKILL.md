@@ -11,7 +11,9 @@ description: >-
   registerAs, StratalDurableObject, StratalWorkerEntrypoint, StratalWorkflow, runInScope,
   stratal/workers, DurableObject, Workflow, WorkerEntrypoint, Service Binding, RPC,
   @Get, @Post, @Put, @Patch, @Delete, @All, HttpRouteMetadata, RouteConfig,
-  versioning, VERSION_NEUTRAL, VersioningOptions, defaultVersion, version prefix, API versioning.
+  versioning, VERSION_NEUTRAL, VersioningOptions, defaultVersion, version prefix, API versioning,
+  RouteBody, RouteBodyObject, RouteResponse, RouteResponseObject, contentType, content type,
+  multipart/form-data, application/octet-stream, DEFAULT_CONTENT_TYPE.
 user-invocable: false
 license: MIT
 metadata:
@@ -131,6 +133,18 @@ export class UsersController implements IController {
 **Available decorators:** `@Get(path, config?)`, `@Post(path, config?)`, `@Put(path, config?)`, `@Patch(path, config?)`, `@Delete(path, config?)`, `@All(path, config?)`.
 
 **`RouteConfig` options:** `body`, `params`, `query`, `response` (required), `tags`, `security`, `description`, `summary`, `statusCode`, `hideFromDocs`.
+
+**Custom content types:** `body` and `response` accept an object form with optional `contentType` (defaults to `application/json`):
+
+```ts
+@Route({
+  body: { schema: UploadSchema, contentType: 'multipart/form-data' },
+  response: { schema: FileSchema, contentType: 'application/octet-stream', description: 'Binary file' },
+})
+async upload(ctx: RouterContext) { /* ... */ }
+```
+
+Types: `RouteBody = ZodType | RouteBodyObject`, `RouteResponse = ZodType | RouteResponseObject`. Error responses always use `application/json` regardless of route content type.
 
 **Key rules:**
 - HTTP method decorators and `@Route()` **cannot be mixed** in the same controller — use one pattern or the other
@@ -425,7 +439,7 @@ export class MyWorkflow extends StratalWorkflow<Env, { orderId: string }> {
 |---|---|
 | `stratal` | `Stratal`, `Application`, `@Module`, `StratalEnv` |
 | `stratal/di` | `Container`, `DI_TOKENS`, `Scope`, `inject`, `Transient` |
-| `stratal/router` | `@Controller`, `@Route`, `@Get`, `@Post`, `@Put`, `@Patch`, `@Delete`, `@All`, `RouteConfig`, `RouterContext`, `UseGuards`, `IController`, `VERSION_NEUTRAL`, `VersioningOptions` |
+| `stratal/router` | `@Controller`, `@Route`, `@Get`, `@Post`, `@Put`, `@Patch`, `@Delete`, `@All`, `RouteConfig`, `RouteBody`, `RouteBodyObject`, `RouteResponse`, `RouteResponseObject`, `RouterContext`, `UseGuards`, `IController`, `VERSION_NEUTRAL`, `VersioningOptions` |
 | `stratal/validation` | `z` (Zod), `ZodType`, validation utilities |
 | `stratal/errors` | `ApplicationError`, `ERROR_CODES`, built-in error classes |
 | `stratal/events` | `@Listener`, `@On`, `EventRegistry` |
