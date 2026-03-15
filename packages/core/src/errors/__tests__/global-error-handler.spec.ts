@@ -143,7 +143,7 @@ describe('GlobalErrorHandler', () => {
   })
 
   describe('translation', () => {
-    it('should call i18n.t(messageKey, metadata) for ApplicationError', () => {
+    it('should call i18n.t(message, metadata) for ApplicationError', () => {
       const error = new ValidationTestError({ field: 'email' })
       handler.handle(error)
 

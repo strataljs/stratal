@@ -18,7 +18,8 @@ import type { ErrorCode } from './error-codes'
  * - Serialization for RPC transmission
  *
  * Message Localization:
- * - Each error class defines a message key (e.g., 'errors.userNotFound')
+ * - Each error class passes an i18n key (e.g., 'errors.userNotFound') to super()
+ * - `Error.message` contains the i18n key for useful stack traces and fallback display
  * - Metadata provides interpolation parameters (e.g., { userId: '123' })
  * - GlobalErrorHandler translates the message key using I18nService before sending response
  * - This ensures errors are localized based on the user's locale (from X-Locale header)
@@ -51,17 +52,17 @@ export abstract class ApplicationError extends Error {
   public readonly metadata?: Record<string, unknown>
 
   /**
-   * @param messageKey - Type-safe i18n message key (e.g., 'errors.userNotFound')
+   * @param i18nKey - Type-safe i18n message key (e.g., 'errors.userNotFound')
    * @param code - Type-safe error code from ERROR_CODES registry
    * @param metadata - Optional data for logging and interpolation
    */
   constructor(
-    messageKey: MessageKeys,
+    i18nKey: MessageKeys,
     code: ErrorCode,
     metadata?: Record<string, unknown>
   ) {
-    // Pass message key as the Error message (will be replaced with translated message in GlobalErrorHandler)
-    super(messageKey)
+    // Pass i18nKey to Error.message for useful stack traces (e.g., "InternalError: errors.internalError")
+    super(i18nKey)
 
     // Maintains proper prototype chain for instanceof checks
     Object.setPrototypeOf(this, new.target.prototype)
@@ -125,14 +126,19 @@ export abstract class ApplicationError extends Error {
    * @returns ErrorResponse object suitable for JSON serialization
    */
   toErrorResponse(env: Environment, translatedMessage?: string): ErrorResponse {
+    const message = translatedMessage ?? this.message
+
     return {
       code: this.code,
-      message: translatedMessage ?? this.message, // Use translated message if provided, otherwise fallback to messageKey
+      message,
       timestamp: this.timestamp,
       // Include filtered user-facing metadata in all environments
       metadata: ApplicationError.filterMetadata(this.metadata),
       // Stack trace only in development for debugging
-      stack: env === 'development' ? this.stack : undefined,
+      // Rewrite first line with translated message for readable debugging
+      stack: env === 'development'
+        ? this.stack?.replace(this.message, message)
+        : undefined,
     }
   }
 
