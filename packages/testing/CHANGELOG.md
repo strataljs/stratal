@@ -1,5 +1,30 @@
 # @stratal/testing
 
+## 0.0.13
+
+### Patch Changes
+
+- [#120](https://github.com/strataljs/stratal/pull/120) [`8d0df50`](https://github.com/strataljs/stratal/commit/8d0df506411bc725ef4e4eaf4efdb314b3384d98) Thanks [@adesege](https://github.com/adesege)! - Add SSE testing utilities with `TestSseRequest` and `TestSseConnection`
+
+  ### Details
+
+  - `TestingModule.sse(path)` creates an SSE test request builder
+  - `TestSseRequest` supports custom headers, authentication via `actingAs()`, and automatic `Accept: text/event-stream` header
+  - `TestSseConnection` wraps a live SSE stream with assertion helpers: `assertEvent()`, `assertEventData()`, `assertJsonEventData()`, `waitForEvent()`, `waitForEnd()`, `collectEvents()`
+  - Replace dynamic `import('vitest')` with static imports in `TestWsConnection`, `TestWsRequest`, and `TestingModule`
+
+- [#120](https://github.com/strataljs/stratal/pull/120) [`8d0df50`](https://github.com/strataljs/stratal/commit/8d0df506411bc725ef4e4eaf4efdb314b3384d98) Thanks [@adesege](https://github.com/adesege)! - Add WebSocket testing utilities with `TestWsRequest` and `TestWsConnection`
+
+  ### Details
+
+  - `TestingModule.ws(path)` creates a WebSocket test request builder
+  - `TestWsRequest` supports custom headers, authentication via `actingAs()`, and WebSocket upgrade handshake
+  - `TestWsConnection` wraps a live WebSocket with assertion helpers: `assertMessage()`, `assertClosed()`, `waitForMessage()`, `waitForClose()`
+
+- Updated dependencies [[`8d0df50`](https://github.com/strataljs/stratal/commit/8d0df506411bc725ef4e4eaf4efdb314b3384d98), [`527f675`](https://github.com/strataljs/stratal/commit/527f675ea3b4cdb98165cbe1f81e820fa9e79490), [`bb99119`](https://github.com/strataljs/stratal/commit/bb991196dbcc55963d16ee1a6f5db580c18c796a), [`957de6e`](https://github.com/strataljs/stratal/commit/957de6e88684344bf26e95d03187345bf77f4f52), [`0ade941`](https://github.com/strataljs/stratal/commit/0ade94162f9058e9230039fa72efbbf3e57cf572)]:
+  - stratal@0.0.13
+  - @stratal/framework@0.0.13
+
 ## 0.0.12
 
 ### Patch Changes
