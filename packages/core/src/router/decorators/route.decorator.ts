@@ -2,7 +2,10 @@ import { ROUTE_METADATA_KEYS } from '../constants'
 import type { RouteConfig } from '../types'
 
 /**
- * Decorator to add OpenAPI metadata to a controller method
+ * Decorator to add OpenAPI metadata to a controller method using convention-based routing.
+ *
+ * **Cannot be mixed with HTTP method decorators** (`@Get`, `@Post`, `@Put`, `@Patch`,
+ * `@Delete`, `@All`) in the same controller. Use one pattern or the other.
  *
  * Stores route configuration (schemas, response, tags, security) in metadata.
  * HTTP method, path, and success status code are auto-derived from the method name:
@@ -70,7 +73,7 @@ import type { RouteConfig } from '../types'
  * }
  * ```
  */
-export function Route(config: RouteConfig) {
+export function Route(config: Omit<RouteConfig, 'statusCode'>) {
   return function (
     target: object,
     propertyKey: string,

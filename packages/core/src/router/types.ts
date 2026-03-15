@@ -42,7 +42,7 @@ export type MethodName = keyof typeof HTTP_METHODS
 /**
  * HTTP method type from OpenAPI spec
  */
-export type HttpMethod = 'get' | 'post' | 'put' | 'delete' | 'patch' | 'head' | 'options' | 'trace'
+export type HttpMethod = 'get' | 'post' | 'put' | 'delete' | 'patch' | 'head' | 'options' | 'trace' | 'all'
 
 /**
  * Security scheme record for OpenAPI security array format
@@ -119,6 +119,23 @@ export interface RouteConfig {
    * Useful for internal-only endpoints, debug routes, or work-in-progress features
    */
   hideFromDocs?: boolean
+
+  /**
+   * HTTP success status code for the response
+   * Used by HTTP method decorators (@Get, @Post, etc.) to set the success status
+   * For @Route() decorator, status code is auto-derived from method name
+   */
+  statusCode?: number
+}
+
+/**
+ * Metadata stored by HTTP method decorators (@Get, @Post, etc.)
+ * Contains the explicit HTTP method, path, and route configuration
+ */
+export interface HttpRouteMetadata {
+  method: HttpMethod
+  path: string
+  config: RouteConfig
 }
 
 /**
