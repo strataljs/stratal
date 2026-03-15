@@ -16,6 +16,8 @@ import {
   getControllerOptions,
   getControllerRoute,
   getDecoratedMethods,
+  getHttpDecoratedMethods,
+  getHttpRouteMetadata,
   getRouteConfig
 } from '../decorators'
 import {
@@ -111,11 +113,23 @@ export class RouteRegistrationService {
       return
     }
 
-    // Check for OpenAPI decorated methods
+    // Check for both decorator types
     const decoratedMethods = getDecoratedMethods(ControllerClass)
+    const httpDecoratedMethods = getHttpDecoratedMethods(ControllerClass)
 
-    if (decoratedMethods.length > 0) {
-      // Register OpenAPI routes
+    // Enforce mutual exclusivity: a controller cannot mix @Route() with HTTP method decorators
+    if (decoratedMethods.length > 0 && httpDecoratedMethods.length > 0) {
+      throw new ControllerRegistrationError(
+        ControllerClass.name,
+        'Cannot mix @Route() with HTTP method decorators (@Get, @Post, etc.) in the same controller. Use one pattern or the other.'
+      )
+    }
+
+    if (httpDecoratedMethods.length > 0) {
+      // Register explicit HTTP method routes (@Get, @Post, etc.)
+      this.registerHttpRoutes(app, ControllerClass, route, httpDecoratedMethods, controllerOpts)
+    } else if (decoratedMethods.length > 0) {
+      // Register OpenAPI routes (@Route with convention-based method names)
       this.registerOpenAPIRoutes(app, ControllerClass, route, decoratedMethods, controllerOpts)
     } else {
       // Fallback to traditional RESTful method registration (no OpenAPI)
@@ -265,6 +279,104 @@ export class RouteRegistrationService {
   }
 
   /**
+   * Register routes using HTTP method decorators (@Get, @Post, etc.)
+   * These use explicit method + path instead of convention-based derivation
+   */
+  private registerHttpRoutes(
+    app: OpenAPIHono<RouterEnv>,
+    ControllerClass: Constructor<IController>,
+    basePath: string,
+    httpDecoratedMethods: string[],
+    controllerOpts: ControllerOptions | undefined
+  ): void {
+    const className = ControllerClass.name
+    const prototype = ControllerClass.prototype as IController
+
+    const controllerHidden = controllerOpts?.hideFromDocs ?? false
+    const controllerGuards = getControllerGuards(ControllerClass)?.guards ?? []
+
+    for (const methodName of httpDecoratedMethods) {
+      const httpMeta = getHttpRouteMetadata(prototype, methodName)
+      if (!httpMeta) continue
+
+      const fullPath = this.joinPaths(basePath, httpMeta.path)
+      const routeConfig = httpMeta.config
+      const hideFromDocs = routeConfig.hideFromDocs ?? controllerHidden
+
+      // @All routes or hidden routes are registered without OpenAPI
+      if (httpMeta.method === 'all' || hideFromDocs) {
+        this.logger.info(`Registering route (no OpenAPI)`, {
+          controller: className,
+          method: httpMeta.method.toUpperCase(),
+          path: fullPath,
+          methodName,
+        })
+
+        this.registerRouteWithoutOpenAPI(app, ControllerClass, methodName, {
+          method: httpMeta.method,
+          path: fullPath,
+        })
+        continue
+      }
+
+      // Collect method-level guards
+      const methodGuards = getMethodGuards(prototype, methodName)?.guards ?? []
+      const allGuards: Guard[] = [...controllerGuards, ...methodGuards]
+
+      if (allGuards.length > 0) {
+        this.logger.info(`Route guards`, {
+          controller: className,
+          method: httpMeta.method.toUpperCase(),
+          path: fullPath,
+          methodName,
+          guardCount: allGuards.length,
+        })
+      }
+
+      // Build and register OpenAPI route
+      const metadata = this.mergeMetadata(controllerOpts, routeConfig, ControllerClass, methodName)
+      const statusCode = routeConfig.statusCode ?? 200
+      const openApiRoute = this.buildOpenAPIRoute(
+        httpMeta.method,
+        fullPath,
+        routeConfig,
+        metadata,
+        allGuards,
+        undefined,
+        statusCode
+      )
+
+      this.logger.info(`Registering OpenAPI route`, {
+        controller: className,
+        method: httpMeta.method.toUpperCase(),
+        path: fullPath,
+        methodName,
+        tags: metadata.tags,
+      })
+
+      app.openapi(openApiRoute, async (c) => {
+        const ctx = new RouterContext(c)
+        const requestContainer = ctx.getContainer()
+        const controller = requestContainer.resolve<IController>(ControllerClass)
+        const method = controller[methodName as keyof IController]
+        if (typeof method === 'function') {
+          const injectedArgs = this.resolveMethodInjections(prototype, methodName, requestContainer)
+          return await (method as (...args: unknown[]) => Promise<Response>).call(controller, ctx, ...injectedArgs)
+        }
+        throw new ControllerMethodNotFoundError(methodName, className)
+      })
+    }
+  }
+
+  /**
+   * Join a base path and a route path, normalizing slashes
+   */
+  private joinPaths(basePath: string, routePath: string): string {
+    if (routePath === '/') return basePath
+    return basePath + routePath
+  }
+
+  /**
    * Register route without OpenAPI metadata (for hidden routes)
    * Route is functional but won't appear in documentation
    */
@@ -307,6 +419,9 @@ export class RouteRegistrationService {
       case 'delete':
         app.delete(derived.path, handler)
         break
+      case 'all':
+        app.all(derived.path, handler)
+        break
       default:
         // For head, options, trace, or any other method, use all()
         app.all(derived.path, handler)
@@ -348,12 +463,12 @@ export class RouteRegistrationService {
    * Auto-derive HTTP method and path from controller method name
    * Uses HTTP_METHODS constant for RESTful convention mapping
    */
-  private deriveHttpMethodAndPath(methodName: string, basePath: string): { method: HttpMethod; path: string } | null {
+  private deriveHttpMethodAndPath(methodName: string, basePath: string): { method: Exclude<HttpMethod, 'all'>; path: string } | null {
     if (!(methodName in HTTP_METHODS)) return null
     const mapping = HTTP_METHODS[methodName as keyof typeof HTTP_METHODS]
 
     return {
-      method: mapping.method as HttpMethod,
+      method: mapping.method as Exclude<HttpMethod, 'all'>,
       path: basePath + mapping.path,
     }
   }
@@ -410,12 +525,13 @@ export class RouteRegistrationService {
    * Execution order: Global middlewares → Guards → Handler
    */
   private buildOpenAPIRoute(
-    method: HttpMethod,
+    method: Exclude<HttpMethod, 'all'>,
     path: string,
     routeConfig: RouteConfig,
     metadata: { tags: string[]; security: Record<string, string[]>[] },
     guards: Guard[],
-    methodName?: string
+    methodName?: string,
+    statusCodeOverride?: number
   ): OpenAPIRouteConfig {
     try {
       const route: Partial<OpenAPIRouteConfig> = {
@@ -460,9 +576,10 @@ export class RouteRegistrationService {
         }
       }
 
-      // Derive success status code from method name
-
-      const successStatus = (methodName && METHOD_STATUS_CODES[methodName as keyof typeof METHOD_STATUS_CODES]) ?? 200
+      // Derive success status code from method name or use override
+      const successStatus = statusCodeOverride
+        ?? (methodName && METHOD_STATUS_CODES[methodName as keyof typeof METHOD_STATUS_CODES])
+        ?? 200
 
       // Build responses object with auto-derived status
       const responses: NonNullable<OpenAPIRouteConfig['responses']> = {}
