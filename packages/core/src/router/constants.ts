@@ -63,3 +63,8 @@ export const METHOD_STATUS_CODES = {
  * When used as the version, no prefix is applied even when defaultVersion is set.
  */
 export const VERSION_NEUTRAL = Symbol.for('stratal:version:neutral')
+
+/**
+ * Default content type for request bodies and responses
+ */
+export const DEFAULT_CONTENT_TYPE = 'application/json'

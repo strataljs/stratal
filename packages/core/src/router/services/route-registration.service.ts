@@ -10,7 +10,7 @@ import type { OpenAPIHono } from '../../i18n/validation'
 import { createRoute } from '../../i18n/validation'
 import { type LoggerService } from '../../logger'
 import type { Constructor } from '../../types'
-import { HTTP_METHODS, METHOD_STATUS_CODES, SECURITY_SCHEMES } from '../constants'
+import { DEFAULT_CONTENT_TYPE, HTTP_METHODS, METHOD_STATUS_CODES, SECURITY_SCHEMES } from '../constants'
 import type { IController } from '../controller'
 import {
   getControllerOptions,
@@ -31,6 +31,7 @@ import type {
   ControllerOptions,
   HttpMethod,
   OpenAPIRouteConfig,
+  RouteBodyObject,
   RouteConfig,
   RouterEnv,
   SecuritySchemeRecord,
@@ -618,12 +619,15 @@ export class RouteRegistrationService {
 
       // Add request body if defined
       if (routeConfig.body) {
+        const bodySchema = this.isRouteBodyObject(routeConfig.body) ? routeConfig.body.schema : routeConfig.body
+        const bodyContentType = this.isRouteBodyObject(routeConfig.body) ? routeConfig.body.contentType ?? DEFAULT_CONTENT_TYPE : DEFAULT_CONTENT_TYPE
+
         route.request = {
           ...route.request,
           body: {
             content: {
-              'application/json': {
-                schema: routeConfig.body,
+              [bodyContentType]: {
+                schema: bodySchema,
               },
             },
           },
@@ -659,16 +663,17 @@ export class RouteRegistrationService {
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- response may be undefined at runtime
       if (responseDef) {
         if (typeof responseDef === 'object' && 'schema' in responseDef) {
+          const responseContentType = responseDef.contentType ?? DEFAULT_CONTENT_TYPE
           responses[successStatus] = {
             content: {
-              'application/json': { schema: responseDef.schema },
+              [responseContentType]: { schema: responseDef.schema },
             },
             description: responseDef.description ?? `Response ${successStatus}`,
           }
         } else {
           responses[successStatus] = {
             content: {
-              'application/json': { schema: responseDef },
+              [DEFAULT_CONTENT_TYPE]: { schema: responseDef },
             },
             description: `Response ${successStatus}`,
           }
@@ -707,6 +712,13 @@ export class RouteRegistrationService {
     } catch (error) {
       throw new OpenAPIRouteRegistrationError(path, error instanceof Error ? error.message : String(error))
     }
+  }
+
+  /**
+   * Check if a body definition is a RouteBodyObject (has schema key) vs bare ZodType
+   */
+  private isRouteBodyObject(body: RouteConfig['body']): body is RouteBodyObject {
+    return typeof body === 'object' && 'schema' in body
   }
 
   /**

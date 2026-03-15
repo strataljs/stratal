@@ -56,10 +56,26 @@ export type SecuritySchemeRecord = Record<SecurityScheme, string[]>
 export type { OpenAPIRouteConfig }
 
 /**
+ * Object form for request body with optional content type
+ */
+export interface RouteBodyObject { schema: ZodType; contentType?: string }
+
+/**
+ * Request body definition for @Route() decorator
+ * Bare ZodType defaults to application/json
+ */
+export type RouteBody = ZodType | RouteBodyObject
+
+/**
+ * Object form for response with optional description and content type
+ */
+export interface RouteResponseObject { schema: ZodType; description?: string; contentType?: string }
+
+/**
  * Single response definition for @Route() decorator
  * Status code is auto-derived from method name (create->201, others->200)
  */
-export type RouteResponse = ZodType | { schema: ZodType; description?: string }
+export type RouteResponse = ZodType | RouteResponseObject
 
 /**
  * Route configuration for @Route() decorator
@@ -68,8 +84,9 @@ export type RouteResponse = ZodType | { schema: ZodType; description?: string }
 export interface RouteConfig {
   /**
    * Request body schema (for POST, PUT, PATCH)
+   * @example z.object({}) or { schema: z.object({}), contentType: 'multipart/form-data' }
    */
-  body?: ZodType
+  body?: RouteBody
 
   /**
    * URL parameters schema (e.g., { id: z.string().uuid() })
