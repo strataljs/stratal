@@ -1,5 +1,63 @@
 # stratal
 
+## 0.0.12
+
+### Patch Changes
+
+- [#113](https://github.com/strataljs/stratal/pull/113) [`11b0da9`](https://github.com/strataljs/stratal/commit/11b0da97ef436bffef592fbc34685bbcc85d7ef7) Thanks [@adesege](https://github.com/adesege)! - Add HTTP method decorators (`@Get`, `@Post`, `@Put`, `@Patch`, `@Delete`, `@All`) for explicit route handling as an alternative to convention-based `@Route()` routing
+
+  ### Details
+
+  - **stratal**
+    - Add `@Get`, `@Post`, `@Put`, `@Patch`, `@Delete`, and `@All` decorators that accept an explicit path and optional `RouteConfig`
+    - Routes decorated with `@All` are automatically hidden from OpenAPI documentation
+    - Enforce mutual exclusivity: a controller cannot mix `@Route()` with HTTP method decorators
+    - Add `statusCode` option to `RouteConfig` for explicit status code control in HTTP method decorators
+    - Add `HttpRouteMetadata` type and `'all'` to the `HttpMethod` union
+    - Remove `statusCode` from the `@Route()` decorator signature (status codes are auto-derived from method names in convention-based routing)
+    - Export new decorators and helpers (`getHttpRouteMetadata`, `getHttpDecoratedMethods`) from `stratal/router`
+
+- [#114](https://github.com/strataljs/stratal/pull/114) [`e1a2ba2`](https://github.com/strataljs/stratal/commit/e1a2ba2da883481d192a15b8015456705982d683) Thanks [@adesege](https://github.com/adesege)! - Add URI-based API versioning support with configurable version prefix and default version
+
+  ### Details
+
+  - **stratal**
+    - Add `versioning` option to `ApplicationConfig` to enable URI-based versioning (e.g., `/v1/users`, `/v2/users`)
+    - Add `version` option to `ControllerOptions` for per-controller version assignment (single, array, or `VERSION_NEUTRAL`)
+    - Add `VERSION_NEUTRAL` sentinel symbol to opt controllers out of versioning even when a `defaultVersion` is set
+    - Add `VersioningOptions` type with `prefix` (default `'v'`) and `defaultVersion` fields
+    - Add `getControllerVersion()` helper exported from `stratal/router`
+    - Extend `RouteRegistrationService` to resolve versioned paths for all route registration patterns (wildcard, OpenAPI, HTTP method, RESTful)
+    - Extend `MiddlewareConfigurationService` to resolve versioned `RouteInfo` targets with `version` field
+    - Add `version` field to `RouteInfo` middleware type for targeting versioned middleware routes
+    - Export `VersioningOptions` and `VERSION_NEUTRAL` from `stratal/router`
+
+- [#97](https://github.com/strataljs/stratal/pull/97) [`d58b878`](https://github.com/strataljs/stratal/commit/d58b8782848562a50b79cd558eaf01978aa77f26) Thanks [@adesege](https://github.com/adesege)! - Add `stratalTest()` vitest plugin and migrate fetch mocking from Cloudflare's undici-based `fetchMock` to MSW
+
+  ### Details
+
+  - **@stratal/testing**
+
+    - Add `@stratal/testing/vitest-plugin` sub-export with `stratalTest()` — wraps `cloudflareTest` with Stratal defaults (tslib alias, ZenStack mocks, SSR externals)
+    - Replace `FetchMock`/`createFetchMock` with `MockFetch`/`createMockFetch` backed by MSW (`setupServer`)
+    - Re-export `http` and `HttpResponse` from `msw` for convenience
+    - Update `cloudflare:test` imports to `cloudflare:workers`
+    - Bump vitest peer dependency from `^3.2.0` to `^4.1.0`
+
+  - **stratal**
+
+    - Update test mocks to use class syntax for Vitest 4 compatibility
+    - Bump dependencies: `@intlify/*`, `@scalar/hono-api-reference`, `hono`, `@aws-sdk/*`, `vitest`
+
+  - **@stratal/framework**
+    - Refactor vitest config to use `stratalTest()` plugin, removing manual pool/alias config
+    - Bump dependencies: `better-auth`, `@zenstackhq/*`, `wrangler`, `vitest`
+
+  ### Breaking Changes
+
+  - **@stratal/testing**: `FetchMock` and `createFetchMock` are removed. Use `MockFetch`/`createMockFetch` instead. The new API uses MSW lifecycle methods (`listen`/`reset`/`close`) instead of `activate`/`disableNetConnect`/`deactivate`.
+  - **@stratal/testing**: Vitest peer dependency is now `^4.1.0` (was `^3.2.0`).
+
 ## 0.0.11
 
 ### Patch Changes
