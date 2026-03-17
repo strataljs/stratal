@@ -34,6 +34,9 @@ export {
 export { All, Delete, Get, getHttpDecoratedMethods, getHttpRouteMetadata, Patch, Post, Put } from './decorators/http-method.decorator'
 export { getDecoratedMethods, getRouteConfig, Route } from './decorators/route.decorator'
 
+// Hypermedia
+export * from './hypermedia'
+
 // Schemas
 export * from './schemas'
 

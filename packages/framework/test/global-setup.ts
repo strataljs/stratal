@@ -11,6 +11,7 @@ export default function setup() {
     env: {
       ...process.env,
       PATH: `${nodeBinDir}:${process.env.PATH ?? ''}`,
+      PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION: 'yes',
     },
   })
 }

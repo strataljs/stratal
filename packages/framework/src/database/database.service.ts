@@ -1,5 +1,24 @@
 import type { ClientContract, ClientOptions } from '@zenstackhq/orm'
+import type { ModelName } from './event-types'
+import type { CursorPaginateOptions, CursorPaginateResult, PaginateOptions, PaginateResult } from './plugins/pagination.plugin'
 import type { ConnectionName, DefaultConnectionName, InferConnectionSchema } from './types'
+
+/**
+ * $resource namespace added by the pagination plugin
+ */
+export interface ResourceClientExtension {
+  $resource: {
+    paginate<T = unknown>(
+      model: Uncapitalize<ModelName>,
+      options?: PaginateOptions,
+    ): Promise<PaginateResult<T>>
+
+    cursorPaginate<T = unknown>(
+      model: Uncapitalize<ModelName>,
+      options?: CursorPaginateOptions,
+    ): Promise<CursorPaginateResult<T>>
+  }
+}
 
 /**
  * DatabaseService type
@@ -20,4 +39,4 @@ export type DatabaseService<
 > = ClientContract<
   InferConnectionSchema<K>,
   ClientOptions<InferConnectionSchema<K>>
->
+> & ResourceClientExtension

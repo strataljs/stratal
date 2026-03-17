@@ -13,7 +13,8 @@ import { type LoggerService } from '../../logger'
 import type { Constructor } from '../../types'
 import { getWsOnCloseMethod, getWsOnErrorMethod, getWsOnMessageMethod, isGateway } from '../../websocket/decorators'
 import { GatewayContext } from '../../websocket/gateway-context'
-import { DEFAULT_CONTENT_TYPE, HTTP_METHODS, METHOD_STATUS_CODES, SECURITY_SCHEMES, VERSION_NEUTRAL } from '../constants'
+import { DEFAULT_CONTENT_TYPE, HTTP_METHODS, METHOD_STATUS_CODES, ROUTER_CONTEXT_KEYS, SECURITY_SCHEMES, VERSION_NEUTRAL } from '../constants'
+import { paginatedResourceSchema, resourceResponseSchema } from '../hypermedia/schemas'
 import type { IController } from '../controller'
 import {
   getControllerOptions,
@@ -466,7 +467,8 @@ export class RouteRegistrationService {
 
       // Register OpenAPI route with handler
       app.openapi(openApiRoute, async (c) => {
-        const ctx = new RouterContext(c)
+        c.set(ROUTER_CONTEXT_KEYS.CURRENT_CONTROLLER, ControllerClass)
+        const ctx = new RouterContext(c, this.versioningOptions)
         const requestContainer = ctx.getContainer()
         const controller = requestContainer.resolve<IController>(ControllerClass)
         const method = controller[methodName as keyof IController]
@@ -556,7 +558,8 @@ export class RouteRegistrationService {
       })
 
       app.openapi(openApiRoute, async (c) => {
-        const ctx = new RouterContext(c)
+        c.set(ROUTER_CONTEXT_KEYS.CURRENT_CONTROLLER, ControllerClass)
+        const ctx = new RouterContext(c, this.versioningOptions)
         const requestContainer = ctx.getContainer()
         const controller = requestContainer.resolve<IController>(ControllerClass)
         const method = controller[methodName as keyof IController]
@@ -590,7 +593,8 @@ export class RouteRegistrationService {
     // Create handler function
     const prototype = ControllerClass.prototype as IController
     const handler = async (c: Context<RouterEnv>) => {
-      const ctx = new RouterContext(c)
+      c.set(ROUTER_CONTEXT_KEYS.CURRENT_CONTROLLER, ControllerClass)
+      const ctx = new RouterContext(c, this.versioningOptions)
       const requestContainer = ctx.getContainer()
       const controller = requestContainer.resolve<IController>(ControllerClass)
       const method = controller[methodName as keyof IController]
@@ -789,9 +793,22 @@ export class RouteRegistrationService {
       const responses: NonNullable<OpenAPIRouteConfig['responses']> = {}
 
       // Add success response with derived status code
-      const responseDef = routeConfig.response
+      let responseDef = routeConfig.response
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- response may be undefined at runtime
       if (responseDef) {
+        // Auto-wrap response schema in hypermedia envelope when resource option is set
+        if (routeConfig.resource) {
+          const rawSchema = typeof responseDef === 'object' && 'schema' in responseDef
+            ? responseDef.schema
+            : responseDef
+          const wrappedSchema = routeConfig.resource === 'paginated'
+            ? paginatedResourceSchema(rawSchema)
+            : resourceResponseSchema(rawSchema)
+          responseDef = typeof responseDef === 'object' && 'schema' in responseDef
+            ? { ...responseDef, schema: wrappedSchema }
+            : wrappedSchema
+        }
+
         if (typeof responseDef === 'object' && 'schema' in responseDef) {
           const responseContentType = responseDef.contentType ?? DEFAULT_CONTENT_TYPE
           responses[successStatus] = {
@@ -887,7 +904,8 @@ export class RouteRegistrationService {
       })
 
       try {
-        const ctx = new RouterContext(c)
+        c.set(ROUTER_CONTEXT_KEYS.CURRENT_CONTROLLER, ControllerClass)
+        const ctx = new RouterContext(c, this.versioningOptions)
         const requestContainer = ctx.getContainer()
 
         // Resolve controller from request-scoped container

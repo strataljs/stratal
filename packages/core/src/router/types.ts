@@ -1,6 +1,7 @@
 import type { Container } from '../di'
 import { type StratalEnv } from '../env'
 import type { RouteConfig as OpenAPIRouteConfig, ZodObject, ZodPipe, ZodType } from '../i18n/validation'
+import type { Constructor } from '../types'
 import { type HTTP_METHODS, type ROUTER_CONTEXT_KEYS, type SECURITY_SCHEMES, type VERSION_NEUTRAL } from './constants'
 
 /**
@@ -17,6 +18,7 @@ type RouteParameter = ZodObjectWithEffect | undefined
 export interface RouterVariables {
   [ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER]: Container
   [ROUTER_CONTEXT_KEYS.LOCALE]?: string
+  [ROUTER_CONTEXT_KEYS.CURRENT_CONTROLLER]?: Constructor
 }
 
 /**
@@ -143,6 +145,16 @@ export interface RouteConfig {
    * For @Route() decorator, status code is auto-derived from method name
    */
   statusCode?: number
+
+  /**
+   * Auto-wrap the response schema in a hypermedia envelope for OpenAPI docs
+   * - `true`: wraps response → `{ data: T, _links?: LinkMap, _meta?: object }`
+   * - `'paginated'`: wraps response → `{ data: T[], _links?: LinkMap, _meta: PaginationMeta }`
+   *
+   * Does not affect runtime behavior — use `ctx.resource()` or `ctx.collection()` to
+   * produce the envelope in handler code.
+   */
+  resource?: true | 'paginated'
 }
 
 /**
