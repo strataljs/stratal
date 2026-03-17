@@ -1,8 +1,8 @@
 import 'reflect-metadata'
 
 import { Application, type ApplicationConfig } from './application'
-import { StratalNotInitializedError } from './errors'
 import type { StratalEnv } from './env'
+import { StratalNotInitializedError } from './errors'
 import type { HonoApp } from './router/hono-app'
 
 /**

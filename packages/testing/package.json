@@ -34,28 +34,29 @@
   ],
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
     },
     "./mocks": {
-      "types": "./dist/mocks/index.d.ts",
-      "import": "./dist/mocks/index.js"
+      "types": "./dist/mocks/index.d.mts",
+      "import": "./dist/mocks/index.mjs"
     },
     "./mocks/nodemailer": {
-      "types": "./dist/mocks/nodemailer.d.ts",
-      "import": "./dist/mocks/nodemailer.js"
+      "types": "./dist/mocks/nodemailer.d.mts",
+      "import": "./dist/mocks/nodemailer.mjs"
     },
     "./mocks/zenstack-language": {
-      "types": "./dist/mocks/zenstack-language.d.ts",
-      "import": "./dist/mocks/zenstack-language.js"
+      "types": "./dist/mocks/zenstack-language.d.mts",
+      "import": "./dist/mocks/zenstack-language.mjs"
     },
     "./vitest-plugin": {
-      "types": "./dist/vitest-plugin/index.d.ts",
-      "import": "./dist/vitest-plugin/index.js"
-    }
+      "types": "./dist/vitest-plugin/index.d.mts",
+      "import": "./dist/vitest-plugin/index.mjs"
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "lint": "npx eslint .",
     "lint:fix": "npx eslint --fix ."
@@ -87,6 +88,7 @@
     "@vitest/snapshot": "~4.1.0",
     "better-auth": "^1.5.5",
     "stratal": "workspace:*",
+    "tsdown": "^0.21.4",
     "typescript": "^5.9.3",
     "vitest": "~4.1.0"
   }

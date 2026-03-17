@@ -4,7 +4,6 @@
     "target": "esnext",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "rootDir": ".",
     "outDir": "./dist",
     "module": "esnext",
     "moduleResolution": "bundler",
@@ -28,10 +27,8 @@
     }
   },
   "include": [
-    "src/**/*",
-    "test/**/*",
-    "worker-configuration.d.ts",
-    "vitest.config.ts"
+    "**/*",
+    "test/**/*"
   ],
   "exclude": [
     "node_modules"

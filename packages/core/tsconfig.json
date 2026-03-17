@@ -4,7 +4,6 @@
     "target": "esnext",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "rootDir": ".",
     "outDir": "./dist",
     "downlevelIteration": true,
     "module": "esnext",
@@ -22,7 +21,7 @@
     ]
   },
   "include": [
-    "src/**/*",
+    "**/*",
     "test/**/*",
     "vitest.config.ts"
   ],

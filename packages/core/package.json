@@ -39,38 +39,93 @@
   ],
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./cache": {
+      "types": "./dist/cache/index.d.mts",
+      "import": "./dist/cache/index.mjs"
+    },
+    "./config": {
+      "types": "./dist/config/index.d.mts",
+      "import": "./dist/config/index.mjs"
+    },
+    "./cron": {
+      "types": "./dist/cron/index.d.mts",
+      "import": "./dist/cron/index.mjs"
+    },
+    "./di": {
+      "types": "./dist/di/index.d.mts",
+      "import": "./dist/di/index.mjs"
+    },
+    "./email": {
+      "types": "./dist/email/index.d.mts",
+      "import": "./dist/email/index.mjs"
     },
     "./errors": {
-      "types": "./dist/errors/index.d.ts",
-      "import": "./dist/errors/index.js"
+      "types": "./dist/errors/index.d.mts",
+      "import": "./dist/errors/index.mjs"
+    },
+    "./events": {
+      "types": "./dist/events/index.d.mts",
+      "import": "./dist/events/index.mjs"
+    },
+    "./guards": {
+      "types": "./dist/guards/index.d.mts",
+      "import": "./dist/guards/index.mjs"
     },
     "./i18n": {
-      "types": "./dist/i18n/index.d.ts",
-      "import": "./dist/i18n/index.js"
+      "types": "./dist/i18n/index.d.mts",
+      "import": "./dist/i18n/index.mjs"
     },
     "./i18n/messages/en": {
-      "types": "./dist/i18n/messages/en/index.d.ts",
-      "import": "./dist/i18n/messages/en/index.js"
+      "types": "./dist/i18n/messages/en/index.d.mts",
+      "import": "./dist/i18n/messages/en/index.mjs"
     },
-    "./validation": {
-      "types": "./dist/i18n/validation/index.d.ts",
-      "import": "./dist/i18n/validation/index.js"
+    "./logger": {
+      "types": "./dist/logger/index.d.mts",
+      "import": "./dist/logger/index.mjs"
+    },
+    "./middleware": {
+      "types": "./dist/middleware/index.d.mts",
+      "import": "./dist/middleware/index.mjs"
+    },
+    "./module": {
+      "types": "./dist/module/index.d.mts",
+      "import": "./dist/module/index.mjs"
+    },
+    "./openapi": {
+      "types": "./dist/openapi/index.d.mts",
+      "import": "./dist/openapi/index.mjs"
+    },
+    "./queue": {
+      "types": "./dist/queue/index.d.mts",
+      "import": "./dist/queue/index.mjs"
+    },
+    "./router": {
+      "types": "./dist/router/index.d.mts",
+      "import": "./dist/router/index.mjs"
+    },
+    "./storage": {
+      "types": "./dist/storage/index.d.mts",
+      "import": "./dist/storage/index.mjs"
     },
     "./websocket": {
-      "types": "./dist/websocket/index.d.ts",
-      "import": "./dist/websocket/index.js"
+      "types": "./dist/websocket/index.d.mts",
+      "import": "./dist/websocket/index.mjs"
     },
-    "./*": {
-      "types": "./dist/*/index.d.ts",
-      "import": "./dist/*/index.js"
+    "./workers": {
+      "types": "./dist/workers/index.d.mts",
+      "import": "./dist/workers/index.mjs"
+    },
+    "./package.json": "./package.json",
+    "./validation": {
+      "types": "./dist/i18n/validation/index.d.mts",
+      "import": "./dist/i18n/validation/index.mjs"
     }
   },
   "scripts": {
-    "build": "yarn prebuild && tsc -p tsconfig.build.json",
-    "clean": "rm -rf dist",
-    "prebuild": "yarn clean",
+    "build": "tsdown",
     "typecheck": "yarn tsc --noEmit",
     "bench": "vitest bench --run",
     "bench:unit": "vitest bench --run --project unit",
@@ -154,6 +209,7 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "resend": "^6.9.3",
+    "tsdown": "^0.21.4",
     "typescript": "^5.9.3",
     "vitest": "~4.1.0"
   }
