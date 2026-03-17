@@ -62,9 +62,9 @@
     "lint:fix": "npx eslint --fix ."
   },
   "dependencies": {
-    "@cloudflare/vitest-pool-workers": "patch:@cloudflare/vitest-pool-workers@npm%3A0.13.0#~/.yarn/patches/@cloudflare-vitest-pool-workers-npm-0.13.0-47105599c6.patch",
-    "@golevelup/ts-vitest": "^2.2.0",
-    "msw": "^2.12.10"
+    "@cloudflare/vitest-pool-workers": "^0.13.2",
+    "@golevelup/ts-vitest": "^3.0.0",
+    "msw": "^2.12.13"
   },
   "peerDependencies": {
     "@stratal/framework": "^0.0.13",
@@ -81,7 +81,7 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "4.20260313.1",
+    "@cloudflare/workers-types": "4.20260317.1",
     "@stratal/framework": "workspace:*",
     "@types/node": "^25.5.0",
     "@vitest/runner": "~4.1.0",

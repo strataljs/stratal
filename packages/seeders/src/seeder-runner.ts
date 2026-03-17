@@ -1,12 +1,12 @@
 import 'reflect-metadata'
 
-import { Application, type Constructor, type StratalEnv } from 'stratal'
-import { LogLevel } from 'stratal/logger'
+import { type Constructor } from 'stratal'
 import yargs from 'yargs'
 import { hideBin } from 'yargs/helpers'
 import { collectSeeders } from './collector.js'
 import { resolveConfig } from './config.js'
 import { executeSeeder } from './executor.js'
+import { loadApp } from './utils.js'
 import { logger } from './logger.js'
 import type { Seeder } from './seeder.js'
 import type { SeederMap } from './types.js'
@@ -123,30 +123,6 @@ async function runAllSeeders(
     await app.shutdown()
     await dispose()
   }
-}
-
-async function loadApp(
-  module: Constructor,
-  wranglerPath: string
-): Promise<{ app: Application; dispose: () => Promise<void> }> {
-  const { getPlatformProxy } = await import('wrangler')
-
-  const { env, ctx, dispose } = await getPlatformProxy({
-    configPath: wranglerPath,
-  })
-
-  const app = new Application({
-    module,
-    logging: {
-      level: LogLevel.ERROR,
-      formatter: 'pretty'
-    },
-    env: env as unknown as StratalEnv,
-    ctx,
-  })
-  await app.initialize()
-
-  return { app, dispose }
 }
 
 function printAvailableSeeders(seeders: SeederMap): void {
