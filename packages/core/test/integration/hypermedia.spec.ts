@@ -92,6 +92,59 @@ describe('Hypermedia', () => {
     })
   })
 
+  describe('Cursor-paginated collection', () => {
+    it('first page returns cursor envelope with next link', async () => {
+      const response = await module.http
+        .get('/api/cursored?limit=20')
+        .send()
+
+      response.assertOk()
+      await response.assertJsonPathMatches('data', (data) =>
+        Array.isArray(data) && data.length === 2,
+      )
+      await response.assertJsonPath('_meta.hasMore', true)
+      await response.assertJsonPath('_meta.nextCursor', 'cursor-after-2')
+      await response.assertJsonPathMatches('_links.self.href', (href) =>
+        typeof href === 'string' && href.includes('/api/cursored') && href.includes('limit=20'),
+      )
+      await response.assertJsonPathMatches('_links.next.href', (href) =>
+        typeof href === 'string' && href.includes('cursor=cursor-after-2') && href.includes('limit=20'),
+      )
+    })
+
+    it('last page omits next link and nextCursor', async () => {
+      const response = await module.http
+        .get('/api/cursored?cursor=cursor-after-2&limit=20')
+        .send()
+
+      response.assertOk()
+      await response.assertJsonPathMatches('data', (data) =>
+        Array.isArray(data) && data.length === 1 && (data as { id: string }[])[0].id === '3',
+      )
+      await response.assertJsonPath('_meta.hasMore', false)
+
+      const json = await response.json<Record<string, unknown>>()
+      const meta = json._meta as Record<string, unknown>
+      const links = json._links as Record<string, unknown>
+      expect(meta).not.toHaveProperty('nextCursor')
+      expect(links).not.toHaveProperty('next')
+    })
+
+    it('extra query params preserved in links', async () => {
+      const response = await module.http
+        .get('/api/cursored?limit=10&status=active')
+        .send()
+
+      response.assertOk()
+      await response.assertJsonPathMatches('_links.self.href', (href) =>
+        typeof href === 'string' && href.includes('status=active'),
+      )
+      await response.assertJsonPathMatches('_links.next.href', (href) =>
+        typeof href === 'string' && href.includes('status=active'),
+      )
+    })
+  })
+
   describe('Non-envelope route', () => {
     it('POST /api/resources returns plain ctx.json() response', async () => {
       const response = await module.http

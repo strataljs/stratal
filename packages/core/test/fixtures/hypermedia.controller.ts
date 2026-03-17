@@ -3,7 +3,7 @@ import { Module } from '../../src/module/module.decorator'
 import { Controller } from '../../src/router/decorators/controller.decorator'
 import { Route } from '../../src/router/decorators/route.decorator'
 import type { RouterContext } from '../../src/router/router-context'
-import { paginationQuerySchema } from '../../src/router/schemas/common.schemas'
+import { cursorPaginationQuerySchema, paginationQuerySchema } from '../../src/router/schemas/common.schemas'
 
 const itemSchema = z.object({
   id: z.string(),
@@ -46,6 +46,22 @@ export class PlainController {
   }
 }
 
+@Controller('/api/cursored')
+export class CursorController {
+  @Route({ query: cursorPaginationQuerySchema, response: itemSchema, resource: 'paginated' })
+  index(ctx: RouterContext) {
+    const { cursor, limit } = ctx.query<{ cursor?: string; limit: number }>()
+
+    const hasMore = !cursor
+    const data = hasMore
+      ? [{ id: '1', name: 'Item 1' }, { id: '2', name: 'Item 2' }]
+      : [{ id: '3', name: 'Item 3' }]
+    const nextCursor = hasMore ? 'cursor-after-2' : null
+
+    return ctx.cursorCollection({ data, nextCursor, hasMore, limit })
+  }
+}
+
 @Controller('/api/related')
 export class CrossLinkController {
   @Route({ response: z.object({ id: z.string() }), resource: true, params: idParamSchema })
@@ -61,6 +77,6 @@ export class CrossLinkController {
 }
 
 @Module({
-  controllers: [HypermediaController, PlainController, CrossLinkController],
+  controllers: [HypermediaController, CursorController, PlainController, CrossLinkController],
 })
 export class HypermediaAppModule { }

@@ -51,6 +51,15 @@ export const paginationQuerySchema = z.object({
 }).openapi('PaginationQuery')
 
 /**
+ * Cursor-based pagination query parameters schema
+ * Used for list endpoints with cursor-based pagination
+ */
+export const cursorPaginationQuerySchema = z.object({
+  cursor: z.string().optional().describe('Cursor for pagination (omit for first page)'),
+  limit: z.coerce.number().int().positive().max(100).default(20).describe('Items per page (max 100)'),
+}).openapi('CursorPaginationQuery')
+
+/**
  * Paginated response wrapper schema
  * Generic wrapper for paginated list responses
  */

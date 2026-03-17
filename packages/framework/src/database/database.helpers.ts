@@ -3,7 +3,7 @@ import { Transient } from 'stratal/di'
 import type { IEventRegistry } from 'stratal/events'
 import { withI18n, z } from 'stratal/validation'
 import type { DatabaseConnectionConfig } from './database.module'
-import { ErrorHandlerPlugin, EventEmitterPlugin } from './plugins'
+import { ErrorHandlerPlugin, EventEmitterPlugin, paginationPlugin } from './plugins'
 
 const databaseConnectionSchema = z.object({
   name: z.string().min(1, withI18n('database.connectionNameRequired')),
@@ -35,6 +35,7 @@ export function createDatabaseService(
     new EventEmitterPlugin({
       eventRegistry,
     }),
+    paginationPlugin,
     ...(conn.plugins ?? []),
   ]
 

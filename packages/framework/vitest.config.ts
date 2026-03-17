@@ -17,7 +17,6 @@ export default defineConfig({
     },
     projects: [
       {
-        extends: true,
         test: {
           name: 'unit',
           environment: 'node',
@@ -25,6 +24,7 @@ export default defineConfig({
           exclude: ['**/node_modules/**', '**/dist/**'],
           setupFiles: ['./vitest.setup.ts'],
           globals: true,
+          maxWorkers: 1,
         },
       },
       {
@@ -45,6 +45,7 @@ export default defineConfig({
           globalSetup: ['./test/global-setup.ts'],
           fileParallelism: false,
           isolate: false,
+          maxWorkers: 1,
         },
       },
     ],

@@ -66,6 +66,26 @@ export interface CollectionResponseOptions {
 }
 
 /**
+ * Cursor pagination result — matches the shape returned by db.$resource.cursorPaginate()
+ */
+export interface CursorPaginationResult<T = unknown> {
+  data: T[]
+  nextCursor: string | number | null
+  hasMore: boolean
+  limit: number
+}
+
+/**
+ * Options for cursor collection response
+ */
+export interface CursorCollectionOptions extends CollectionResponseOptions {
+  /** Query param name for cursor, defaults to 'cursor' */
+  cursorParam?: string
+  /** Query param name for limit, defaults to 'limit' */
+  limitParam?: string
+}
+
+/**
  * Helper type that extracts method names from a class type
  */
 export type MethodNames<T> = {
