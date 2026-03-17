@@ -20,7 +20,12 @@ export async function loadApp(
     env: env as unknown as StratalEnv,
     ctx,
   })
-  await app.initialize()
+  try {
+    await app.initialize()
+  } catch (error) {
+    await dispose()
+    throw error
+  }
 
   return { app, dispose }
 }

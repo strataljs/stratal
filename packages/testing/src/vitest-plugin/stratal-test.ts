@@ -8,12 +8,12 @@ const require = createRequire(import.meta.url)
 
 type CloudflareTestOptions = Parameters<typeof cloudflareTest>[0]
 
-const pgCjsTargets: Record<string, string> = {
-  'pg-protocol': require.resolve('pg-protocol'),
-  'pg-connection-string': require.resolve('pg-connection-string'),
-  'pg-pool': require.resolve('pg-pool'),
-  'pg-cloudflare': path.join(path.dirname(require.resolve('pg-cloudflare')), 'index.js'),
-}
+const pgCjsResolvers = new Map<string, () => string>([
+  ['pg-protocol', () => require.resolve('pg-protocol')],
+  ['pg-connection-string', () => require.resolve('pg-connection-string')],
+  ['pg-pool', () => require.resolve('pg-pool')],
+  ['pg-cloudflare', () => path.join(path.dirname(require.resolve('pg-cloudflare')), 'index.js')],
+])
 
 /**
  * Returns a Vite plugin that forces CJS resolution for `pg` sub-dependencies.
@@ -48,7 +48,13 @@ export const fixPgCjs = (): Plugin => ({
   name: 'stratal-pg-cjs',
   enforce: 'pre',
   resolveId(id) {
-    if (id in pgCjsTargets) return pgCjsTargets[id]
+    const resolver = pgCjsResolvers.get(id)
+    if (!resolver) return
+    try {
+      return resolver()
+    } catch {
+      return
+    }
   },
 })
 
@@ -75,12 +81,14 @@ const stratalPlugin: Plugin = {
 /**
  * Returns Vite plugins for Stratal tests running in the Cloudflare Workers (workerd) environment.
  *
- * Includes the cloudflare pool plugin, pg CJS resolution plugin, and Stratal alias plugin.
+ * Includes the cloudflare pool plugin and Stratal alias plugin.
  * Use inside a project-level `plugins` array.
+ *
+ * **Note:** `fixPgCjs()` must be registered separately at the root `defineConfig` level.
  *
  * @param options - Same options as `cloudflareTest()` from `@cloudflare/vitest-pool-workers`
  * @returns An array of Vite plugins
  */
 export function stratalTest(options: CloudflareTestOptions = {}): Plugin[] {
-  return [cloudflareTest(options), fixPgCjs(), stratalPlugin]
+  return [cloudflareTest(options), stratalPlugin]
 }

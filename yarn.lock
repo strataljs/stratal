@@ -1816,12 +1816,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@hono/swagger-ui@npm:^0.5.3":
-  version: 0.5.3
-  resolution: "@hono/swagger-ui@npm:0.5.3"
+"@hono/swagger-ui@npm:^0.6.1":
+  version: 0.6.1
+  resolution: "@hono/swagger-ui@npm:0.6.1"
   peerDependencies:
     hono: ">=4.0.0"
-  checksum: 10c0/c1acf638aa8b2fdf1c237f15233a8071621f7a65a29a179296141aa019208c89fb4e9bf76139fdf9589e2b505ebf96e89db088a8783c3d60eeacf7d5d5d1a5a5
+  checksum: 10c0/9f4fc6aff3762ace6b6755ed071e84cfc6b0f6c944831b1176ff7a4f0b36c9871db65ff34cadbcc2a46dd4a80bd68f9b5b6585348f9ac77df3c771ed7c708df1
   languageName: node
   linkType: hard
 
@@ -9524,7 +9524,7 @@ __metadata:
     "@aws-sdk/s3-request-presigner": "npm:3.1011.0"
     "@cloudflare/vitest-pool-workers": "npm:^0.13.2"
     "@cloudflare/workers-types": "npm:4.20260317.1"
-    "@hono/swagger-ui": "npm:^0.5.3"
+    "@hono/swagger-ui": "npm:^0.6.1"
     "@hono/zod-openapi": "npm:^1.2.2"
     "@intlify/core-base": "npm:^11.3.0"
     "@intlify/message-compiler": "npm:^11.3.0"
