@@ -89,6 +89,7 @@ export default defineConfig([
       "*.config.{ts,mts,cts,js,mjs,cjs}",
       "**/vitest.config.{ts,mts}",
       "**/vitest.setup.{ts,mts}",
+      "**/tsdown.config.ts",
     ],
     extends: [tseslint.configs.disableTypeChecked],
   },
