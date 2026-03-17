@@ -1,7 +1,8 @@
-import { stratalTest } from '@stratal/testing/vitest-plugin'
+import { fixPgCjs, stratalTest } from '@stratal/testing/vitest-plugin'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  plugins: [fixPgCjs()],
   test: {
     coverage: {
       provider: 'istanbul',

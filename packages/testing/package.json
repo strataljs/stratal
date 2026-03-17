@@ -62,7 +62,7 @@
     "lint:fix": "npx eslint --fix ."
   },
   "dependencies": {
-    "@cloudflare/vitest-pool-workers": "patch:@cloudflare/vitest-pool-workers@npm%3A0.13.0#~/.yarn/patches/@cloudflare-vitest-pool-workers-npm-0.13.0-47105599c6.patch",
+    "@cloudflare/vitest-pool-workers": "^0.13.0",
     "@golevelup/ts-vitest": "^2.2.0",
     "msw": "^2.12.10"
   },

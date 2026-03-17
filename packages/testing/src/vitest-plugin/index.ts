@@ -1,1 +1,1 @@
-export { stratalTest } from './stratal-test.js'
+export { fixPgCjs, stratalTest } from './stratal-test.js'

@@ -98,7 +98,7 @@
   },
   "devDependencies": {
     "@better-auth/core": "^1.5.5",
-    "@cloudflare/vitest-pool-workers": "patch:@cloudflare/vitest-pool-workers@npm%3A0.13.0#~/.yarn/patches/@cloudflare-vitest-pool-workers-npm-0.13.0-47105599c6.patch",
+    "@cloudflare/vitest-pool-workers": "^0.13.0",
     "@cloudflare/workers-types": "4.20260313.1",
     "@faker-js/faker": "^10.3.0",
     "@stratal/testing": "workspace:^",

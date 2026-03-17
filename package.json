@@ -50,7 +50,8 @@
     ]
   },
   "resolutions": {
-    "fast-xml-parser": ">=5.3.8"
+    "fast-xml-parser": ">=5.3.8",
+    "@paralleldrive/cuid2": "^3.3.0"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.6.0",

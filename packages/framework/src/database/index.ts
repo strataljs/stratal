@@ -1,7 +1,6 @@
 export * from './database.service'
 export * from './database.module'
 export * from './database.tokens'
-export * from './custom-pg-types'
 export * from './decorators/inject-db.decorator'
 export * from './event-types'
 export * from './types'
