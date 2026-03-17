@@ -5,7 +5,6 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "outDir": "./dist",
-    "rootDir": "./src",
     "declaration": true,
     "declarationMap": true,
     "emitDecoratorMetadata": true,
@@ -20,10 +19,11 @@
     ]
   },
   "include": [
-    "src/**/*"
+    "**/*"
   ],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "tsdown.config.ts"
   ]
 }

@@ -23,41 +23,40 @@
   ],
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
     },
     "./auth": {
-      "types": "./dist/auth/index.d.ts",
-      "import": "./dist/auth/index.js"
+      "types": "./dist/auth/index.d.mts",
+      "import": "./dist/auth/index.mjs"
     },
     "./context": {
-      "types": "./dist/context/index.d.ts",
-      "import": "./dist/context/index.js"
+      "types": "./dist/context/index.d.mts",
+      "import": "./dist/context/index.mjs"
     },
     "./database": {
-      "types": "./dist/database/index.d.ts",
-      "import": "./dist/database/index.js"
+      "types": "./dist/database/index.d.mts",
+      "import": "./dist/database/index.mjs"
     },
     "./factory": {
-      "types": "./dist/factory/index.d.ts",
-      "import": "./dist/factory/index.js"
+      "types": "./dist/factory/index.d.mts",
+      "import": "./dist/factory/index.mjs"
     },
     "./guards": {
-      "types": "./dist/guards/index.d.ts",
-      "import": "./dist/guards/index.js"
+      "types": "./dist/guards/index.d.mts",
+      "import": "./dist/guards/index.mjs"
     },
     "./rbac": {
-      "types": "./dist/rbac/index.d.ts",
-      "import": "./dist/rbac/index.js"
-    }
+      "types": "./dist/rbac/index.d.mts",
+      "import": "./dist/rbac/index.mjs"
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "yarn prebuild && tsc -p tsconfig.build.json",
-    "clean": "rm -rf dist",
-    "prebuild": "yarn clean",
+    "build": "tsdown",
     "generate": "zenstack generate --schema=test/schema.zmodel -o test/zenstack",
     "generate:types": "wrangler types -c test/wrangler.jsonc",
-    "pretest": "yarn generate && yarn generate:types",
+    "pretest": "npx dotenv -- yarn generate && yarn generate:types",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "vitest run --project e2e",
@@ -113,9 +112,11 @@
     "@zenstackhq/orm": "^3.4.6",
     "better-auth": "^1.5.5",
     "casbin": "^5.49.0",
+    "dotenv-cli": "^11.0.0",
     "pg": "^8.20.0",
     "reflect-metadata": "^0.2.2",
     "stratal": "workspace:*",
+    "tsdown": "^0.21.4",
     "typescript": "^5.9.3",
     "vitest": "~4.1.0",
     "wrangler": "^4.73.0"

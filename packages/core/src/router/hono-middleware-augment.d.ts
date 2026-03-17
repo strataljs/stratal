@@ -1,4 +1,4 @@
-import type { Env, Schema, MergePath, HonoBase } from 'hono'
+import type { HonoBase } from 'hono/hono-base'
 import type { Constructor } from '../types'
 import type { Middleware } from './middleware.interface'
 

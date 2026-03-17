@@ -37,8 +37,9 @@
     "prepare": "husky",
     "changeset": "changeset",
     "release": "changeset publish",
+    "typecheck": "yarn workspaces foreach -At --no-private run typecheck",
     "version-packages": "changeset version && yarn install --no-immutable",
-    "build": "yarn workspaces foreach -At --no-private exec run build",
+    "build": "yarn workspaces foreach -At --no-private run build",
     "docs": "typedoc",
     "docs:watch": "typedoc --watch",
     "examples:install": "bash -c 'for dir in examples/*/; do (cd \"$dir\" && npm i wrangler); done'"
@@ -61,6 +62,7 @@
     "husky": "^9.1.7",
     "jiti": "^2.6.1",
     "lint-staged": "^16.4.0",
+    "tsdown": "^0.21.4",
     "typedoc": "^0.28.17",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.0"
