@@ -98,8 +98,8 @@
   },
   "devDependencies": {
     "@better-auth/core": "^1.5.5",
-    "@cloudflare/vitest-pool-workers": "^0.13.0",
-    "@cloudflare/workers-types": "4.20260313.1",
+    "@cloudflare/vitest-pool-workers": "^0.13.2",
+    "@cloudflare/workers-types": "4.20260317.1",
     "@faker-js/faker": "^10.3.0",
     "@stratal/testing": "workspace:^",
     "@types/node": "^25.5.0",
@@ -119,6 +119,6 @@
     "tsdown": "^0.21.4",
     "typescript": "^5.9.3",
     "vitest": "~4.1.0",
-    "wrangler": "^4.73.0"
+    "wrangler": "^4.75.0"
   }
 }
