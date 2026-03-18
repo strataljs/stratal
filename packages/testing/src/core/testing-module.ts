@@ -8,6 +8,7 @@ import { expect } from 'vitest'
 import type { FakeStorageService } from '../storage'
 import type { Seeder } from '../types'
 import { TestHttpClient } from './http/test-http-client'
+import { TestCommandRequest } from './quarry/test-command-request'
 import { TestSseRequest } from './sse/test-sse-request'
 import { TestWsRequest } from './ws/test-ws-request'
 
@@ -87,6 +88,13 @@ export class TestingModule {
    */
   sse(path: string): TestSseRequest {
     return new TestSseRequest(path, this)
+  }
+
+  /**
+   * Create a Quarry command test request builder
+   */
+  quarry(name: string): TestCommandRequest {
+    return new TestCommandRequest(name, this)
   }
 
   /**

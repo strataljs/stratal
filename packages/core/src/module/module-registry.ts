@@ -12,6 +12,7 @@ import { instancePerContainerCachingFactory } from 'tsyringe'
 import type { Container } from '../di/container'
 import { Scope } from '../di/types'
 import { isListener } from '../events'
+import { isCommand } from '../quarry/is-command'
 import type { LoggerService } from '../logger'
 import {
   createMiddlewareConsumer,
@@ -59,6 +60,7 @@ export class ModuleRegistry {
   private allConsumers: Constructor[] = []
   private allJobs: Constructor[] = []
   private allListeners: Constructor[] = []
+  private allCommands: Constructor[] = []
   private allMiddlewareConfigs: MiddlewareConfigEntry[] = []
 
   constructor(
@@ -202,6 +204,13 @@ export class ModuleRegistry {
   }
 
   /**
+   * Get all commands registered from all modules
+   */
+  getAllCommands(): Constructor[] {
+    return this.allCommands
+  }
+
+  /**
    * Get all middleware configurations from all modules
    */
   getAllMiddlewareConfigs(): MiddlewareConfigEntry[] {
@@ -326,10 +335,12 @@ export class ModuleRegistry {
       // Class-only provider - transient by default
       this.container.register(provider as Constructor)
       this.collectIfListener(provider as Constructor)
+      this.collectIfCommand(provider as Constructor)
     } else if ('useClass' in provider) {
       // ClassProvider with optional scope
       this.container.register(provider.provide, provider.useClass as Constructor, provider.scope)
       this.collectIfListener(provider.useClass as Constructor)
+      this.collectIfCommand(provider.useClass as Constructor)
     } else if ('useValue' in provider) {
       // ValueProvider - no scope needed (values are inherently singleton)
       this.container.registerValue(provider.provide, provider.useValue)
@@ -347,6 +358,17 @@ export class ModuleRegistry {
     } else if ('useExisting' in provider) {
       // ExistingProvider - alias to another token
       this.container.registerExisting(provider.provide, provider.useExisting)
+    }
+  }
+
+  /**
+   * Check if a class is a `Command` and collect it for auto-wiring
+   */
+  private collectIfCommand(providerClass: Constructor): void {
+    if (isCommand(providerClass)) {
+      this.container.register(providerClass, providerClass, Scope.Singleton)
+      this.allCommands.push(providerClass)
+      this.logger.debug(`Collected command: ${providerClass.name}`)
     }
   }
 

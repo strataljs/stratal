@@ -33,8 +33,12 @@
     "access": "public",
     "provenance": true
   },
+  "bin": {
+    "quarry": "./bin/quarry.js"
+  },
   "files": [
     "dist",
+    "bin",
     "README.md"
   ],
   "exports": {
@@ -98,6 +102,10 @@
       "types": "./dist/openapi/index.d.mts",
       "import": "./dist/openapi/index.mjs"
     },
+    "./quarry": {
+      "types": "./dist/quarry/index.d.mts",
+      "import": "./dist/quarry/index.mjs"
+    },
     "./queue": {
       "types": "./dist/queue/index.d.mts",
       "import": "./dist/queue/index.mjs"
@@ -144,6 +152,7 @@
     "@intlify/core-base": "^11.3.0",
     "@intlify/message-compiler": "^11.3.0",
     "@xmldom/xmldom": "^0.8.11",
+    "clipanion": "^4.0.0-rc.4",
     "hono": "^4.12.8",
     "reflect-metadata": "^0.2.2",
     "tsyringe": "^4.10.0",

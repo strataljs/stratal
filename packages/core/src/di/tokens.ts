@@ -19,6 +19,7 @@ export const DI_TOKENS = {
   ConsumerRegistry: Symbol.for('stratal:consumer:registry'),
   Cron: Symbol.for('stratal:cron:manager'),
   EventRegistry: Symbol.for('stratal:event:registry'),
+  Quarry: Symbol.for('stratal:quarry'),
 
   // Context
   /**
