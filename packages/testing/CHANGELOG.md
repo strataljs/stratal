@@ -1,5 +1,24 @@
 # @stratal/testing
 
+## 0.0.14
+
+### Patch Changes
+
+- [#124](https://github.com/strataljs/stratal/pull/124) [`59251d3`](https://github.com/strataljs/stratal/commit/59251d32743cbd461f952985f192a68cb7ccdb91) Thanks [@adesege](https://github.com/adesege)! - Add `fixPgCjs()` Vite plugin for CJS resolution of pg sub-dependencies in workerd
+
+  ### Details
+
+  - Replace the `@cloudflare/vitest-pool-workers` yarn patch with a dedicated `fixPgCjs()` Vite plugin
+  - `fixPgCjs()` must be applied at the root `defineConfig` level for the module fallback resolver to work correctly
+  - `stratalTest()` does NOT automatically apply `fixPgCjs()` — it must be registered separately at the root level
+  - Upgrade `@cloudflare/vitest-pool-workers` to ^0.13.2 (unpinned)
+
+- [#122](https://github.com/strataljs/stratal/pull/122) [`47530bd`](https://github.com/strataljs/stratal/commit/47530bd31bc91329788b4ba7b03a389f0e722f46) Thanks [@adesege](https://github.com/adesege)! - Migrate build system from tsc to tsdown for faster builds and code-splitting support
+
+- Updated dependencies [[`59251d3`](https://github.com/strataljs/stratal/commit/59251d32743cbd461f952985f192a68cb7ccdb91), [`59251d3`](https://github.com/strataljs/stratal/commit/59251d32743cbd461f952985f192a68cb7ccdb91), [`47530bd`](https://github.com/strataljs/stratal/commit/47530bd31bc91329788b4ba7b03a389f0e722f46), [`47530bd`](https://github.com/strataljs/stratal/commit/47530bd31bc91329788b4ba7b03a389f0e722f46)]:
+  - stratal@0.0.14
+  - @stratal/framework@0.0.14
+
 ## 0.0.13
 
 ### Patch Changes
