@@ -86,7 +86,7 @@ async function main(): Promise<void> {
 
     cli.register(Builtins.HelpCommand)
     cli.register(createListCommand(quarry))
-    cli.register(createHelpCommand(quarry))
+    cli.register(createHelpCommand())
 
     for (const cmd of createDynamicCommands(quarry, parseSignature, app)) {
       cli.register(cmd)
