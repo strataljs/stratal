@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S node --no-warnings
 /* global process */
 import { createRequire, register } from 'node:module';
 import { dirname, join, resolve } from 'node:path';

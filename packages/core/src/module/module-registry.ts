@@ -8,7 +8,7 @@
  * - Lifecycle hooks: onInitialize, onShutdown
  */
 
-import { instancePerContainerCachingFactory } from 'tsyringe'
+import { injectable, instancePerContainerCachingFactory } from 'tsyringe'
 import type { Container } from '../di/container'
 import { Scope } from '../di/types'
 import { isListener } from '../events'
@@ -366,6 +366,7 @@ export class ModuleRegistry {
    */
   private collectIfCommand(providerClass: Constructor): void {
     if (isCommand(providerClass)) {
+      injectable()(providerClass)
       this.container.register(providerClass, providerClass, Scope.Singleton)
       this.allCommands.push(providerClass)
       this.logger.debug(`Collected command: ${providerClass.name}`)

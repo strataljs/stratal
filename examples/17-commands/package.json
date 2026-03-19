@@ -1,0 +1,18 @@
+{
+  "name": "stratal-example-17-commands",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "quarry": "quarry"
+  },
+  "dependencies": {
+    "reflect-metadata": "^0.2.2",
+    "stratal": "file:../../packages/core"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251014.0",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.73.0"
+  }
+}

@@ -1,12 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
-import { container as tsyringeRootContainer, inject } from 'tsyringe'
 import type { DependencyContainer } from 'tsyringe'
+import { inject, container as tsyringeRootContainer } from 'tsyringe'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Transient } from '../../di'
 import { Container } from '../../di/container'
 import { Scope } from '../../di/types'
 import type { LoggerService } from '../../logger/services/logger.service'
-import { Module } from '../../module/module.decorator'
 import { ModuleRegistry } from '../../module/module-registry'
+import { Module } from '../../module/module.decorator'
 import { Command } from '../command'
 import { isCommand } from '../is-command'
 import { QuarryRegistry } from '../quarry'
@@ -32,8 +33,6 @@ describe('Command Auto-Wiring (Application-level)', () => {
       static command = 'my:command'
       handle(): Promise<undefined> { return Promise.resolve(undefined) }
     }
-    // Instantiate to trigger Reflect.defineMetadata in constructor
-    new MyCommand()
 
     expect(isCommand(MyCommand)).toBe(true)
   })
@@ -51,11 +50,9 @@ describe('Command Auto-Wiring (Application-level)', () => {
       static command = 'my:command'
       handle(): Promise<undefined> { return Promise.resolve(undefined) }
     }
-    // Force metadata (normally set during DI resolution)
-    new MyCommand()
 
     @Module({ providers: [MyCommand] })
-    class TestModule {}
+    class TestModule { }
 
     registry.register(TestModule)
 
@@ -69,14 +66,13 @@ describe('Command Auto-Wiring (Application-level)', () => {
       static command = 'my:command'
       handle(): Promise<undefined> { return Promise.resolve(undefined) }
     }
-    new MyCommand()
 
     @Module({
       providers: [
         { provide: CMD_TOKEN, useClass: MyCommand, scope: Scope.Singleton },
       ],
     })
-    class TestModule {}
+    class TestModule { }
 
     registry.register(TestModule)
 
@@ -84,10 +80,10 @@ describe('Command Auto-Wiring (Application-level)', () => {
   })
 
   it('should not collect non-command providers', () => {
-    class RegularService {}
+    class RegularService { }
 
     @Module({ providers: [RegularService] })
-    class TestModule {}
+    class TestModule { }
 
     registry.register(TestModule)
 
@@ -99,10 +95,9 @@ describe('Command Auto-Wiring (Application-level)', () => {
       static command = 'my:command'
       handle(): Promise<undefined> { return Promise.resolve(undefined) }
     }
-    new MyCommand()
 
     @Module({ providers: [MyCommand] })
-    class TestModule {}
+    class TestModule { }
 
     registry.register(TestModule)
 
@@ -121,10 +116,9 @@ describe('Command Auto-Wiring (Application-level)', () => {
         return Promise.resolve(undefined)
       }
     }
-    new GreetCommand()
 
     @Module({ providers: [GreetCommand] })
-    class TestModule {}
+    class TestModule { }
 
     registry.register(TestModule)
 
@@ -149,6 +143,7 @@ describe('Command Auto-Wiring (Application-level)', () => {
 
     container.register(SERVICE_TOKEN, TestService, Scope.Singleton)
 
+    @Transient()
     class DependentCommand extends Command {
       static command = 'dependent'
 
@@ -161,10 +156,9 @@ describe('Command Auto-Wiring (Application-level)', () => {
         return Promise.resolve(undefined)
       }
     }
-    new DependentCommand(null as never)
 
     @Module({ providers: [DependentCommand] })
-    class TestModule {}
+    class TestModule { }
 
     registry.register(TestModule)
 

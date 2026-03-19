@@ -4,7 +4,9 @@ import type { ParsedArgument, ParsedOption, ParsedSignature } from './types'
  * Parse a Laravel-style command signature string.
  *
  * Signature syntax:
- *   command:name {arg} {arg?} {arg=default} {arg*} {arg : desc}
+ *   command-name {arg} ...              — flat command
+ *   group subcommand {arg} ...          — subcommand hierarchy (space-separated)
+ *   namespace:command {arg} ...         — namespaced flat command (colon-separated)
  *   {--flag} {--name=} {--name=default} {--name=*} {--A|name} {--name= : desc}
  *
  * Pure function, zero dependencies, edge-compatible.
@@ -29,7 +31,7 @@ export function parseSignature(signature: string): ParsedSignature {
 }
 
 function extractCommandName(signature: string): string {
-  const match = /^[\w:.-]+/.exec(signature)
+  const match = /^[\w:.-]+(?:\s+[\w:.-]+)*/.exec(signature)
   if (!match) {
     throw new Error(`Invalid signature: cannot extract command name from "${signature}"`)
   }

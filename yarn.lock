@@ -9541,6 +9541,7 @@ __metadata:
     "@intlify/message-compiler": "npm:^11.3.0"
     "@react-email/components": "npm:^1.0.10"
     "@stratal/testing": "workspace:*"
+    "@swc-node/register": "npm:^1.11.1"
     "@tus/server": "npm:^2.3.0"
     "@types/node": "npm:^25.5.0"
     "@types/nodemailer": "npm:^7.0.11"

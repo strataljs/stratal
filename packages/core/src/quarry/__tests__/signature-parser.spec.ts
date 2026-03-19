@@ -19,6 +19,13 @@ describe('parseSignature', () => {
     expect(result.name).toBe('db.migrate')
   })
 
+  it('should parse a space-separated subcommand name', () => {
+    const result = parseSignature('task add {title}')
+    expect(result.name).toBe('task add')
+    expect(result.arguments).toHaveLength(1)
+    expect(result.arguments[0].name).toBe('title')
+  })
+
   // ── Arguments ────────────────────────────────────────────────────
 
   it('should parse a required argument', () => {

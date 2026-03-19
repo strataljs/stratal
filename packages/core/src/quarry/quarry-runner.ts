@@ -164,10 +164,10 @@ function createDynamicCommand(
   quarry: QuarryRegistry,
   app: Application,
 ) {
-  const paths: string[][] = [name.split(':')]
+  const paths: string[][] = [name.split(' ')]
   if (aliases) {
     for (const alias of aliases) {
-      paths.push(alias.split(':'))
+      paths.push(alias.split(' '))
     }
   }
 

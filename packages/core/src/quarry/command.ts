@@ -1,7 +1,6 @@
 import 'reflect-metadata'
 
-import { injectable } from 'tsyringe'
-import { COMMAND_INTERNALS, COMMAND_METADATA_KEY } from './constants'
+import { COMMAND_INTERNALS } from './constants'
 import { CommandError } from './errors/command.error'
 import type { CommandInput, CommandInternals, CommandResult } from './types'
 
@@ -28,6 +27,11 @@ export abstract class Command {
   /**
    * Laravel-style command signature string.
    *
+   * **Command names:**
+   * - `'greet'` — flat command (`quarry greet`)
+   * - `'task add'` — subcommand hierarchy via spaces (`quarry task add`)
+   * - `'task:add'` — namespaced flat command via colons (`quarry task:add`)
+   *
    * **Arguments:**
    * - `{name}` — required argument
    * - `{name?}` — optional argument
@@ -45,7 +49,11 @@ export abstract class Command {
    *
    * @example
    * ```typescript
+   * // Namespaced flat command: `quarry users:create ...`
    * static command = 'users:create {email : The user email} {--A|admin} {--R|role= : Assign a role}'
+   *
+   * // Subcommand hierarchy: `quarry users create ...`
+   * static command = 'users create {email : The user email} {--A|admin} {--R|role= : Assign a role}'
    * ```
    */
   static command: string
@@ -57,10 +65,6 @@ export abstract class Command {
   [COMMAND_INTERNALS]: CommandInternals
 
   constructor() {
-    // Make the subclass injectable for tsyringe DI resolution
-    injectable()(this.constructor as new (...args: never[]) => unknown)
-    Reflect.defineMetadata(COMMAND_METADATA_KEY, true, this.constructor)
-
     this[COMMAND_INTERNALS] = {
       inputs: {},
       output: [],

@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest'
 import { Command } from '../command'
 import { getCommandResult, resetCommandState, setCommandInputs, setCommandQuarry } from '../command-internals'
 import { CommandError } from '../errors/command.error'
-import { COMMAND_METADATA_KEY } from '../constants'
 
 class TestCommand extends Command {
   static command = 'test {name} {--verbose}'
@@ -17,11 +16,6 @@ class TestCommand extends Command {
 }
 
 describe('Command', () => {
-  it('should set COMMAND_METADATA_KEY on the constructor', () => {
-    const cmd = new TestCommand()
-    expect(Reflect.getMetadata(COMMAND_METADATA_KEY, cmd.constructor)).toBe(true)
-  })
-
   // ── Input Accessors ──────────────────────────────────────────────
 
   describe('string()', () => {
