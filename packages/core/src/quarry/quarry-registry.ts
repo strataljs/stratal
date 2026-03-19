@@ -180,15 +180,21 @@ export class QuarryRegistry implements Quarry {
       throw new CommandError(`Duplicate command name: "${name}" is already registered`)
     }
 
-    this.commands.set(name, commandClass)
-    this.signatures.set(name, signature)
-
-    // Register aliases
+    // Validate all aliases before any mutation
     if (staticCommand.aliases) {
       for (const alias of staticCommand.aliases) {
         if (this.commands.has(alias) || this.aliases.has(alias)) {
           throw new CommandError(`Duplicate alias: "${alias}" conflicts with an existing command or alias`)
         }
+      }
+    }
+
+    // All checks passed — safe to mutate
+    this.commands.set(name, commandClass)
+    this.signatures.set(name, signature)
+
+    if (staticCommand.aliases) {
+      for (const alias of staticCommand.aliases) {
         this.aliases.set(alias, name)
       }
     }

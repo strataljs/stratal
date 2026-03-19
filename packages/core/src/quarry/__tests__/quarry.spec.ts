@@ -151,6 +151,22 @@ describe('QuarryRegistry', () => {
     expect(() => quarry.register(AliasConflict)).toThrow('Duplicate alias: "g" conflicts with an existing command or alias')
   })
 
+  it('should not leave command registered when alias conflicts', () => {
+    quarry.register(GreetCommand)
+
+    class AliasConflict extends Command {
+      static command = 'other'
+      static aliases = ['fresh-alias', 'g'] // 'g' conflicts with GreetCommand alias
+      handle(): Promise<undefined> { return Promise.resolve(undefined) }
+    }
+
+    expect(() => quarry.register(AliasConflict)).toThrow('Duplicate alias')
+    // 'other' should NOT be in the registry since its alias validation failed
+    expect(quarry.has('other')).toBe(false)
+    // 'fresh-alias' should also not be registered
+    expect(quarry.has('fresh-alias')).toBe(false)
+  })
+
   it('should throw for missing static command signature', () => {
     class NoSignature extends Command {
       handle(): Promise<undefined> { return Promise.resolve(undefined) }
