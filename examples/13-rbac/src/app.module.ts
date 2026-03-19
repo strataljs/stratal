@@ -14,8 +14,10 @@ import { rbacConfig } from './rbac/rbac.config'
 import { ArticlesModule } from './articles/articles.module'
 import { ListenersModule } from './listeners/listeners.module'
 import { RolesModule } from './roles/roles.module'
+import { RbacSeeder } from './seeders/rbac.seeder'
 
 @Module({
+  providers: [RbacSeeder],
   imports: [
     DatabaseModule.forRootAsync({
       inject: [DI_TOKENS.CloudflareEnv],

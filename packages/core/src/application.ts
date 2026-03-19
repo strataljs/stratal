@@ -1,9 +1,10 @@
-import { container as tsyringeRootContainer } from 'tsyringe'
+import { injectable, container as tsyringeRootContainer } from 'tsyringe'
 import { CacheModule } from './cache'
 import type { CronJob } from './cron/cron-job'
 import { CronManager } from './cron/cron-manager'
 import { Container } from './di/container'
 import { DI_TOKENS } from './di/tokens'
+import { Scope } from './di/types'
 import { type StratalEnv } from './env'
 import { ApplicationError, GlobalErrorHandler } from './errors'
 import type { EventHandler } from './events'
@@ -25,6 +26,7 @@ import { type IController, type RouterContext } from './router'
 import { HonoApp } from './router/hono-app'
 import type { VersioningOptions } from './router/types'
 import type { Constructor } from './types'
+import { DbSeedCommand, DbSeedListCommand, SeederRegistry, SEEDER_TOKENS, Seeder } from './seeder'
 
 export interface ApplicationConfig {
   /** Root application module */
@@ -155,10 +157,11 @@ export class Application {
     const controllers = this.moduleRegistry.getAllControllers() as Constructor<IController>[]
     await this.honoApp.configure(middlewareConfigs, controllers, this.appConfig.versioning)
 
-    // Phase 6: Configure queues, cron, events, commands
+    // Phase 6: Configure queues, cron, events, commands, seeders
     this.registerQueueConsumers()
     this.registerCronJobs()
     this.registerEventListeners()
+    this.registerSeeders()
     this.registerCommands()
 
     this.initialized = true
@@ -248,6 +251,16 @@ export class Application {
   }
 
   private registerCommands(): void {
+    // Built-in seeder commands (always available)
+    const builtinCommands: Constructor<Command>[] = [DbSeedCommand, DbSeedListCommand]
+    for (const Cmd of builtinCommands) {
+      injectable()(Cmd)
+      this._container.register(Cmd, Cmd, Scope.Singleton)
+      const command = this._container.resolve<Command>(Cmd)
+      this.quarry.register(command, Cmd)
+    }
+
+    // User commands from modules
     const commands = this.moduleRegistry.getAllCommands()
     if (commands.length === 0) {
       return
@@ -255,6 +268,15 @@ export class Application {
 
     for (const CommandClass of commands) {
       this.quarry.register(CommandClass as Constructor<Command>)
+    }
+  }
+
+  private registerSeeders(): void {
+    const seeders = this.moduleRegistry.getAllSeeders()
+    if (seeders.length === 0) return
+    const registry = this._container.resolve<SeederRegistry>(SEEDER_TOKENS.SeederRegistry)
+    for (const SeederClass of seeders) {
+      registry.register(SeederClass as Constructor<Seeder>)
     }
   }
 
@@ -321,5 +343,6 @@ export class Application {
     this._container.register(DI_TOKENS.ErrorHandler, GlobalErrorHandler)
     this._container.registerSingleton(DI_TOKENS.EventRegistry, EventRegistry)
     this._container.registerSingleton(DI_TOKENS.Quarry, QuarryRegistry)
+    this._container.registerValue(SEEDER_TOKENS.SeederRegistry, new SeederRegistry(this))
   }
 }

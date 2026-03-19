@@ -24,7 +24,7 @@ npx wrangler dev
 | 06 | [queues](06-queues/) | Queue producer/consumer pattern with Cloudflare Queues |
 | 07 | [scheduled-tasks](07-scheduled-tasks/) | Cron job scheduling with the `CronJob` interface |
 | 08 | [openapi](08-openapi/) | OpenAPI documentation with Swagger UI |
-| 09 | [seeders](09-seeders/) | Database seeding with `@stratal/seeders` and the `stratal-seed` CLI |
+| 09 | [seeders](09-seeders/) | Database seeding with `stratal/seeder` and the Quarry CLI |
 | 10 | [events](10-events/) | Type-safe event system with `@Listener` and `@On` decorators |
 | 11 | [auth](11-auth/) | Session-based authentication with Better Auth and `AuthGuard` |
 | 12 | [database](12-database/) | ZenStack ORM with Hyperdrive and database event listeners |

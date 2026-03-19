@@ -259,11 +259,13 @@ const response = await module.http
 ## Database Testing
 
 ```ts
+import { Seeder } from 'stratal/seeder';
+
 // Truncate tables between tests
 await module.truncateDb();
 
-// Seed test data
-await module.seed(new UserSeeder());
+// Seed test data (pass class constructors, not instances)
+await module.seed(UserSeeder);
 
 // Database assertions
 await module.assertDatabaseHas('user', { email: 'test@example.com' });

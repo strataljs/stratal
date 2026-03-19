@@ -4,10 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "seed": "stratal-seed ./src/seeders/index.ts"
+    "quarry": "quarry ./src/commands/index.ts"
   },
   "dependencies": {
-    "@stratal/seeders": "latest",
     "reflect-metadata": "^0.2.2",
     "stratal": "latest"
   },

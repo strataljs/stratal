@@ -1,7 +1,10 @@
 import { Module } from 'stratal/module'
-import { NotesModule } from './notes/notes.module'
+import { NotesController } from './notes/notes.controller'
+import { NotesService } from './notes/notes.service'
+import { NotesSeeder } from './seeders/notes.seeder'
 
 @Module({
-  imports: [NotesModule],
+  providers: [NotesService, NotesSeeder],
+  controllers: [NotesController],
 })
 export class AppModule {}

@@ -113,6 +113,10 @@
       "types": "./dist/router/index.d.mts",
       "import": "./dist/router/index.mjs"
     },
+    "./seeder": {
+      "types": "./dist/seeder/index.d.mts",
+      "import": "./dist/seeder/index.mjs"
+    },
     "./storage": {
       "types": "./dist/storage/index.d.mts",
       "import": "./dist/storage/index.mjs"

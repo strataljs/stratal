@@ -78,7 +78,7 @@ export abstract class Command {
    * Implement this method with the command's logic.
    * Return a number to set the exit code, or void for exit code 0.
    */
-  abstract handle(): Promise<number | undefined>
+  abstract handle(): number | undefined | Promise<number | undefined>
 
   // ── Input Accessors ──────────────────────────────────────────────
 

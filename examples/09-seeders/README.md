@@ -1,14 +1,14 @@
 # 09 - Seeders
 
-Database seeding with `@stratal/seeders` and the `stratal-seed` CLI.
+Database seeding with `stratal/seeder` and the Quarry CLI framework.
 
 ## What it demonstrates
 
 - `Seeder` abstract class for defining seed data
-- `SeederRunner.run()` to register and execute seeders
-- CLI commands: `list`, `run <name>`, `--all`, `--dry-run`
+- `QuarryRunner.run()` to bootstrap the CLI
+- Built-in commands: `db:seed`, `db:seed:list`
 - Dependency injection inside seeders (injecting services)
-- Seeder module pattern with feature module imports
+- Seeders as module providers (auto-discovered)
 
 ## Running
 
@@ -27,10 +27,10 @@ npx wrangler dev
 
 | Command | Description |
 |---------|-------------|
-| `npm run seed list` | List all available seeders |
-| `npm run seed run notes` | Run the `notes` seeder |
-| `npm run seed run -- --all` | Run all seeders |
-| `npm run seed run -- --dry-run` | Preview without executing |
+| `npm run quarry db:seed:list` | List all available seeders |
+| `npm run quarry db:seed NotesSeeder` | Run the `NotesSeeder` seeder |
+| `npm run quarry db:seed -- --all` | Run all seeders |
+| `npm run quarry db:seed NotesSeeder -- --dry-run` | Preview without executing |
 
 ### Example requests
 
@@ -46,8 +46,8 @@ curl -X POST http://localhost:8787/api/notes \
 
 ## Key files
 
-- [`src/seeders/index.ts`](src/seeders/index.ts) - CLI entry point for `stratal-seed`
-- [`src/seeders/seeders.module.ts`](src/seeders/seeders.module.ts) - Module registering seeder providers
+- [`src/commands/index.ts`](src/commands/index.ts) - CLI entry point using `QuarryRunner`
 - [`src/seeders/notes.seeder.ts`](src/seeders/notes.seeder.ts) - Seeder that creates sample notes
+- [`src/app.module.ts`](src/app.module.ts) - Root module with seeder in providers
 - [`src/notes/notes.service.ts`](src/notes/notes.service.ts) - In-memory notes service
 - [`src/notes/notes.controller.ts`](src/notes/notes.controller.ts) - Notes REST controller
