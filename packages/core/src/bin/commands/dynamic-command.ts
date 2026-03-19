@@ -12,8 +12,7 @@ export function createDynamicCommands(
   const commands: CommandClass[] = []
 
   for (const entry of quarry.list()) {
-    const commandInstance = quarry.get(entry.name)!
-    const commandClass = commandInstance.constructor as unknown as { command: string; description?: string; aliases?: string[] }
+    const commandClass = quarry.get(entry.name)! as unknown as { command: string; description?: string; aliases?: string[] }
     const signature = parseSignature(commandClass.command)
 
     const paths: string[][] = [entry.name.split(' ')]

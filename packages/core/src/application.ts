@@ -254,8 +254,7 @@ export class Application {
     }
 
     for (const CommandClass of commands) {
-      const command = this._container.resolve<Command>(CommandClass as Constructor<Command>)
-      this.quarry.register(command, CommandClass)
+      this.quarry.register(CommandClass as Constructor<Command>)
     }
   }
 

@@ -1,11 +1,13 @@
 import 'reflect-metadata'
 
-import { describe, expect, it, beforeEach } from 'vitest'
+import { container as tsyringeRootContainer, type DependencyContainer } from 'tsyringe'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { Container } from '../../di/container'
 import { Command } from '../command'
-import { QuarryRegistry } from '../quarry'
-import { CommandError } from '../errors/command.error'
-import { CommandNotFoundError } from '../errors/command-not-found.error'
 import { CommandExecutionError } from '../errors/command-execution.error'
+import { CommandNotFoundError } from '../errors/command-not-found.error'
+import { CommandError } from '../errors/command.error'
+import { QuarryRegistry } from '../quarry'
 
 class GreetCommand extends Command {
   static command = 'greet {name : The name} {--loud}'
@@ -69,32 +71,36 @@ class CallerCommand extends Command {
 
 describe('QuarryRegistry', () => {
   let quarry: QuarryRegistry
+  let childContainer: DependencyContainer
+  let container: Container
 
   beforeEach(() => {
-    quarry = new QuarryRegistry()
+    childContainer = tsyringeRootContainer.createChildContainer()
+    container = new Container({
+      container: childContainer,
+    })
+    quarry = new QuarryRegistry(container)
   })
 
   function registerAll(): void {
-    quarry.register(new GreetCommand(), GreetCommand)
-    quarry.register(new FailCommand(), FailCommand)
-    quarry.register(new ErrorCommand(), ErrorCommand)
-    quarry.register(new CrashCommand(), CrashCommand)
-    quarry.register(new DefaultsCommand(), DefaultsCommand)
-
-    const caller = new CallerCommand()
-    quarry.register(caller, CallerCommand)
+    quarry.register(GreetCommand)
+    quarry.register(FailCommand)
+    quarry.register(ErrorCommand)
+    quarry.register(CrashCommand)
+    quarry.register(DefaultsCommand)
+    quarry.register(CallerCommand)
   }
 
   // ── register & has ──────────────────────────────────────────────
 
   it('should register a command and check existence', () => {
-    quarry.register(new GreetCommand(), GreetCommand)
+    quarry.register(GreetCommand)
     expect(quarry.has('greet')).toBe(true)
     expect(quarry.has('unknown')).toBe(false)
   })
 
   it('should resolve aliases', () => {
-    quarry.register(new GreetCommand(), GreetCommand)
+    quarry.register(GreetCommand)
     expect(quarry.has('g')).toBe(true)
     expect(quarry.has('hello')).toBe(true)
   })
@@ -104,7 +110,7 @@ describe('QuarryRegistry', () => {
       handle(): Promise<undefined> { return Promise.resolve(undefined) }
     }
 
-    expect(() => quarry.register(new NoSignature(), NoSignature)).toThrow('missing static "command" signature')
+    expect(() => quarry.register(NoSignature)).toThrow('missing static "command" signature')
   })
 
   // ── call ────────────────────────────────────────────────────────
@@ -189,15 +195,15 @@ describe('QuarryRegistry', () => {
 
   // ── get, all, list ──────────────────────────────────────────────
 
-  it('should get a command by name', () => {
+  it('should get a command constructor by name', () => {
     registerAll()
-    expect(quarry.get('greet')).toBeInstanceOf(Command)
+    expect(quarry.get('greet')).toBe(GreetCommand)
     expect(quarry.get('unknown')).toBeUndefined()
   })
 
-  it('should get a command by alias', () => {
+  it('should get a command constructor by alias', () => {
     registerAll()
-    expect(quarry.get('g')).toBeInstanceOf(Command)
+    expect(quarry.get('g')).toBe(GreetCommand)
   })
 
   it('should return all commands', () => {

@@ -1,3 +1,5 @@
+import 'reflect-metadata';
+
 import { existsSync } from 'node:fs';
 import { createRequire, register } from 'node:module';
 import { dirname, join, resolve } from 'node:path';

@@ -8,6 +8,7 @@ import { Scope } from '../../di/types'
 import type { LoggerService } from '../../logger/services/logger.service'
 import { ModuleRegistry } from '../../module/module-registry'
 import { Module } from '../../module/module.decorator'
+import type { Constructor } from '../../types'
 import { Command } from '../command'
 import { isCommand } from '../is-command'
 import { QuarryRegistry } from '../quarry'
@@ -90,22 +91,6 @@ describe('Command Auto-Wiring (Application-level)', () => {
     expect(registry.getAllCommands()).toHaveLength(0)
   })
 
-  it('should re-register command as singleton', () => {
-    class MyCommand extends Command {
-      static command = 'my:command'
-      handle(): Promise<undefined> { return Promise.resolve(undefined) }
-    }
-
-    @Module({ providers: [MyCommand] })
-    class TestModule { }
-
-    registry.register(TestModule)
-
-    const instance1 = container.resolve(MyCommand)
-    const instance2 = container.resolve(MyCommand)
-    expect(instance1).toBe(instance2)
-  })
-
   it('should wire commands with Quarry', () => {
     class GreetCommand extends Command {
       static command = 'greet {name}'
@@ -122,13 +107,12 @@ describe('Command Auto-Wiring (Application-level)', () => {
 
     registry.register(TestModule)
 
-    const quarry = new QuarryRegistry()
+    const quarry = new QuarryRegistry(container)
     const commands = registry.getAllCommands()
     expect(commands).toHaveLength(1)
 
     for (const CommandClass of commands) {
-      const instance = container.resolve(CommandClass) as Command
-      quarry.register(instance, CommandClass)
+      quarry.register(CommandClass as Constructor<Command>)
     }
 
     expect(quarry.has('greet')).toBe(true)
@@ -162,10 +146,9 @@ describe('Command Auto-Wiring (Application-level)', () => {
 
     registry.register(TestModule)
 
-    const quarry = new QuarryRegistry()
+    const quarry = new QuarryRegistry(container)
     for (const CommandClass of registry.getAllCommands()) {
-      const instance = container.resolve(CommandClass) as Command
-      quarry.register(instance, CommandClass)
+      quarry.register(CommandClass as Constructor<Command>)
     }
 
     const result = await quarry.call('dependent')

@@ -1,8 +1,10 @@
+import { inject } from 'tsyringe'
+import type { Container } from '../di/container'
 import { Transient } from '../di/decorators'
 import { DI_TOKENS } from '../di/tokens'
 import type { Constructor } from '../types'
-import type { Command } from './command'
-import { getCommandResult, resetCommandState, setCommandInputs, setCommandQuarry } from './command-internals'
+import { Command } from './command'
+import { getCommandResult, setCommandInputs, setCommandQuarry } from './command-internals'
 import { CommandExecutionError } from './errors/command-execution.error'
 import { CommandNotFoundError } from './errors/command-not-found.error'
 import { CommandError } from './errors/command.error'
@@ -14,23 +16,27 @@ import type { CommandInput, CommandResult, ParsedSignature, Quarry } from './typ
  *
  * Registered as a singleton via DI_TOKENS.Quarry.
  * Commands are auto-discovered from module providers and registered at bootstrap.
+ * Command constructors are stored at bootstrap; fresh instances are resolved per `call()`.
  *
  * Users should inject and type as `Quarry` (the interface), which only exposes `call()`.
  */
 @Transient(DI_TOKENS.Quarry)
 export class QuarryRegistry implements Quarry {
-  private commands = new Map<string, Command>()
+  private commands = new Map<string, Constructor<Command>>()
   private signatures = new Map<string, ParsedSignature>()
   private aliases = new Map<string, string>()
 
+  constructor(@inject(DI_TOKENS.Container) private readonly container: Container) { }
+
   /**
    * Execute a command by name with optional flat input.
+   * A fresh command instance is resolved from the container per invocation.
    */
   async call(name: string, input?: CommandInput): Promise<CommandResult> {
     const resolvedName = this.resolveName(name)
-    const command = this.commands.get(resolvedName)
+    const CommandClass = this.commands.get(resolvedName)
 
-    if (!command) {
+    if (!CommandClass) {
       throw new CommandNotFoundError(name)
     }
 
@@ -44,7 +50,10 @@ export class QuarryRegistry implements Quarry {
       }
     }
 
-    resetCommandState(command)
+    // Resolve a fresh instance per invocation to avoid shared mutable state
+    const command = this.container.resolve<Command>(CommandClass)
+
+    setCommandQuarry(command, this)
     setCommandInputs(command, mergedInput)
 
     try {
@@ -79,17 +88,17 @@ export class QuarryRegistry implements Quarry {
   }
 
   /**
-   * Get a command instance by name or alias.
+   * Get a command constructor by name or alias.
    */
-  get(name: string): Command | undefined {
+  get(name: string): Constructor<Command> | undefined {
     const resolved = this.resolveName(name)
     return this.commands.get(resolved)
   }
 
   /**
-   * Get all registered commands.
+   * Get all registered command constructors.
    */
-  all(): Map<string, Command> {
+  all(): Map<string, Constructor<Command>> {
     return new Map(this.commands)
   }
 
@@ -99,8 +108,8 @@ export class QuarryRegistry implements Quarry {
   list(): { name: string; description?: string; aliases: string[] }[] {
     const result: { name: string; description?: string; aliases: string[] }[] = []
 
-    for (const [name, command] of this.commands) {
-      const commandClass = command.constructor as typeof Command
+    for (const [name, CommandClass] of this.commands) {
+      const staticCommand = CommandClass as unknown as typeof Command
       const commandAliases: string[] = []
 
       for (const [alias, target] of this.aliases) {
@@ -111,7 +120,7 @@ export class QuarryRegistry implements Quarry {
 
       result.push({
         name,
-        description: commandClass.description,
+        description: staticCommand.description,
         aliases: commandAliases,
       })
     }
@@ -124,25 +133,25 @@ export class QuarryRegistry implements Quarry {
    */
   async usage(name: string): Promise<string> {
     const resolvedName = this.resolveName(name)
-    const command = this.commands.get(resolvedName)
+    const CommandClass = this.commands.get(resolvedName)
 
-    if (!command) {
+    if (!CommandClass) {
       throw new CommandNotFoundError(name)
     }
 
     const signature = this.signatures.get(resolvedName)!
-    const commandClass = command.constructor as typeof Command
+    const staticCommand = CommandClass as unknown as typeof Command
 
     // Dynamic import to keep usage-generator tree-shakeable
     const { generateUsage } = await import('./usage-generator')
-    return generateUsage(signature, commandClass.description)
+    return generateUsage(signature, staticCommand.description)
   }
 
   /**
-   * Register a command instance with the registry.
+   * Register a command constructor with the registry.
    * @internal Called by Application during bootstrap.
    */
-  register(command: Command, commandClass: Constructor): void {
+  register(commandClass: Constructor<Command>): void {
     const staticCommand = commandClass as unknown as typeof Command
 
     if (!staticCommand.command) {
@@ -152,9 +161,7 @@ export class QuarryRegistry implements Quarry {
     const signature = parseSignature(staticCommand.command)
     const name = signature.name
 
-    setCommandQuarry(command, this)
-
-    this.commands.set(name, command)
+    this.commands.set(name, commandClass)
     this.signatures.set(name, signature)
 
     // Register aliases

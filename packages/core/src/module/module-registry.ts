@@ -367,7 +367,6 @@ export class ModuleRegistry {
   private collectIfCommand(providerClass: Constructor): void {
     if (isCommand(providerClass)) {
       injectable()(providerClass)
-      this.container.register(providerClass, providerClass, Scope.Singleton)
       this.allCommands.push(providerClass)
       this.logger.debug(`Collected command: ${providerClass.name}`)
     }

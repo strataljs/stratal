@@ -1,6 +1,6 @@
 import { Command, Option, type Usage } from 'clipanion'
 
-import type { QuarryRegistry } from 'stratal/quarry'
+import { CommandNotFoundError, type QuarryRegistry } from 'stratal/quarry'
 
 export function createHelpCommand(quarry: QuarryRegistry) {
   class HelpCommand extends Command {
@@ -15,9 +15,17 @@ export function createHelpCommand(quarry: QuarryRegistry) {
         return 0
       }
 
-      const usage = await quarry.usage(this.commandName)
-      this.context.stdout.write(usage + '\n')
-      return 0
+      try {
+        const usage = await quarry.usage(this.commandName)
+        this.context.stdout.write(usage + '\n')
+        return 0
+      } catch (error) {
+        if (error instanceof CommandNotFoundError) {
+          this.context.stderr.write(`Unknown command: ${this.commandName}\n`)
+          return 1
+        }
+        throw error
+      }
     }
   }
 

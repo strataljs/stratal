@@ -14,6 +14,5 @@ Introduce Quarry command framework with auto-discovery and Clipanion-based CLI
 - Auto-discover commands from module `providers` via `isCommand()` utility
 - Support usage/help generation with `UsageGenerator`
 - Custom error types: `CommandError`, `CommandNotFoundError`, `CommandExecutionError`
-- New DI token `QUARRY_COMMANDS` for manual command registration
 - New sub-path export `stratal/quarry`
 - New dependencies: `clipanion`, `@swc-node/register`
