@@ -2,10 +2,10 @@ import { inject } from 'tsyringe'
 import type { Container } from '../di/container'
 import { Transient } from '../di/decorators'
 import { DI_TOKENS } from '../di/tokens'
+import type { GlobalErrorHandler } from '../errors/global-error-handler'
 import type { Constructor } from '../types'
 import { Command } from './command'
 import { getCommandResult, setCommandInputs, setCommandQuarry } from './command-internals'
-import { CommandExecutionError } from './errors/command-execution.error'
 import { CommandNotFoundError } from './errors/command-not-found.error'
 import { CommandError } from './errors/command.error'
 import { parseSignature } from './signature-parser'
@@ -75,7 +75,14 @@ export class QuarryRegistry implements Quarry {
         }
       }
 
-      throw new CommandExecutionError(resolvedName, error)
+      const result = getCommandResult(command)
+      const errorMessage = this.handleError(error)
+
+      return {
+        exitCode: result.exitCode === 0 ? 1 : result.exitCode,
+        output: result.output,
+        errors: [...result.errors, errorMessage],
+      }
     }
   }
 
@@ -170,6 +177,12 @@ export class QuarryRegistry implements Quarry {
         this.aliases.set(alias, name)
       }
     }
+  }
+
+  private handleError(error: unknown): string {
+    const errorHandler = this.container.resolve<GlobalErrorHandler>(DI_TOKENS.ErrorHandler)
+    const response = errorHandler.handle(error)
+    return response.message
   }
 
   private resolveName(name: string): string {

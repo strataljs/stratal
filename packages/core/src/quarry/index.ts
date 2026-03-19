@@ -1,9 +1,9 @@
 export { Command } from './command'
-export { QuarryRegistry } from './quarry'
-export { CommandError } from './errors/command.error'
 export { CommandNotFoundError } from './errors/command-not-found.error'
-export { CommandExecutionError } from './errors/command-execution.error'
+export { CommandError } from './errors/command.error'
 export { isCommand } from './is-command'
+export { QuarryRegistry } from './quarry'
 export { parseSignature } from './signature-parser'
+export type { CommandInput, CommandResult, ParsedArgument, ParsedOption, ParsedSignature, Quarry } from './types'
 export { generateUsage } from './usage-generator'
-export type { Quarry, CommandInput, CommandResult, ParsedSignature, ParsedArgument, ParsedOption } from './types'
+

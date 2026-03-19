@@ -1,10 +1,10 @@
 import 'reflect-metadata'
 
 import { container as tsyringeRootContainer, type DependencyContainer } from 'tsyringe'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Container } from '../../di/container'
+import { DI_TOKENS } from '../../di/tokens'
 import { Command } from '../command'
-import { CommandExecutionError } from '../errors/command-execution.error'
 import { CommandNotFoundError } from '../errors/command-not-found.error'
 import { CommandError } from '../errors/command.error'
 import { QuarryRegistry } from '../quarry'
@@ -48,6 +48,14 @@ class CrashCommand extends Command {
   }
 }
 
+class AppErrorCommand extends Command {
+  static command = 'app-error'
+
+  handle(): Promise<never> {
+    throw new Error('errors.someAppError')
+  }
+}
+
 class DefaultsCommand extends Command {
   static command = 'defaults {name=World} {--greeting=Hello}'
 
@@ -74,12 +82,22 @@ describe('QuarryRegistry', () => {
   let childContainer: DependencyContainer
   let container: Container
 
+  const mockErrorHandler = {
+    handle: vi.fn((error: unknown) => ({
+      code: 9999,
+      message: error instanceof Error ? `handled:${error.message}` : 'handled:unknown',
+      timestamp: new Date().toISOString(),
+    })),
+  }
+
   beforeEach(() => {
     childContainer = tsyringeRootContainer.createChildContainer()
     container = new Container({
       container: childContainer,
     })
+    container.registerValue(DI_TOKENS.ErrorHandler, mockErrorHandler)
     quarry = new QuarryRegistry(container)
+    mockErrorHandler.handle.mockClear()
   })
 
   function registerAll(): void {
@@ -87,6 +105,7 @@ describe('QuarryRegistry', () => {
     quarry.register(FailCommand)
     quarry.register(ErrorCommand)
     quarry.register(CrashCommand)
+    quarry.register(AppErrorCommand)
     quarry.register(DefaultsCommand)
     quarry.register(CallerCommand)
   }
@@ -173,10 +192,32 @@ describe('QuarryRegistry', () => {
     expect(result.errors).toContain('User-facing error')
   })
 
-  it('should wrap unexpected errors in CommandExecutionError', async () => {
+  it('should handle unexpected errors through GlobalErrorHandler', async () => {
     registerAll()
-    await expect(quarry.call('crash')).rejects.toThrow(CommandExecutionError)
-    await expect(quarry.call('crash')).rejects.toThrow('Unexpected crash')
+    const result = await quarry.call('crash')
+    expect(result.exitCode).toBe(1)
+    expect(result.errors).toContain('handled:Unexpected crash')
+    expect(mockErrorHandler.handle).toHaveBeenCalledOnce()
+  })
+
+  it('should route ApplicationError through GlobalErrorHandler', async () => {
+    registerAll()
+    mockErrorHandler.handle.mockReturnValueOnce({
+      code: 9999,
+      message: 'Translated app error',
+      timestamp: new Date().toISOString(),
+    })
+    const result = await quarry.call('app-error')
+    expect(result.exitCode).toBe(1)
+    expect(result.errors).toContain('Translated app error')
+    expect(mockErrorHandler.handle).toHaveBeenCalledOnce()
+  })
+
+  it('should not re-throw for unexpected errors', async () => {
+    registerAll()
+    const result = await quarry.call('crash')
+    expect(result.exitCode).toBe(1)
+    expect(result.errors.length).toBeGreaterThan(0)
   })
 
   it('should throw CommandError for missing required argument', async () => {
@@ -209,14 +250,14 @@ describe('QuarryRegistry', () => {
   it('should return all commands', () => {
     registerAll()
     const all = quarry.all()
-    expect(all.size).toBe(6)
+    expect(all.size).toBe(7)
     expect(all.has('greet')).toBe(true)
   })
 
   it('should list commands sorted by name', () => {
     registerAll()
     const list = quarry.list()
-    expect(list.length).toBe(6)
+    expect(list.length).toBe(7)
     // Should be sorted alphabetically
     const names = list.map((c) => c.name)
     expect(names).toEqual([...names].sort())

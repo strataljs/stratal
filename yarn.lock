@@ -9593,7 +9593,7 @@ __metadata:
     resend:
       optional: true
   bin:
-    quarry: ./bin/quarry.js
+    quarry: ./dist/bin/quarry.mjs
   languageName: unknown
   linkType: soft
 
