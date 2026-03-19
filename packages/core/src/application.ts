@@ -14,6 +14,9 @@ import { ConsoleTransport, JsonFormatter, LOGGER_TOKENS, LoggerService, LogLevel
 import { ModuleRegistry } from './module/module-registry'
 import type { DynamicModule, ModuleClass } from './module/types'
 import { OpenAPIModule } from './openapi'
+import type { Command } from './quarry/command'
+import { QuarryRegistry } from './quarry/quarry-registry'
+import type { CommandInput, CommandResult } from './quarry/types'
 import { type ConsumerRegistry } from './queue/consumer-registry'
 import type { IQueueConsumer, QueueMessage } from './queue/queue-consumer'
 import { type QueueManager } from './queue/queue-manager'
@@ -73,6 +76,7 @@ export class Application {
   private moduleRegistry: ModuleRegistry
   private consumerRegistry!: ConsumerRegistry
   private cronManager!: CronManager
+  private quarry!: QuarryRegistry
   private initialized = false
 
   readonly env: StratalEnv
@@ -142,6 +146,7 @@ export class Application {
     // Phase 4: Resolve managers from container
     this.consumerRegistry = this._container.resolve<ConsumerRegistry>(DI_TOKENS.ConsumerRegistry)
     this.cronManager = this._container.resolve<CronManager>(DI_TOKENS.Cron)
+    this.quarry = this._container.resolve<QuarryRegistry>(DI_TOKENS.Quarry)
 
     // Phase 5: Create & configure HonoApp
     const logger = this._container.resolve<LoggerService>(LOGGER_TOKENS.LoggerService)
@@ -150,10 +155,11 @@ export class Application {
     const controllers = this.moduleRegistry.getAllControllers() as Constructor<IController>[]
     await this.honoApp.configure(middlewareConfigs, controllers, this.appConfig.versioning)
 
-    // Phase 6: Configure queues, cron, events
+    // Phase 6: Configure queues, cron, events, commands
     this.registerQueueConsumers()
     this.registerCronJobs()
     this.registerEventListeners()
+    this.registerCommands()
 
     this.initialized = true
   }
@@ -231,6 +237,27 @@ export class Application {
     await this._container.dispose()
   }
 
+  /**
+   * Execute a command by name in a request-scoped container.
+   */
+  async handleCommand(name: string, input?: CommandInput): Promise<CommandResult> {
+    const mockContext = this.createMockRouterContext('en')
+    return this._container.runInRequestScope(mockContext, async () => {
+      return this.quarry.call(name, input)
+    })
+  }
+
+  private registerCommands(): void {
+    const commands = this.moduleRegistry.getAllCommands()
+    if (commands.length === 0) {
+      return
+    }
+
+    for (const CommandClass of commands) {
+      this.quarry.register(CommandClass as Constructor<Command>)
+    }
+  }
+
   private registerQueueConsumers(): void {
     for (const ConsumerClass of this.moduleRegistry.getAllConsumers()) {
       const consumer = this._container.resolve(ConsumerClass) as IQueueConsumer
@@ -293,5 +320,6 @@ export class Application {
     this._container.registerSingleton(DI_TOKENS.Cron, CronManager)
     this._container.register(DI_TOKENS.ErrorHandler, GlobalErrorHandler)
     this._container.registerSingleton(DI_TOKENS.EventRegistry, EventRegistry)
+    this._container.registerSingleton(DI_TOKENS.Quarry, QuarryRegistry)
   }
 }

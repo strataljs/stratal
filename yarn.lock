@@ -5438,6 +5438,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"clipanion@npm:^4.0.0-rc.4":
+  version: 4.0.0-rc.4
+  resolution: "clipanion@npm:4.0.0-rc.4"
+  dependencies:
+    typanion: "npm:^3.8.0"
+  peerDependencies:
+    typanion: "*"
+  checksum: 10c0/047b415b59a5e9777d00690fba563ccc850eca6bf27790a88d1deea3ecc8a89840ae9aed554ff284cc698a9f3f20256e43c25ff4a7c4c90a71e5e7d9dca61dd1
+  languageName: node
+  linkType: hard
+
 "cliui@npm:^8.0.1":
   version: 8.0.1
   resolution: "cliui@npm:8.0.1"
@@ -9530,6 +9541,7 @@ __metadata:
     "@intlify/message-compiler": "npm:^11.3.0"
     "@react-email/components": "npm:^1.0.10"
     "@stratal/testing": "workspace:*"
+    "@swc-node/register": "npm:^1.11.1"
     "@tus/server": "npm:^2.3.0"
     "@types/node": "npm:^25.5.0"
     "@types/nodemailer": "npm:^7.0.11"
@@ -9539,6 +9551,7 @@ __metadata:
     "@vitest/runner": "npm:~4.1.0"
     "@vitest/snapshot": "npm:~4.1.0"
     "@xmldom/xmldom": "npm:^0.8.11"
+    clipanion: "npm:^4.0.0-rc.4"
     hono: "npm:^4.12.8"
     nodemailer: "npm:^8.0.2"
     react: "npm:^19.2.4"
@@ -9579,6 +9592,8 @@ __metadata:
       optional: true
     resend:
       optional: true
+  bin:
+    quarry: ./dist/bin/quarry.mjs
   languageName: unknown
   linkType: soft
 
@@ -9971,6 +9986,13 @@ __metadata:
   dependencies:
     tslib: "npm:^1.9.3"
   checksum: 10c0/918594b4dfac97beb8be2c041c6ec45f078ef3768ed4edfe35ae2c709ab503e2e6b454b2b37e692c658572d1972a428fbfdbc0a2b42fee727a83c1c685fbe5e1
+  languageName: node
+  linkType: hard
+
+"typanion@npm:^3.8.0":
+  version: 3.14.0
+  resolution: "typanion@npm:3.14.0"
+  checksum: 10c0/8b03b19844e6955bfd906c31dc781bae6d7f1fb3ce4fe24b7501557013d4889ae5cefe671dafe98d87ead0adceb8afcb8bc16df7dc0bd2b7331bac96f3a7cae2
   languageName: node
   linkType: hard
 

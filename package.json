@@ -40,6 +40,7 @@
     "typecheck": "yarn workspaces foreach -At --no-private run typecheck",
     "version-packages": "changeset version && yarn install --no-immutable",
     "build": "yarn workspaces foreach -At --no-private run build",
+    "test": "yarn workspaces foreach -At --no-private run test",
     "docs": "typedoc",
     "docs:watch": "typedoc --watch",
     "examples:install": "bash -c 'for dir in examples/*/; do (cd \"$dir\" && npm i wrangler); done'"

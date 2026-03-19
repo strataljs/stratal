@@ -33,6 +33,9 @@
     "access": "public",
     "provenance": true
   },
+  "bin": {
+    "quarry": "./dist/bin/quarry.mjs"
+  },
   "files": [
     "dist",
     "README.md"
@@ -98,6 +101,10 @@
       "types": "./dist/openapi/index.d.mts",
       "import": "./dist/openapi/index.mjs"
     },
+    "./quarry": {
+      "types": "./dist/quarry/index.d.mts",
+      "import": "./dist/quarry/index.mjs"
+    },
     "./queue": {
       "types": "./dist/queue/index.d.mts",
       "import": "./dist/queue/index.mjs"
@@ -143,7 +150,9 @@
     "@hono/zod-openapi": "^1.2.2",
     "@intlify/core-base": "^11.3.0",
     "@intlify/message-compiler": "^11.3.0",
+    "@swc-node/register": "^1.11.1",
     "@xmldom/xmldom": "^0.8.11",
+    "clipanion": "^4.0.0-rc.4",
     "hono": "^4.12.8",
     "reflect-metadata": "^0.2.2",
     "tsyringe": "^4.10.0",

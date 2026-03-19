@@ -40,6 +40,4 @@ export function setupI18nCompiler(): void {
   registerMessageCompiler(compile)
 
   isRegistered = true
-
-  console.log('[i18n] JIT message compiler registered successfully')
 }

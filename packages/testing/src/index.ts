@@ -20,6 +20,10 @@ export { TestSseRequest } from './core/sse/test-sse-request'
 export { TestSseConnection } from './core/sse/test-sse-connection'
 export type { TestSseEvent } from './core/sse/test-sse-connection'
 
+// Quarry Testing
+export { TestCommandRequest } from './core/quarry/test-command-request'
+export { TestCommandResult } from './core/quarry/test-command-result'
+
 // Re-export MSW utilities for convenience
 export { http, HttpResponse } from 'msw'
 
