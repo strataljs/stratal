@@ -12,7 +12,7 @@ describe('AuthContext', () => {
     }).compile()
 
     await module.truncateDb()
-    await module.seed(new UserSeeder())
+    await module.seed(UserSeeder)
   })
 
   afterAll(async () => {

@@ -191,7 +191,7 @@ describe('Database Module', () => {
 
   describe('Seeders', () => {
     it('seeds users via UserSeeder', async () => {
-      await module.seed(new UserSeeder())
+      await module.seed(UserSeeder)
 
       await module.assertDatabaseHas('user', { email: 'admin@test.com', role: 'admin' })
       await module.assertDatabaseHas('user', { email: 'user@test.com', role: 'user' })

@@ -1,9 +1,17 @@
-import { Seeder } from '@stratal/testing'
+import { InjectDB } from '@stratal/framework/database'
+import { Transient } from 'stratal/di'
+import { Seeder } from 'stratal/seeder'
 import type { DatabaseService } from '../../src/database/database.service'
 import { ADMIN_USER_ID, REGULAR_USER_ID } from './user.seeder'
 
+@Transient()
 export class RbacSeeder extends Seeder {
-  async run(db: DatabaseService): Promise<void> {
+  constructor(@InjectDB('main') private db: DatabaseService) {
+    super()
+  }
+
+  async run(): Promise<void> {
+    const db = this.db
     // Role assignments (g type = grouping policy)
     await db.casbinRule.createMany({
       data: [

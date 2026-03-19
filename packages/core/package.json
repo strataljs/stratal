@@ -155,6 +155,7 @@
     "@intlify/core-base": "^11.3.0",
     "@intlify/message-compiler": "^11.3.0",
     "@swc-node/register": "^1.11.1",
+    "@swc/core": "^1.11.29",
     "@xmldom/xmldom": "^0.8.11",
     "clipanion": "^4.0.0-rc.4",
     "hono": "^4.12.8",

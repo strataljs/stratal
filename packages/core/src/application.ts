@@ -256,8 +256,7 @@ export class Application {
     for (const Cmd of builtinCommands) {
       injectable()(Cmd)
       this._container.register(Cmd, Cmd, Scope.Singleton)
-      const command = this._container.resolve<Command>(Cmd)
-      this.quarry.register(command, Cmd)
+      this.quarry.register(Cmd)
     }
 
     // User commands from modules
