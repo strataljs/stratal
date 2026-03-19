@@ -50,13 +50,15 @@ export class QuarryRegistry implements Quarry {
       }
     }
 
-    // Resolve a fresh instance per invocation to avoid shared mutable state
-    const command = this.container.resolve<Command>(CommandClass)
-
-    setCommandQuarry(command, this)
-    setCommandInputs(command, mergedInput)
+    let command: Command | undefined
 
     try {
+      // Resolve a fresh instance per invocation to avoid shared mutable state
+      command = this.container.resolve<Command>(CommandClass)
+
+      setCommandQuarry(command, this)
+      setCommandInputs(command, mergedInput)
+
       const exitCode = await command.handle()
       const result = getCommandResult(command)
 
@@ -67,22 +69,28 @@ export class QuarryRegistry implements Quarry {
       return result
     } catch (error) {
       if (error instanceof CommandError) {
+        if (command) {
+          const result = getCommandResult(command)
+          return {
+            exitCode: result.exitCode === 0 ? 1 : result.exitCode,
+            output: result.output,
+            errors: [...result.errors, error.message],
+          }
+        }
+        return { exitCode: 1, output: [], errors: [error.message] }
+      }
+
+      const errorMessage = this.handleError(error)
+
+      if (command) {
         const result = getCommandResult(command)
         return {
           exitCode: result.exitCode === 0 ? 1 : result.exitCode,
           output: result.output,
-          errors: [...result.errors, error.message],
+          errors: [...result.errors, errorMessage],
         }
       }
-
-      const result = getCommandResult(command)
-      const errorMessage = this.handleError(error)
-
-      return {
-        exitCode: result.exitCode === 0 ? 1 : result.exitCode,
-        output: result.output,
-        errors: [...result.errors, errorMessage],
-      }
+      return { exitCode: 1, output: [], errors: [errorMessage] }
     }
   }
 
@@ -162,11 +170,15 @@ export class QuarryRegistry implements Quarry {
     const staticCommand = commandClass as unknown as typeof Command
 
     if (!staticCommand.command) {
-      throw new Error(`Command class ${commandClass.name} is missing static "command" signature`)
+      throw new CommandError(`Command class ${commandClass.name} is missing static "command" signature`)
     }
 
     const signature = parseSignature(staticCommand.command)
     const name = signature.name
+
+    if (this.commands.has(name) || this.aliases.has(name)) {
+      throw new CommandError(`Duplicate command name: "${name}" is already registered`)
+    }
 
     this.commands.set(name, commandClass)
     this.signatures.set(name, signature)
@@ -174,6 +186,9 @@ export class QuarryRegistry implements Quarry {
     // Register aliases
     if (staticCommand.aliases) {
       for (const alias of staticCommand.aliases) {
+        if (this.commands.has(alias) || this.aliases.has(alias)) {
+          throw new CommandError(`Duplicate alias: "${alias}" conflicts with an existing command or alias`)
+        }
         this.aliases.set(alias, name)
       }
     }

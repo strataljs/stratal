@@ -1,3 +1,4 @@
+import { CommandError } from './errors/command.error'
 import type { ParsedArgument, ParsedOption, ParsedSignature } from './types'
 
 /**
@@ -33,7 +34,7 @@ export function parseSignature(signature: string): ParsedSignature {
 function extractCommandName(signature: string): string {
   const match = /^[\w:.-]+(?:\s+[\w:.-]+)*/.exec(signature)
   if (!match) {
-    throw new Error(`Invalid signature: cannot extract command name from "${signature}"`)
+    throw new CommandError(`Invalid signature: cannot extract command name from "${signature}"`)
   }
   return match[0]
 }

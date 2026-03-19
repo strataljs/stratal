@@ -5,17 +5,17 @@ import type { QuarryRegistry } from 'stratal/quarry'
 export function createListCommand(quarry: QuarryRegistry) {
   class ListCommand extends Command {
     static override paths = [['list']]
-    static override usage: Usage = Command.Usage({ description: 'List all available commands' })
+    static override usage: Usage = Command.Usage({ description: 'List all registered commands' })
 
     execute(): Promise<number> {
       const commands = quarry.list()
 
       if (commands.length === 0) {
-        this.context.stdout.write('No commands registered.\n')
+        this.context.stdout.write('No registered commands.\n')
         return Promise.resolve(0)
       }
 
-      this.context.stdout.write('\nAvailable commands:\n\n')
+      this.context.stdout.write('\nRegistered commands:\n\n')
 
       const maxName = Math.max(...commands.map((c) => c.name.length))
       for (const cmd of commands) {

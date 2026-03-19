@@ -124,6 +124,33 @@ describe('QuarryRegistry', () => {
     expect(quarry.has('hello')).toBe(true)
   })
 
+  it('should throw for duplicate command name', () => {
+    quarry.register(GreetCommand)
+    expect(() => quarry.register(GreetCommand)).toThrow('Duplicate command name: "greet"')
+  })
+
+  it('should throw for alias conflicting with existing command name', () => {
+    class AliasConflict extends Command {
+      static command = 'other'
+      static aliases = ['greet']
+      handle(): Promise<undefined> { return Promise.resolve(undefined) }
+    }
+
+    quarry.register(GreetCommand)
+    expect(() => quarry.register(AliasConflict)).toThrow('Duplicate alias: "greet" conflicts with an existing command or alias')
+  })
+
+  it('should throw for alias conflicting with existing alias', () => {
+    class AliasConflict extends Command {
+      static command = 'other'
+      static aliases = ['g']
+      handle(): Promise<undefined> { return Promise.resolve(undefined) }
+    }
+
+    quarry.register(GreetCommand)
+    expect(() => quarry.register(AliasConflict)).toThrow('Duplicate alias: "g" conflicts with an existing command or alias')
+  })
+
   it('should throw for missing static command signature', () => {
     class NoSignature extends Command {
       handle(): Promise<undefined> { return Promise.resolve(undefined) }

@@ -5,7 +5,6 @@ import { createRequire, register } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { QuarryRegistry } from 'stratal/quarry';
-import type Wrangler from 'wrangler';
 
 import { createDynamicCommands } from './commands/dynamic-command';
 import { createHelpCommand } from './commands/help-command';
@@ -45,7 +44,8 @@ if (!existsSync(entryPath)) {
 
 async function main(): Promise<void> {
   const cwdRequire = createRequire(join(process.cwd(), 'package.json'))
-  const { getPlatformProxy } = await import(cwdRequire.resolve('wrangler')) as typeof Wrangler
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
+  const { getPlatformProxy } = await import(cwdRequire.resolve('wrangler')) as typeof import('wrangler')
   const { env, ctx, dispose } = await getPlatformProxy();
 
   // Store platform proxy on globalThis so the cloudflare:workers virtual module can read it

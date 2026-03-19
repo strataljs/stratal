@@ -30,7 +30,7 @@ export interface CommandInternals {
   output: string[]
   errors: string[]
   exitCode: number
-  quarry: { call(name: string, input?: CommandInput): Promise<CommandResult> } | null
+  quarry: Quarry | null
 }
 
 /**
