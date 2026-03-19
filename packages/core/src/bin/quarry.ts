@@ -1,14 +1,15 @@
-import 'reflect-metadata';
+import 'reflect-metadata'
 
-import { existsSync } from 'node:fs';
-import { createRequire, register } from 'node:module';
-import { dirname, join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import type { QuarryRegistry } from 'stratal/quarry';
+import { existsSync } from 'node:fs'
+import { createRequire, register } from 'node:module'
+import { dirname, join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import type { QuarryRegistry } from 'stratal/quarry'
 
-import { createDynamicCommands } from './commands/dynamic-command';
-import { createHelpCommand } from './commands/help-command';
-import { createListCommand } from './commands/list-command';
+import { type Application } from '../application'
+import { createDynamicCommands } from './commands/dynamic-command'
+import { createHelpCommand } from './commands/help-command'
+import { createListCommand } from './commands/list-command'
 
 const require = createRequire(import.meta.url)
 
@@ -46,53 +47,54 @@ async function main(): Promise<void> {
   const cwdRequire = createRequire(join(process.cwd(), 'package.json'))
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const { getPlatformProxy } = await import(cwdRequire.resolve('wrangler')) as typeof import('wrangler')
-  const { env, ctx, dispose } = await getPlatformProxy();
+  const { env, ctx, dispose } = await getPlatformProxy()
 
-  // Store platform proxy on globalThis so the cloudflare:workers virtual module can read it
-  (globalThis as Record<string, unknown>).__stratalPlatformProxy = {
-    env,
-    waitUntil: ctx.waitUntil.bind(ctx),
-  }
-
-  // Import user's entry file — triggers `new Stratal(...)` + full Application init
-  await import(pathToFileURL(entryPath).href)
-
-  // Parallel import of stratal modules
-  const [
-    { Stratal },
-    { DI_TOKENS },
-    { parseSignature },
-  ] = await Promise.all([
-    import('stratal'),
-    import('stratal/di'),
-    import('stratal/quarry'),
-  ])
-
-  const app = await Stratal.resolveApplication()
-  const quarry = app.container.resolve<QuarryRegistry>(DI_TOKENS.Quarry)
-
-  // Build Clipanion CLI
-  const { Builtins, Cli } = await import('clipanion')
-  const pkg = require('../../package.json') as { version: string }
-
-  const cli = new Cli({
-    binaryName: 'quarry',
-    binaryLabel: 'Quarry CLI',
-    binaryVersion: pkg.version,
-  })
-
-  cli.register(Builtins.HelpCommand)
-  cli.register(createListCommand(quarry))
-  cli.register(createHelpCommand(quarry))
-
-  for (const cmd of createDynamicCommands(quarry, parseSignature, app)) {
-    cli.register(cmd)
-  }
-
+  let app: Application | undefined
   try {
+    // Store platform proxy on globalThis so the cloudflare:workers virtual module can read it
+    (globalThis as Record<string, unknown>).__stratalPlatformProxy = {
+      env,
+      waitUntil: ctx.waitUntil.bind(ctx),
+    }
+
+    // Import user's entry file — triggers `new Stratal(...)` + full Application init
+    await import(pathToFileURL(entryPath).href)
+
+    // Parallel import of stratal modules
+    const [
+      { Stratal },
+      { DI_TOKENS },
+      { parseSignature },
+    ] = await Promise.all([
+      import('stratal'),
+      import('stratal/di'),
+      import('stratal/quarry'),
+    ])
+
+    app = await Stratal.resolveApplication()
+    const quarry = app.container.resolve<QuarryRegistry>(DI_TOKENS.Quarry)
+
+    // Build Clipanion CLI
+    const { Builtins, Cli } = await import('clipanion')
+    const pkg = require('../../package.json') as { version: string }
+
+    const cli = new Cli({
+      binaryName: 'quarry',
+      binaryLabel: 'Quarry CLI',
+      binaryVersion: pkg.version,
+    })
+
+    cli.register(Builtins.HelpCommand)
+    cli.register(createListCommand(quarry))
+    cli.register(createHelpCommand(quarry))
+
+    for (const cmd of createDynamicCommands(quarry, parseSignature, app)) {
+      cli.register(cmd)
+    }
+
     await cli.runExit(process.argv.slice(2), { ...Cli.defaultContext })
   } finally {
-    await app.shutdown()
+    await app?.shutdown()
     await dispose()
   }
 }

@@ -2,7 +2,7 @@ import { Command, type CommandClass, Option, type Usage } from 'clipanion'
 
 import type { Application } from 'stratal'
 import type { QuarryRegistry } from 'stratal/quarry'
-import type { CommandResult, ParsedSignature } from 'stratal/quarry'
+import type { ParsedSignature } from 'stratal/quarry'
 
 export function createDynamicCommands(
   quarry: QuarryRegistry,
@@ -41,10 +41,7 @@ export function createDynamicCommands(
           if (value !== undefined) input[opt.name] = value
         }
 
-        const mockContext = app.createMockRouterContext('en')
-        const result = await app.container.runInRequestScope<CommandResult>(mockContext, async () => {
-          return quarry.call(entry.name, input)
-        })
+        const result = await app.handleCommand(entry.name, input)
 
         for (const line of result.output) {
           this.context.stdout.write(line + '\n')

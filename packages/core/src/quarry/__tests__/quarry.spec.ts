@@ -7,7 +7,7 @@ import { DI_TOKENS } from '../../di/tokens'
 import { Command } from '../command'
 import { CommandNotFoundError } from '../errors/command-not-found.error'
 import { CommandError } from '../errors/command.error'
-import { QuarryRegistry } from '../quarry'
+import { QuarryRegistry } from '../quarry-registry'
 
 class GreetCommand extends Command {
   static command = 'greet {name : The name} {--loud}'

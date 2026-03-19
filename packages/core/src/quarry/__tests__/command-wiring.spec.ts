@@ -11,7 +11,7 @@ import { Module } from '../../module/module.decorator'
 import type { Constructor } from '../../types'
 import { Command } from '../command'
 import { isCommand } from '../is-command'
-import { QuarryRegistry } from '../quarry'
+import { QuarryRegistry } from '../quarry-registry'
 
 describe('Command Auto-Wiring (Application-level)', () => {
   let childContainer: DependencyContainer
