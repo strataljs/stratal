@@ -34,11 +34,10 @@
     "provenance": true
   },
   "bin": {
-    "quarry": "./bin/quarry.js"
+    "quarry": "./dist/bin/quarry.mjs"
   },
   "files": [
     "dist",
-    "bin",
     "README.md"
   ],
   "exports": {
