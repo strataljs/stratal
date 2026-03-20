@@ -78,7 +78,8 @@ export abstract class Command {
    * Implement this method with the command's logic.
    * Return a number to set the exit code, or void for exit code 0.
    */
-  abstract handle(): Promise<number | undefined>
+  // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
+  abstract handle(): number | void | Promise<number | void>
 
   // ── Input Accessors ──────────────────────────────────────────────
 

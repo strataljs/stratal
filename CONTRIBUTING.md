@@ -25,7 +25,6 @@ packages/
   core/       # stratal — core framework (DI, modules, routing, queues, storage, email, i18n)
   testing/    # @stratal/testing — test utilities, mocks, and factories
   framework/  # @stratal/framework — auth, database ORM (ZenStack), RBAC (Casbin), guards
-  seeders/    # @stratal/seeders — CLI tool for database seeding
 ```
 
 ## Development Workflow
@@ -43,7 +42,6 @@ yarn lint:fix
 yarn workspace stratal typecheck
 yarn workspace @stratal/testing typecheck
 yarn workspace @stratal/framework typecheck
-yarn workspace @stratal/seeders typecheck
 
 # Run tests
 yarn workspace stratal test

@@ -14,7 +14,7 @@ describe('Event System', () => {
     }).compile()
 
     await module.truncateDb()
-    await module.seed(new UserSeeder())
+    await module.seed(UserSeeder)
   })
 
   afterEach(async () => {

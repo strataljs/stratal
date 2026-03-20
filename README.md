@@ -48,8 +48,6 @@ yarn add stratal
 | `stratal` | [![npm](https://img.shields.io/npm/v/stratal)](https://www.npmjs.com/package/stratal) | Core framework — modules, DI, routing, OpenAPI, queues, cron, storage, email, i18n |
 | `@stratal/testing` | [![npm](https://img.shields.io/npm/v/@stratal/testing)](https://www.npmjs.com/package/@stratal/testing) | Testing utilities and mocks |
 | `@stratal/framework` | [![npm](https://img.shields.io/npm/v/@stratal/framework)](https://www.npmjs.com/package/@stratal/framework) | Auth (Better Auth), database ORM (ZenStack), RBAC (Casbin), guards, factories |
-| `@stratal/seeders` | [![npm](https://img.shields.io/npm/v/@stratal/seeders)](https://www.npmjs.com/package/@stratal/seeders) | Database seeder CLI and infrastructure |
-
 ### AI Agent Skills
 
 Stratal provides [Agent Skills](https://agentskills.io) for AI coding assistants like Claude Code and Cursor. Install to give your AI agent knowledge of Stratal patterns, conventions, and APIs:
@@ -63,7 +61,6 @@ npx skills add strataljs/stratal
 | `stratal` | Core framework — modules, DI, controllers, routing, OpenAPI, queues, cron, email, storage, caching, i18n, logging, guards, middleware, config, events, and error handling |
 | `stratal-testing` | Testing — TestingModule, HTTP testing, mocks, fakes, and auth testing utilities |
 | `stratal-framework` | Framework modules — authentication (Better Auth), database (ZenStack ORM), RBAC (Casbin), AuthGuard, and test data factories |
-| `stratal-seeders` | Database seeders — writing seeders, CLI usage, and seeder registration |
 | `stratal-incremental-adoption` | Incremental adoption — mounting Stratal into an existing Hono app, gradual migration, coexisting queue consumers and cron jobs |
 
 ## Quick Start

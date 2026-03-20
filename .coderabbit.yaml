@@ -18,8 +18,6 @@ reviews:
       instructions: Apply when changes affect `packages/testing/`
     - label: framework
       instructions: Apply when changes affect `packages/framework/`
-    - label: seeders
-      instructions: Apply when changes affect `packages/seeders/`
   path_instructions:
     - path: packages/core/src/di/**
       instructions: >

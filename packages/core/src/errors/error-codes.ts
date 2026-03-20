@@ -189,6 +189,10 @@ export const ERROR_CODES = {
     WEBSOCKET_BODY_NOT_AVAILABLE: 9206,
     /** Duplicate WebSocket event decorator on a gateway */
     WEBSOCKET_DUPLICATE_EVENT_HANDLER: 9207,
+    /** Seeder name collision — two seeders share the same class name */
+    SEEDER_NAME_COLLISION: 9208,
+    /** Seeder not registered in the SeederRegistry */
+    SEEDER_NOT_REGISTERED: 9209,
   },
 } as const
 

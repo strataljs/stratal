@@ -13,6 +13,7 @@ import type { Container } from '../di/container'
 import { Scope } from '../di/types'
 import { isListener } from '../events'
 import { isCommand } from '../quarry/is-command'
+import { isSeeder } from '../seeder/is-seeder'
 import type { LoggerService } from '../logger'
 import {
   createMiddlewareConsumer,
@@ -61,6 +62,7 @@ export class ModuleRegistry {
   private allJobs: Constructor[] = []
   private allListeners: Constructor[] = []
   private allCommands: Constructor[] = []
+  private allSeeders: Constructor[] = []
   private allMiddlewareConfigs: MiddlewareConfigEntry[] = []
 
   constructor(
@@ -211,6 +213,13 @@ export class ModuleRegistry {
   }
 
   /**
+   * Get all seeders registered from all modules
+   */
+  getAllSeeders(): Constructor[] {
+    return this.allSeeders
+  }
+
+  /**
    * Get all middleware configurations from all modules
    */
   getAllMiddlewareConfigs(): MiddlewareConfigEntry[] {
@@ -336,11 +345,13 @@ export class ModuleRegistry {
       this.container.register(provider as Constructor)
       this.collectIfListener(provider as Constructor)
       this.collectIfCommand(provider as Constructor)
+      this.collectIfSeeder(provider as Constructor)
     } else if ('useClass' in provider) {
       // ClassProvider with optional scope
       this.container.register(provider.provide, provider.useClass as Constructor, provider.scope)
       this.collectIfListener(provider.useClass as Constructor)
       this.collectIfCommand(provider.useClass as Constructor)
+      this.collectIfSeeder(provider.useClass as Constructor)
     } else if ('useValue' in provider) {
       // ValueProvider - no scope needed (values are inherently singleton)
       this.container.registerValue(provider.provide, provider.useValue)
@@ -369,6 +380,16 @@ export class ModuleRegistry {
       injectable()(providerClass)
       this.allCommands.push(providerClass)
       this.logger.debug(`Collected command: ${providerClass.name}`)
+    }
+  }
+
+  /**
+   * Check if a class is a `Seeder` and collect it for auto-wiring
+   */
+  private collectIfSeeder(providerClass: Constructor): void {
+    if (isSeeder(providerClass) && !this.allSeeders.includes(providerClass)) {
+      this.allSeeders.push(providerClass)
+      this.logger.debug(`Collected seeder: ${providerClass.name}`)
     }
   }
 

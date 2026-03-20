@@ -17,8 +17,8 @@ describe('RBAC Module', () => {
 
   beforeEach(async () => {
     await module.truncateDb()
-    await module.seed(new UserSeeder())
-    await module.seed(new RbacSeeder())
+    await module.seed(UserSeeder)
+    await module.seed(RbacSeeder)
   })
 
   afterAll(async () => {

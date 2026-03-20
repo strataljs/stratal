@@ -33,9 +33,6 @@ export { ActingAs } from './auth'
 // Storage
 export { FakeStorageService, type StoredFile } from './storage'
 
-// Types
-export { Seeder } from './types'
-
 // Environment utilities
 export { getTestEnv } from './core/env'
 

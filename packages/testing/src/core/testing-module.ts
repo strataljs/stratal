@@ -1,12 +1,12 @@
 import type { ConnectionName, DatabaseService } from '@stratal/framework/database'
 import { connectionSymbol } from '@stratal/framework/database'
-import type { Application, StratalEnv } from 'stratal'
+import type { Application, Constructor, StratalEnv } from 'stratal'
 import { DI_TOKENS, type Container } from 'stratal/di'
 import { type InjectionToken } from 'stratal/module'
+import { SEEDER_TOKENS, type Seeder, type SeederRegistry, SeederNotRegisteredError } from 'stratal/seeder'
 import { STORAGE_TOKENS } from 'stratal/storage'
 import { expect } from 'vitest'
 import type { FakeStorageService } from '../storage'
-import type { Seeder } from '../types'
 import { TestHttpClient } from './http/test-http-client'
 import { TestCommandRequest } from './quarry/test-command-request'
 import { TestSseRequest } from './sse/test-sse-request'
@@ -34,7 +34,7 @@ import { TestWsRequest } from './ws/test-ws-request'
  *
  * // Database utilities
  * await module.truncateDb()
- * await module.seed(new UserSeeder())
+ * await module.seed(UserSeeder)
  * await module.assertDatabaseHas('user', { email: 'test@example.com' })
  *
  * // Cleanup
@@ -152,27 +152,16 @@ export class TestingModule {
   }
 
   /**
-   * Run seeders in a database transaction
+   * Run seeders by class constructor in the request-scoped container
    */
-  async seed(...seeders: Seeder[]): Promise<void>
-  async seed(name: ConnectionName, ...seeders: Seeder[]): Promise<void>
-  async seed(...args: unknown[]): Promise<void> {
-    let name: string | undefined
-    let seeders: Seeder[]
-
-    if (typeof args[0] === 'string') {
-      name = args[0]
-      seeders = args.slice(1) as Seeder[]
-    } else {
-      seeders = args as Seeder[]
-    }
-
-    const db = this.getDb(name!)
-    await db.$transaction(async (tx) => {
-      for (const seeder of seeders) {
-        await seeder.run(tx as DatabaseService)
+  async seed(...SeederClasses: Constructor<Seeder>[]): Promise<void> {
+    const registry = this._requestContainer.resolve<SeederRegistry>(SEEDER_TOKENS.SeederRegistry)
+    for (const SeederClass of SeederClasses) {
+      if (!registry.has(SeederClass)) {
+        throw new SeederNotRegisteredError(SeederClass.name)
       }
-    })
+      await registry.run(SeederClass, { container: this._requestContainer })
+    }
   }
 
   /**

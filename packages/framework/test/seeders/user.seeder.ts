@@ -1,12 +1,20 @@
-import { Seeder } from '@stratal/testing'
+import { InjectDB } from '@stratal/framework/database'
+import { Transient } from 'stratal/di'
+import { Seeder } from 'stratal/seeder'
 import type { DatabaseService } from '../../src/database/database.service'
 
 export const ADMIN_USER_ID = 'admin-user-id'
 export const REGULAR_USER_ID = 'regular-user-id'
 export const UNVERIFIED_USER_ID = 'unverified-user-id'
 
+@Transient()
 export class UserSeeder extends Seeder {
-  async run(db: DatabaseService): Promise<void> {
+  constructor(@InjectDB('main') private db: DatabaseService) {
+    super()
+  }
+
+  async run(): Promise<void> {
+    const db = this.db
     const [admin, regular, unverified] = await Promise.all([
       db.user.create({
         data: {

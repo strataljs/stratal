@@ -1,4 +1,4 @@
-import { Seeder } from '@stratal/seeders'
+import { Seeder } from 'stratal/seeder'
 import { inject, Transient } from 'stratal/di'
 import { CasbinEnforcerService } from '@stratal/framework/rbac'
 

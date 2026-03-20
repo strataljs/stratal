@@ -136,6 +136,10 @@ export const errors = {
     tokenExpired: 'The verification token has expired. Please request a new verification email.'
   },
 
+  // Seeder errors
+  seederNameCollision: 'Seeder name collision: "{name}" is already registered. Use distinct class names for each seeder.',
+  seederNotRegistered: 'Seeder "{name}" is not registered',
+
   // Migration errors
   migration: {
     failed: 'Migration {migrationName} failed: {error}',

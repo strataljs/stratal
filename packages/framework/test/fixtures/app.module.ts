@@ -14,6 +14,8 @@ import { AdminController } from './controllers/admin.controller'
 import { PostsController } from './controllers/posts.controller'
 import { PublicController } from './controllers/public.controller'
 import { UsersController } from './controllers/users.controller'
+import { RbacSeeder } from '../seeders/rbac.seeder'
+import { UserSeeder } from '../seeders/user.seeder'
 import { RBAC_MODEL } from './rbac-model'
 
 @Module({
@@ -58,5 +60,6 @@ import { RBAC_MODEL } from './rbac-model'
     }),
   ],
   controllers: [PublicController, UsersController, PostsController, AdminController],
+  providers: [UserSeeder, RbacSeeder],
 })
 export class TestAppModule { }

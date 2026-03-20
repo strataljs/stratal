@@ -19,14 +19,12 @@ Use the npm package names exactly:
 - `stratal` — `packages/core`
 - `@stratal/testing` — `packages/testing`
 - `@stratal/framework` — `packages/framework`
-- `@stratal/seeders` — `packages/seeders`
-- `@stratal/zenstack-plugin` — `packages/zenstack-plugin`
 
 ## Changeset File Format
 
 Create a **separate changeset file for each affected package** — do not combine multiple packages into one file. This ensures each package's CHANGELOG and GitHub Release contains only its own relevant notes.
 
-Naming convention: `<change-name>-<package-short-name>.md` where `<package-short-name>` is `core`, `testing`, `framework`, or `seeders`.
+Naming convention: `<change-name>-<package-short-name>.md` where `<package-short-name>` is `core`, `testing`, or `framework`.
 
 ```markdown
 ---
