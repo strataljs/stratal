@@ -15,6 +15,10 @@ export class DbSeedCommand extends Command {
     const all = this.boolean('all')
     const dryRun = this.boolean('dry-run')
 
+    if (name && all) {
+      this.warn(`Ignoring "${name}" because --all takes precedence`)
+    }
+
     if (!name && !all) {
       this.fail('Specify a seeder class name or use --all')
       return 1
