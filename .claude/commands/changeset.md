@@ -19,7 +19,6 @@ Use the npm package names exactly:
 - `stratal` — `packages/core`
 - `@stratal/testing` — `packages/testing`
 - `@stratal/framework` — `packages/framework`
-- `@stratal/zenstack-plugin` — `packages/zenstack-plugin`
 
 ## Changeset File Format
 

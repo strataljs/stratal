@@ -1,11 +1,10 @@
 import type { ConnectionName, DatabaseService } from '@stratal/framework/database'
 import { connectionSymbol } from '@stratal/framework/database'
-import type { Application, StratalEnv } from 'stratal'
+import type { Application, Constructor, StratalEnv } from 'stratal'
 import { DI_TOKENS, type Container } from 'stratal/di'
 import { type InjectionToken } from 'stratal/module'
-import { type Seeder, SEEDER_TOKENS, type SeederRegistry } from 'stratal/seeder'
+import { SEEDER_TOKENS, type Seeder, type SeederRegistry } from 'stratal/seeder'
 import { STORAGE_TOKENS } from 'stratal/storage'
-import type { Constructor } from 'stratal'
 import { expect } from 'vitest'
 import type { FakeStorageService } from '../storage'
 import { TestHttpClient } from './http/test-http-client'
@@ -35,7 +34,7 @@ import { TestWsRequest } from './ws/test-ws-request'
  *
  * // Database utilities
  * await module.truncateDb()
- * await module.seed(new UserSeeder())
+ * await module.seed(UserSeeder)
  * await module.assertDatabaseHas('user', { email: 'test@example.com' })
  *
  * // Cleanup

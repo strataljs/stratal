@@ -1,5 +1,5 @@
 {
-  "name": "stratal-example-15-zenstack-plugin",
+  "name": "stratal-example-15-multi-connection-database",
   "main": "src/index.ts",
   "compatibility_date": "2026-02-25",
   "compatibility_flags": [
