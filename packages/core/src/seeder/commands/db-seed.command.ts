@@ -50,5 +50,7 @@ export class DbSeedCommand extends Command {
       await this.seeders.run(SeederClass)
       this.success(`Seeder "${name}" completed`)
     }
+
+    return 0
   }
 }

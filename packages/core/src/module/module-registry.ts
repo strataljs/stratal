@@ -387,7 +387,7 @@ export class ModuleRegistry {
    * Check if a class is a `Seeder` and collect it for auto-wiring
    */
   private collectIfSeeder(providerClass: Constructor): void {
-    if (isSeeder(providerClass)) {
+    if (isSeeder(providerClass) && !this.allSeeders.includes(providerClass)) {
       this.allSeeders.push(providerClass)
       this.logger.debug(`Collected seeder: ${providerClass.name}`)
     }

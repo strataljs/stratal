@@ -3,7 +3,7 @@ import { connectionSymbol } from '@stratal/framework/database'
 import type { Application, StratalEnv } from 'stratal'
 import { DI_TOKENS, type Container } from 'stratal/di'
 import { type InjectionToken } from 'stratal/module'
-import { type Seeder, SEEDER_INTERNALS } from 'stratal/seeder'
+import { type Seeder, SEEDER_TOKENS, type SeederRegistry } from 'stratal/seeder'
 import { STORAGE_TOKENS } from 'stratal/storage'
 import type { Constructor } from 'stratal'
 import { expect } from 'vitest'
@@ -156,17 +156,12 @@ export class TestingModule {
    * Run seeders by class constructor in the request-scoped container
    */
   async seed(...SeederClasses: Constructor<Seeder>[]): Promise<void> {
+    const registry = this._requestContainer.resolve<SeederRegistry>(SEEDER_TOKENS.SeederRegistry)
     for (const SeederClass of SeederClasses) {
-      const seeder = this._requestContainer.resolve<Seeder>(SeederClass)
-      seeder[SEEDER_INTERNALS] = {
-        run: async (cls: Constructor<Seeder>) => {
-          const s = this._requestContainer.resolve<Seeder>(cls)
-          s[SEEDER_INTERNALS] = seeder[SEEDER_INTERNALS]
-          await s.run()
-        },
-        container: this._requestContainer,
+      if (!registry.has(SeederClass)) {
+        registry.register(SeederClass)
       }
-      await seeder.run()
+      await registry.run(SeederClass, { container: this._requestContainer })
     }
   }
 

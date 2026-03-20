@@ -9,7 +9,7 @@ export const SEEDER_TOKENS = {
 } as const
 
 export class SeederRegistry {
-  private seeders = new Map<Constructor<Seeder>, Constructor<Seeder>>()
+  private seeders = new Set<Constructor<Seeder>>()
   private nameIndex = new Map<string, Constructor<Seeder>>()
 
   constructor(private app: Application) { }
@@ -19,7 +19,7 @@ export class SeederRegistry {
     if (existing && existing !== SeederClass) {
       throw new SeederNameCollisionError(SeederClass.name)
     }
-    this.seeders.set(SeederClass, SeederClass)
+    this.seeders.add(SeederClass)
     this.nameIndex.set(SeederClass.name, SeederClass)
   }
 
@@ -46,7 +46,7 @@ export class SeederRegistry {
   }
 
   async runAll(options?: { container?: Container }): Promise<void> {
-    for (const SeederClass of this.seeders.keys()) {
+    for (const SeederClass of this.seeders) {
       await this.run(SeederClass, options)
     }
   }
@@ -60,6 +60,6 @@ export class SeederRegistry {
   }
 
   list(): { className: string }[] {
-    return [...this.seeders.keys()].map(cls => ({ className: cls.name }))
+    return [...this.seeders].map(cls => ({ className: cls.name }))
   }
 }
