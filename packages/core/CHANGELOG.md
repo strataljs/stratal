@@ -1,5 +1,38 @@
 # stratal
 
+## 0.0.15
+
+### Patch Changes
+
+- [#125](https://github.com/strataljs/stratal/pull/125) [`0731e99`](https://github.com/strataljs/stratal/commit/0731e99c3e0c96f988387611f0ef8559b63d7bd8) Thanks [@adesege](https://github.com/adesege)! - Introduce Quarry command framework with auto-discovery and Clipanion-based CLI
+
+  ### Details
+
+  - Add `Command` base class with declarative signature parsing (arguments, options, flags)
+  - Add `QuarryRegistry` for command registration, discovery from modules, and execution
+  - Add `quarry` CLI bin (`npx quarry`) with Clipanion-based command routing
+  - Add virtual `cloudflare:workers` ESM loader hook for Node compatibility
+  - Built-in commands: `list`, `help <command>`, and dynamic command dispatch
+  - Auto-discover commands from module `providers` via `isCommand()` utility
+  - Support usage/help generation with `UsageGenerator`
+  - Custom error types: `CommandError`, `CommandNotFoundError`
+  - New sub-path export `stratal/quarry`
+  - New dependencies: `clipanion`, `@swc-node/register`
+
+- [#134](https://github.com/strataljs/stratal/pull/134) [`52f1daa`](https://github.com/strataljs/stratal/commit/52f1daa981f5a38b983bb3c14abfefb663eb6941) Thanks [@adesege](https://github.com/adesege)! - Move seeders from standalone `@stratal/seeders` package into core as `stratal/seeder`
+
+  ### Details
+
+  - Add `Seeder` abstract base class with `run()` and `call(OtherSeeder)` methods
+  - Add `SeederRegistry` for seeder registration and execution
+  - Auto-discover seeders from module `providers` (any class extending `Seeder`)
+  - Add built-in Quarry commands: `db:seed {name?} {--all}`, `db:seed:list`
+  - Seeders execute within request-scoped DI containers with full access to injected services
+  - Use DI-resolved seeders instead of manual instantiation
+  - Route unexpected command errors through `GlobalErrorHandler`
+  - Remove standalone `packages/seeders` package — all seeder functionality now lives in core
+  - New sub-path export: `stratal/seeder`
+
 ## 0.0.14
 
 ### Patch Changes
