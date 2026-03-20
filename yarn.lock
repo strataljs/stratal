@@ -3835,7 +3835,7 @@ __metadata:
     better-auth: ^1.4.9
     casbin: ^5.41.0
     pg: ^8.0.0
-    stratal: 0.0.14
+    stratal: 0.0.15
   peerDependenciesMeta:
     "@better-auth/core":
       optional: true
@@ -3868,9 +3868,9 @@ __metadata:
     typescript: "npm:^5.9.3"
     vitest: "npm:~4.1.0"
   peerDependencies:
-    "@stratal/framework": ^0.0.14
+    "@stratal/framework": ^0.0.15
     better-auth: ^1.4.9
-    stratal: ^0.0.14
+    stratal: ^0.0.15
     vitest: ^4.1.0
   peerDependenciesMeta:
     "@stratal/framework":
