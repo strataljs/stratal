@@ -46,7 +46,6 @@ curl -X POST http://localhost:8787/api/notes \
 
 ## Key files
 
-- [`src/commands/index.ts`](src/commands/index.ts) - CLI entry point using `QuarryRunner`
 - [`src/seeders/notes.seeder.ts`](src/seeders/notes.seeder.ts) - Seeder that creates sample notes
 - [`src/app.module.ts`](src/app.module.ts) - Root module with seeder in providers
 - [`src/notes/notes.service.ts`](src/notes/notes.service.ts) - In-memory notes service

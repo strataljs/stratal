@@ -8,7 +8,7 @@
     "wrangler:types": "wrangler types",
     "db:up": "docker compose up -d",
     "db:push": "DATABASE_URL='postgres://stratal:stratal@localhost:6432/stratal_rbac_example' npx zenstack db push --schema db/schema.zmodel",
-    "quarry": "quarry ./src/commands/index.ts"
+    "quarry": "quarry"
   },
   "dependencies": {
     "@stratal/framework": "^0.0.14",

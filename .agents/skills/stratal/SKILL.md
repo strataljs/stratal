@@ -3,7 +3,8 @@ name: stratal
 description: >-
   Use when working with the Stratal core framework for Cloudflare Workers — modules,
   dependency injection, controllers, routing, OpenAPI, queues, cron, email, storage,
-  caching, i18n, logging, guards, middleware, config, events, SSE, streaming, and error handling.
+  caching, i18n, logging, guards, middleware, config, events, SSE, streaming, seeders,
+  Quarry CLI, commands, and error handling.
   Trigger on: stratal, Stratal, StratalWorker, @Module, @Controller, @Route, IController,
   RouterContext, @inject, Scope, @Listener, @On, queues, cron, email, storage, cache,
   i18n, logging, guards, middleware, config, OpenAPIModule, ConfigModule, CacheModule,
@@ -16,7 +17,9 @@ description: >-
   multipart/form-data, application/octet-stream, DEFAULT_CONTENT_TYPE,
   @Gateway, @OnMessage, @OnClose, @OnError, GatewayContext, WebSocket, websocket, gateway,
   stratal/websocket, streamSSE, SSEStreamingApi, SSEMessage, StreamingApi, stream, streamText,
-  text/event-stream, SSE, streaming, Server-Sent Events.
+  text/event-stream, SSE, streaming, Server-Sent Events,
+  Seeder, SeederRegistry, stratal/seeder, db:seed, quarry, Quarry, Command, QuarryRegistry,
+  stratal/quarry, QuarryRunner, npx quarry.
 user-invocable: false
 license: MIT
 metadata:
@@ -31,7 +34,7 @@ Stratal is a modular Cloudflare Workers framework with dependency injection (tsy
 ## Key Constraints
 
 - ESM-only (`"type": "module"`)
-- Build with `tsc` only — **never** esbuild/tsup (tsyringe requires `emitDecoratorMetadata`)
+- Build with tsdown (powered by Rolldown/Oxc) — **never** esbuild/tsup (tsyringe requires `emitDecoratorMetadata`)
 - `experimentalDecorators` and `emitDecoratorMetadata` must be enabled in tsconfig
 - Always import Zod from `stratal/validation`, never from `zod` directly
 - Service classes can be used directly as DI tokens (`@inject(MyService)`). Only create Symbol tokens when the service needs to be replaceable or is part of a reusable library
@@ -474,6 +477,55 @@ export class CleanupJob implements CronJob {
 
 Register in module `jobs` array. Schedule must match a trigger in `wrangler.jsonc`.
 
+## Seeders
+
+Docs: [Seeders](https://stratal.dev/integrations/seeders)
+
+```ts
+import { Seeder } from 'stratal/seeder';
+
+export class UsersSeeder extends Seeder {
+  constructor(@inject(UsersService) private usersService: UsersService) {}
+
+  async run(): Promise<void> {
+    await this.usersService.create({ name: 'Admin', email: 'admin@example.com' });
+    // Call another seeder (like Laravel's $this->call())
+    await this.call(RolesSeeder);
+  }
+}
+```
+
+Register seeders in the module's `providers` array — they are auto-discovered from any class extending `Seeder`. Seeders execute within request-scoped DI containers, so they have full access to injected services.
+
+Run seeders via the Quarry CLI: `npx quarry db:seed UsersSeeder`, `npx quarry db:seed --all`, `npx quarry db:seed:list`.
+
+## Quarry CLI
+
+Docs: [Quarry CLI](https://stratal.dev/integrations/quarry)
+
+`Command` abstract base class with Laravel-style signature parsing for arguments, options, and flags.
+
+```ts
+import { Command } from 'stratal/quarry';
+
+export class GreetCommand extends Command {
+  static command = 'greet {name : The name to greet} {--loud}';
+  static description = 'Greet someone';
+
+  async handle(): Promise<void> {
+    const name = this.string('name');
+    const loud = this.boolean('loud');
+    this.info(loud ? `HELLO, ${name.toUpperCase()}!` : `Hello, ${name}!`);
+  }
+}
+```
+
+Register commands in the module's `providers` array — they are auto-discovered from any class extending `Command`. Commands execute within request-scoped DI containers.
+
+**CLI entry:** `npx quarry` imports the app's default `Stratal` export from `src/index.ts`. Override entry path: `npx quarry ./custom/entry.ts <command>`.
+
+**Built-in commands:** `list`, `help <command>`, `db:seed {name?} {--all}`, `db:seed:list`.
+
 ## Workers
 
 Docs: [Durable Objects](https://stratal.dev/integrations/durable-objects) · [Service Bindings](https://stratal.dev/integrations/service-bindings) · [Workflows](https://stratal.dev/integrations/workflows)
@@ -568,6 +620,8 @@ export class MyWorkflow extends StratalWorkflow<Env, { orderId: string }> {
 | `stratal/config` | `ConfigModule`, `registerAs` |
 | `stratal/openapi` | `OpenAPIModule` |
 | `stratal/websocket` | `@Gateway`, `@OnMessage`, `@OnClose`, `@OnError`, `GatewayContext` |
+| `stratal/seeder` | `Seeder`, `SeederRegistry`, `SEEDER_TOKENS` |
+| `stratal/quarry` | `Command`, `QuarryRegistry`, `parseSignature` |
 | `stratal/workers` | `StratalDurableObject`, `StratalWorkerEntrypoint`, `StratalWorkflow`, `runInScope` |
 
 ## Do's and Don'ts
@@ -579,7 +633,7 @@ export class MyWorkflow extends StratalWorkflow<Env, { orderId: string }> {
 - **Do** use constructor injection with `@inject()`
 - **Do** add `@Transient()` to consumers, jobs, guards, middleware, and listeners
 - **Do** register consumers in `consumers` and jobs in `jobs` arrays
-- **Don't** use esbuild or tsup — only `tsc`
+- **Don't** use esbuild or tsup — only tsdown (powered by Rolldown/Oxc)
 - **Don't** use `ctx.req.valid('json')` — use `await ctx.body<T>()`
 - **Don't** import Zod from `zod` directly
 - **Do** export the `Stratal` instance as the default export (required for the static singleton used by worker classes)
