@@ -25,8 +25,8 @@ import { QueueModule } from './queue/queue.module'
 import { type IController, type RouterContext } from './router'
 import { HonoApp } from './router/hono-app'
 import type { VersioningOptions } from './router/types'
+import { DbSeedCommand, DbSeedListCommand, SEEDER_TOKENS, SeederRegistry, type Seeder } from './seeder'
 import type { Constructor } from './types'
-import { DbSeedCommand, DbSeedListCommand, SeederRegistry, SEEDER_TOKENS, Seeder } from './seeder'
 
 export interface ApplicationConfig {
   /** Root application module */
