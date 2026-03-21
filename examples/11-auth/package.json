@@ -8,14 +8,14 @@
   },
   "dependencies": {
     "@better-auth/kysely-adapter": "^1.5.4",
-    "@stratal/framework": "latest",
-    "kysely": "^0.28.11",
+    "@stratal/framework": "^0.0.15",
+    "kysely": "^0.28.14",
     "kysely-d1": "^0.4.0",
     "reflect-metadata": "^0.2.2",
-    "stratal": "latest"
+    "stratal": "^0.0.16"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260306.1",
+    "@cloudflare/workers-types": "^4.20260317.1",
     "typescript": "^5.9.3",
     "wrangler": "^4.76.0"
   }

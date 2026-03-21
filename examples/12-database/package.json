@@ -10,14 +10,14 @@
     "db:push": "DATABASE_URL='postgres://stratal:stratal@localhost:6432/stratal_database_example' npx zenstack db push --schema db/schema.zmodel"
   },
   "dependencies": {
-    "@stratal/framework": "latest",
-    "pg": "^8.13.3",
+    "@stratal/framework": "^0.0.15",
+    "pg": "^8.20.0",
     "reflect-metadata": "^0.2.2",
-    "stratal": "latest"
+    "stratal": "^0.0.16"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260306.1",
-    "@types/pg": "^8.11.11",
+    "@cloudflare/workers-types": "^4.20260317.1",
+    "@types/pg": "^8.20.0",
     "typescript": "^5.9.3",
     "wrangler": "^4.76.0"
   }
