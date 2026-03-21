@@ -1,0 +1,178 @@
+name: Canary Publish
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [labeled, synchronize]
+  workflow_dispatch:
+    inputs:
+      snapshot_name:
+        description: "Snapshot name (used as npm dist-tag)"
+        required: false
+        default: "canary"
+
+concurrency:
+  group: canary-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    name: Canary Publish
+    if: >
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'canary'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: "22"
+          cache: "yarn"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Update npm for trusted publishing
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Check for changesets
+        id: changesets
+        run: |
+          CHANGESET_FILES=$(find .changeset -name '*.md' ! -name 'README.md' | head -1)
+          if [ -z "$CHANGESET_FILES" ]; then
+            echo "No changesets found, skipping canary publish"
+            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Determine snapshot name
+        if: steps.changesets.outputs.has_changesets == 'true'
+        id: snapshot
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          INPUT_SNAPSHOT_NAME: ${{ github.event.inputs.snapshot_name }}
+        run: |
+          if [ "$EVENT_NAME" = "push" ]; then
+            echo "name=canary" >> "$GITHUB_OUTPUT"
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
+            echo "name=canary-pr-${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+          else
+            SNAPSHOT_NAME="${INPUT_SNAPSHOT_NAME:-canary}"
+            # Sanitize: allow only alphanumeric, hyphens, and dots
+            SNAPSHOT_NAME=$(echo "$SNAPSHOT_NAME" | tr -cd '[:alnum:]-.')
+            echo "name=${SNAPSHOT_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build all packages
+        if: steps.changesets.outputs.has_changesets == 'true'
+        run: yarn workspaces foreach -At run build
+
+      - name: Snapshot version
+        if: steps.changesets.outputs.has_changesets == 'true'
+        env:
+          SNAPSHOT_NAME: ${{ steps.snapshot.outputs.name }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: yarn changeset version --snapshot "$SNAPSHOT_NAME" --snapshot-prerelease-template '{tag}-{datetime}-{commit}'
+
+      - name: Publish canary
+        if: steps.changesets.outputs.has_changesets == 'true'
+        id: publish
+        env:
+          SNAPSHOT_NAME: ${{ steps.snapshot.outputs.name }}
+          NPM_CONFIG_PROVENANCE: "true"
+        run: |
+          OUTPUT=$(yarn changeset publish --tag "$SNAPSHOT_NAME" 2>&1)
+          echo "$OUTPUT"
+
+          # Extract published packages for the PR comment
+          PUBLISHED=$(echo "$OUTPUT" | grep -E '^\S+@' || true)
+          {
+            echo "published<<EOF"
+            echo "$PUBLISHED"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Comment on PR
+        if: steps.changesets.outputs.has_changesets == 'true' && github.event_name == 'pull_request'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        env:
+          SNAPSHOT_TAG: ${{ steps.snapshot.outputs.name }}
+          PUBLISHED_PACKAGES: ${{ steps.publish.outputs.published }}
+        with:
+          script: |
+            const tag = process.env.SNAPSHOT_TAG;
+            const published = (process.env.PUBLISHED_PACKAGES || '').trim();
+
+            if (!published) {
+              console.log('No packages were published, skipping comment');
+              return;
+            }
+
+            const packages = published.split('\n').filter(Boolean);
+            const installLines = packages.map(pkg => {
+              const atIndex = pkg.lastIndexOf('@');
+              const name = pkg.substring(0, atIndex);
+              return `npm install ${name}@${tag}`;
+            });
+
+            const body = [
+              '### Canary packages published',
+              '',
+              'Install the canary versions:',
+              '',
+              '```sh',
+              ...installLines,
+              '```',
+              '',
+              `> Published with dist-tag \`${tag}\``,
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(
+              c => c.user.type === 'Bot' && c.body.includes('### Canary packages published')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
