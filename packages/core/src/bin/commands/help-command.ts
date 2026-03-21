@@ -5,7 +5,7 @@ import type { QuarryRegistry } from '../../quarry/quarry-registry'
 /** Create the built-in `help`/`list` Clipanion command that delegates to Quarry's usage generator. */
 export function createHelpCommand(quarry: QuarryRegistry) {
   class HelpCommand extends Command {
-    static override paths = [['help'], ['list']]
+    static override paths = [[], ['help'], ['list']]
     static override usage: Usage = Command.Usage({ description: 'Show help for a command' })
 
     commandPath = Option.Rest()

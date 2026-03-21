@@ -74,7 +74,7 @@ async function main(): Promise<void> {
     const quarry = app.container.resolve<QuarryRegistry>(DI_TOKENS.Quarry)
 
     // Build Clipanion CLI
-    const { Builtins, Cli } = await import('clipanion')
+    const { Cli } = await import('clipanion')
     const pkg = require('../../package.json') as { version: string }
 
     const cli = new Cli({
@@ -83,7 +83,6 @@ async function main(): Promise<void> {
       binaryVersion: pkg.version,
     })
 
-    cli.register(Builtins.HelpCommand)
     cli.register(createHelpCommand(quarry))
 
     for (const cmd of createDynamicCommands(quarry, parseSignature, app)) {
