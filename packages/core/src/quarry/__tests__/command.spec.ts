@@ -1,6 +1,7 @@
 import 'reflect-metadata'
 
 import { describe, expect, it } from 'vitest'
+import { bold, cyan, dim, green, red, yellow } from '../colors'
 import { Command } from '../command'
 import { getCommandResult, resetCommandState, setCommandInputs, setCommandQuarry } from '../command-internals'
 import { CommandError } from '../errors/command.error'
@@ -120,25 +121,25 @@ describe('Command', () => {
     it('should collect info messages', () => {
       const cmd = new TestCommand()
       cmd.info('test message')
-      expect(getCommandResult(cmd).output).toEqual(['test message'])
+      expect(getCommandResult(cmd).output).toEqual([cyan('test message')])
     })
 
     it('should collect success messages', () => {
       const cmd = new TestCommand()
       cmd.success('done')
-      expect(getCommandResult(cmd).output).toEqual(['done'])
+      expect(getCommandResult(cmd).output).toEqual([`${green(bold('✔'))} ${green('done')}`])
     })
 
     it('should collect warn messages with prefix', () => {
       const cmd = new TestCommand()
       cmd.warn('low disk')
-      expect(getCommandResult(cmd).output).toEqual(['Warning: low disk'])
+      expect(getCommandResult(cmd).output).toEqual([`${yellow(bold('⚠'))} ${yellow('low disk')}`])
     })
 
     it('should collect error messages', () => {
       const cmd = new TestCommand()
       cmd.error('something broke')
-      expect(getCommandResult(cmd).errors).toEqual(['something broke'])
+      expect(getCommandResult(cmd).errors).toEqual([red('something broke')])
     })
 
     it('should write lines and newlines', () => {
@@ -152,7 +153,7 @@ describe('Command', () => {
     it('should write comments', () => {
       const cmd = new TestCommand()
       cmd.comment('a note')
-      expect(getCommandResult(cmd).output).toEqual(['// a note'])
+      expect(getCommandResult(cmd).output).toEqual([dim('// a note')])
     })
 
     it('should format tables', () => {
@@ -160,18 +161,17 @@ describe('Command', () => {
       cmd.table(['Name', 'Age'], [['Alice', '30'], ['Bob', '25']])
       const output = getCommandResult(cmd).output
       expect(output).toHaveLength(4) // header + separator + 2 rows
-      expect(output[0]).toContain('Name')
-      expect(output[0]).toContain('Age')
-      expect(output[1]).toContain('---')
-      expect(output[2]).toContain('Alice')
-      expect(output[3]).toContain('Bob')
+      expect(output[0]).toBe(bold('Name   Age'))
+      expect(output[1]).toBe(dim('-----  ---'))
+      expect(output[2]).toBe('Alice  30 ')
+      expect(output[3]).toBe('Bob    25 ')
     })
 
     it('should fail with error and exit code', () => {
       const cmd = new TestCommand()
       cmd.fail('fatal error', 2)
       const result = getCommandResult(cmd)
-      expect(result.errors).toEqual(['fatal error'])
+      expect(result.errors).toEqual([`${red(bold('✖'))} ${red('fatal error')}`])
       expect(result.exitCode).toBe(2)
     })
   })
@@ -203,7 +203,7 @@ describe('Command', () => {
       const cmd = new TestCommand()
       setCommandInputs(cmd, { name: 'World' })
       await cmd.handle()
-      expect(getCommandResult(cmd).output).toEqual(['Hello, World!'])
+      expect(getCommandResult(cmd).output).toEqual([cyan('Hello, World!')])
     })
   })
 

@@ -22,6 +22,7 @@ export default defineConfig({
         test: {
           name: 'unit',
           environment: 'node',
+          env: { NO_COLOR: '1' },
           include: ['src/**/__tests__/**/*.spec.ts'],
           exclude: ['**/node_modules/**', '**/dist/**'],
           setupFiles: ['./vitest.setup.ts'],

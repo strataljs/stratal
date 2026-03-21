@@ -1,5 +1,6 @@
 import 'reflect-metadata'
 
+import { bold, cyan, dim, green, red, yellow } from './colors'
 import { COMMAND_INTERNALS } from './constants'
 import { CommandError } from './errors/command.error'
 import type { CommandInput, CommandInternals, CommandResult } from './types'
@@ -151,22 +152,22 @@ export abstract class Command {
 
   /** Write an informational message to output */
   info(message: string): void {
-    this[COMMAND_INTERNALS].output.push(message)
+    this[COMMAND_INTERNALS].output.push(cyan(message))
   }
 
   /** Write a success message to output */
   success(message: string): void {
-    this[COMMAND_INTERNALS].output.push(message)
+    this[COMMAND_INTERNALS].output.push(`${green(bold('✔'))} ${green(message)}`)
   }
 
   /** Write a warning message to output */
   warn(message: string): void {
-    this[COMMAND_INTERNALS].output.push(`Warning: ${message}`)
+    this[COMMAND_INTERNALS].output.push(`${yellow(bold('⚠'))} ${yellow(message)}`)
   }
 
   /** Write an error message to errors */
   error(message: string): void {
-    this[COMMAND_INTERNALS].errors.push(message)
+    this[COMMAND_INTERNALS].errors.push(red(message))
   }
 
   /** Write a plain line to output */
@@ -181,7 +182,7 @@ export abstract class Command {
 
   /** Write a comment-style line to output */
   comment(message: string): void {
-    this[COMMAND_INTERNALS].output.push(`// ${message}`)
+    this[COMMAND_INTERNALS].output.push(dim(`// ${message}`))
   }
 
   /** Write a formatted table to output */
@@ -194,8 +195,8 @@ export abstract class Command {
     const formatRow = (cells: string[]) =>
       cells.map((cell, i) => cell.padEnd(colWidths[i])).join('  ')
 
-    this[COMMAND_INTERNALS].output.push(formatRow(headers))
-    this[COMMAND_INTERNALS].output.push(colWidths.map((w) => '-'.repeat(w)).join('  '))
+    this[COMMAND_INTERNALS].output.push(bold(formatRow(headers)))
+    this[COMMAND_INTERNALS].output.push(dim(colWidths.map((w) => '-'.repeat(w)).join('  ')))
     for (const row of rows) {
       this[COMMAND_INTERNALS].output.push(formatRow(row))
     }
@@ -203,7 +204,7 @@ export abstract class Command {
 
   /** Write an error message and set exit code */
   fail(message: string, exitCode = 1): void {
-    this[COMMAND_INTERNALS].errors.push(message)
+    this[COMMAND_INTERNALS].errors.push(`${red(bold('✖'))} ${red(message)}`)
     this[COMMAND_INTERNALS].exitCode = exitCode
   }
 
