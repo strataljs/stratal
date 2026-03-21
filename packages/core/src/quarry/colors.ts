@@ -9,6 +9,8 @@ const code = (open: number, close: number) => enabled
 export const bold = code(1, 22)
 export const dim = code(2, 22)
 export const cyan = code(36, 39)
+export const green = code(32, 39)
+export const red = code(31, 39)
 export const yellow = code(33, 39)
 export const dimWhite = enabled
   ? (s: string) => `\x1b[2;37m${s}\x1b[22;39m`
