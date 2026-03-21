@@ -17,6 +17,7 @@ import type { DynamicModule, ModuleClass } from './module/types'
 import { OpenAPIModule } from './openapi'
 import type { Command } from './quarry/command'
 import { EventListCommand } from './quarry/commands/event-list.command'
+import { HelpCommand } from './quarry/commands/help.command'
 import { QueueListCommand } from './quarry/commands/queue-list.command'
 import { RouteListCommand } from './quarry/commands/route-list.command'
 import { ScheduleListCommand } from './quarry/commands/schedule-list.command'
@@ -257,6 +258,7 @@ export class Application {
   private registerCommands(): void {
     // Built-in seeder commands (always available)
     const builtinCommands: Constructor<Command>[] = [
+      HelpCommand,
       DbSeedCommand, DbSeedListCommand,
       RouteListCommand, EventListCommand,
       ScheduleListCommand, QueueListCommand,

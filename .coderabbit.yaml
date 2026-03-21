@@ -57,9 +57,7 @@ reviews:
     - "!**/coverage/**"
     - "!**/.yarn/**"
     - "!**/*.tsbuildinfo"
-    - "!examples/**"
     - "!docs/**"
-    - "!packages/framework/test/zenstack/**"
     - "!**/*.lock"
     - "!yarn.lock"
   tools:
