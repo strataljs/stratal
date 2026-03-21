@@ -7,4 +7,4 @@ Add dedicated `@stratal/testing/storage` sub-path export and add `reflect-metada
 ### Details
 
 - `FakeStorageService` and `StoredFile` are no longer exported from the main entry point — import from `@stratal/testing/storage` instead
-- Added `reflect-metadata` as a peer dependency
+- Add `reflect-metadata` as a peer dependency
