@@ -1,5 +1,19 @@
 # @stratal/framework
 
+## 0.0.16
+
+### Patch Changes
+
+- [#142](https://github.com/strataljs/stratal/pull/142) [`4b958e2`](https://github.com/strataljs/stratal/commit/4b958e250c99681a99a34a398fbf706546f556cc) Thanks [@adesege](https://github.com/adesege)! - Move auth, database, RBAC, and factory dependencies from optional peer dependencies to hard dependencies
+
+  ### Details
+
+  - `@better-auth/core`, `better-auth`, `@faker-js/faker`, `@zenstackhq/cli`, `@zenstackhq/orm`, and `casbin` are now direct dependencies
+  - Remove `peerDependenciesMeta` optional markers for these packages
+
+- Updated dependencies [[`3dd0bc8`](https://github.com/strataljs/stratal/commit/3dd0bc84c8638db30db7b70f3532a44aa187ace8), [`4b958e2`](https://github.com/strataljs/stratal/commit/4b958e250c99681a99a34a398fbf706546f556cc)]:
+  - stratal@0.0.16
+
 ## 0.0.15
 
 ### Patch Changes

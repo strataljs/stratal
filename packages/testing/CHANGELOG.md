@@ -1,5 +1,20 @@
 # @stratal/testing
 
+## 0.0.16
+
+### Patch Changes
+
+- [#142](https://github.com/strataljs/stratal/pull/142) [`4b958e2`](https://github.com/strataljs/stratal/commit/4b958e250c99681a99a34a398fbf706546f556cc) Thanks [@adesege](https://github.com/adesege)! - Add dedicated `@stratal/testing/storage` sub-path export and add `reflect-metadata` as peer dependency
+
+  ### Details
+
+  - `FakeStorageService` and `StoredFile` are no longer exported from the main entry point — import from `@stratal/testing/storage` instead
+  - Add `reflect-metadata` as a peer dependency
+
+- Updated dependencies [[`3dd0bc8`](https://github.com/strataljs/stratal/commit/3dd0bc84c8638db30db7b70f3532a44aa187ace8), [`4b958e2`](https://github.com/strataljs/stratal/commit/4b958e250c99681a99a34a398fbf706546f556cc), [`4b958e2`](https://github.com/strataljs/stratal/commit/4b958e250c99681a99a34a398fbf706546f556cc)]:
+  - stratal@0.0.16
+  - @stratal/framework@0.0.16
+
 ## 0.0.15
 
 ### Patch Changes

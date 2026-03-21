@@ -1,5 +1,31 @@
 # stratal
 
+## 0.0.16
+
+### Patch Changes
+
+- [#144](https://github.com/strataljs/stratal/pull/144) [`3dd0bc8`](https://github.com/strataljs/stratal/commit/3dd0bc84c8638db30db7b70f3532a44aa187ace8) Thanks [@adesege](https://github.com/adesege)! - Enhance Quarry CLI with dynamic command generation, improved help output, and usage generator
+
+  ### Details
+
+  - Replace static `ListCommand` with dynamic command generation via `createDynamicCommands` that auto-registers user-defined commands with Clipanion
+  - Improve `HelpCommand` to display detailed usage for specific commands including arguments, options, and aliases
+  - Add `UsageGenerator` for rendering formatted command usage with ANSI colors (name, description, arguments, options sections)
+  - Add `colors` utility module for ANSI terminal color output
+  - Add `QuarryRegistry.list()` method to retrieve all registered command entries
+  - Add comprehensive tests for dynamic commands, help command, and usage generator
+
+- [#142](https://github.com/strataljs/stratal/pull/142) [`4b958e2`](https://github.com/strataljs/stratal/commit/4b958e250c99681a99a34a398fbf706546f556cc) Thanks [@adesege](https://github.com/adesege)! - Lazy-load S3 storage provider and enhance StorageManagerService with promise deduplication
+
+  ### Details
+
+  - `StorageManager.getProvider()` is now async and dynamically imports `S3StorageProvider` to avoid loading AWS SDK at module evaluation time
+  - Add promise deduplication to prevent concurrent `getProvider` calls from creating multiple provider instances
+  - Register `StorageManager` as a singleton to share cached providers across requests
+  - Move `reflect-metadata` from hard dependency to optional peer dependency
+  - Remove `@tus/server` peer dependency
+  - Remove direct exports of `S3StorageProvider` and S3 multipart types from the storage barrel — use dynamic import instead
+
 ## 0.0.15
 
 ### Patch Changes
