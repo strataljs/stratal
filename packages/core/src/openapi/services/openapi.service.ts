@@ -95,6 +95,7 @@ export class OpenAPIService {
 
       return c.json(fullSpec)
     })
+    this.nameLastHandler(app, 'OpenAPI', 'spec')
 
     // Docs UI endpoint
     if (config.ui !== false) {
@@ -115,7 +116,13 @@ export class OpenAPIService {
 
         return swaggerUI<RouterEnv>({ url: uiContext.specUrl })(c, next)
       })
+      this.nameLastHandler(app, 'OpenAPI', 'docs')
     }
+  }
+
+  private nameLastHandler(app: OpenAPIHono<RouterEnv>, controller: string, method: string): void {
+    const last = app.routes[app.routes.length - 1]
+    Object.defineProperty(last.handler, 'name', { value: `http:${controller}.${method}` })
   }
 
   /**

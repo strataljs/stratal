@@ -1,8 +1,7 @@
 import { Command, type CommandClass, Option, type Usage } from 'clipanion'
 
 import type { Application } from 'stratal'
-import type { QuarryRegistry } from 'stratal/quarry'
-import type { ParsedSignature } from 'stratal/quarry'
+import type { ParsedSignature, QuarryRegistry } from 'stratal/quarry'
 
 /** Create Clipanion command classes from Quarry-registered commands. */
 export function createDynamicCommands(
@@ -21,6 +20,11 @@ export function createDynamicCommands(
       for (const alias of commandClass.aliases) {
         paths.push(alias.split(' '))
       }
+    }
+
+    // Allow bare `npx quarry` (no arguments) to invoke the help command
+    if (entry.name === 'help') {
+      paths.push([])
     }
 
     class DynCmd extends Command {

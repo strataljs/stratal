@@ -198,6 +198,8 @@ export class RouteRegistrationService {
       return events
     }) as MiddlewareHandler<RouterEnv>
 
+    this.nameHandler(wsHandler, GatewayClass.name, onMsgMethod ?? '[anonymous]', 'ws')
+
     this.logger.info('Registering WebSocket gateway', {
       gateway: GatewayClass.name,
       path: fullPath,
@@ -465,7 +467,7 @@ export class RouteRegistrationService {
       })
 
       // Register OpenAPI route with handler
-      app.openapi(openApiRoute, async (c) => {
+      const handler = async (c: Context<RouterEnv>) => {
         const ctx = new RouterContext(c)
         const requestContainer = ctx.getContainer()
         const controller = requestContainer.resolve<IController>(ControllerClass)
@@ -475,7 +477,9 @@ export class RouteRegistrationService {
           return await (method as (...args: unknown[]) => Promise<Response>).call(controller, ctx, ...injectedArgs)
         }
         throw new ControllerMethodNotFoundError(methodName, className)
-      })
+      }
+      this.nameHandler(handler, className, methodName)
+      app.openapi(openApiRoute, handler)
     }
   }
 
@@ -555,7 +559,7 @@ export class RouteRegistrationService {
         tags: metadata.tags,
       })
 
-      app.openapi(openApiRoute, async (c) => {
+      const handler = async (c: Context<RouterEnv>) => {
         const ctx = new RouterContext(c)
         const requestContainer = ctx.getContainer()
         const controller = requestContainer.resolve<IController>(ControllerClass)
@@ -565,7 +569,9 @@ export class RouteRegistrationService {
           return await (method as (...args: unknown[]) => Promise<Response>).call(controller, ctx, ...injectedArgs)
         }
         throw new ControllerMethodNotFoundError(methodName, className)
-      })
+      }
+      this.nameHandler(handler, className, methodName)
+      app.openapi(openApiRoute, handler)
     }
   }
 
@@ -600,6 +606,7 @@ export class RouteRegistrationService {
       }
       throw new ControllerMethodNotFoundError(methodName, ControllerClass.name)
     }
+    this.nameHandler(handler, ControllerClass.name, methodName)
 
     // Register route handler without OpenAPI metadata using type-safe method dispatch
     // Note: Only common HTTP methods (get, post, put, patch, delete) are supported
@@ -871,6 +878,15 @@ export class RouteRegistrationService {
   }
 
   /**
+   * Name a handler function so Hono's inspectRoutes() can identify it.
+   * Format: `{type}:{Controller}.{method}` (e.g. `http:UsersController.create`)
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type -- intentionally accepting any function to set its name
+  private nameHandler(fn: Function, controller: string, method: string, type: 'http' | 'ws' = 'http'): void {
+    Object.defineProperty(fn, 'name', { value: `${type}:${controller}.${method}` })
+  }
+
+  /**
    * Create controller handler that resolves controller from request-scoped container
    * This ensures each request gets a fresh controller with request-scoped context
    */
@@ -878,7 +894,7 @@ export class RouteRegistrationService {
     ControllerClass: new (...args: unknown[]) => IController,
     methodName: keyof IController
   ): (c: Context<RouterEnv>) => Promise<Response> {
-    return async (c: Context<RouterEnv>) => {
+    const handler = async (c: Context<RouterEnv>) => {
       this.logger.info('Handler invoked', {
         path: c.req.path,
         method: c.req.method,
@@ -911,5 +927,8 @@ export class RouteRegistrationService {
         throw error
       }
     }
+
+    this.nameHandler(handler, ControllerClass.name, methodName as string)
+    return handler
   }
 }

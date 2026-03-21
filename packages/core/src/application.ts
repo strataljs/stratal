@@ -16,6 +16,11 @@ import { ModuleRegistry } from './module/module-registry'
 import type { DynamicModule, ModuleClass } from './module/types'
 import { OpenAPIModule } from './openapi'
 import type { Command } from './quarry/command'
+import { EventListCommand } from './quarry/commands/event-list.command'
+import { HelpCommand } from './quarry/commands/help.command'
+import { QueueListCommand } from './quarry/commands/queue-list.command'
+import { RouteListCommand } from './quarry/commands/route-list.command'
+import { ScheduleListCommand } from './quarry/commands/schedule-list.command'
 import { QuarryRegistry } from './quarry/quarry-registry'
 import type { CommandInput, CommandResult } from './quarry/types'
 import { type ConsumerRegistry } from './queue/consumer-registry'
@@ -251,8 +256,13 @@ export class Application {
   }
 
   private registerCommands(): void {
-    // Built-in seeder commands (always available)
-    const builtinCommands: Constructor<Command>[] = [DbSeedCommand, DbSeedListCommand]
+    // Built-in commands (always available)
+    const builtinCommands: Constructor<Command>[] = [
+      HelpCommand,
+      DbSeedCommand, DbSeedListCommand,
+      RouteListCommand, EventListCommand,
+      ScheduleListCommand, QueueListCommand,
+    ]
     for (const Cmd of builtinCommands) {
       injectable()(Cmd)
       this._container.register(Cmd, Cmd, Scope.Singleton)

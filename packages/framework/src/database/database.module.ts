@@ -12,6 +12,13 @@ import {
   type OnInitialize,
   type OnShutdown,
 } from 'stratal/module'
+import { DbGenerateCommand } from './commands/db-generate.command'
+import { DbPullCommand } from './commands/db-pull.command'
+import { DbPushCommand } from './commands/db-push.command'
+import { MigrateDeployCommand } from './commands/migrate-deploy.command'
+import { MigrateDevCommand } from './commands/migrate-dev.command'
+import { MigrateResetCommand } from './commands/migrate-reset.command'
+import { MigrateStatusCommand } from './commands/migrate-status.command'
 import { createDatabaseService } from './database.helpers'
 import { DATABASE_TOKENS, connectionSymbol } from './database.tokens'
 import type { ConnectionName, DefaultConnectionName } from './types'
@@ -31,7 +38,17 @@ export interface DatabaseModuleConfig {
   connections: DatabaseConnectionConfig[]
 }
 
-@Module({})
+@Module({
+  providers: [
+    DbGenerateCommand,
+    DbPushCommand,
+    DbPullCommand,
+    MigrateDevCommand,
+    MigrateDeployCommand,
+    MigrateStatusCommand,
+    MigrateResetCommand,
+  ],
+})
 export class DatabaseModule implements OnInitialize, OnShutdown {
   static forRoot(config: DatabaseModuleConfig): DynamicModule {
     return {

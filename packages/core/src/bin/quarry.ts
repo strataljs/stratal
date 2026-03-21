@@ -8,7 +8,6 @@ import type { QuarryRegistry } from 'stratal/quarry'
 
 import { type Application } from '../application'
 import { createDynamicCommands } from './commands/dynamic-command'
-import { createHelpCommand } from './commands/help-command'
 
 const require = createRequire(import.meta.url)
 
@@ -82,8 +81,6 @@ async function main(): Promise<void> {
       binaryLabel: 'Quarry CLI',
       binaryVersion: pkg.version,
     })
-
-    cli.register(createHelpCommand(quarry))
 
     for (const cmd of createDynamicCommands(quarry, parseSignature, app)) {
       cli.register(cmd)
