@@ -14,8 +14,6 @@
   },
   "dependencies": {
     "@stratal/framework": "latest",
-    "@zenstackhq/cli": "^3.4.5",
-    "@zenstackhq/orm": "^3.4.4",
     "pg": "^8.20.0",
     "reflect-metadata": "^0.2.2",
     "stratal": "latest"
@@ -25,6 +23,6 @@
     "@types/pg": "^8.18.0",
     "dotenv-cli": "^11.0.0",
     "typescript": "^5.9.3",
-    "wrangler": "^4.73.0"
+    "wrangler": "^4.76.0"
   }
 }

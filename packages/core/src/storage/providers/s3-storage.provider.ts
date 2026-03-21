@@ -1,3 +1,5 @@
+import '../dom.polyfill'
+
 import {
   AbortMultipartUploadCommand,
   CompleteMultipartUploadCommand,

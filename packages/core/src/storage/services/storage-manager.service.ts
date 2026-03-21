@@ -1,7 +1,6 @@
 import { inject } from 'tsyringe'
 import { Transient } from '../../di/decorators'
 import { DiskNotConfiguredError, StorageProviderNotSupportedError } from '../errors'
-import { S3StorageProvider } from '../providers/s3-storage.provider'
 import type { IStorageProvider } from '../providers/storage-provider.interface'
 import { STORAGE_TOKENS } from '../storage.tokens'
 import type { StorageConfig, StorageEntry } from '../types'
@@ -38,7 +37,7 @@ export class StorageManagerService {
    * @param diskName - Name of the disk
    * @returns Storage provider instance
    */
-  getProvider(diskName: string): IStorageProvider {
+  async getProvider(diskName: string): Promise<IStorageProvider> {
     // Return cached provider if exists
     const cached = this.providers.get(diskName)
     if (cached) {
@@ -52,7 +51,7 @@ export class StorageManagerService {
     }
 
     // Create provider based on configuration
-    const provider = this.createProvider(diskConfig)
+    const provider = await this.createProvider(diskConfig)
 
     // Cache provider
     this.providers.set(diskName, provider)
@@ -62,13 +61,16 @@ export class StorageManagerService {
 
   /**
    * Create a provider instance based on configuration
+   * Dynamically imports S3StorageProvider to avoid loading AWS SDK at module evaluation time
    * @param config - Storage entry configuration
    * @returns Storage provider instance
    */
-  private createProvider(config: StorageEntry): IStorageProvider {
+  private async createProvider(config: StorageEntry): Promise<IStorageProvider> {
     switch (config.provider) {
-      case 's3':
+      case 's3': {
+        const { S3StorageProvider } = await import('../providers/s3-storage.provider')
         return new S3StorageProvider(config)
+      }
       case 'gcs':
         throw new StorageProviderNotSupportedError(config.provider)
       default:

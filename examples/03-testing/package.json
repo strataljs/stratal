@@ -15,6 +15,6 @@
     "@stratal/testing": "latest",
     "typescript": "^5.9.3",
     "vitest": "~4.1.0",
-    "wrangler": "^4.35.0"
+    "wrangler": "^4.76.0"
   }
 }

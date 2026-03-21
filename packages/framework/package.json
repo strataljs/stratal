@@ -67,6 +67,13 @@
     "lint:fix": "npx eslint --fix ."
   },
   "dependencies": {
+    "@better-auth/core": "^1.5.5",
+    "@faker-js/faker": "^10.3.0",
+    "@zenstackhq/better-auth": "^3.4.6",
+    "@zenstackhq/cli": "^3.4.6",
+    "@zenstackhq/orm": "^3.4.6",
+    "better-auth": "^1.5.5",
+    "casbin": "^5.49.0",
     "postgres-array": "^3.0.4"
   },
   "peerDependencies": {
@@ -77,41 +84,19 @@
     "better-auth": "^1.4.9",
     "casbin": "^5.41.0",
     "pg": "^8.0.0",
-    "stratal": "0.0.15"
-  },
-  "peerDependenciesMeta": {
-    "@better-auth/core": {
-      "optional": true
-    },
-    "@faker-js/faker": {
-      "optional": true
-    },
-    "@zenstackhq/better-auth": {
-      "optional": true
-    },
-    "better-auth": {
-      "optional": true
-    },
-    "casbin": {
-      "optional": true
-    }
+    "reflect-metadata": "^0.2.2",
+    "stratal": "^0.0.15",
+    "wrangler": "^4.75.0"
   },
   "devDependencies": {
-    "@better-auth/core": "^1.5.5",
     "@cloudflare/vitest-pool-workers": "^0.13.2",
     "@cloudflare/workers-types": "4.20260317.1",
-    "@faker-js/faker": "^10.3.0",
     "@stratal/testing": "workspace:^",
     "@types/node": "^25.5.0",
     "@types/pg": "^8.18.0",
     "@vitest/coverage-istanbul": "~4.1.0",
     "@vitest/runner": "~4.1.0",
     "@vitest/snapshot": "~4.1.0",
-    "@zenstackhq/better-auth": "^3.4.6",
-    "@zenstackhq/cli": "^3.4.6",
-    "@zenstackhq/orm": "^3.4.6",
-    "better-auth": "^1.5.5",
-    "casbin": "^5.49.0",
     "dotenv-cli": "^11.0.0",
     "pg": "^8.20.0",
     "reflect-metadata": "^0.2.2",

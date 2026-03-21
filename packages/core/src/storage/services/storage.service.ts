@@ -1,5 +1,3 @@
-import '../dom.polyfill'
-
 import { inject } from 'tsyringe'
 import { Transient } from '../../di/decorators'
 import type { DownloadResult, PresignedUrlResult, UploadOptions, UploadResult } from '../contracts'
@@ -50,7 +48,7 @@ export class StorageService {
     disk?: string
   ): Promise<UploadResult> {
     const diskName = this.resolveDisk(disk)
-    const provider = this.storageManager.getProvider(diskName)
+    const provider = await this.storageManager.getProvider(diskName)
     const fullPath = this.buildFullPath(relativePath, diskName)
 
     return provider.upload(body, fullPath, options)
@@ -64,7 +62,7 @@ export class StorageService {
    */
   async download(relativePath: string, disk?: string): Promise<DownloadResult> {
     const diskName = this.resolveDisk(disk)
-    const provider = this.storageManager.getProvider(diskName)
+    const provider = await this.storageManager.getProvider(diskName)
     const fullPath = this.buildFullPath(relativePath, diskName)
 
     return provider.download(fullPath)
@@ -77,7 +75,7 @@ export class StorageService {
    */
   async delete(relativePath: string, disk?: string): Promise<void> {
     const diskName = this.resolveDisk(disk)
-    const provider = this.storageManager.getProvider(diskName)
+    const provider = await this.storageManager.getProvider(diskName)
     const fullPath = this.buildFullPath(relativePath, diskName)
 
     await provider.delete(fullPath)
@@ -91,7 +89,7 @@ export class StorageService {
    */
   async exists(relativePath: string, disk?: string): Promise<boolean> {
     const diskName = this.resolveDisk(disk)
-    const provider = this.storageManager.getProvider(diskName)
+    const provider = await this.storageManager.getProvider(diskName)
     const fullPath = this.buildFullPath(relativePath, diskName)
 
     return provider.exists(fullPath)
@@ -157,7 +155,7 @@ export class StorageService {
     disk?: string
   ): Promise<PresignedUrlResult> {
     const diskName = this.resolveDisk(disk)
-    const provider = this.storageManager.getProvider(diskName)
+    const provider = await this.storageManager.getProvider(diskName)
     const fullPath = this.buildFullPath(relativePath, diskName)
     const validatedExpiresIn = this.validateExpiresIn(expiresIn)
 
@@ -267,7 +265,7 @@ export class StorageService {
     disk?: string
   ): Promise<UploadResult> {
     const diskName = this.resolveDisk(disk)
-    const provider = this.storageManager.getProvider(diskName)
+    const provider = await this.storageManager.getProvider(diskName)
     const fullPath = this.buildFullPath(relativePath, diskName)
 
     return provider.chunkedUpload(body, fullPath, options)

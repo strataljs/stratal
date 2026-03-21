@@ -8,6 +8,7 @@ export default defineConfig({
     'src/mocks/index.ts',
     'src/mocks/nodemailer.ts',
     'src/mocks/zenstack-language.ts',
+    'src/storage/index.ts',
     'src/vitest-plugin/index.ts',
   ],
   tsconfig: './tsconfig.build.json',

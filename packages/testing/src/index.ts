@@ -30,9 +30,6 @@ export { http, HttpResponse } from 'msw'
 // Auth
 export { ActingAs } from './auth'
 
-// Storage
-export { FakeStorageService, type StoredFile } from './storage'
-
 // Environment utilities
 export { getTestEnv } from './core/env'
 

@@ -49,6 +49,10 @@
       "types": "./dist/mocks/zenstack-language.d.mts",
       "import": "./dist/mocks/zenstack-language.mjs"
     },
+    "./storage": {
+      "types": "./dist/storage/index.d.mts",
+      "import": "./dist/storage/index.mjs"
+    },
     "./vitest-plugin": {
       "types": "./dist/vitest-plugin/index.d.mts",
       "import": "./dist/vitest-plugin/index.mjs"
@@ -69,6 +73,7 @@
   "peerDependencies": {
     "@stratal/framework": "^0.0.15",
     "better-auth": "^1.4.9",
+    "reflect-metadata": "^0.2.2",
     "stratal": "^0.0.15",
     "vitest": "^4.1.0"
   },
@@ -87,6 +92,7 @@
     "@vitest/runner": "~4.1.0",
     "@vitest/snapshot": "~4.1.0",
     "better-auth": "^1.5.5",
+    "reflect-metadata": "^0.2.2",
     "stratal": "workspace:*",
     "tsdown": "^0.21.4",
     "typescript": "^5.9.3",
