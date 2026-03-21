@@ -121,6 +121,10 @@
       "types": "./dist/storage/index.d.mts",
       "import": "./dist/storage/index.mjs"
     },
+    "./storage/providers": {
+      "types": "./dist/storage/providers/index.d.mts",
+      "import": "./dist/storage/providers/index.mjs"
+    },
     "./websocket": {
       "types": "./dist/websocket/index.d.mts",
       "import": "./dist/websocket/index.mjs"

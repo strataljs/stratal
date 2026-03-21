@@ -4,7 +4,7 @@ import { baseConfig, withTypesExports } from '../../tsdown.base.ts';
 export default defineConfig([
   {
     ...baseConfig,
-    entry: ['src/index.ts', 'src/*/index.ts', 'src/i18n/messages/en/index.ts', 'src/i18n/validation/index.ts'],
+    entry: ['src/index.ts', 'src/*/index.ts', 'src/i18n/messages/en/index.ts', 'src/i18n/validation/index.ts', 'src/storage/providers/index.ts'],
     tsconfig: './tsconfig.build.json',
     exports: {
       customExports(exports: Record<string, Record<string, unknown> | string>) {
