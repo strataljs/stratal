@@ -308,6 +308,8 @@ Testing: `@stratal/testing`, `@stratal/testing/mocks`, `@stratal/testing/vitest-
 
 **User says "Set up the database"** → Read `references/database.md`. Configure `DatabaseModule.forRootAsync()` with ZenStack.
 
+**User says "I have an existing Hono app and want to add Stratal"** → Read `references/incremental-adoption.md`. Mount Stratal as sub-app using `stratal.hono`, forward queue/scheduled handlers.
+
 ## Reference Loading Guide
 
 Load these reference files when the task requires deeper knowledge:
@@ -326,6 +328,7 @@ Load these reference files when the task requires deeper knowledge:
 | `references/testing.md` | TestingModule, TestHttpClient, mocks, factories |
 | `references/infrastructure.md` | Cache, Logger, Email, Storage, OpenAPI services |
 | `references/errors-and-i18n.md` | ApplicationError, error codes, I18n, withI18n() |
+| `references/incremental-adoption.md` | Mounting Stratal into existing Hono app, gradual migration |
 | `references/gotchas.md` | CF Workers constraints, common errors, troubleshooting |
 | `assets/project-scaffold.md` | New project template (only when scaffolding from scratch) |
 
