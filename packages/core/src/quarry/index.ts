@@ -1,4 +1,8 @@
 export { Command } from './command'
+export { EventListCommand } from './commands/event-list.command'
+export { QueueListCommand } from './commands/queue-list.command'
+export { RouteListCommand } from './commands/route-list.command'
+export { ScheduleListCommand } from './commands/schedule-list.command'
 export { CommandNotFoundError } from './errors/command-not-found.error'
 export { CommandError } from './errors/command.error'
 export { isCommand } from './is-command'
