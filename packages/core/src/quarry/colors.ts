@@ -1,4 +1,7 @@
+/** Minimal ANSI color helpers that respect the `NO_COLOR` convention. */
 const enabled = typeof process !== 'undefined' ? !process.env.NO_COLOR : true
+
+/** Create an ANSI formatter that wraps text with the given open/close SGR codes. */
 const code = (open: number, close: number) => enabled
   ? (s: string) => `\x1b[${open}m${s}\x1b[${close}m`
   : (s: string) => s

@@ -84,20 +84,23 @@ describe('createDynamicCommands', () => {
   })
 
   describe('arguments', () => {
-    it('should set description with default for argument with default', () => {
-      // Clipanion stores positional option metadata on the prototype via symbols
-      // We verify by creating an instance and checking the property value is undefined
-      // (Clipanion positional args don't support defaults directly)
+    it('should register optional positional arg for argument with default', () => {
+      const output = getHelpOutput('greet {name=World}')
+      // Clipanion renders positional args in the usage line
+      expect(output).toContain('name')
+      // The arg should not be required (no error thrown without it)
       const { cli } = buildCli('greet {name=World}')
       const command = cli.process(['greet'])
-      // The positional arg should not be required (no error thrown without it)
       expect(command).toBeInstanceOf(Command)
     })
 
-    it('should set description with both user description and default', () => {
-      const { dynamicCommands } = buildCli('greet {name=World : The name}')
-      // Verify the command was created without error
-      expect(dynamicCommands).toHaveLength(1)
+    it('should register positional arg with user description and default', () => {
+      const output = getHelpOutput('greet {name=World : The name}')
+      expect(output).toContain('name')
+      // The arg should not be required
+      const { cli } = buildCli('greet {name=World : The name}')
+      const command = cli.process(['greet'])
+      expect(command).toBeInstanceOf(Command)
     })
   })
 

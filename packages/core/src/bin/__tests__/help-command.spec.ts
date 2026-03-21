@@ -81,6 +81,8 @@ describe('createHelpCommand', () => {
     expect(exitCode).toBe(0)
   })
 
+  // The rethrown error is caught by Clipanion's default error handler,
+  // which prints the message to stdout and returns exit code 1.
   it('should re-throw non-CommandNotFoundError errors', async () => {
     const quarry = createMock<QuarryRegistry>()
     quarry.usage.mockRejectedValue(new Error('unexpected'))

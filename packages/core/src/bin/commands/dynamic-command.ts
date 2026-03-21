@@ -4,6 +4,7 @@ import type { Application } from 'stratal'
 import type { QuarryRegistry } from 'stratal/quarry'
 import type { ParsedSignature } from 'stratal/quarry'
 
+/** Create Clipanion command classes from Quarry-registered commands. */
 export function createDynamicCommands(
   quarry: QuarryRegistry,
   parseSignature: (command: string) => ParsedSignature,
@@ -58,15 +59,10 @@ export function createDynamicCommands(
     // Define Clipanion options/arguments as class property defaults
     const proto = DynCmd.prototype as unknown as Record<string, unknown>
     for (const arg of signature.arguments) {
-      const argDescParts: string[] = []
-      if (arg.description) argDescParts.push(arg.description)
-      if (arg.default !== undefined) argDescParts.push(`(default: ${arg.default})`)
-      const argDesc = argDescParts.length > 0 ? argDescParts.join(' ') : undefined
-
       if (arg.isArray) {
         proto[arg.name] = Option.Rest({ name: arg.name, required: arg.required ? 1 : 0 })
       } else {
-        proto[arg.name] = Option.String({ name: arg.name, required: arg.required, description: argDesc })
+        proto[arg.name] = Option.String({ name: arg.name, required: arg.required })
       }
     }
 
@@ -78,7 +74,7 @@ export function createDynamicCommands(
       const optDesc = optDescParts.length > 0 ? optDescParts.join(' ') : undefined
 
       if (opt.isFlag) {
-        proto[opt.name] = Option.Boolean(optName, { description: opt.description })
+        proto[opt.name] = Option.Boolean(optName, { description: optDesc })
       } else if (opt.isArray) {
         if (opt.default !== undefined) {
           proto[opt.name] = Option.Array(optName, [opt.default], { description: optDesc })

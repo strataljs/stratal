@@ -122,15 +122,7 @@ export function generateListing(
     if (sig) {
       const inlineParts: string[] = []
       for (const arg of sig.arguments) {
-        if (arg.isArray) {
-          inlineParts.push(`<${arg.name}...>`)
-        } else if (arg.required) {
-          inlineParts.push(`<${arg.name}>`)
-        } else if (arg.default !== undefined) {
-          inlineParts.push(`[${arg.name}=${arg.default}]`)
-        } else {
-          inlineParts.push(`[${arg.name}]`)
-        }
+        inlineParts.push(formatArgPlaceholder(arg))
       }
 
       for (const opt of sig.options) {
@@ -163,19 +155,20 @@ export function generateListing(
   return lines.join('\n')
 }
 
+/** Format a single argument into its placeholder representation (e.g. `<name>`, `[name=default]`). */
+function formatArgPlaceholder(arg: ParsedSignature['arguments'][number]): string {
+  if (arg.isArray) return `<${arg.name}...>`
+  if (arg.required) return `<${arg.name}>`
+  if (arg.default !== undefined) return `[${arg.name}=${arg.default}]`
+  return `[${arg.name}]`
+}
+
+/** Build the inline usage line showing the command name with argument and option placeholders. */
 function buildUsageLine(signature: ParsedSignature): string {
   const parts = [signature.name]
 
   for (const arg of signature.arguments) {
-    if (arg.isArray) {
-      parts.push(`<${arg.name}...>`)
-    } else if (arg.required) {
-      parts.push(`<${arg.name}>`)
-    } else if (arg.default !== undefined) {
-      parts.push(`[${arg.name}=${arg.default}]`)
-    } else {
-      parts.push(`[${arg.name}]`)
-    }
+    parts.push(formatArgPlaceholder(arg))
   }
 
   for (const opt of signature.options) {
@@ -196,6 +189,7 @@ function buildUsageLine(signature: ParsedSignature): string {
 // eslint-disable-next-line no-control-regex
 const ANSI_RE = /\x1b\[[0-9;]*m/g
 
+/** Remove ANSI escape sequences from a string. */
 function stripAnsi(s: string): string {
   return s.replace(ANSI_RE, '')
 }
@@ -203,6 +197,7 @@ function stripAnsi(s: string): string {
 // eslint-disable-next-line no-control-regex
 const TOKEN_RE = /(?:\x1b\[[0-9;]*m)*[^\s\x1b]+(?:\x1b\[[0-9;]*m)*/g
 
+/** Wrap a single line at word boundaries, preserving ANSI codes across wrapped segments. */
 function wrapLine(text: string, maxWidth: number, continuationIndent: string): string[] {
   const visibleLen = stripAnsi(text).length
   if (visibleLen <= maxWidth) return [text]
@@ -235,6 +230,7 @@ function wrapLine(text: string, maxWidth: number, continuationIndent: string): s
   return lines
 }
 
+/** Format label/description pairs into aligned two-column table rows. */
 function formatTable(rows: readonly (readonly [string, string])[]): string[] {
   if (rows.length === 0) return []
 

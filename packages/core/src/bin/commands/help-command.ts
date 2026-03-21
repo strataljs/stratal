@@ -2,6 +2,7 @@ import { Command, Option, type Usage } from 'clipanion'
 import { CommandNotFoundError } from '../../quarry/errors/command-not-found.error'
 import type { QuarryRegistry } from '../../quarry/quarry-registry'
 
+/** Create the built-in `help`/`list` Clipanion command that delegates to Quarry's usage generator. */
 export function createHelpCommand(quarry: QuarryRegistry) {
   class HelpCommand extends Command {
     static override paths = [['help'], ['list']]
