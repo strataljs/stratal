@@ -12,10 +12,6 @@
   },
   "dependencies": {
     "@stratal/framework": "^0.0.14",
-    "@zenstackhq/better-auth": "^3.4.6",
-    "@zenstackhq/orm": "^3.4.4",
-    "better-auth": "^1.5.5",
-    "casbin": "^5.49.0",
     "pg": "^8.20.0",
     "reflect-metadata": "^0.2.2",
     "stratal": "latest"
@@ -24,6 +20,6 @@
     "@cloudflare/workers-types": "^4.20260317.1",
     "@types/pg": "^8.18.0",
     "typescript": "^5.9.3",
-    "wrangler": "^4.75.0"
+    "wrangler": "^4.76.0"
   }
 }

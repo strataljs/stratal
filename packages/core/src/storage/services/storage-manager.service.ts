@@ -1,7 +1,6 @@
 import { inject } from 'tsyringe'
 import { Transient } from '../../di/decorators'
 import { DiskNotConfiguredError, StorageProviderNotSupportedError } from '../errors'
-import { S3StorageProvider } from '../providers/s3-storage.provider'
 import type { IStorageProvider } from '../providers/storage-provider.interface'
 import { STORAGE_TOKENS } from '../storage.tokens'
 import type { StorageConfig, StorageEntry } from '../types'
@@ -14,6 +13,7 @@ import type { StorageConfig, StorageEntry } from '../types'
 @Transient(STORAGE_TOKENS.StorageManager)
 export class StorageManagerService {
   private readonly providers = new Map<string, IStorageProvider>()
+  private readonly creationPromises = new Map<string, Promise<IStorageProvider>>()
   private readonly diskConfigs = new Map<string, StorageEntry>()
 
   constructor(
@@ -38,11 +38,17 @@ export class StorageManagerService {
    * @param diskName - Name of the disk
    * @returns Storage provider instance
    */
-  getProvider(diskName: string): IStorageProvider {
+  async getProvider(diskName: string): Promise<IStorageProvider> {
     // Return cached provider if exists
     const cached = this.providers.get(diskName)
     if (cached) {
       return cached
+    }
+
+    // Return in-flight creation promise to deduplicate concurrent calls
+    const inflight = this.creationPromises.get(diskName)
+    if (inflight) {
+      return inflight
     }
 
     // Get disk configuration
@@ -51,24 +57,33 @@ export class StorageManagerService {
       throw new DiskNotConfiguredError(diskName)
     }
 
-    // Create provider based on configuration
-    const provider = this.createProvider(diskConfig)
+    // Create provider and deduplicate concurrent calls
+    const promise = this.createProvider(diskConfig).then((provider) => {
+      this.providers.set(diskName, provider)
+      this.creationPromises.delete(diskName)
+      return provider
+    }).catch((error: unknown) => {
+      this.creationPromises.delete(diskName)
+      throw error
+    })
 
-    // Cache provider
-    this.providers.set(diskName, provider)
+    this.creationPromises.set(diskName, promise)
 
-    return provider
+    return promise
   }
 
   /**
    * Create a provider instance based on configuration
+   * Dynamically imports S3StorageProvider to avoid loading AWS SDK at module evaluation time
    * @param config - Storage entry configuration
    * @returns Storage provider instance
    */
-  private createProvider(config: StorageEntry): IStorageProvider {
+  private async createProvider(config: StorageEntry): Promise<IStorageProvider> {
     switch (config.provider) {
-      case 's3':
+      case 's3': {
+        const { S3StorageProvider } = await import('../providers/s3-storage.provider')
         return new S3StorageProvider(config)
+      }
       case 'gcs':
         throw new StorageProviderNotSupportedError(config.provider)
       default:
