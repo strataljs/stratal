@@ -13,6 +13,7 @@ import type { StorageConfig, StorageEntry } from '../types'
 @Transient(STORAGE_TOKENS.StorageManager)
 export class StorageManagerService {
   private readonly providers = new Map<string, IStorageProvider>()
+  private readonly creationPromises = new Map<string, Promise<IStorageProvider>>()
   private readonly diskConfigs = new Map<string, StorageEntry>()
 
   constructor(
@@ -44,19 +45,31 @@ export class StorageManagerService {
       return cached
     }
 
+    // Return in-flight creation promise to deduplicate concurrent calls
+    const inflight = this.creationPromises.get(diskName)
+    if (inflight) {
+      return inflight
+    }
+
     // Get disk configuration
     const diskConfig = this.diskConfigs.get(diskName)
     if (!diskConfig) {
       throw new DiskNotConfiguredError(diskName)
     }
 
-    // Create provider based on configuration
-    const provider = await this.createProvider(diskConfig)
+    // Create provider and deduplicate concurrent calls
+    const promise = this.createProvider(diskConfig).then((provider) => {
+      this.providers.set(diskName, provider)
+      this.creationPromises.delete(diskName)
+      return provider
+    }).catch((error: unknown) => {
+      this.creationPromises.delete(diskName)
+      throw error
+    })
 
-    // Cache provider
-    this.providers.set(diskName, provider)
+    this.creationPromises.set(diskName, promise)
 
-    return provider
+    return promise
   }
 
   /**
