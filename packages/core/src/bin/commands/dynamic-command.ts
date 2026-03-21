@@ -58,22 +58,39 @@ export function createDynamicCommands(
     // Define Clipanion options/arguments as class property defaults
     const proto = DynCmd.prototype as unknown as Record<string, unknown>
     for (const arg of signature.arguments) {
+      const argDescParts: string[] = []
+      if (arg.description) argDescParts.push(arg.description)
+      if (arg.default !== undefined) argDescParts.push(`(default: ${arg.default})`)
+      const argDesc = argDescParts.length > 0 ? argDescParts.join(' ') : undefined
+
       if (arg.isArray) {
         proto[arg.name] = Option.Rest({ name: arg.name, required: arg.required ? 1 : 0 })
       } else {
-        proto[arg.name] = Option.String({ name: arg.name, required: arg.required })
+        proto[arg.name] = Option.String({ name: arg.name, required: arg.required, description: argDesc })
       }
     }
 
     for (const opt of signature.options) {
       const optName = opt.alias ? `-${opt.alias},--${opt.name}` : `--${opt.name}`
+      const optDescParts: string[] = []
+      if (opt.description) optDescParts.push(opt.description)
+      if (opt.default !== undefined) optDescParts.push(`(default: ${opt.default})`)
+      const optDesc = optDescParts.length > 0 ? optDescParts.join(' ') : undefined
 
       if (opt.isFlag) {
         proto[opt.name] = Option.Boolean(optName, { description: opt.description })
       } else if (opt.isArray) {
-        proto[opt.name] = Option.Array(optName, { description: opt.description })
+        if (opt.default !== undefined) {
+          proto[opt.name] = Option.Array(optName, [opt.default], { description: optDesc })
+        } else {
+          proto[opt.name] = Option.Array(optName, { description: optDesc })
+        }
       } else {
-        proto[opt.name] = Option.String(optName, { description: opt.description })
+        if (opt.default !== undefined) {
+          proto[opt.name] = Option.String(optName, opt.default, { description: optDesc })
+        } else {
+          proto[opt.name] = Option.String(optName, { description: optDesc })
+        }
       }
     }
 

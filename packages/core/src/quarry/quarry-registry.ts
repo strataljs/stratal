@@ -144,6 +144,17 @@ export class QuarryRegistry implements Quarry {
   }
 
   /**
+   * Generate a compact listing of all commands with visual hierarchy and colors.
+   */
+  async listUsage(options?: { binaryName?: string; binaryLabel?: string; binaryVersion?: string }): Promise<string> {
+    const commands = this.list()
+
+    // Dynamic import to keep usage-generator tree-shakeable
+    const { generateListing } = await import('./usage-generator')
+    return generateListing(commands, this.signatures, options)
+  }
+
+  /**
    * Get auto-generated usage text for a command.
    */
   async usage(name: string): Promise<string> {

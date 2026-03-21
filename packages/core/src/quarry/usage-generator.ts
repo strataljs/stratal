@@ -1,3 +1,4 @@
+import { bold, cyan, dim, dimWhite, yellow } from './colors'
 import type { ParsedSignature } from './types'
 
 /**
@@ -9,7 +10,7 @@ export function generateUsage(signature: ParsedSignature, description?: string):
   const lines: string[] = []
 
   // Usage line
-  lines.push(`Usage: quarry ${buildUsageLine(signature)}`)
+  lines.push(`${bold('Usage:')} ${bold(cyan('quarry ' + buildUsageLine(signature)))}`)
 
   // Description
   if (description) {
@@ -20,7 +21,7 @@ export function generateUsage(signature: ParsedSignature, description?: string):
   // Arguments section
   if (signature.arguments.length > 0) {
     lines.push('')
-    lines.push('Arguments:')
+    lines.push(bold(yellow('Arguments:')))
     const argRows = signature.arguments.map((arg) => {
       const label = arg.name
       const parts: string[] = []
@@ -32,7 +33,7 @@ export function generateUsage(signature: ParsedSignature, description?: string):
       } else if (arg.required) {
         parts.push('(required)')
       } else if (arg.default !== undefined) {
-        parts.push(`(default: ${arg.default})`)
+        parts.push(dim(`(default: ${arg.default})`))
       } else {
         parts.push('(optional)')
       }
@@ -45,7 +46,7 @@ export function generateUsage(signature: ParsedSignature, description?: string):
   // Options section
   if (signature.options.length > 0) {
     lines.push('')
-    lines.push('Options:')
+    lines.push(bold(yellow('Options:')))
     const optRows = signature.options.map((opt) => {
       const flagParts: string[] = []
       if (opt.alias) flagParts.push(`-${opt.alias},`)
@@ -58,12 +59,106 @@ export function generateUsage(signature: ParsedSignature, description?: string):
       if (!opt.isFlag && !opt.description) parts.push('Accepts a value')
       if (opt.isFlag && !opt.description) parts.push('Boolean flag')
       if (opt.isArray) parts.push('(multiple)')
-      if (opt.default !== undefined) parts.push(`(default: ${opt.default})`)
+      if (opt.default !== undefined) parts.push(dim(`(default: ${opt.default})`))
 
       return [label, parts.join(' ')] as const
     })
     lines.push(...formatTable(optRows))
   }
+
+  return lines.join('\n')
+}
+
+export interface ListingOptions {
+  binaryName?: string
+  binaryLabel?: string
+  binaryVersion?: string
+}
+
+/**
+ * Generate a compact command listing with visual hierarchy.
+ */
+export function generateListing(
+  commands: { name: string; description?: string; aliases: string[] }[],
+  signatures: Map<string, ParsedSignature>,
+  options?: ListingOptions,
+): string {
+  const bin = options?.binaryName ?? 'quarry'
+  const label = options?.binaryLabel ?? 'Quarry CLI'
+  const version = options?.binaryVersion
+
+  const lines: string[] = []
+
+  // Header
+  lines.push(bold(`${label}${version ? ` v${version}` : ''}`))
+  lines.push('')
+
+  // Usage
+  lines.push(bold(yellow('Usage')))
+  lines.push(`  $ ${bin} <command> [options]`)
+  lines.push('')
+
+  // Commands
+  if (commands.length === 0) {
+    lines.push('No registered commands.')
+    return lines.join('\n')
+  }
+
+  lines.push(bold(yellow('Commands')))
+
+  const termWidth = typeof process !== 'undefined'
+    ? (process.stdout.columns as number | undefined) ?? 80
+    : 80
+
+  for (let i = 0; i < commands.length; i++) {
+    const cmd = commands[i]
+    const sig = signatures.get(cmd.name)
+    const sigParts: string[] = [cyan(cmd.name)]
+
+    if (cmd.aliases.length > 0) {
+      sigParts.push(cyan(`(alias: ${cmd.aliases.join(', ')})`))
+    }
+
+    if (sig) {
+      const inlineParts: string[] = []
+      for (const arg of sig.arguments) {
+        if (arg.isArray) {
+          inlineParts.push(`<${arg.name}...>`)
+        } else if (arg.required) {
+          inlineParts.push(`<${arg.name}>`)
+        } else if (arg.default !== undefined) {
+          inlineParts.push(`[${arg.name}=${arg.default}]`)
+        } else {
+          inlineParts.push(`[${arg.name}]`)
+        }
+      }
+
+      for (const opt of sig.options) {
+        const flagStr = opt.alias ? `-${opt.alias},--${opt.name}` : `--${opt.name}`
+        inlineParts.push(`[${flagStr}]`)
+      }
+
+      if (inlineParts.length > 0) {
+        sigParts.push(dim(inlineParts.join(' ')))
+      }
+    }
+
+    const sigLine = '  ' + sigParts.join(' ')
+    lines.push(...wrapLine(sigLine, termWidth, '      '))
+
+    if (cmd.description) {
+      lines.push(`    ${dimWhite(cmd.description)}`)
+    }
+
+    if (i < commands.length - 1) {
+      lines.push('')
+    }
+  }
+
+  lines.push('')
+
+  // Footer
+  lines.push(dimWhite(`Run ${bin} help <command> for detailed information.`))
 
   return lines.join('\n')
 }
@@ -76,6 +171,8 @@ function buildUsageLine(signature: ParsedSignature): string {
       parts.push(`<${arg.name}...>`)
     } else if (arg.required) {
       parts.push(`<${arg.name}>`)
+    } else if (arg.default !== undefined) {
+      parts.push(`[${arg.name}=${arg.default}]`)
     } else {
       parts.push(`[${arg.name}]`)
     }
@@ -96,13 +193,57 @@ function buildUsageLine(signature: ParsedSignature): string {
   return parts.join(' ')
 }
 
+// eslint-disable-next-line no-control-regex
+const ANSI_RE = /\x1b\[[0-9;]*m/g
+
+function stripAnsi(s: string): string {
+  return s.replace(ANSI_RE, '')
+}
+
+// eslint-disable-next-line no-control-regex
+const TOKEN_RE = /(?:\x1b\[[0-9;]*m)*[^\s\x1b]+(?:\x1b\[[0-9;]*m)*/g
+
+function wrapLine(text: string, maxWidth: number, continuationIndent: string): string[] {
+  const visibleLen = stripAnsi(text).length
+  if (visibleLen <= maxWidth) return [text]
+
+  const tokens = text.match(TOKEN_RE) ?? [text]
+
+  const lines: string[] = []
+  let currentLine = ''
+  let currentVisibleLen = 0
+
+  for (const token of tokens) {
+    const tokenVisible = stripAnsi(token).length
+    const separator = currentLine === '' ? '' : ' '
+    const separatorLen = separator.length
+
+    if (currentLine !== '' && currentVisibleLen + separatorLen + tokenVisible > maxWidth) {
+      lines.push(currentLine)
+      currentLine = continuationIndent + token
+      currentVisibleLen = continuationIndent.length + tokenVisible
+    } else {
+      currentLine += separator + token
+      currentVisibleLen += separatorLen + tokenVisible
+    }
+  }
+
+  if (currentLine !== '') {
+    lines.push(currentLine)
+  }
+
+  return lines
+}
+
 function formatTable(rows: readonly (readonly [string, string])[]): string[] {
   if (rows.length === 0) return []
 
-  const maxLabel = Math.max(...rows.map(([label]) => label.length))
+  const maxLabel = Math.max(...rows.map(([label]) => stripAnsi(label).length))
   const padding = 4
 
   return rows.map(([label, desc]) => {
-    return `  ${label.padEnd(maxLabel + padding)}${desc}`
+    const visibleLen = stripAnsi(label).length
+    const pad = ' '.repeat(maxLabel - visibleLen + padding)
+    return `  ${label}${pad}${desc}`
   })
 }
