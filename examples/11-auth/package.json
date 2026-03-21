@@ -9,7 +9,7 @@
   "dependencies": {
     "@better-auth/kysely-adapter": "^1.5.4",
     "@stratal/framework": "latest",
-    "kysely": "^0.28.11",
+    "kysely": "^0.28.14",
     "kysely-d1": "^0.4.0",
     "reflect-metadata": "^0.2.2",
     "stratal": "latest"
