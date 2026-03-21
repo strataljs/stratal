@@ -19,6 +19,18 @@ yarn add -D @stratal/testing
 npm install -D stratal vitest
 ```
 
+### AI Agent Skills
+
+Stratal provides [Agent Skills](https://agentskills.io) for AI coding assistants like Claude Code and Cursor. Install to give your AI agent knowledge of Stratal patterns, conventions, and APIs:
+
+```bash
+npx skills add strataljs/stratal
+```
+
+| Skill | Description |
+|---|---|
+| `stratal` | Build Cloudflare Workers apps with the Stratal framework — modules, DI, controllers, routing, OpenAPI, queues, cron, events, seeders, CLI, auth, database, RBAC, testing, and more |
+
 ## Quick Start
 
 Set up base modules once in your Vitest setup file, then create test modules in each test:

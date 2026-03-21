@@ -58,10 +58,7 @@ npx skills add strataljs/stratal
 
 | Skill | Description |
 |---|---|
-| `stratal` | Core framework — modules, DI, controllers, routing, OpenAPI, queues, cron, email, storage, caching, i18n, logging, guards, middleware, config, events, and error handling |
-| `stratal-testing` | Testing — TestingModule, HTTP testing, mocks, fakes, and auth testing utilities |
-| `stratal-framework` | Framework modules — authentication (Better Auth), database (ZenStack ORM), RBAC (Casbin), AuthGuard, and test data factories |
-| `stratal-incremental-adoption` | Incremental adoption — mounting Stratal into an existing Hono app, gradual migration, coexisting queue consumers and cron jobs |
+| `stratal` | Build Cloudflare Workers apps with the Stratal framework — modules, DI, controllers, routing, OpenAPI, queues, cron, events, seeders, CLI, auth, database, RBAC, testing, and more |
 
 ## Quick Start
 

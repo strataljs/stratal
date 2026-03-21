@@ -51,6 +51,10 @@ Stratal provides [Agent Skills](https://agentskills.io) for AI coding assistants
 npx skills add strataljs/stratal
 ```
 
+| Skill | Description |
+|---|---|
+| `stratal` | Build Cloudflare Workers apps with the Stratal framework — modules, DI, controllers, routing, OpenAPI, queues, cron, events, seeders, CLI, auth, database, RBAC, testing, and more |
+
 ## Quick Start
 
 ```typescript
