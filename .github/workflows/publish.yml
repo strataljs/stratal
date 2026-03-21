@@ -126,15 +126,20 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           INPUT_SNAPSHOT_NAME: ${{ github.event.inputs.snapshot_name }}
         run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+
           if [ "$EVENT_NAME" = "push" ]; then
-            echo "name=canary" >> "$GITHUB_OUTPUT"
+            echo "name=canary-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "dist_tag=canary" >> "$GITHUB_OUTPUT"
           elif [ "$EVENT_NAME" = "pull_request" ]; then
-            echo "name=canary-pr-${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+            echo "name=canary-pr-${PR_NUMBER}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "dist_tag=canary-pr-${PR_NUMBER}" >> "$GITHUB_OUTPUT"
           else
             SNAPSHOT_NAME="${INPUT_SNAPSHOT_NAME:-canary}"
             # Sanitize: allow only alphanumeric, hyphens, and dots
             SNAPSHOT_NAME=$(echo "$SNAPSHOT_NAME" | tr -cd '[:alnum:]-.')
-            echo "name=${SNAPSHOT_NAME}" >> "$GITHUB_OUTPUT"
+            echo "name=${SNAPSHOT_NAME}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "dist_tag=${SNAPSHOT_NAME}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build all packages
@@ -146,17 +151,17 @@ jobs:
         env:
           SNAPSHOT_NAME: ${{ steps.snapshot.outputs.name }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: yarn changeset version --snapshot "$SNAPSHOT_NAME" --snapshot-prerelease-template '{tag}-{datetime}-{commit}'
+        run: yarn changeset version --snapshot "$SNAPSHOT_NAME" --snapshot-prerelease-template '{tag}'
 
       - name: Publish canary
         if: steps.changesets.outputs.has_changesets == 'true'
         id: publish
         env:
-          SNAPSHOT_NAME: ${{ steps.snapshot.outputs.name }}
+          DIST_TAG: ${{ steps.snapshot.outputs.dist_tag }}
           NPM_CONFIG_PROVENANCE: "true"
         run: |
           set +e
-          OUTPUT=$(yarn changeset publish --tag "$SNAPSHOT_NAME" 2>&1)
+          OUTPUT=$(yarn changeset publish --tag "$DIST_TAG" 2>&1)
           EXIT_CODE=$?
           set -e
 
@@ -179,7 +184,7 @@ jobs:
         if: steps.changesets.outputs.has_changesets == 'true' && github.event_name == 'pull_request'
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         env:
-          SNAPSHOT_TAG: ${{ steps.snapshot.outputs.name }}
+          SNAPSHOT_TAG: ${{ steps.snapshot.outputs.dist_tag }}
           PUBLISHED_PACKAGES: ${{ steps.publish.outputs.published }}
         with:
           script: |
