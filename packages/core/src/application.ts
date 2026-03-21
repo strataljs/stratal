@@ -256,7 +256,7 @@ export class Application {
   }
 
   private registerCommands(): void {
-    // Built-in seeder commands (always available)
+    // Built-in commands (always available)
     const builtinCommands: Constructor<Command>[] = [
       HelpCommand,
       DbSeedCommand, DbSeedListCommand,
