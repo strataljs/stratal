@@ -1,4 +1,5 @@
 name: Deploy API Reference
+run-name: ${{ github.event.workflow_run.display_title || 'Deploy API Reference' }}
 
 on:
   workflow_run:

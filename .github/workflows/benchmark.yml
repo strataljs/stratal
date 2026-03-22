@@ -1,4 +1,5 @@
 name: Benchmark
+run-name: ${{ github.event.workflow_run.display_title || 'Benchmark' }}
 
 # Pre-requisites (manual setup by maintainer):
 # 1. Create a GitHub Gist (any content) and note the Gist ID
