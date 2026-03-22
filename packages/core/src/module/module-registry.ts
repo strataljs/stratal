@@ -12,14 +12,14 @@ import { injectable, instancePerContainerCachingFactory } from 'tsyringe'
 import type { Container } from '../di/container'
 import { Scope } from '../di/types'
 import { isListener } from '../events'
-import { isCommand } from '../quarry/is-command'
-import { isSeeder } from '../seeder/is-seeder'
 import type { LoggerService } from '../logger'
 import {
   createMiddlewareConsumer,
   type MiddlewareConfigEntry,
   type MiddlewareConfigurable,
 } from '../middleware'
+import { isCommand } from '../quarry/is-command'
+import { isSeeder } from '../seeder/is-seeder'
 import type { Constructor } from '../types'
 import { getModuleOptions } from './module.decorator'
 import type {
@@ -85,7 +85,8 @@ export class ModuleRegistry {
       // This allows forRoot() to add configuration even if base module is registered
       if (isDynamic) {
         this.logger.debug(`Module ${moduleClass.name} already registered, registering DynamicModule providers`)
-        for (const provider of options.providers ?? []) {
+        const { module: _, ...dynamicRest } = moduleOrDynamic
+        for (const provider of dynamicRest.providers ?? []) {
           this.registerProvider(provider)
         }
       } else {
@@ -376,7 +377,7 @@ export class ModuleRegistry {
    * Check if a class is a `Command` and collect it for auto-wiring
    */
   private collectIfCommand(providerClass: Constructor): void {
-    if (isCommand(providerClass)) {
+    if (isCommand(providerClass) && !this.allCommands.includes(providerClass)) {
       injectable()(providerClass)
       this.allCommands.push(providerClass)
       this.logger.debug(`Collected command: ${providerClass.name}`)
