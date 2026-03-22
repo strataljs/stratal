@@ -1,16 +1,15 @@
-import { waitUntil } from 'cloudflare:workers'
 import {
   Application,
   ApplicationConfig,
   type Constructor,
   type StratalEnv,
+  type StratalExecutionContext,
 } from 'stratal'
 import { Container } from 'stratal/di'
 import { LogLevel } from 'stratal/logger'
 import { InjectionToken, Module, ModuleClass, ModuleOptions } from 'stratal/module'
 import { STORAGE_TOKENS } from 'stratal/storage'
 import { FakeStorageService } from '../storage'
-import { getTestEnv } from './env'
 import { ProviderOverrideBuilder, type ProviderOverrideConfig } from './override'
 import { Test } from './test'
 import { TestingModule } from './testing-module'
@@ -69,14 +68,30 @@ export class TestingModuleBuilder {
     return this
   }
 
+  private async getCloudflareWorkers() {
+    try {
+      return await import('cloudflare:workers')
+    } catch {
+      return null
+    }
+  }
+
   /**
    * Compile the testing module
    *
    * Creates the Application, applies overrides, initializes, and returns TestingModule.
    */
   async compile(): Promise<TestingModule> {
-    const env = getTestEnv(this.config.env)
-    const ctx = { waitUntil } as ExecutionContext
+    const cf = await this.getCloudflareWorkers()
+
+    const env = { ...cf?.env, ...this.config.env } as StratalEnv
+    const ctx: StratalExecutionContext = {
+      waitUntil: cf ? cf.waitUntil : (p) => {
+        p.catch(() => {
+          //
+        })
+      },
+    }
 
     // Build root module from config
     const baseModules = Test.getBaseModules()
@@ -103,7 +118,9 @@ export class TestingModuleBuilder {
     // Auto-register FakeStorageService (can be overridden by user)
     app.container.registerSingleton(STORAGE_TOKENS.StorageService, FakeStorageService)
 
-    // Apply user overrides BEFORE initialize
+    await app.initialize()
+
+    // Apply user overrides AFTER initialize so they replace module-registered providers
     for (const override of this.overrides) {
       switch (override.type) {
         case 'value':
@@ -129,8 +146,6 @@ export class TestingModuleBuilder {
           break
       }
     }
-
-    await app.initialize()
 
     return new TestingModule(app, env, ctx)
   }

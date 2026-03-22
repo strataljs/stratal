@@ -30,8 +30,5 @@ export { http, HttpResponse } from 'msw'
 // Auth
 export { ActingAs } from './auth'
 
-// Environment utilities
-export { getTestEnv } from './core/env'
-
 // Errors
 export { TestError, TestSetupError } from './errors'

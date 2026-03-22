@@ -1,6 +1,6 @@
 import type { ConnectionName, DatabaseService } from '@stratal/framework/database'
 import { connectionSymbol } from '@stratal/framework/database'
-import type { Application, Constructor, StratalEnv } from 'stratal'
+import type { Application, Constructor, StratalEnv, StratalExecutionContext } from 'stratal'
 import { DI_TOKENS, type Container } from 'stratal/di'
 import { type InjectionToken } from 'stratal/module'
 import { SEEDER_TOKENS, type Seeder, type SeederRegistry, SeederNotRegisteredError } from 'stratal/seeder'
@@ -48,7 +48,7 @@ export class TestingModule {
   constructor(
     private readonly app: Application,
     private readonly env: StratalEnv,
-    private readonly ctx: ExecutionContext,
+    private readonly ctx: StratalExecutionContext,
   ) {
     const mockContext = this.app.createMockRouterContext()
     this._requestContainer = this.app.container.createRequestScope(mockContext)
@@ -115,7 +115,7 @@ export class TestingModule {
    * Execute an HTTP request through HonoApp
    */
   async fetch(request: Request): Promise<Response> {
-    return this.app.hono.fetch(request, this.env, this.ctx)
+    return this.app.hono.fetch(request, this.env, this.ctx as ExecutionContext)
   }
 
   /**
