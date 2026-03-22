@@ -231,21 +231,43 @@ export class OpenApiToolsService {
     return { schema, pathParams }
   }
 
-  private resolveRef(obj: unknown): unknown {
+  private resolveRef(obj: unknown, seen = new Set<string>()): unknown {
     if (!obj || typeof obj !== 'object') return obj
     const record = obj as Record<string, unknown>
+
     if (typeof record.$ref === 'string') {
       const refPath = record.$ref
-      const match = /^#\/components\/schemas\/(.+)$/.exec(refPath)
-      if (match) {
-        const schemaName = match[1]
-        const components = this.spec.components
-        const resolved = components?.schemas?.[schemaName]
-        return resolved ?? obj
-      }
-      return obj
+      if (seen.has(refPath)) return obj
+      seen.add(refPath)
+
+      const resolved = this.lookupRef(refPath)
+      if (!resolved) return obj
+      return this.resolveRef(resolved, seen)
     }
-    return obj
+
+    // Recursively walk all properties and resolve nested $refs
+    const result: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(record)) {
+      if (Array.isArray(value)) {
+        result[key] = value.map((item) => this.resolveRef(item, seen))
+      } else if (value && typeof value === 'object') {
+        result[key] = this.resolveRef(value, seen)
+      } else {
+        result[key] = value
+      }
+    }
+    return result
+  }
+
+  private lookupRef(refPath: string): unknown {
+    const components = this.spec.components as Record<string, Record<string, unknown>> | undefined
+    if (!components) return undefined
+
+    const match = /^#\/components\/(\w+)\/(.+)$/.exec(refPath)
+    if (!match) return undefined
+
+    const [, section, name] = match
+    return components[section][name]
   }
 
   private getOperation(method: string, path: string): OperationObject | undefined {

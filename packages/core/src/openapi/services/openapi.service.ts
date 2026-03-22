@@ -1,5 +1,4 @@
 import { swaggerUI } from '@hono/swagger-ui'
-import { inject } from 'tsyringe'
 import type { Container } from '../../di/container'
 import { Transient } from '../../di/decorators'
 import type { II18nService } from '../../i18n'
@@ -36,10 +35,6 @@ interface RouteInfo {
 export class OpenAPIService {
   private routeInfoMap = new Map<string, RouteInfo>()
 
-  constructor(
-    @inject(OPENAPI_TOKENS.ConfigService)
-    private configService: IOpenAPIConfigService
-  ) { }
 
   /**
    * Generate a filtered OpenAPI spec using the user's config.
@@ -80,11 +75,12 @@ export class OpenAPIService {
   /**
    * Setup OpenAPI documentation endpoints
    */
-  setupEndpoints(app: OpenAPIHono<RouterEnv>, controllers: Constructor<IController>[]): void {
+  setupEndpoints(app: OpenAPIHono<RouterEnv>, controllers: Constructor<IController>[], container: Container): void {
     // Build route info map for hideFromDocs filtering
     this.buildRouteInfoMap(controllers)
 
-    const config = this.configService.getEffectiveConfig()
+    const configService = container.resolve<IOpenAPIConfigService>(OPENAPI_TOKENS.ConfigService)
+    const config = configService.getEffectiveConfig()
 
     // OpenAPI JSON spec endpoint
     app.get(config.jsonPath, (c) => {

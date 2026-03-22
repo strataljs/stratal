@@ -3,10 +3,10 @@ import { z } from 'zod'
 import type { Application } from '../../application'
 import { DI_TOKENS } from '../../di/tokens'
 import { OPENAPI_TOKENS } from '../../openapi/openapi.tokens'
-import type { IOpenAPIConfigService } from '../../openapi/types'
-import type { OpenAPIService } from '../../openapi/services/openapi.service'
-import { OpenApiToolsService } from '../../openapi/services/openapi-tools.service'
 import type { Dispatcher } from '../../openapi/services/openapi-tools.service'
+import { OpenApiToolsService } from '../../openapi/services/openapi-tools.service'
+import type { OpenAPIService } from '../../openapi/services/openapi.service'
+import type { IOpenAPIConfigService } from '../../openapi/types'
 import { Command } from '../command'
 
 export class McpServeCommand extends Command {
@@ -41,15 +41,20 @@ export class McpServeCommand extends Command {
 
     const dispatcher: Dispatcher = baseUrl
       ? async (method, url, opts) => {
-        return fetch(`${baseUrl}${url}`, {
-          method,
-          headers: {
-            'Content-Type': 'application/json',
-            ...headers,
-            ...opts?.headers,
-          },
-          body: opts?.body !== undefined ? JSON.stringify(opts.body) : undefined,
-        })
+        const fullUrl = `${baseUrl}${url}`
+        try {
+          return await fetch(fullUrl, {
+            method,
+            headers: {
+              'Content-Type': 'application/json',
+              ...headers,
+              ...opts?.headers,
+            },
+            body: opts?.body !== undefined ? JSON.stringify(opts.body) : undefined,
+          })
+        } catch (error) {
+          throw new Error(`MCP dispatch failed: ${method} ${fullUrl} — ${error instanceof Error ? error.message : String(error)}`, { cause: error })
+        }
       }
       : async (method, url, opts) => {
         const request = new Request(`http://localhost${url}`, {
@@ -61,7 +66,11 @@ export class McpServeCommand extends Command {
           },
           body: opts?.body !== undefined ? JSON.stringify(opts.body) : undefined,
         })
-        return this.app.hono.fetch(request, this.app.env)
+        try {
+          return await this.app.hono.fetch(request, this.app.env)
+        } catch (error) {
+          throw new Error(`MCP dispatch failed: ${method} ${url} — ${error instanceof Error ? error.message : String(error)}`, { cause: error })
+        }
       }
 
     const service = new OpenApiToolsService(spec, { dispatcher })
