@@ -281,7 +281,9 @@ export class OpenApiToolsService {
     if (!match) return undefined
 
     const [, section, name] = match
-    return components[section][name]
+    const sectionObj = components[section]
+    if (typeof sectionObj !== 'object') return undefined
+    return sectionObj[name]
   }
 
   private getOperation(method: string, path: string): OperationObject | undefined {

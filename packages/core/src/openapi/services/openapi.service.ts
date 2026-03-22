@@ -226,18 +226,15 @@ export class OpenAPIService {
     const filteredSchemas: Record<string, unknown> = {}
     const components = spec.components as Record<string, unknown> | undefined
     if (components?.schemas) {
-      for (const [schemaName, schemaValue] of Object.entries(components.schemas as Record<string, unknown>)) {
-        if (referencedSchemas.has(schemaName)) {
-          filteredSchemas[schemaName] = schemaValue
-          // Also collect references from this schema (for nested schemas)
-          this.collectSchemaRefs(schemaValue, referencedSchemas)
-        }
-      }
-
-      // Second pass to include any schemas referenced by included schemas
-      for (const [schemaName, schemaValue] of Object.entries(components.schemas as Record<string, unknown>)) {
-        if (referencedSchemas.has(schemaName) && !filteredSchemas[schemaName]) {
-          filteredSchemas[schemaName] = schemaValue
+      const allSchemas = components.schemas as Record<string, unknown>
+      let prevSize = 0
+      while (referencedSchemas.size > prevSize) {
+        prevSize = referencedSchemas.size
+        for (const [schemaName, schemaValue] of Object.entries(allSchemas)) {
+          if (referencedSchemas.has(schemaName) && !filteredSchemas[schemaName]) {
+            filteredSchemas[schemaName] = schemaValue
+            this.collectSchemaRefs(schemaValue, referencedSchemas)
+          }
         }
       }
     }
