@@ -66,9 +66,9 @@
     "lint:fix": "npx eslint --fix ."
   },
   "dependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.13.2",
-    "@golevelup/ts-vitest": "^3.0.0",
-    "msw": "^2.12.13"
+    "@cloudflare/vitest-pool-workers": "^0.13.3",
+    "@golevelup/ts-vitest": "^4.0.0",
+    "msw": "^2.12.14"
   },
   "peerDependencies": {
     "@stratal/framework": "^0.0.16",

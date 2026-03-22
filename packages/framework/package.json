@@ -81,11 +81,11 @@
     "stratal": "^0.0.16"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.13.2",
+    "@cloudflare/vitest-pool-workers": "^0.13.3",
     "@cloudflare/workers-types": "4.20260317.1",
     "@stratal/testing": "workspace:^",
     "@types/node": "^25.5.0",
-    "@types/pg": "^8.18.0",
+    "@types/pg": "^8.20.0",
     "@vitest/coverage-istanbul": "~4.1.0",
     "@vitest/runner": "~4.1.0",
     "@vitest/snapshot": "~4.1.0",
@@ -97,6 +97,6 @@
     "tsdown": "^0.21.4",
     "typescript": "^5.9.3",
     "vitest": "~4.1.0",
-    "wrangler": "^4.75.0"
+    "wrangler": "^4.76.0"
   }
 }
