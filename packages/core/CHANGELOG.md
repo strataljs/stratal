@@ -1,5 +1,69 @@
 # stratal
 
+## 0.0.17
+
+### Patch Changes
+
+- [#147](https://github.com/strataljs/stratal/pull/147) [`7f2772b`](https://github.com/strataljs/stratal/commit/7f2772ba90a9b6a91603f79293d384e972864125) Thanks [@adesege](https://github.com/adesege)! - Add MCP server support and API CLI commands
+
+  ### Details
+
+  - Add `mcp:serve` command to start a stdio MCP server that exposes OpenAPI routes as tools
+  - Add `mcp:tools` command to list available MCP tools derived from the OpenAPI spec
+  - Add `api` command to invoke API endpoints directly from the CLI
+  - Add `OpenApiToolsService` for converting OpenAPI specs into tool definitions, reusable across MCP, CLI, and custom tooling
+
+- [`6cccfef`](https://github.com/strataljs/stratal/commit/6cccfefdde703c5c6eaba199d05307ab9fe36085) Thanks [@adesege](https://github.com/adesege)! - Add `stratal/storage/providers` sub-path export for direct access to storage provider implementations
+
+- [#145](https://github.com/strataljs/stratal/pull/145) [`79e05de`](https://github.com/strataljs/stratal/commit/79e05de7482c925323a2f37a00e47929133a979f) Thanks [@adesege](https://github.com/adesege)! - Enhance Quarry CLI with dynamic command generation, improved help output, and usage generator
+
+  ### Details
+
+  - Replace static `ListCommand` with dynamic command generation via `createDynamicCommands` that auto-registers user-defined commands with Clipanion
+  - Improve `HelpCommand` to display detailed usage for specific commands including arguments, options, and aliases
+  - Add `UsageGenerator` for rendering formatted command usage with ANSI colors (name, description, arguments, options sections)
+  - Add `colors` utility module for ANSI terminal color output
+  - Add `QuarryRegistry.list()` method to retrieve all registered command entries
+  - Add comprehensive tests for dynamic commands, help command, and usage generator
+
+- [`3c89c14`](https://github.com/strataljs/stratal/commit/3c89c147fca366382c0771bb442f29a6fc73601e) Thanks [@adesege](https://github.com/adesege)! - Fix module registry to prevent duplicate command registration and exclude internal module property from dynamic module providers
+
+- [`916fd90`](https://github.com/strataljs/stratal/commit/916fd90727a06b5ce7c0397467fe9dc1f859f841) Thanks [@adesege](https://github.com/adesege)! - Add `I18nModule.registerMessages()` for decentralized i18n message registration
+
+  ### Details
+
+  - Any module can now call `I18nModule.registerMessages()` to contribute translations, enabling package-level message ownership
+  - Messages are deep-merged across all registrations in order — later calls override earlier ones at leaf level
+  - `RouterContext.json()` now accepts `null` and automatically returns 204 No Content
+
+  ### Breaking Changes
+
+  - Remove `messages` option from `I18nModule.forRoot()` — use `I18nModule.registerMessages()` instead
+
+    **Before:**
+
+    ```typescript
+    I18nModule.forRoot({
+      defaultLocale: 'en',
+      messages: { en: { ... }, fr: { ... } },
+    })
+    ```
+
+    **After:**
+
+    ```typescript
+    I18nModule.forRoot({ defaultLocale: 'en' }),
+    I18nModule.registerMessages({ en: { ... }, fr: { ... } }),
+    ```
+
+- [`cbfce8b`](https://github.com/strataljs/stratal/commit/cbfce8b3a3517b60d94f500c5dc1ef68d8ee76f4) Thanks [@adesege](https://github.com/adesege)! - Support multiple seeder names in `db:seed` command via variadic `{names*}` argument
+
+  ### Details
+
+  - Change `db:seed {name?}` to `db:seed {names*}` to accept multiple seeder class names in a single invocation
+  - When `--all` is used with named seeders, warn and ignore the names
+  - Iterate over all provided names, running each seeder sequentially
+
 ## 0.0.16
 
 ### Patch Changes

@@ -3845,7 +3845,7 @@ __metadata:
   peerDependencies:
     pg: ^8.0.0
     reflect-metadata: ^0.2.2
-    stratal: ^0.0.16
+    stratal: ^0.0.17
   languageName: unknown
   linkType: soft
 
@@ -3868,10 +3868,10 @@ __metadata:
     typescript: "npm:^5.9.3"
     vitest: "npm:~4.1.0"
   peerDependencies:
-    "@stratal/framework": ^0.0.16
+    "@stratal/framework": ^0.0.17
     better-auth: ^1.4.9
     reflect-metadata: ^0.2.2
-    stratal: ^0.0.16
+    stratal: ^0.0.17
     vitest: ^4.1.0
   peerDependenciesMeta:
     "@stratal/framework":
