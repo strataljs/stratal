@@ -161,7 +161,7 @@ export class TestResponse {
       expect(
         actual[key],
         `Expected JSON key "${key}" to be ${JSON.stringify(value)}, got ${JSON.stringify(actual[key])}`
-      ).toBe(value)
+      ).toStrictEqual(value)
     }
 
     return this
@@ -180,7 +180,7 @@ export class TestResponse {
     expect(
       actual,
       `Expected JSON path "${path}" to be ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`
-    ).toBe(expected)
+    ).toStrictEqual(expected)
 
     return this
   }
@@ -338,7 +338,7 @@ export class TestResponse {
       expect(
         actual,
         `Expected JSON path "${path}" to be ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`
-      ).toBe(expected)
+      ).toStrictEqual(expected)
     }
 
     return this
