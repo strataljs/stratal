@@ -105,15 +105,14 @@ export class McpServeCommand extends Command {
     )
 
     const transport = new StdioServerTransport()
+    const closed = new Promise<void>((resolve) => { transport.onclose = resolve })
     await server.connect(transport)
 
     // Write info to stderr (stdout is reserved for MCP JSON-RPC)
     process.stderr.write(`MCP server started with ${tools.length} tool(s)\n`)
 
     // Keep process alive until client disconnects
-    await new Promise<void>((resolve) => {
-      transport.onclose = resolve
-    })
+    await closed
 
     return 0
   }

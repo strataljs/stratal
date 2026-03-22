@@ -137,6 +137,28 @@ describe('OpenApiToolsService', () => {
     })
   })
 
+  describe('HTTP method filtering', () => {
+    it('should skip non-HTTP-method keys on path items', () => {
+      const spec = {
+        openapi: '3.0.0',
+        info: { title: 'Test', version: '1.0.0' },
+        paths: {
+          '/api/notes': {
+            get: { operationId: 'listNotes', summary: 'List notes' },
+            summary: 'Notes endpoint',
+            description: 'Manages notes',
+            parameters: [{ name: 'shared', in: 'query' }],
+          },
+        },
+      } as unknown as OpenAPIObject
+
+      const service = new OpenApiToolsService(spec)
+      const tools = service.getTools()
+      expect(tools).toHaveLength(1)
+      expect(tools[0].name).toBe('listNotes')
+    })
+  })
+
   describe('$ref resolution', () => {
     it('should resolve $ref pointers to components.schemas', () => {
       const spec = {
@@ -264,6 +286,26 @@ describe('OpenApiToolsService', () => {
     it('should throw when tool not found', async () => {
       const service = new OpenApiToolsService({ openapi: '3.0.0', info: { title: 'Test', version: '1.0.0' }, paths: {} } as unknown as OpenAPIObject, { dispatcher: vi.fn() })
       await expect(service.executeTool('missing', {})).rejects.toThrow('Tool not found: missing')
+    })
+
+    it('should throw when required path parameter is missing', async () => {
+      const spec = {
+        openapi: '3.0.0',
+        info: { title: 'Test', version: '1.0.0' },
+        paths: {
+          '/api/notes/{id}': {
+            get: {
+              operationId: 'getNote',
+              parameters: [
+                { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+              ],
+            },
+          },
+        },
+      } as unknown as OpenAPIObject
+
+      const service = new OpenApiToolsService(spec, { dispatcher: vi.fn() })
+      await expect(service.executeTool('getNote', {})).rejects.toThrow('Missing required path parameter: id')
     })
 
     it('should throw when no dispatcher configured', async () => {

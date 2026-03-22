@@ -1,7 +1,7 @@
 import 'reflect-metadata'
 
 import { container as tsyringeRootContainer, injectable } from 'tsyringe'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Container } from '../../../di/container'
 import { DI_TOKENS } from '../../../di/tokens'
 import { OPENAPI_TOKENS } from '../../../openapi/openapi.tokens'
@@ -39,6 +39,7 @@ vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => {
   return { StdioServerTransport: MockStdioServerTransport }
 })
 
+let stderrSpy: ReturnType<typeof vi.spyOn>
 let childContainer: Container
 
 const testSpec = {
@@ -99,6 +100,7 @@ beforeEach(() => {
   registeredTools = []
   registeredResources = []
   connectCalled = false
+  stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
 
   const tsyringe = tsyringeRootContainer.createChildContainer()
   childContainer = new Container({ container: tsyringe })
@@ -107,6 +109,10 @@ beforeEach(() => {
 
   injectable()(McpServeCommand)
   childContainer.register(McpServeCommand, McpServeCommand)
+})
+
+afterEach(() => {
+  stderrSpy.mockRestore()
 })
 
 function createCommand(input: Record<string, unknown> = {}): McpServeCommand {
@@ -118,49 +124,40 @@ function createCommand(input: Record<string, unknown> = {}): McpServeCommand {
 
 describe('McpServeCommand', () => {
   it('should register all tools from the OpenAPI spec', async () => {
-    const stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     const cmd = createCommand()
     await cmd.handle()
 
     expect(registeredTools).toHaveLength(3)
     expect(registeredTools.map((t) => t.name)).toEqual(['listNotes', 'createNote', 'listUsers'])
     expect(connectCalled).toBe(true)
-    stderrSpy.mockRestore()
   })
 
   it('should register the OpenAPI spec as a resource', async () => {
-    const stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     const cmd = createCommand()
     await cmd.handle()
 
     expect(registeredResources).toHaveLength(1)
     expect(registeredResources[0].name).toBe('openapi-spec')
     expect(registeredResources[0].uri).toBe('openapi://spec')
-    stderrSpy.mockRestore()
   })
 
   it('should respect tag filter', async () => {
-    const stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     const cmd = createCommand({ tag: ['users'] })
     await cmd.handle()
 
     expect(registeredTools).toHaveLength(1)
     expect(registeredTools[0].name).toBe('listUsers')
-    stderrSpy.mockRestore()
   })
 
   it('should respect path filter', async () => {
-    const stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     const cmd = createCommand({ path: '/api/notes' })
     await cmd.handle()
 
     expect(registeredTools).toHaveLength(2)
     expect(registeredTools.map((t) => t.name)).toEqual(['listNotes', 'createNote'])
-    stderrSpy.mockRestore()
   })
 
   it('should parse header flags', async () => {
-    const stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     const cmd = createCommand({
       url: 'https://api.example.com',
       header: ['Authorization:Bearer tok123', 'X-Custom:value'],
@@ -169,16 +166,13 @@ describe('McpServeCommand', () => {
 
     // Just verify it runs without error — headers are used in dispatcher
     expect(registeredTools).toHaveLength(3)
-    stderrSpy.mockRestore()
   })
 
   it('should write tool count to stderr', async () => {
-    const stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     const cmd = createCommand()
     await cmd.handle()
 
     expect(stderrSpy).toHaveBeenCalledWith('MCP server started with 3 tool(s)\n')
-    stderrSpy.mockRestore()
   })
 
   it('should have the correct signature', () => {

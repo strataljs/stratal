@@ -1,4 +1,5 @@
 import { type OpenAPIObject } from "../../i18n/validation"
+import type { HttpMethod } from '../../router/types'
 
 type JsonSchema = Record<string, unknown>
 
@@ -55,6 +56,8 @@ interface RequestBodyObject {
  * Plain class (no DI) — reusable across MCP, CLI, and custom tooling.
  */
 export class OpenApiToolsService {
+  private static readonly HTTP_METHODS: Set<string> = new Set<HttpMethod>(['get', 'post', 'put', 'delete', 'patch', 'head', 'options', 'trace'])
+
   private tools: ToolDefinition[] = []
   private toolMap = new Map<string, ToolDefinition>()
   private dispatcher?: Dispatcher
@@ -106,9 +109,10 @@ export class OpenApiToolsService {
     let url = tool.path
     for (const param of tool.pathParams) {
       const value = args[`path_${param}`]
-      if (value !== undefined) {
-        url = url.replace(`{${param}}`, encodeURIComponent(value != null && typeof value === 'object' ? JSON.stringify(value) : String(value as string | number | boolean)))
+      if (value === undefined) {
+        throw new Error(`Missing required path parameter: ${param}`)
       }
+      url = url.replace(`{${param}}`, encodeURIComponent(value != null && typeof value === 'object' ? JSON.stringify(value) : String(value as string | number | boolean)))
     }
 
     // Collect query params
@@ -150,6 +154,7 @@ export class OpenApiToolsService {
     for (const [path, pathItem] of Object.entries(paths)) {
       for (const [method, operation] of Object.entries(pathItem)) {
         if (!operation || typeof operation !== 'object') continue
+        if (!OpenApiToolsService.HTTP_METHODS.has(method.toLowerCase())) continue
 
         const op = operation as OperationObject
         const name = op.operationId ?? this.generateName(method, path)

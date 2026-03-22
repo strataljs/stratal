@@ -29,7 +29,10 @@ export class ApiCommand extends Command {
     const headerArgs = this.array('header')
     const queryArgs = this.array('query')
 
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    const headers: Record<string, string> = {}
+    if (data) {
+      headers['Content-Type'] = 'application/json'
+    }
     for (const h of headerArgs) {
       const colonIdx = h.indexOf(':')
       if (colonIdx > 0) {
