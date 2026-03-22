@@ -58,6 +58,22 @@ const proxy = globalThis.__stratalPlatformProxy;
 if (!proxy) throw new Error('globalThis.__stratalPlatformProxy not set — Quarry CLI must initialize it before importing the app entry.');
 export const env = proxy.env;
 export const waitUntil = proxy.waitUntil;
+export const exports = {}
+export class DurableObject {
+  constructor(ctx, env) { this.ctx = ctx; this.env = env; }
+}
+export class WorkerEntrypoint {
+  constructor(ctx, env) { this.ctx = ctx; this.env = env; }
+}
+export class WorkflowEntrypoint {
+  constructor(ctx, env) { this.ctx = ctx; this.env = env; }
+}
+export class WorkflowStep {}
+export class RpcTarget {}
+export const RpcStub = function(value) { return value; };
+export function withEnv(newEnv, fn) { return fn(); }
+export function withExports(newExports, fn) { return fn(); }
+export function withEnvAndExports(newEnv, newExports, fn) { return fn(); }
 `,
     }
   }
