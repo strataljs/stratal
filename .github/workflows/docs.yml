@@ -1,7 +1,9 @@
 name: Deploy API Reference
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -15,7 +17,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  docs:
+    name: Generate Docs
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -24,20 +30,32 @@ jobs:
           egress-policy: audit
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
-          node-version: "22"
-      - run: corepack enable
-      - run: yarn install --immutable
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: ./.github/actions/setup
+
+      - name: Download build artifacts from CI
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist-artifacts
+          path: packages
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build all packages
+        if: github.event_name == 'workflow_dispatch'
         run: yarn workspaces foreach -At run build
+
       - run: yarn docs
+
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
         with:
           path: docs
 
   deploy:
-    needs: build
+    needs: docs
     runs-on: ubuntu-latest
     environment:
       name: github-pages

@@ -1,9 +1,10 @@
 name: Publish
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
   pull_request:
     types: [labeled, synchronize]
   workflow_dispatch:
@@ -19,7 +20,7 @@ permissions:
 jobs:
   publish:
     name: Publish
-    if: github.event_name == 'push'
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     concurrency:
       group: publish
@@ -53,8 +54,13 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
-      - name: Build all packages
-        run: yarn workspaces foreach -At run build
+      - name: Download build artifacts from CI
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: dist-artifacts
+          path: packages
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create Release PR or Publish
         uses: changesets/action@e87c8ed249971350e47fab7515075f44eb134e5b # v1.7.0
@@ -71,7 +77,6 @@ jobs:
   canary:
     name: Canary Publish
     if: >
-      github.event_name == 'push' ||
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'canary'))
     runs-on: ubuntu-latest
@@ -118,6 +123,10 @@ jobs:
             echo "has_changesets=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Build all packages
+        if: steps.changesets.outputs.has_changesets == 'true'
+        run: yarn workspaces foreach -At run build
+
       - name: Determine snapshot name
         if: steps.changesets.outputs.has_changesets == 'true'
         id: snapshot
@@ -128,10 +137,7 @@ jobs:
         run: |
           SHORT_SHA=$(git rev-parse --short HEAD)
 
-          if [ "$EVENT_NAME" = "push" ]; then
-            echo "name=canary-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-            echo "dist_tag=canary" >> "$GITHUB_OUTPUT"
-          elif [ "$EVENT_NAME" = "pull_request" ]; then
+          if [ "$EVENT_NAME" = "pull_request" ]; then
             echo "name=canary-pr-${PR_NUMBER}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
             echo "dist_tag=canary-pr-${PR_NUMBER}" >> "$GITHUB_OUTPUT"
           else
@@ -141,10 +147,6 @@ jobs:
             echo "name=${SNAPSHOT_NAME}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
             echo "dist_tag=${SNAPSHOT_NAME}" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Build all packages
-        if: steps.changesets.outputs.has_changesets == 'true'
-        run: yarn workspaces foreach -At run build
 
       - name: Snapshot version
         if: steps.changesets.outputs.has_changesets == 'true'
