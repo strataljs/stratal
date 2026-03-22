@@ -1,7 +1,8 @@
 import 'reflect-metadata'
 
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { createRequire, register } from 'node:module'
+import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { QuarryRegistry } from 'stratal/quarry'
@@ -41,11 +42,50 @@ if (!existsSync(entryPath)) {
   process.exit(1)
 }
 
+function stripDurableObjects(config: Record<string, unknown>): void {
+  delete config.durable_objects
+  delete config.migrations
+  if (config.env && typeof config.env === 'object') {
+    for (const envConfig of Object.values(config.env as Record<string, Record<string, unknown>>)) {
+      delete envConfig.durable_objects
+      delete envConfig.migrations
+    }
+  }
+}
+
+async function createStrippedConfig(cwdRequire: NodeRequire): Promise<string | undefined> {
+  const candidates = ['wrangler.jsonc', 'wrangler.json', 'wrangler.toml']
+  const configName = candidates.find(c => existsSync(resolve(process.cwd(), c)))
+  if (!configName) return undefined
+
+  const configPath = resolve(process.cwd(), configName)
+  const raw = readFileSync(configPath, 'utf-8')
+
+  let config: Record<string, unknown>
+  if (configName.endsWith('.toml')) {
+    const { parse } = await import(cwdRequire.resolve('smol-toml')) as { parse: (input: string) => Record<string, unknown> }
+    config = parse(raw)
+  } else {
+    const { parse: parseJsonc } = await import(cwdRequire.resolve('jsonc-parser')) as { parse: (input: string) => Record<string, unknown> }
+    config = parseJsonc(raw)
+  }
+
+  stripDurableObjects(config)
+
+  const tmpPath = resolve(tmpdir(), `quarry-wrangler-${Date.now()}.json`)
+  writeFileSync(tmpPath, JSON.stringify(config, null, 2))
+  return tmpPath
+}
+
 async function main(): Promise<void> {
   const cwdRequire = createRequire(join(process.cwd(), 'package.json'))
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const { getPlatformProxy } = await import(cwdRequire.resolve('wrangler')) as typeof import('wrangler')
-  const { env, ctx, dispose } = await getPlatformProxy()
+
+  const tmpConfigPath = await createStrippedConfig(cwdRequire)
+  const { env, ctx, dispose } = await getPlatformProxy(
+    tmpConfigPath ? { configPath: tmpConfigPath } : undefined,
+  )
 
   let app: Application | undefined
   try {
@@ -90,6 +130,11 @@ async function main(): Promise<void> {
   } finally {
     await app?.shutdown()
     await dispose()
+    if (tmpConfigPath) {
+      try { unlinkSync(tmpConfigPath) } catch {
+        //
+      }
+    }
   }
 }
 
