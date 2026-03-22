@@ -1,9 +1,10 @@
 import { swaggerUI } from '@hono/swagger-ui'
 import { inject } from 'tsyringe'
+import type { Container } from '../../di/container'
 import { Transient } from '../../di/decorators'
 import type { II18nService } from '../../i18n'
 import { I18N_TOKENS } from '../../i18n'
-import type { OpenAPIHono, PathItemObject } from '../../i18n/validation'
+import type { OpenAPIHono, OpenAPIObject, PathItemObject } from '../../i18n/validation'
 import { ROUTER_CONTEXT_KEYS, SECURITY_SCHEMES } from '../../router/constants'
 import type { IController } from '../../router/controller'
 import { getControllerOptions, getControllerRoute } from '../../router/decorators'
@@ -41,6 +42,42 @@ export class OpenAPIService {
   ) { }
 
   /**
+   * Generate a filtered OpenAPI spec using the user's config.
+   * Usable from both HTTP handlers and CLI commands.
+   */
+  getSpec(app: OpenAPIHono<RouterEnv>, container: Container): OpenAPIObject {
+    const configService = container.resolve<IOpenAPIConfigService>(OPENAPI_TOKENS.ConfigService)
+    const i18n = container.resolve<II18nService>(I18N_TOKENS.I18nService)
+    const config = configService.getEffectiveConfig()
+
+    const fullSpec = app.getOpenAPIDocument({
+      openapi: '3.0.0',
+      info: {
+        version: config.info.version,
+        title: config.info.title,
+        description: config.info.description,
+      },
+    })
+
+    // Security schemes
+    fullSpec.components ??= {}
+    fullSpec.components.securitySchemes = this.getSecuritySchemeDefinitions(i18n)
+
+    // Filter routes (hideFromDocs + custom routeFilter)
+    fullSpec.paths = this.filterRoutes(
+      fullSpec.paths as Record<string, PathItemObject>,
+      config,
+    )
+
+    // Filter unreferenced schemas
+    if (fullSpec.components.schemas) {
+      fullSpec.components.schemas = this.filterSchemas(fullSpec as unknown as Record<string, unknown>) as typeof fullSpec.components.schemas
+    }
+
+    return fullSpec
+  }
+
+  /**
    * Setup OpenAPI documentation endpoints
    */
   setupEndpoints(app: OpenAPIHono<RouterEnv>, controllers: Constructor<IController>[]): void {
@@ -51,47 +88,16 @@ export class OpenAPIService {
 
     // OpenAPI JSON spec endpoint
     app.get(config.jsonPath, (c) => {
-      // Get request-scoped services
       const requestContainer = c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER)
-      const i18n = requestContainer.resolve<II18nService>(I18N_TOKENS.I18nService)
-      const requestConfigService = requestContainer.resolve<IOpenAPIConfigService>(
-        OPENAPI_TOKENS.ConfigService
-      )
+      const fullSpec = this.getSpec(app, requestContainer)
 
-      // Get effective config (with any middleware overrides)
-      const effectiveConfig = requestConfigService.getEffectiveConfig()
+      // Add servers (HTTP-specific — needs request URL context)
       const url = new URL(c.req.raw.url)
-
-      // Generate full OpenAPI spec using Hono's built-in generator
-      const fullSpec = app.getOpenAPIDocument({
-        openapi: '3.0.0',
-        info: {
-          version: effectiveConfig.info.version,
-          title: effectiveConfig.info.title,
-          description: effectiveConfig.info.description
-        },
-        servers: [
-          {
-            url: `${url.protocol}//${url.host}`,
-            description: i18n.t('common.api.serverDescription')
-          }
-        ]
-      })
-
-      // Add security schemes
-      fullSpec.components ??= {}
-      fullSpec.components.securitySchemes = this.getSecuritySchemeDefinitions(i18n)
-
-      // Filter routes based on hideFromDocs and custom routeFilter
-      fullSpec.paths = this.filterRoutes(
-        fullSpec.paths as Record<string, PathItemObject>,
-        effectiveConfig
-      )
-
-      // Filter unreferenced schemas
-      if (fullSpec.components.schemas) {
-        fullSpec.components.schemas = this.filterSchemas(fullSpec as unknown as Record<string, unknown>) as typeof fullSpec.components.schemas
-      }
+      const i18n = requestContainer.resolve<II18nService>(I18N_TOKENS.I18nService)
+      fullSpec.servers = [{
+        url: `${url.protocol}//${url.host}`,
+        description: i18n.t('common.api.serverDescription'),
+      }]
 
       return c.json(fullSpec)
     })

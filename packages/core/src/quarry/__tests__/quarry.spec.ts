@@ -274,7 +274,7 @@ describe('QuarryRegistry', () => {
   it('should allow commands to call other commands via this.call()', async () => {
     registerAll()
     const result = await quarry.call('caller')
-    expect(result.output).toEqual(['Inner result: Hello, Inner!'])
+    expect(result.output).toEqual(['Hello, Inner!', 'Inner result: Hello, Inner!'])
   })
 
   // ── get, all, list ──────────────────────────────────────────────

@@ -1,40 +1,31 @@
 import type { SchemaDef } from '@zenstackhq/schema'
+import type { StratalDatabase } from './index'
 
 /**
- * Augment with per-connection schemas and default connection.
- *
- * @example
- * ```typescript
- * declare module '@stratal/framework/database' {
- *   interface StratalDatabase {
- *     schemas: {
- *       main: MainSchemaType
- *       tenant: TenantSchemaType
- *     }
- *     defaultConnection: 'main'
- *   }
- * }
- * ```
+ * Re-exported from the barrel (`./index`) where it's declared.
+ * This ensures `declare module '@stratal/framework/database'` augmentations
+ * merge into the same module, avoiding TypeScript's re-export forking
+ * limitation (microsoft/TypeScript#18877).
  */
-export interface StratalDatabase {}
+export type { StratalDatabase }
 
 /** Infer schema type for a specific connection */
 export type InferConnectionSchema<K extends string> =
   StratalDatabase extends { schemas: infer R }
-    ? K extends keyof R ? R[K] extends SchemaDef ? R[K] : SchemaDef : SchemaDef
-    : SchemaDef
+  ? K extends keyof R ? R[K] extends SchemaDef ? R[K] : SchemaDef : SchemaDef
+  : SchemaDef
 
 /** Union of ALL schemas across connections (for events) */
 export type InferAnySchema =
   StratalDatabase extends { schemas: infer R }
-    ? R[keyof R] extends SchemaDef ? R[keyof R] : SchemaDef
-    : SchemaDef
+  ? R[keyof R] extends SchemaDef ? R[keyof R] : SchemaDef
+  : SchemaDef
 
 /** Connection name — derived from schemas keys */
 export type ConnectionName =
   StratalDatabase extends { schemas: infer R }
-    ? keyof R extends never ? string : Extract<keyof R, string>
-    : string
+  ? keyof R extends never ? string : Extract<keyof R, string>
+  : string
 
 /** Default connection name */
 export type DefaultConnectionName =
