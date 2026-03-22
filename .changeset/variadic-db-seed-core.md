@@ -1,5 +1,5 @@
 ---
-"stratal": minor
+"stratal": patch
 ---
 
 Support multiple seeder names in `db:seed` command via variadic `{names*}` argument

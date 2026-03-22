@@ -1,5 +1,5 @@
 ---
-"@stratal/framework": minor
+"@stratal/framework": patch
 ---
 
 Export database CLI commands from `@stratal/framework/database`

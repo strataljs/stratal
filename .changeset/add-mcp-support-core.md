@@ -1,5 +1,5 @@
 ---
-"stratal": minor
+"stratal": patch
 ---
 
 Add MCP server support and API CLI commands

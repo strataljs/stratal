@@ -1,5 +1,5 @@
 ---
-"stratal": minor
+"stratal": patch
 ---
 
 Add `I18nModule.registerMessages()` for decentralized i18n message registration
