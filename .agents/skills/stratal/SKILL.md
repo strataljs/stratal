@@ -39,7 +39,7 @@ These are non-negotiable. Breaking any of these causes runtime failures.
 
 9. **Cron schedules must match `wrangler.jsonc`** — `CronJob.schedule` must exactly match a trigger in `[triggers]`.
 
-10. **I18nModule must be configured and I18nService must be used for translations** — Do not hardcode user-facing strings. Use `I18nService.t()` for messages and `withI18n()` for Zod validation messages.
+10. **I18nModule must be configured and I18nService must be used for translations** — Do not hardcode user-facing strings. `I18nModule.forRoot()` is config-only (locales, fallback). Use `I18nModule.registerMessages()` to add translation messages. Use `I18nService.t()` for messages and `withI18n()` for Zod validation messages.
 
 ## Entry Point
 

@@ -8,8 +8,8 @@ import { BenchController, BenchItemsController } from './bench.controller'
     I18nModule.forRoot({
       defaultLocale: 'en',
       locales: ['en', 'fr'],
-      messages: { fr: frenchMessages },
     }),
+    I18nModule.registerMessages({ fr: frenchMessages }),
   ],
   controllers: [BenchController, BenchItemsController],
 })

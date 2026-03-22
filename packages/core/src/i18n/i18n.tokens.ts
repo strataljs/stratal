@@ -9,5 +9,7 @@ export const I18N_TOKENS = {
   /** I18nService - request-scoped translation service */
   I18nService: Symbol.for('stratal:i18n:service'),
   /** I18nModuleOptions - configuration options from forRoot() */
-  Options: Symbol.for('stratal:i18n:options')
+  Options: Symbol.for('stratal:i18n:options'),
+  /** MessageRegistry - singleton accumulator for registerMessages() contributions */
+  MessageRegistry: Symbol.for('stratal:i18n:message:registry'),
 } as const

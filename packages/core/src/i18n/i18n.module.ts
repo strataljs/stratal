@@ -4,21 +4,28 @@
  * Core infrastructure module for internationalization.
  * Provides message translation and locale handling.
  *
- * @example Default usage (system messages only)
- * ```typescript
- * // In Application.ts - I18nModule is already included in core modules
- * // Works with system messages and 'en' default locale
- * ```
+ * - `forRoot()` configures locale settings (call once in root module)
+ * - `registerMessages()` adds translations (call from any module, as many times as needed)
  *
- * @example With app-specific configuration
+ * @example
  * ```typescript
- * // In apps/backend/src/app.module.ts
- * import { i18nConfig } from './i18n'
- *
  * @Module({
- *   imports: [I18nModule.forRoot(i18nConfig)],
+ *   imports: [
+ *     I18nModule.forRoot({ defaultLocale: 'en', locales: ['en', 'fr'] }),
+ *     I18nModule.registerMessages(appMessages),
+ *   ],
  * })
  * export class AppModule {}
+ * ```
+ *
+ * @example Package contributing messages
+ * ```typescript
+ * @Module({
+ *   imports: [
+ *     I18nModule.registerMessages(tenancyMessages),
+ *   ],
+ * })
+ * export class TenancyModule {}
  * ```
  */
 
@@ -33,53 +40,33 @@ import { I18nContextMiddleware } from './middleware/i18n-context.middleware'
 import { LocaleExtractionMiddleware } from './middleware/locale-extraction.middleware'
 import { I18nService } from './services/i18n.service'
 import { MessageLoaderService } from './services/message-loader.service'
+import { MessageRegistry } from './services/message-registry'
 import { setupI18nCompiler } from './setup'
 
 // Setup i18n JIT compiler once at module load time
-// This registers the message compiler globally for all I18nService instances
-// Must be called before any Application initialization
 setupI18nCompiler()
 
-// Set global Zod error map for i18n support using v4 config API
-// This registers the custom error map that translates validation errors
-// Must be set once at module load time, before any schema validation
+// Set global Zod error map for i18n support
 z.config({ customError: backendErrorMap })
-
 
 @Module({
   providers: [
-    // Singleton: Message loader (loaded once at startup, via Scope.Singleton)
+    // Singleton: Message registry (accumulates all registerMessages contributions)
+    { provide: I18N_TOKENS.MessageRegistry, useClass: MessageRegistry, scope: Scope.Singleton },
+    // Singleton: Message loader (loaded once at startup)
     { provide: I18N_TOKENS.MessageLoader, useClass: MessageLoaderService, scope: Scope.Singleton },
-    // Request-scoped: I18n service (per request via Scope.Request)
+    // Request-scoped: I18n service (per request)
     { provide: I18N_TOKENS.I18nService, useClass: I18nService },
   ],
 })
 export class I18nModule implements MiddlewareConfigurable {
   /**
-   * Configure I18n with app-specific options
+   * Configure I18n locale settings
    *
-   * Use this method in AppModule to provide custom locale configuration
-   * and app-specific messages that merge with system messages.
+   * Call once in the root module. Does not accept messages —
+   * use `registerMessages()` to add translations.
    *
-   * @param options - I18n configuration options
-   * @returns Dynamic module with options provider
-   *
-   * @example
-   * ```typescript
-   * // apps/backend/src/i18n/index.ts
-   * export const i18nConfig: I18nModuleOptions = {
-   *   defaultLocale: 'en',
-   *   fallbackLocale: 'en',
-   *   locales: ['en', 'fr'],
-   *   messages: appMessages
-   * }
-   *
-   * // apps/backend/src/app.module.ts
-   * @Module({
-   *   imports: [I18nModule.forRoot(i18nConfig)],
-   * })
-   * export class AppModule {}
-   * ```
+   * @param options - Locale configuration (defaultLocale, fallbackLocale, locales)
    */
   static forRoot(options: I18nModuleOptions = {}): DynamicModule {
     return {
@@ -91,8 +78,36 @@ export class I18nModule implements MiddlewareConfigurable {
   }
 
   /**
-   * Configure middleware for locale extraction and i18n context
+   * Register i18n messages
+   *
+   * Can be called from any module, as many times as needed.
+   * Messages are deep-merged in registration order — later calls override earlier ones at leaf level.
+   *
+   * @param messages - Messages keyed by locale code
+   *
+   * @example App-level messages
+   * ```typescript
+   * I18nModule.registerMessages({
+   *   en: { common: { hello: 'Hello' }, errors: { notFound: 'Not found' } },
+   *   fr: { common: { hello: 'Bonjour' }, errors: { notFound: 'Introuvable' } },
+   * })
+   * ```
+   *
+   * @example Package-level messages
+   * ```typescript
+   * I18nModule.registerMessages({
+   *   en: { tenancy: { tenantNotFound: 'Tenant not found' } },
+   * })
+   * ```
    */
+  static registerMessages(messages: Record<string, Record<string, unknown>>): DynamicModule {
+    MessageRegistry.addMessages(messages)
+    return {
+      module: I18nModule,
+      providers: [],
+    }
+  }
+
   configure(consumer: MiddlewareConsumer): void {
     consumer
       .apply(LocaleExtractionMiddleware, I18nContextMiddleware)

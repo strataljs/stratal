@@ -2,7 +2,7 @@
  * Message Loader Service
  *
  * Singleton service that loads and caches all locale messages at startup.
- * Merges core messages (from packages/modules) with app messages (from forRoot options).
+ * Merges core messages with registry messages (from registerMessages() calls).
  * Lazily builds and caches CoreContext per locale on first access.
  */
 
@@ -13,6 +13,8 @@ import { Transient } from '../../di/decorators'
 import type { I18nModuleOptions } from '../i18n.options'
 import { I18N_TOKENS } from '../i18n.tokens'
 import { getLocales, getMessages } from '../messages'
+import { deepMerge } from '../utils/deep-merge'
+import type { MessageRegistry } from './message-registry'
 
 @Transient(I18N_TOKENS.MessageLoader)
 export class MessageLoaderService {
@@ -22,6 +24,7 @@ export class MessageLoaderService {
   private readonly defaultLocale: string
 
   constructor(
+    @inject(I18N_TOKENS.MessageRegistry) private readonly registry: MessageRegistry,
     @inject(I18N_TOKENS.Options, { isOptional: true })
     private readonly options?: I18nModuleOptions
   ) {
@@ -29,25 +32,24 @@ export class MessageLoaderService {
     this.cache = new Map()
     this.contextCache = new Map()
 
-    // Get core messages (always available)
+    // Core messages (always available)
     const coreMessages = getMessages()
     const coreLocales = getLocales()
 
-    // Get app messages from options (if provided)
-    const appMessages = this.options?.messages ?? {}
+    // Registry messages (accumulated from all registerMessages() calls)
+    const registryMessages = this.registry.getMergedMessages()
+    const registryLocales = Object.keys(registryMessages)
 
-    // Determine available locales (union of core and app locales)
-    const appLocales = Object.keys(appMessages)
-    const allLocales = [...new Set([...coreLocales, ...appLocales])]
+    // Union of all locales
+    const allLocales = [...new Set([...coreLocales, ...registryLocales])]
     this.locales = allLocales
 
-    // Merge messages for each locale (CoreContext built lazily on first access)
+    // Merge messages for each locale: core defaults + registry contributions
     for (const locale of allLocales) {
       const coreLocaleMessages = coreMessages[locale] ?? {}
-      const appLocaleMessages = appMessages[locale] ?? {}
+      const registryLocaleMessages = registryMessages[locale] ?? {}
 
-      // Deep merge: core defaults + app overrides
-      const merged = this.deepMerge(coreLocaleMessages, appLocaleMessages)
+      const merged = deepMerge(coreLocaleMessages, registryLocaleMessages)
       this.cache.set(locale, merged)
     }
   }
@@ -55,22 +57,16 @@ export class MessageLoaderService {
   /**
    * Get CoreContext for a locale (lazily built and cached on first access)
    * Falls back to default locale if locale not found
-   *
-   * @param locale - Locale code
-   * @returns Cached CoreContext ready for translation
    */
   getCoreContext(locale: string): CoreContext {
     const cached = this.contextCache.get(locale)
     if (cached) return cached
 
-    // Resolve effective locale (fallback to default if unsupported)
     const effectiveLocale = this.cache.has(locale) ? locale : this.defaultLocale
 
-    // Check if effective locale already cached (handles fallback)
     const cachedEffective = this.contextCache.get(effectiveLocale)
     if (cachedEffective) return cachedEffective
 
-    // Build and cache on first access
     const messages = this.cache.get(effectiveLocale) ?? {}
     const flattened = this.flattenMessages(messages)
     const ctx = createCoreContext({
@@ -84,54 +80,31 @@ export class MessageLoaderService {
   }
 
   /**
-   * Get messages for a specific locale
-   * Falls back to default locale if locale not found
-   *
-   * @param locale - Locale code
-   * @returns Message object for the locale
+   * Get messages for a specific locale.
+   * Falls back to default locale if not found.
    */
   getMessages(locale: string): Record<string, unknown> {
-    const msgs = this.cache.get(locale)
-    if (!msgs) {
-      // Fallback to default locale
-      return this.cache.get(this.defaultLocale) ?? {}
-    }
-    return msgs
+    return this.cache.get(locale) ?? this.cache.get(this.defaultLocale) ?? {}
   }
 
-  /**
-   * Get list of available locale codes
-   *
-   * @returns Array of locale codes
-   */
+  /** Get list of available locale codes */
   getAvailableLocales(): string[] {
     return this.locales
   }
 
-  /**
-   * Check if a locale is supported
-   *
-   * @param locale - Locale code to check
-   * @returns true if locale is supported
-   */
+  /** Check if a locale is supported */
   isLocaleSupported(locale: string): boolean {
     return this.cache.has(locale)
   }
 
-  /**
-   * Get default locale
-   *
-   * @returns Default locale code
-   */
+  /** Get default locale */
   getDefaultLocale(): string {
     return this.defaultLocale
   }
 
   /**
-   * Flatten nested messages to dot-notation
-   *
-   * Converts { auth: { login: { title: 'Sign In' } } }
-   * to { 'auth.login.title': 'Sign In' }
+   * Flatten nested messages to dot-notation.
+   * e.g. `{ a: { b: 'hello' } }` → `{ 'a.b': 'hello' }`
    */
   private flattenMessages(
     messages: Record<string, unknown>,
@@ -153,39 +126,4 @@ export class MessageLoaderService {
     return result
   }
 
-  /**
-   * Deep merge two objects
-   * App messages override core messages at leaf level
-   */
-  private deepMerge(
-    target: Record<string, unknown>,
-    source: Record<string, unknown>
-  ): Record<string, unknown> {
-    const result: Record<string, unknown> = { ...target }
-
-    for (const key of Object.keys(source)) {
-      const targetValue = target[key]
-      const sourceValue = source[key]
-
-      if (
-        typeof targetValue === 'object' &&
-        targetValue !== null &&
-        !Array.isArray(targetValue) &&
-        typeof sourceValue === 'object' &&
-        sourceValue !== null &&
-        !Array.isArray(sourceValue)
-      ) {
-        // Both are objects, deep merge
-        result[key] = this.deepMerge(
-          targetValue as Record<string, unknown>,
-          sourceValue as Record<string, unknown>
-        )
-      } else {
-        // Source value overrides target
-        result[key] = sourceValue
-      }
-    }
-
-    return result
-  }
 }

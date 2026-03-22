@@ -2,7 +2,8 @@
  * I18n Module Options
  *
  * Configuration options for the I18n dynamic module.
- * Use with I18nModule.forRoot() to configure i18n for your application.
+ * Use with I18nModule.forRoot() to configure locale settings.
+ * Use I18nModule.registerMessages() to add translations.
  */
 
 /**
@@ -14,10 +15,11 @@
  *   defaultLocale: 'en',
  *   fallbackLocale: 'en',
  *   locales: ['en', 'fr'],
- *   messages: {
- *     en: { common: { hello: 'Hello' } },
- *     fr: { common: { hello: 'Bonjour' } }
- *   }
+ * })
+ *
+ * I18nModule.registerMessages({
+ *   en: { common: { hello: 'Hello' } },
+ *   fr: { common: { hello: 'Bonjour' } },
  * })
  * ```
  */
@@ -40,12 +42,6 @@ export interface I18nModuleOptions {
    * Request locales not in this list will fall back to defaultLocale
    */
   locales?: string[]
-
-  /**
-   * Application-specific messages to merge with system messages
-   * Keys are locale codes, values are message objects
-   */
-  messages?: Record<string, Record<string, unknown>>
 }
 
 /**
@@ -56,7 +52,6 @@ export interface ResolvedI18nOptions {
   defaultLocale: string
   fallbackLocale: string
   locales: string[]
-  messages: Record<string, Record<string, unknown>>
 }
 
 /**
@@ -67,6 +62,5 @@ export function resolveI18nOptions(options?: I18nModuleOptions): ResolvedI18nOpt
     defaultLocale: options?.defaultLocale ?? 'en',
     fallbackLocale: options?.fallbackLocale ?? 'en',
     locales: options?.locales ?? ['en'],
-    messages: options?.messages ?? {}
   }
 }

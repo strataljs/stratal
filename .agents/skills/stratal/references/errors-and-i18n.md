@@ -62,39 +62,46 @@ ERROR_CODES.VALIDATION.GENERIC         // 1000
 
 ### Setup
 
+`forRoot()` configures locale settings. `registerMessages()` adds translations (call from any module).
+
 ```typescript
 import { I18nModule } from 'stratal/i18n'
 
 @Module({
   imports: [
     I18nModule.forRoot({
-      defaultLocale: 'en',           // default: 'en'
-      fallbackLocale: 'en',          // default: 'en'
-      locales: ['en', 'fr'],   // default: ['en']
-      messages: {                    // merged with system messages
-        en: {
-          errors: {
-            notes: { not_found: 'Note {noteId} not found' },
-          },
-          validation: {
-            notes: {
-              title: {
-                required: 'Title is required',
-                max: 'Title must be at most {max} characters',
-              },
-            },
-          },
-        },
-        fr: {
-          errors: {
-            notes: { not_found: 'Note {noteId} introuvable' },
-          },
-        },
+      defaultLocale: 'en',
+      fallbackLocale: 'en',
+      locales: ['en', 'fr'],
+    }),
+    I18nModule.registerMessages({
+      en: {
+        errors: { notes: { not_found: 'Note {noteId} not found' } },
+        validation: { notes: { title: { required: 'Title is required' } } },
+      },
+      fr: {
+        errors: { notes: { not_found: 'Note {noteId} introuvable' } },
       },
     }),
   ],
 })
 export class AppModule {}
+```
+
+### Package-Level Messages
+
+Any module can call `registerMessages()`. Messages are deep-merged across all registrations — later calls override at leaf level.
+
+```typescript
+@Module({
+  imports: [
+    I18nModule.registerMessages({
+      en: { tenancy: { tenantNotFound: 'Tenant not found' } },
+      fr: { tenancy: { tenantNotFound: 'Locataire introuvable' } },
+    }),
+  ],
+})
+export class TenancyModule {}
 ```
 
 The module auto-registers `LocaleExtractionMiddleware` and `I18nContextMiddleware` on all routes. Locale is extracted from the `X-Locale` request header.
@@ -103,10 +110,9 @@ The module auto-registers `LocaleExtractionMiddleware` and `I18nContextMiddlewar
 
 ```typescript
 interface I18nModuleOptions {
-  defaultLocale?: string                              // default: 'en'
-  fallbackLocale?: string                             // default: 'en'
-  locales?: string[]                                  // default: ['en']
-  messages?: Record<string, Record<string, unknown>>  // merged with system messages
+  defaultLocale?: string    // default: 'en'
+  fallbackLocale?: string   // default: 'en'
+  locales?: string[]        // default: ['en']
 }
 ```
 

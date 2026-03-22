@@ -85,10 +85,15 @@ export class RouterContext<T extends RouterEnv = RouterEnv> {
   /**
    * Return JSON response
    *
-   * @param data - Data to serialize as JSON
-   * @param status - HTTP status code (default: 200)
+   * When data is null, automatically returns 204 No Content (configurable via status param).
+   *
+   * @param data - Data to serialize as JSON, or null for 204
+   * @param status - HTTP status code (default: 200, or 204 when data is null)
    */
-  json(data: object, status?: ContentfulStatusCode): Response {
+  json(data: object | null, status?: ContentfulStatusCode): Response {
+    if (data === null) {
+      return this.c.body(null, status ?? 204)
+    }
     return this.c.json(data, status)
   }
 

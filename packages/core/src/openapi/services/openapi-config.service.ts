@@ -39,18 +39,15 @@ export class OpenAPIConfigService implements IOpenAPIConfigService {
   ) { }
 
   /**
-   * Add configuration override for this request
-   * Overrides are merged in the order they are added
+   * Add configuration override for this request.
+   * Overrides are merged in the order they are added.
    */
   override(config: OpenAPIConfigOverride): void {
     this.overrides.push(config)
   }
 
-  /**
-   * Get effective configuration (base merged with all overrides)
-   */
+  /** Get effective configuration (base merged with all overrides) */
   getEffectiveConfig(): OpenAPIEffectiveConfig {
-    // Start with base options and defaults
     let effective: OpenAPIEffectiveConfig = {
       jsonPath: this.baseOptions?.jsonPath ?? '/api/openapi.json',
       ui: this.baseOptions?.ui,
@@ -62,7 +59,6 @@ export class OpenAPIConfigService implements IOpenAPIConfigService {
       securitySchemes: this.baseOptions?.securitySchemes
     }
 
-    // Merge each override in order
     for (const override of this.overrides) {
       effective = this.mergeConfig(effective, override)
     }
@@ -71,8 +67,8 @@ export class OpenAPIConfigService implements IOpenAPIConfigService {
   }
 
   /**
-   * Merge override into effective config
-   * Info is shallow-merged, routeFilter is replaced
+   * Merge override into effective config.
+   * Info is shallow-merged, routeFilter is replaced.
    */
   private mergeConfig(
     base: OpenAPIEffectiveConfig,
@@ -88,7 +84,6 @@ export class OpenAPIConfigService implements IOpenAPIConfigService {
           description: override.info.description ?? base.info.description
         })
       },
-      // Last routeFilter wins
       routeFilter: override.routeFilter ?? base.routeFilter
     }
   }
