@@ -106,20 +106,20 @@ describe('createDynamicCommands', () => {
 
   describe('command creation', () => {
     it('should create commands with correct paths', () => {
-      const { cli } = buildCli('db:seed {name?}', { description: 'Seed the database' })
-      const command = cli.process(['db:seed'])
+      const { cli } = buildCli('db:seed {names*}', { description: 'Seed the database' })
+      const command = cli.process(['db:seed', 'UsersSeeder'])
       expect(command).toBeInstanceOf(Command)
     })
 
     it('should create commands with aliases', () => {
-      const { cli } = buildCli('db:seed {name?}', { aliases: ['seed'] })
-      const command = cli.process(['seed'])
+      const { cli } = buildCli('db:seed {names*}', { aliases: ['seed'] })
+      const command = cli.process(['seed', 'UsersSeeder'])
       expect(command).toBeInstanceOf(Command)
     })
 
     it('should create subcommands with space-separated paths', () => {
-      const { cli } = buildCli('db seed {name?}')
-      const command = cli.process(['db', 'seed'])
+      const { cli } = buildCli('db seed {names*}')
+      const command = cli.process(['db', 'seed', 'UsersSeeder'])
       expect(command).toBeInstanceOf(Command)
     })
   })

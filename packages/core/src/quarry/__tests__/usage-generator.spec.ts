@@ -129,7 +129,7 @@ describe('generateListing', () => {
   })
 
   it('should show commands with descriptions below the signature', () => {
-    const sig1 = parseSignature('db:seed {name?} {--A|all} {--dry-run}')
+    const sig1 = parseSignature('db:seed {names*} {--A|all} {--dry-run}')
     const sig2 = parseSignature('db:seed:list')
 
     const signatures = new Map([
@@ -146,7 +146,7 @@ describe('generateListing', () => {
     const lines = listing.split('\n')
 
     // Signature on its own line, description on the next (4-space indent)
-    const seedLine = lines.findIndex((l) => l.includes('db:seed') && l.includes('[name]'))
+    const seedLine = lines.findIndex((l) => l.includes('db:seed') && l.includes('<names...>'))
     expect(seedLine).toBeGreaterThan(-1)
     expect(lines[seedLine + 1]).toMatch(/^\s{4}.*Run database seeders/)
 
@@ -169,7 +169,7 @@ describe('generateListing', () => {
   })
 
   it('should show aliases inline', () => {
-    const sig = parseSignature('db:seed {name?}')
+    const sig = parseSignature('db:seed {names*}')
     const signatures = new Map([['db:seed', sig]])
     const commands = [{ name: 'db:seed', description: 'Run seeders', aliases: ['seed'] }]
 
