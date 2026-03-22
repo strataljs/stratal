@@ -79,6 +79,7 @@ jobs:
     name: Canary Publish
     if: >
       github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
       (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'canary'))
     runs-on: ubuntu-latest
     concurrency:
