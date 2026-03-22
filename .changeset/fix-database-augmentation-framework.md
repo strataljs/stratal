@@ -2,4 +2,4 @@
 "@stratal/framework": patch
 ---
 
-Fix TypeScript module augmentation for database interfaces by declaring them directly in the barrel export
+Fix database event types to correctly resolve models and operation args across multiple schema connections using distributive conditional types

@@ -1,25 +1,3 @@
-/**
- * Augmentable database configuration interface.
- *
- * Declared here (in the barrel) so that `declare module '@stratal/framework/database'`
- * augmentations merge into this module directly, avoiding TypeScript's re-export
- * forking limitation (microsoft/TypeScript#18877).
- *
- * @example
- * ```typescript
- * declare module '@stratal/framework/database' {
- *   interface StratalDatabase {
- *     schemas: {
- *       main: MainSchemaType
- *       tenant: TenantSchemaType
- *     }
- *     defaultConnection: 'main'
- *   }
- * }
- * ```
- */
-export interface StratalDatabase {}
-
 export * from './database.module'
 export * from './database.service'
 export * from './database.tokens'
@@ -38,4 +16,3 @@ export { MigrateDeployCommand } from './commands/migrate-deploy.command'
 export { MigrateDevCommand } from './commands/migrate-dev.command'
 export { MigrateResetCommand } from './commands/migrate-reset.command'
 export { MigrateStatusCommand } from './commands/migrate-status.command'
-

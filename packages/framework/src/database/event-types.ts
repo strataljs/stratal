@@ -45,13 +45,17 @@ export type EventPhase = 'before' | 'after'
 export type DatabaseOperation = AllCrudOperations
 
 /**
- * Model names derived from the shared database schema.
- * Falls back to `never` if no schema is registered.
+ * Distributive helper — extracts model names from each schema member individually.
+ * Using a naked type parameter ensures TypeScript distributes over unions:
+ * `_ExtractModelNames<A | B>` = `_ExtractModelNames<A> | _ExtractModelNames<B>`
  */
-export type ModelName =
-  InferAnySchema extends { models: infer M }
-  ? Extract<keyof M, string>
-  : never
+type _ExtractModelNames<S> = S extends { models: infer M } ? Extract<keyof M, string> : never
+
+/**
+ * Model names derived from the shared database schema.
+ * Distributes over all schema types so models from every connection are included.
+ */
+export type ModelName = _ExtractModelNames<InferAnySchema>
 
 // ============================================================================
 // Event Names
@@ -94,28 +98,46 @@ type OperationArgsMap<
   never
 
 /**
+ * Distributive helper — resolves data/where args for a model against each schema individually.
+ */
+type _ExtractData<S, M extends string, O extends DatabaseOperation> =
+  S extends SchemaDef
+  ? M extends Extract<keyof S['models'], string>
+  ? OperationArgsMap<S, M, O> extends { data: infer D }
+  ? D
+  : OperationArgsMap<S, M, O> extends { where: infer W }
+  ? W
+  : OperationArgsMap<S, M, O>
+  : never
+  : never
+
+/**
  * Extract the data/where property from operation args.
+ * Distributes over all schemas to find the matching model.
  */
 export type GetData<M extends ModelName, O extends DatabaseOperation> =
-  M extends Extract<keyof InferAnySchema['models'], string>
-  ? OperationArgsMap<InferAnySchema, M, O> extends { data: infer D }
-  ? D
-  : OperationArgsMap<InferAnySchema, M, O> extends { where: infer W }
-  ? W
-  : OperationArgsMap<InferAnySchema, M, O>
-  : unknown
+  _ExtractData<InferAnySchema, M, O> extends never ? unknown : _ExtractData<InferAnySchema, M, O>
+
+/**
+ * Distributive helper — resolves result type for a model against each schema individually.
+ */
+type _ExtractResult<S, M extends string, O extends DatabaseOperation> =
+  S extends SchemaDef
+  ? M extends Extract<keyof S['models'], string>
+  ? O extends 'findMany' | 'createMany' | 'updateMany' | 'deleteMany'
+  ? ModelResult<S, M>[]
+  : O extends 'count'
+  ? number
+  : ModelResult<S, M>
+  : never
+  : never
 
 /**
  * Extract result type for a model operation.
+ * Distributes over all schemas to find the matching model.
  */
 export type GetResult<M extends ModelName, O extends DatabaseOperation> =
-  M extends Extract<keyof InferAnySchema['models'], string>
-  ? O extends 'findMany' | 'createMany' | 'updateMany' | 'deleteMany'
-  ? ModelResult<InferAnySchema, M>[]
-  : O extends 'count'
-  ? number
-  : ModelResult<InferAnySchema, M>
-  : unknown
+  _ExtractResult<InferAnySchema, M, O> extends never ? unknown : _ExtractResult<InferAnySchema, M, O>
 
 // ============================================================================
 // Parse Event String

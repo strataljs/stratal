@@ -25,5 +25,4 @@ export const baseConfig = {
   clean: true,
   sourcemap: true,
   fixedExtension: true,
-  unbundle: true,
 } satisfies Partial<UserConfig>
