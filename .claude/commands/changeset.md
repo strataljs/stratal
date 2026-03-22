@@ -10,7 +10,7 @@ Generate a changeset file for the changes on the current branch.
 6. Based on the diff, determine:
    - **Which packages are affected** — only include packages with meaningful code changes (not just lockfile or config tweaks).
    - **Bump type per package** — `patch` for fixes/refactors, `minor` for new features, `major` for breaking changes.
-   - **A concise summary** describing what changed and why.
+   - **A user-friendly summary** describing the change from a consumer's perspective (see Writing Style below).
 
 ## Package Names
 
@@ -43,11 +43,30 @@ Short summary of changes (imperative mood, one sentence)
 - `.changeset/add-queue-retry-core.md` (mentions only `stratal`)
 - `.changeset/add-queue-retry-testing.md` (mentions only `@stratal/testing`)
 
+## Writing Style
+
+Changeset summaries are published in CHANGELOGs and GitHub Releases. Write for **package consumers**, not contributors.
+
+- Describe **what changed for the user** — new capabilities, fixed behavior, breaking changes — not internal implementation details.
+- Do NOT mention internal file names, function names, variable names, refactoring details, or code structure changes.
+- Keep it concise: one sentence for the summary line, optional bullets only for non-trivial changes.
+- For breaking changes, focus on what the user needs to do differently and provide migration steps.
+
+**Good examples:**
+- "Add retry support for queue consumers with configurable backoff"
+- "Fix cache TTL being ignored when using the memory adapter"
+- "Support multiple database connections in `DatabaseModule.forRootAsync()`"
+
+**Bad examples:**
+- "Refactor `QueueConsumerHandler` to use `RetryPolicy` class and update `processMessage()` signature" (too internal)
+- "Update `cache.ts` to pass TTL option to `CacheAdapter.set()` method" (mentions file/function names)
+- "Add `connections` map to `DatabaseModuleOptions` type and update `createDatabaseProviders` factory" (implementation detail)
+
 ## Rules
 
 - Use imperative mood ("add", not "added").
 - Create a separate changeset file for each affected package — do not combine multiple packages into one file.
-- The summary line should be a single sentence, concise but informative.
+- The summary line should be a single sentence, user-friendly, and written for package consumers (see Writing Style above).
 - Only add detail sections for non-trivial changes — simple fixes need only the summary line.
 - If there are breaking changes, list them with migration steps under a `### Breaking Changes` heading.
 - All packages in the `fixed` group (`stratal`, `@stratal/*`) are versioned together — but only list packages that actually changed.
