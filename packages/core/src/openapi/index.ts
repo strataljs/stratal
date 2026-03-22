@@ -19,3 +19,5 @@ export type {
 
 // Services
 export { OpenAPIConfigService, OpenAPIService } from './services'
+export { OpenApiToolsService } from './services/openapi-tools.service'
+export type { Dispatcher, ToolDefinition, ToolExecutionResult, ToolFilter } from './services/openapi-tools.service'

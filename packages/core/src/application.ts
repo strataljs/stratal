@@ -16,8 +16,11 @@ import { ModuleRegistry } from './module/module-registry'
 import type { DynamicModule, ModuleClass } from './module/types'
 import { OpenAPIModule } from './openapi'
 import type { Command } from './quarry/command'
+import { ApiCommand } from './quarry/commands/api.command'
 import { EventListCommand } from './quarry/commands/event-list.command'
 import { HelpCommand } from './quarry/commands/help.command'
+import { McpServeCommand } from './quarry/commands/mcp-serve.command'
+import { McpToolsCommand } from './quarry/commands/mcp-tools.command'
 import { QueueListCommand } from './quarry/commands/queue-list.command'
 import { RouteListCommand } from './quarry/commands/route-list.command'
 import { ScheduleListCommand } from './quarry/commands/schedule-list.command'
@@ -262,6 +265,7 @@ export class Application {
       DbSeedCommand, DbSeedListCommand,
       RouteListCommand, EventListCommand,
       ScheduleListCommand, QueueListCommand,
+      McpServeCommand, McpToolsCommand, ApiCommand,
     ]
     for (const Cmd of builtinCommands) {
       injectable()(Cmd)

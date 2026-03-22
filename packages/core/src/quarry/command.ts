@@ -219,6 +219,12 @@ export abstract class Command {
     if (!internals.quarry) {
       throw new CommandError('Cannot call commands: Quarry reference not set')
     }
-    return internals.quarry.call(name, input)
+    const result = await internals.quarry.call(name, input)
+
+    // Forward child output/errors into parent (like Clipanion context switches)
+    internals.output.push(...result.output)
+    internals.errors.push(...result.errors)
+
+    return result
   }
 }
