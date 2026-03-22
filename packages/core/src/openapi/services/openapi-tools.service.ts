@@ -159,7 +159,9 @@ export class OpenApiToolsService {
         const op = operation as OperationObject
         const name = op.operationId ?? this.generateName(method, path)
         const description = this.buildDescription(op, method, path)
-        const { schema, pathParams } = this.buildInputSchema(op, method)
+        const pathItemParams = (pathItem as Record<string, unknown>).parameters as ParameterObject[] | undefined
+        const mergedParameters = this.mergeParameters(pathItemParams, op.parameters)
+        const { schema, pathParams } = this.buildInputSchema({ ...op, parameters: mergedParameters })
 
         tools.push({ name, description, inputSchema: schema, method: method.toUpperCase(), path, pathParams })
       }
@@ -184,7 +186,7 @@ export class OpenApiToolsService {
     return op.summary ?? op.description ?? `${method.toUpperCase()} ${path}`
   }
 
-  private buildInputSchema(op: OperationObject, method: string): { schema: JsonSchema; pathParams: string[] } {
+  private buildInputSchema(op: OperationObject): { schema: JsonSchema; pathParams: string[] } {
     const properties: Record<string, JsonSchema> = {}
     const required: string[] = []
     const pathParams: string[] = []
@@ -217,7 +219,7 @@ export class OpenApiToolsService {
       } else {
         properties.body = { type: 'object' }
       }
-      const needsBody = resolvedBody.required ?? ['post', 'put', 'patch'].includes(method.toLowerCase())
+      const needsBody = resolvedBody.required === true
       if (needsBody) {
         required.push('body')
       }
@@ -229,6 +231,18 @@ export class OpenApiToolsService {
     }
 
     return { schema, pathParams }
+  }
+
+  private mergeParameters(pathLevel?: ParameterObject[], opLevel?: ParameterObject[]): ParameterObject[] {
+    const resolvedPathLevel = pathLevel?.map((p) => this.resolveRef(p) as ParameterObject)
+    const resolvedOpLevel = opLevel?.map((p) => this.resolveRef(p) as ParameterObject)
+
+    if (!resolvedPathLevel?.length) return resolvedOpLevel ?? []
+    if (!resolvedOpLevel?.length) return resolvedPathLevel
+
+    const opKeys = new Set(resolvedOpLevel.map((p) => `${p.in}:${p.name}`))
+    const inherited = resolvedPathLevel.filter((p) => !opKeys.has(`${p.in}:${p.name}`))
+    return [...inherited, ...resolvedOpLevel]
   }
 
   private resolveRef(obj: unknown, seen = new Set<string>()): unknown {

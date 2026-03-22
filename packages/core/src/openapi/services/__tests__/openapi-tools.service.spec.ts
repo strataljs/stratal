@@ -130,6 +130,32 @@ describe('OpenApiToolsService', () => {
       expect(tool.inputSchema.required).toContain('body')
     })
 
+    it('should not mark body as required when requestBody.required is omitted', () => {
+      const spec = {
+        openapi: '3.0.0',
+        info: { title: 'Test', version: '1.0.0' },
+        paths: {
+          '/api/notes': {
+            post: {
+              operationId: 'createNote',
+              requestBody: {
+                content: {
+                  'application/json': {
+                    schema: { type: 'object', properties: { title: { type: 'string' } } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      } as unknown as OpenAPIObject
+
+      const service = new OpenApiToolsService(spec)
+      const tool = service.getTool('createNote')!
+      expect(tool.inputSchema.properties).toHaveProperty('body')
+      expect(tool.inputSchema.required ?? []).not.toContain('body')
+    })
+
     it('should create minimal schema for GET with no params', () => {
       const service = new OpenApiToolsService(minimalSpec)
       const tool = service.getTool('listNotes')!
@@ -156,6 +182,60 @@ describe('OpenApiToolsService', () => {
       const tools = service.getTools()
       expect(tools).toHaveLength(1)
       expect(tools[0].name).toBe('listNotes')
+      const props = tools[0].inputSchema.properties as Record<string, unknown>
+      expect(props).toHaveProperty('query_shared')
+    })
+  })
+
+  describe('path-level parameters', () => {
+    it('should inherit path-level parameters into operations', () => {
+      const spec = {
+        openapi: '3.0.0',
+        info: { title: 'Test', version: '1.0.0' },
+        paths: {
+          '/api/items/{id}': {
+            parameters: [
+              { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+            ],
+            get: {
+              operationId: 'getItem',
+              summary: 'Get an item',
+            },
+          },
+        },
+      } as unknown as OpenAPIObject
+
+      const service = new OpenApiToolsService(spec)
+      const tool = service.getTool('getItem')!
+      expect(tool.inputSchema.properties).toHaveProperty('path_id')
+      expect(tool.inputSchema.required).toContain('path_id')
+      expect(tool.pathParams).toEqual(['id'])
+    })
+
+    it('should let operation-level params override path-level params with same in+name', () => {
+      const spec = {
+        openapi: '3.0.0',
+        info: { title: 'Test', version: '1.0.0' },
+        paths: {
+          '/api/items': {
+            parameters: [
+              { name: 'limit', in: 'query', required: false, schema: { type: 'integer' }, description: 'Path-level limit' },
+            ],
+            get: {
+              operationId: 'listItems',
+              parameters: [
+                { name: 'limit', in: 'query', required: true, schema: { type: 'integer' }, description: 'Op-level limit' },
+              ],
+            },
+          },
+        },
+      } as unknown as OpenAPIObject
+
+      const service = new OpenApiToolsService(spec)
+      const tool = service.getTool('listItems')!
+      const props = tool.inputSchema.properties as Record<string, Record<string, unknown>>
+      expect(props.query_limit.description).toBe('Op-level limit')
+      expect(tool.inputSchema.required).toContain('query_limit')
     })
   })
 
