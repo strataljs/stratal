@@ -9778,6 +9778,7 @@ __metadata:
       optional: true
   bin:
     quarry: ./dist/bin/quarry.mjs
+    stratal: ./dist/bin/quarry.mjs
   languageName: unknown
   linkType: soft
 

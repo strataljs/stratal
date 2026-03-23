@@ -1,3 +1,4 @@
+import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { inject } from 'tsyringe'
 import { CONTAINER_TOKEN, type Container } from '../di'
 import { Transient } from '../di/decorators'
@@ -9,7 +10,7 @@ import type { II18nService, MessageKeys } from '../i18n/i18n.types'
 import { LOGGER_TOKENS, type LoggerService } from '../logger'
 import type { ApplicationError } from './application-error'
 import type { Environment, ErrorResponse } from './error-response'
-import type { ExceptionContext } from './exception-context'
+import type { ExceptionContext, HttpExceptionContext } from './exception-context'
 import type {
   ApplicationErrorConstructor,
   ContextCallback,
@@ -270,19 +271,17 @@ export abstract class ExceptionHandler {
    * @param context - The execution context where the error occurred
    * @returns A Response (JSON by default, customizable via renderable/respond)
    */
-  handle(error: unknown, context: ExceptionContext): Response | Promise<Response> {
+  async handle(error: unknown, context: ExceptionContext): Promise<Response> {
     const appError = this.normalizeError(error)
 
     // Report via waitUntil — non-blocking in all CF Workers contexts
     this.executionContext.waitUntil(this.performReport(appError, context))
 
     // Render into a Response
-    let response = this.performRender(appError, context)
+    const response = await this.performRender(appError, context)
 
     // Post-process
-    response = this.applyRespondCallbacks(response, appError, context)
-
-    return response
+    return this.applyRespondCallbacks(response, appError, context)
   }
 
   // ── Internals ─────────────────────────────────────────────────────
@@ -330,7 +329,7 @@ export abstract class ExceptionHandler {
   /**
    * Run the rendering pipeline for an error, producing a Response.
    */
-  private performRender(error: ApplicationError, context: ExceptionContext): Response {
+  private async performRender(error: ApplicationError, context: ExceptionContext): Promise<Response> {
     // 1. Self-render
     if (typeof error.render === 'function') {
       const result = error.render(context)
@@ -344,11 +343,11 @@ export abstract class ExceptionHandler {
     if (entry) {
       const result = entry.callback(error, context)
       if (result !== undefined) {
-        return this.toResponse(result, error)
+        return this.toResponse(await result, error)
       }
     }
 
-    // 3. Default rendering
+    // 3. Default rendering (content-negotiated)
     return this.defaultRender(error, context)
   }
 
@@ -444,24 +443,78 @@ export abstract class ExceptionHandler {
   }
 
   /**
-   * Default rendering — translate, serialize to ErrorResponse, return as JSON Response.
+   * Default rendering — content-negotiated.
+   *
+   * For HTTP requests that accept HTML in development: re-throws the error
+   * so the runtime's built-in error UI (e.g., Wrangler) can display it.
+   * For HTTP requests that accept HTML in production: renders a minimal branded HTML page.
+   * For everything else (API, queue, cron, CLI): returns JSON.
    */
   private defaultRender(error: ApplicationError, context: ExceptionContext): Response {
     const translatedMessage = this.translateError(error, context)
     const errorResponse = error.toErrorResponse(this.environment, translatedMessage)
     const status = resolveHttpStatus(error)
 
+    if (context.type === 'http' && this.wantsHtml(context)) {
+      if (this.environment === 'development') {
+        error.stack = error.stack?.replace(error.message, translatedMessage)
+        error.message = translatedMessage
+        throw error
+      }
+      return this.renderDefaultHtml(errorResponse, status)
+    }
+
     return Response.json(errorResponse, { status })
+  }
+
+  // ── Content Negotiation ──────────────────────────────────────────
+
+  /**
+   * Check if the HTTP request prefers an HTML response.
+   *
+   * Uses the `Accept` header to determine format. Inertia v3 XHR requests
+   * send `Accept: text/html, application/xhtml+xml`, so they naturally
+   * receive HTML error pages (displayed in Inertia's error modal in dev).
+   *
+   * Override in a subclass to customize content negotiation logic.
+   */
+  protected wantsHtml(context: HttpExceptionContext): boolean {
+    const accept = context.ctx.c.req.header('accept') ?? ''
+    return accept.includes('text/html')
+  }
+
+  /**
+   * Minimal production HTML error page with inline styles.
+   */
+  private renderDefaultHtml(
+    errorResponse: ErrorResponse,
+    status: ContentfulStatusCode,
+  ): Response {
+    const title = this.escapeHtml(errorResponse.message)
+    const html = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${status} - ${title}</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,-apple-system,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f8fafc;color:#334155}.container{text-align:center;padding:2rem}.status{font-size:6rem;font-weight:800;color:#13c397;line-height:1}.message{font-size:1.25rem;color:#64748b;margin-top:1rem}</style>
+</head><body><div class="container"><div class="status">${status}</div><div class="message">${title}</div></div></body></html>`
+    return new Response(html, {
+      status,
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+    })
+  }
+
+  private escapeHtml(str: string): string {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
   }
 
   /**
    * Convert a render result (Response or ErrorResponse) into a Response.
    */
   private toResponse(result: Response | ErrorResponse, error: ApplicationError): Response {
-    if (result instanceof Response) {
-      return result
-    }
-    // ErrorResponse object — serialize as JSON with appropriate status
+    if (result instanceof Response) return result
     const status = resolveHttpStatus(error)
     return Response.json(result, { status })
   }

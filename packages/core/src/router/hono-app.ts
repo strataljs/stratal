@@ -54,13 +54,9 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
     logger: LoggerService,
   ) {
     super({
-      defaultHook: (result, c) => {
+      defaultHook: (result) => {
         if (!result.success) {
-          const requestContainer = c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER)
-          const handler = requestContainer.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
-          const validationError = new SchemaValidationError(result.error)
-          const ctx = createHttpExceptionContext(c)
-          return handler.handle(validationError, ctx)
+          throw new SchemaValidationError(result.error)
         }
       },
     })
@@ -125,11 +121,7 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
       const routerContext = new RouterContext(c)
       const requestContainer = this._container.createRequestScope(routerContext)
       c.set(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER, requestContainer)
-      try {
-        await next()
-      } finally {
-        await requestContainer.dispose()
-      }
+      await next()
     })
   }
 

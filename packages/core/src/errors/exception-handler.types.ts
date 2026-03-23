@@ -28,7 +28,7 @@ export type ReportableCallback<T extends ApplicationError> =
  * @returns A Response, ErrorResponse, or undefined to fall through
  */
 export type RenderableCallback<T extends ApplicationError> =
-  (error: T, context: ExceptionContext) => Response | ErrorResponse | undefined
+  (error: T, context: ExceptionContext) => Response | ErrorResponse | Promise<Response> | undefined
 
 /**
  * Callback invoked to post-process every error Response before it is returned.

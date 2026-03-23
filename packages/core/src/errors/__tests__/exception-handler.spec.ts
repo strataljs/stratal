@@ -556,4 +556,124 @@ describe('ExceptionHandler', () => {
       createHandler(CustomHandler)
     })
   })
+
+  // ── Content Negotiation ────────────────────────────────────────
+
+  describe('content negotiation', () => {
+    function createMockHonoCtx(options: { accept?: string } = {}) {
+      return {
+        req: {
+          method: 'GET',
+          header: (name: string) => {
+            if (name === 'accept') return options.accept
+            return undefined
+          },
+        },
+      } as never
+    }
+
+    it('should return JSON for requests without Accept: text/html', async () => {
+      const handler = createHandler()
+      const httpCtx = createHttpExceptionContext(createMockHonoCtx({ accept: 'application/json' }))
+      const response = await handler.handle(new TestError(), httpCtx)
+
+      expect(response.headers.get('content-type')).toContain('application/json')
+      const body: Record<string, unknown> = await response.json()
+      expect(body.code).toBe(ERROR_CODES.VALIDATION.GENERIC)
+    })
+
+    it('should return HTML for Inertia XHR Accept header (text/html, application/xhtml+xml)', async () => {
+      const handler = createHandler()
+      const httpCtx = createHttpExceptionContext(createMockHonoCtx({
+        accept: 'text/html, application/xhtml+xml',
+      }))
+      const response = await handler.handle(new HttpException(500), httpCtx)
+
+      expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8')
+    })
+
+    it('should return HTML for requests with Accept: text/html (non-dev)', async () => {
+      const handler = createHandler()
+      const httpCtx = createHttpExceptionContext(createMockHonoCtx({ accept: 'text/html' }))
+      const response = await handler.handle(new HttpException(404, 'Page Not Found'), httpCtx)
+
+      expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8')
+      expect(response.status).toBe(404)
+      const html = await response.text()
+      expect(html).toContain('<!DOCTYPE html>')
+      expect(html).toContain('404')
+      expect(html).toContain('Page Not Found')
+    })
+
+    it('should return minimal branded HTML in production', async () => {
+      // createHandler uses ENVIRONMENT: 'test', which is non-development
+      const handler = createHandler()
+      const httpCtx = createHttpExceptionContext(createMockHonoCtx({ accept: 'text/html' }))
+      const response = await handler.handle(new HttpException(500), httpCtx)
+
+      const html = await response.text()
+      expect(html).toContain('#13c397') // brand color
+      expect(html).toContain('500')
+    })
+
+    it('should re-throw error in development environment for HTML requests', async () => {
+      // Override environment to development
+      const childContainer = tsyringeRootContainer.createChildContainer()
+      const container = new Container({ container: childContainer })
+      container.registerValue(LOGGER_TOKENS.LoggerService, mockLogger)
+      container.registerValue(DI_TOKENS.CloudflareEnv, { ENVIRONMENT: 'development' })
+      container.registerValue(DI_TOKENS.ExecutionContext, mockExecutionContext)
+      container.registerValue(I18N_TOKENS.I18nService, mockI18n)
+      injectable()(DefaultExceptionHandler as never)
+      container.register(DI_TOKENS.ExceptionHandler, DefaultExceptionHandler as never)
+      const handler = container.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
+      handler.register()
+
+      const error = new HttpException(500, 'Server Error')
+      const httpCtx = createHttpExceptionContext(createMockHonoCtx({ accept: 'text/html' }))
+      // In development, HTML errors are re-thrown with a translated message
+      // so the runtime (e.g., Wrangler) can display its own error UI
+      await expect(handler.handle(error, httpCtx)).rejects.toThrow('Server Error')
+    })
+
+    it('should return JSON for non-HTTP contexts regardless of error type', async () => {
+      const handler = createHandler()
+      const response = await handler.handle(new TestError(), cliCtx)
+
+      expect(response.headers.get('content-type')).toContain('application/json')
+    })
+
+    it('should return JSON when Accept header is missing', async () => {
+      const handler = createHandler()
+      const httpCtx = createHttpExceptionContext(createMockHonoCtx())
+      const response = await handler.handle(new TestError(), httpCtx)
+
+      expect(response.headers.get('content-type')).toContain('application/json')
+    })
+
+    it('should escape HTML in error messages for production HTML', async () => {
+      const handler = createHandler()
+      const httpCtx = createHttpExceptionContext(createMockHonoCtx({ accept: 'text/html' }))
+      const response = await handler.handle(new HttpException(400, '<script>alert("xss")</script>'), httpCtx)
+
+      const html = await response.text()
+      expect(html).not.toContain('<script>')
+      expect(html).toContain('&lt;script&gt;')
+    })
+
+    it('custom renderable should take priority over content negotiation', async () => {
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.renderable(TestError, () => new Response('custom', { status: 422 }))
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      const httpCtx = createHttpExceptionContext(createMockHonoCtx({ accept: 'text/html' }))
+      const response = await handler.handle(new TestError(), httpCtx)
+
+      expect(await response.text()).toBe('custom')
+      expect(response.status).toBe(422)
+    })
+  })
 })
