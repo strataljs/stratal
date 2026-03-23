@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { Command } from 'stratal/quarry'
+import { runTypeGeneration } from '../generator/type-generator'
 
 const ROOT_HTML = `<!DOCTYPE html>
 <html>
@@ -107,6 +108,15 @@ export class InertiaInstallCommand extends Command {
       }
     } else {
       this.info('No src/app.module.ts found — please manually configure InertiaModule')
+    }
+
+    // Generate initial type definitions
+    try {
+      const { outputPath, pageCount } = await runTypeGeneration(cwd)
+      const relPath = relative(cwd, outputPath)
+      this.success(`Generated ${relPath} (${pageCount} page${pageCount !== 1 ? 's' : ''})`)
+    } catch {
+      this.warn('Could not generate initial type definitions. Run `quarry inertia:types` manually.')
     }
 
     if (!skipDeps) {

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { Command } from 'stratal/quarry'
-import { type Plugin } from 'vite'
+import { createInertiaViteConfig } from '../vite/create-vite-config'
 
 export class InertiaBuildCommand extends Command {
   static command = 'inertia:build {--outDir=dist : Output directory}'
@@ -20,30 +20,15 @@ export class InertiaBuildCommand extends Command {
     this.info('Building Inertia.js frontend for production...')
 
     try {
-      const { build, mergeConfig } = await import('vite')
+      const { build } = await import('vite')
 
-      let userConfig = {}
-      const viteConfigPath = join(cwd, 'vite.config.ts')
-      if (existsSync(viteConfigPath)) {
-        const loaded = await import(/* @vite-ignore */ viteConfigPath) as Record<string, unknown>
-        userConfig = loaded.default ?? loaded
-        this.info('Loaded vite.config.ts')
-      }
+      const config = await createInertiaViteConfig({
+        cwd,
+        entryPath,
+        outDir,
+      })
 
-      const { cloudflare } = await import('@cloudflare/vite-plugin') as unknown as { cloudflare: () => Plugin }
-
-      const baseConfig = {
-        plugins: [cloudflare()],
-        build: {
-          outDir,
-          rolldownOptions: {
-            input: entryPath,
-          },
-        },
-      }
-
-      const finalConfig = mergeConfig(baseConfig, userConfig)
-      await build(finalConfig)
+      await build(config)
 
       this.success(`Build complete! Output in ${outDir}/`)
     } catch (err) {

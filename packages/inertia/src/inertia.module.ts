@@ -5,6 +5,7 @@ import { augmentRouterContext } from './augment/router-context'
 import { InertiaBuildCommand } from './commands/inertia-build.command'
 import { InertiaDevCommand } from './commands/inertia-dev.command'
 import { InertiaInstallCommand } from './commands/inertia-install.command'
+import { InertiaTypesCommand } from './commands/inertia-types.command'
 import type { InertiaModuleOptions } from './inertia.options'
 import { INERTIA_TOKENS } from './inertia.tokens'
 import { InertiaMiddleware } from './middleware/inertia.middleware'
@@ -20,6 +21,7 @@ import { TemplateService } from './services/template.service'
     { provide: INERTIA_TOKENS.ManifestService, useClass: ManifestService },
     { provide: INERTIA_TOKENS.SsrRenderer, useClass: SsrRendererService },
     InertiaInstallCommand,
+    InertiaTypesCommand,
     InertiaDevCommand,
     InertiaBuildCommand,
   ],

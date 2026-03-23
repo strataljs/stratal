@@ -1,10 +1,25 @@
 import { RouterContext } from 'stratal/router'
 import type { InertiaService } from '../services/inertia.service'
-import type { InertiaDeferredProp, InertiaMergeProp, InertiaOptionalProp, InertiaRenderOptions } from '../types'
+import type {
+  InertiaDeferredProp,
+  InertiaMergeProp,
+  InertiaOptionalProp,
+  InertiaPageComponent,
+  InertiaPageRegistry,
+  InertiaRenderOptions,
+  ResolvedInertiaPageProps,
+} from '../types'
 
 declare module 'stratal/router' {
   interface RouterContext {
-    inertia(component: string, props?: Record<string, unknown>, options?: InertiaRenderOptions): Promise<Response>
+    inertia<C extends InertiaPageComponent>(
+      component: C,
+      ...args: keyof InertiaPageRegistry extends never
+        ? [props?: Record<string, unknown>, options?: InertiaRenderOptions]
+        : Record<string, never> extends ResolvedInertiaPageProps<C>
+          ? [props?: ResolvedInertiaPageProps<C>, options?: InertiaRenderOptions]
+          : [props: ResolvedInertiaPageProps<C>, options?: InertiaRenderOptions]
+    ): Promise<Response>
     defer(callback: () => unknown, group?: string): InertiaDeferredProp
     optional(callback: () => unknown): InertiaOptionalProp
     merge(callback: () => unknown): InertiaMergeProp
@@ -14,7 +29,8 @@ declare module 'stratal/router' {
 export function augmentRouterContext(resolveService: (ctx: RouterContext) => InertiaService): void {
   const proto = RouterContext.prototype
 
-  proto.inertia = function (this: RouterContext, component: string, props?: Record<string, unknown>, options?: InertiaRenderOptions) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  proto.inertia = function (this: RouterContext, component: string, props?: any, options?: InertiaRenderOptions) {
     const service = resolveService(this)
     return service.render(this, component, props, options)
   }

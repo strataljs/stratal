@@ -1,5 +1,19 @@
 import type { RouterContext } from 'stratal/router'
 
+ 
+export interface InertiaPageRegistry {}
+
+ 
+export interface InertiaSharedProps {}
+
+export type InertiaPageComponent = keyof InertiaPageRegistry extends never
+  ? string
+  : Extract<keyof InertiaPageRegistry, string>
+
+export type ResolvedInertiaPageProps<C extends InertiaPageComponent> =
+  (C extends keyof InertiaPageRegistry ? InertiaPageRegistry[C] : Record<string, unknown>)
+  & (keyof InertiaSharedProps extends never ? {} : InertiaSharedProps)
+
 export interface InertiaPage {
   component: string
   props: Record<string, unknown>

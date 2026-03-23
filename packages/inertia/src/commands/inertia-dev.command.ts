@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { Command } from 'stratal/quarry'
-import { type Plugin } from 'vite'
+import { createInertiaViteConfig } from '../vite/create-vite-config'
 
 export class InertiaDevCommand extends Command {
   static command = 'inertia:dev {--port=5173 : Dev server port} {--host : Expose to network}'
@@ -21,47 +21,15 @@ export class InertiaDevCommand extends Command {
     this.info('Starting Vite dev server...')
 
     try {
-      const { createServer, mergeConfig } = await import('vite')
+      const { createServer } = await import('vite')
 
-      // Load user's vite.config if it exists
-      let userConfig = {}
-      const viteConfigPath = join(cwd, 'vite.config.ts')
-      if (existsSync(viteConfigPath)) {
-        const loaded = await import(/* @vite-ignore */ viteConfigPath) as Record<string, unknown>
-        userConfig = loaded.default ?? loaded
-        this.info('Loaded vite.config.ts')
-      }
+      const config = await createInertiaViteConfig({
+        cwd,
+        entryPath,
+        server: { port, host },
+      })
 
-      const { cloudflare } = await import('@cloudflare/vite-plugin') as unknown as { cloudflare: () => Plugin }
-
-      const wranglerExclude = ['@cloudflare/vite-plugin', 'wrangler', 'blake3-wasm']
-
-      const baseConfig = {
-        plugins: [
-          cloudflare(),
-          {
-            name: 'stratal:wrangler-optimize-fix',
-            configEnvironment(_name: string, env: Record<string, unknown>) {
-              const optimizeDeps = (env.optimizeDeps ?? {}) as Record<string, unknown>
-              const existing = (optimizeDeps.exclude ?? []) as string[]
-              optimizeDeps.exclude = [...existing, ...wranglerExclude]
-              env.optimizeDeps = optimizeDeps
-            },
-          },
-        ],
-        build: {
-          rolldownOptions: {
-            input: entryPath,
-          },
-        },
-        server: {
-          port,
-          host: host || undefined,
-        },
-      }
-
-      const finalConfig = mergeConfig(baseConfig, userConfig)
-      const server = await createServer(finalConfig)
+      const server = await createServer(config)
       await server.listen()
       server.printUrls()
     } catch (err) {

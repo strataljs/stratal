@@ -6,6 +6,7 @@ export default defineConfig({
   ...baseConfig,
   entry: [
     'src/index.ts',
+    'src/vite.ts',
   ],
   tsconfig: './tsconfig.build.json',
   exports: {

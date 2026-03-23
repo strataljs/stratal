@@ -13,9 +13,13 @@ export type {
   InertiaMergeProp,
   InertiaOptionalProp,
   InertiaPage,
+  InertiaPageComponent,
+  InertiaPageRegistry,
   InertiaRenderOptions,
+  InertiaSharedProps,
   InertiaSsrBundle,
   InertiaSsrResult,
+  ResolvedInertiaPageProps,
   SharedDataResolver,
   ViteManifest,
   ViteManifestEntry
@@ -34,6 +38,10 @@ export { InertiaMiddleware } from './middleware/inertia.middleware'
 export { InertiaBuildCommand } from './commands/inertia-build.command'
 export { InertiaDevCommand } from './commands/inertia-dev.command'
 export { InertiaInstallCommand } from './commands/inertia-install.command'
+export { InertiaTypesCommand } from './commands/inertia-types.command'
+
+// Generator
+export { runTypeGeneration } from './generator/type-generator'
 
 // Augmentation (side-effect imports: augments RouterContext and RouterVariables types)
 import './augment/router-context'
