@@ -269,13 +269,13 @@ export class RouteRegistrationService {
 
     // Fast path: no versioning — inline dispatch, no array allocation, no loop
     if (!this.versioningOptions) {
-      this.dispatchRoutes(app, ControllerClass, route, decoratedMethods, httpDecoratedMethods, controllerOpts, prototype)
+      this.dispatchRoutes(app, ControllerClass, route, decoratedMethods, httpDecoratedMethods, controllerOpts)
       return
     }
 
     // Versioning path: resolve versioned paths and register each
     for (const versionedRoute of this.resolveVersionedPaths(route, controllerOpts)) {
-      this.dispatchRoutes(app, ControllerClass, versionedRoute, decoratedMethods, httpDecoratedMethods, controllerOpts, prototype)
+      this.dispatchRoutes(app, ControllerClass, versionedRoute, decoratedMethods, httpDecoratedMethods, controllerOpts)
     }
   }
 
@@ -289,14 +289,16 @@ export class RouteRegistrationService {
     decoratedMethods: string[],
     httpDecoratedMethods: string[],
     controllerOpts: ControllerOptions | undefined,
-    prototype: IController
   ): void {
     if (httpDecoratedMethods.length > 0) {
       this.registerHttpRoutes(app, ControllerClass, path, httpDecoratedMethods, controllerOpts)
     } else if (decoratedMethods.length > 0) {
       this.registerOpenAPIRoutes(app, ControllerClass, path, decoratedMethods, controllerOpts)
     } else {
-      this.registerRESTfulRoutes(app, ControllerClass, path, prototype)
+      throw new ControllerRegistrationError(
+        ControllerClass.name,
+        'No route decorators found. Use @Route() or HTTP method decorators (@Get, @Post, etc.) on controller methods.'
+      )
     }
   }
 
@@ -637,35 +639,6 @@ export class RouteRegistrationService {
     }
   }
 
-
-  /**
-   * Register traditional RESTful routes without OpenAPI
-   */
-  private registerRESTfulRoutes(
-    app: OpenAPIHono<RouterEnv>,
-    ControllerClass: Constructor<IController>,
-    route: string,
-    prototype: IController
-  ): void {
-    if (prototype.index) {
-      app.get(route, this.createControllerHandler(ControllerClass, 'index'))
-    }
-    if (prototype.show) {
-      app.get(`${route}/:id`, this.createControllerHandler(ControllerClass, 'show'))
-    }
-    if (prototype.create) {
-      app.post(route, this.createControllerHandler(ControllerClass, 'create'))
-    }
-    if (prototype.update) {
-      app.put(`${route}/:id`, this.createControllerHandler(ControllerClass, 'update'))
-    }
-    if (prototype.patch) {
-      app.patch(`${route}/:id`, this.createControllerHandler(ControllerClass, 'patch'))
-    }
-    if (prototype.destroy) {
-      app.delete(`${route}/:id`, this.createControllerHandler(ControllerClass, 'destroy'))
-    }
-  }
 
   /**
    * Auto-derive HTTP method and path from controller method name

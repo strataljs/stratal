@@ -1,7 +1,8 @@
-import { INERTIA_TOKENS } from '@stratal/inertia'
 import type { InertiaService } from '@stratal/inertia'
-import { inject } from 'tsyringe'
+import { INERTIA_TOKENS, InertiaRoute } from '@stratal/inertia'
 import { Controller, type IController, type RouterContext } from 'stratal/router'
+import { z } from 'stratal/validation'
+import { inject } from 'tsyringe'
 import { NotesService } from './notes.service'
 
 @Controller('/notes')
@@ -9,9 +10,10 @@ export class NotesController implements IController {
   constructor(
     @inject(NotesService) private readonly notes: NotesService,
     @inject(INERTIA_TOKENS.InertiaService) private readonly inertia: InertiaService,
-  ) {}
+  ) { }
 
   // Demonstrates: merge props (paginated list), optional props (stats)
+  @InertiaRoute({ query: z.object({ page: z.string().optional() }) })
   async index(ctx: RouterContext) {
     const page = Number(ctx.query('page') ?? '1')
 
@@ -23,6 +25,7 @@ export class NotesController implements IController {
   }
 
   // Demonstrates: deferred props (comments), render options (encryptHistory), per-request share
+  @InertiaRoute({ params: z.object({ id: z.string() }) })
   async show(ctx: RouterContext) {
     const id = ctx.param('id')
     const note = await this.notes.findById(id)
@@ -40,6 +43,7 @@ export class NotesController implements IController {
   }
 
   // Demonstrates: form POST handling
+  @InertiaRoute({ body: z.object({ title: z.string(), content: z.string() }) })
   async create(ctx: RouterContext) {
     const { title, content } = await ctx.body<{ title: string; content: string }>()
     const note = await this.notes.create({ title, content })
@@ -47,6 +51,10 @@ export class NotesController implements IController {
   }
 
   // Demonstrates: form PUT handling
+  @InertiaRoute({
+    params: z.object({ id: z.string() }),
+    body: z.object({ title: z.string().optional(), content: z.string().optional() }),
+  })
   async update(ctx: RouterContext) {
     const id = ctx.param('id')
     const { title, content } = await ctx.body<{ title?: string; content?: string }>()
@@ -60,6 +68,7 @@ export class NotesController implements IController {
   }
 
   // Demonstrates: form DELETE handling
+  @InertiaRoute({ params: z.object({ id: z.string() }) })
   async destroy(ctx: RouterContext) {
     const id = ctx.param('id')
     await this.notes.delete(id)

@@ -67,7 +67,7 @@ export class InertiaService {
     const allProps = { ...resolvedShared, ...this.sharedData, ...props }
 
     // Process props: handle optional, deferred, merge
-    const { resolvedProps, mergeProps, deferredProps } = this.processProps(
+    const { resolvedProps, mergeProps, deferredProps } = await this.processProps(
       allProps,
       ctx,
       component,
@@ -125,16 +125,16 @@ export class InertiaService {
     return shared
   }
 
-  private processProps(
+  private async processProps(
     allProps: Record<string, unknown>,
     ctx: RouterContext,
     component: string,
     isInertia: boolean,
-  ): {
+  ): Promise<{
     resolvedProps: Record<string, unknown>
     mergeProps: string[]
     deferredProps: Record<string, string[]>
-  } {
+  }> {
     const resolvedProps: Record<string, unknown> = {}
     const mergeProps: string[] = []
     const deferredProps: Record<string, string[]> = {}
@@ -153,7 +153,7 @@ export class InertiaService {
 
         // Only resolve if explicitly requested in partial reload
         if (isPartialReload && requestedProps.includes(key)) {
-          resolvedProps[key] = value.callback()
+          resolvedProps[key] = await value.callback()
         }
         continue
       }
@@ -161,7 +161,7 @@ export class InertiaService {
       // Handle merge props
       if (this.isMergeProp(value)) {
         mergeProps.push(key)
-        resolvedProps[key] = value.callback()
+        resolvedProps[key] = await value.callback()
         continue
       }
 
@@ -169,7 +169,7 @@ export class InertiaService {
       if (this.isOptionalProp(value)) {
         // Only include on partial reloads when explicitly requested
         if (isPartialReload && requestedProps.includes(key)) {
-          resolvedProps[key] = value.callback()
+          resolvedProps[key] = await value.callback()
         }
         continue
       }

@@ -32,6 +32,10 @@ export { ManifestService } from './services/manifest.service'
 export { SsrRendererService } from './services/ssr-renderer.service'
 export { TemplateService } from './services/template.service'
 
+// Decorators
+export { InertiaRoute } from './decorators/inertia-route.decorator'
+export type { InertiaRouteConfig } from './decorators/inertia-route.decorator'
+
 // Middleware
 export { InertiaMiddleware } from './middleware/inertia.middleware'
 

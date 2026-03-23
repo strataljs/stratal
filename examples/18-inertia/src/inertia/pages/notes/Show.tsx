@@ -1,7 +1,7 @@
-import { Deferred, Link, router } from '@inertiajs/react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Deferred, Link, router } from '@inertiajs/react'
 import Layout from '../Layout'
 
 interface Note {
@@ -41,7 +41,7 @@ export default function Show({ note, comments }: { note: Note; comments?: Commen
             <Button variant="destructive" size="sm" onClick={deleteNote}>
               Delete
             </Button>
-            <Button variant="ghost" size="sm" render={<Link href="/notes/export" />}>
+            <Button nativeButton={false} variant="ghost" size="sm" render={<Link href="/notes/export" />}>
               Export
             </Button>
           </div>
@@ -77,7 +77,7 @@ export default function Show({ note, comments }: { note: Note; comments?: Commen
           </Deferred>
         </div>
 
-        <Button variant="ghost" size="sm" render={<Link href="/notes" />}>
+        <Button nativeButton={false} variant="ghost" size="sm" render={<Link href="/notes" />}>
           &larr; Back to Notes
         </Button>
       </div>

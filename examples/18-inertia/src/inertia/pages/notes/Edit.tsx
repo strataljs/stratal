@@ -1,9 +1,9 @@
-import { Link, useForm } from '@inertiajs/react'
-import type { FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Link, useForm } from '@inertiajs/react'
+import type { FormEvent } from 'react'
 import Layout from '../Layout'
 
 interface Note {
@@ -62,7 +62,7 @@ export default function Edit({ note }: { note: Note }) {
                 <Button type="submit" disabled={form.processing}>
                   {form.processing ? 'Saving...' : 'Save Changes'}
                 </Button>
-                <Button variant="ghost" render={<Link href={`/notes/${note.id}`} />}>
+                <Button nativeButton={false} variant="ghost" render={<Link href={`/notes/${note.id}`} />}>
                   Cancel
                 </Button>
               </div>

@@ -1,8 +1,8 @@
-import { Link, router } from '@inertiajs/react'
-import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Link, router } from '@inertiajs/react'
+import { useState } from 'react'
 import Layout from '../Layout'
 
 interface Note {
@@ -48,7 +48,7 @@ export default function Index({ notes, stats, page }: { notes: Note[]; stats?: S
             <Button variant="outline" size="sm" onClick={toggleStats}>
               {showStats ? 'Hide Stats' : 'Show Stats'}
             </Button>
-            <Button render={<Link href="/notes/create" />}>
+            <Button nativeButton={false} render={<Link href="/notes/create" />}>
               Create Note
             </Button>
           </div>
