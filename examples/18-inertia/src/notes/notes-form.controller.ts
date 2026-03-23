@@ -1,5 +1,6 @@
-import { inject } from 'tsyringe'
 import { Controller, Get, type RouterContext } from 'stratal/router'
+import { z } from 'stratal/validation'
+import { inject } from 'tsyringe'
 import { NotesService } from './notes.service'
 
 // Separate controller for form page routes (GET /notes/create, GET /notes/:id/edit)
@@ -8,14 +9,14 @@ import { NotesService } from './notes.service'
 export class NotesFormController {
   constructor(
     @inject(NotesService) private readonly notes: NotesService,
-  ) {}
+  ) { }
 
   @Get('/create')
   async create(ctx: RouterContext) {
     return ctx.inertia('notes/Create')
   }
 
-  @Get('/:id/edit')
+  @Get('/:id/edit', { params: z.object({ id: z.string() }), response: z.any() })
   async edit(ctx: RouterContext) {
     const id = ctx.param('id')
     const note = await this.notes.findById(id)

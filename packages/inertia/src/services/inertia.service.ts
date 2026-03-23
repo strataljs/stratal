@@ -159,6 +159,9 @@ export class InertiaService {
 
       // Handle merge props
       if (this.isMergeProp(value)) {
+        if (isPartialReload && !requestedProps.includes(key)) {
+          continue
+        }
         mergeProps.push(key)
         resolvedProps[key] = await value.callback()
         continue

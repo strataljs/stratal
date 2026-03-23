@@ -35,7 +35,7 @@ export default function Show({ note, comments }: { note: Note; comments?: Commen
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" render={<Link href={`/notes/${note.id}/edit`} />}>
+            <Button nativeButton={false} variant="outline" size="sm" render={<Link href={`/notes/${note.id}/edit`} />}>
               Edit
             </Button>
             <Button variant="destructive" size="sm" onClick={deleteNote}>

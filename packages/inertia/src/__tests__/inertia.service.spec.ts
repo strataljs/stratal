@@ -205,5 +205,43 @@ describe('InertiaService', () => {
       expect(body.mergeProps).toEqual(['items'])
       expect(body.props).toEqual({ items: [1, 2, 3] })
     })
+
+    it('should exclude merge props from partial reloads when not requested', async () => {
+      const ctx = createMockContext({
+        isInertia: true,
+        headers: {
+          'x-inertia-partial-component': 'Home',
+          'x-inertia-partial-data': 'stats',
+        },
+      })
+
+      const response = await service.render(ctx, 'Home', {
+        items: service.merge(() => [1, 2, 3]),
+        stats: service.optional(() => ({ total: 5 })),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.props).toEqual({ stats: { total: 5 } })
+      expect(body.mergeProps).toEqual([])
+    })
+
+    it('should include merge props on partial reload when explicitly requested', async () => {
+      const ctx = createMockContext({
+        isInertia: true,
+        headers: {
+          'x-inertia-partial-component': 'Home',
+          'x-inertia-partial-data': 'items',
+        },
+      })
+
+      const response = await service.render(ctx, 'Home', {
+        items: service.merge(() => [4, 5, 6]),
+        name: 'John',
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.props).toEqual({ items: [4, 5, 6] })
+      expect(body.mergeProps).toEqual(['items'])
+    })
   })
 })
