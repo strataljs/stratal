@@ -17,8 +17,8 @@ declare module 'stratal/router' {
       ...args: keyof InertiaPageRegistry extends never
         ? [props?: Record<string, unknown>, options?: InertiaRenderOptions]
         : Record<string, never> extends ResolvedInertiaPageProps<C>
-          ? [props?: ResolvedInertiaPageProps<C>, options?: InertiaRenderOptions]
-          : [props: ResolvedInertiaPageProps<C>, options?: InertiaRenderOptions]
+        ? [props?: ResolvedInertiaPageProps<C>, options?: InertiaRenderOptions]
+        : [props: ResolvedInertiaPageProps<C>, options?: InertiaRenderOptions]
     ): Promise<Response>
     defer(callback: () => unknown, group?: string): InertiaDeferredProp
     optional(callback: () => unknown): InertiaOptionalProp
@@ -32,7 +32,7 @@ export function augmentRouterContext(resolveService: (ctx: RouterContext) => Ine
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   proto.inertia = function (this: RouterContext, component: string, props?: any, options?: InertiaRenderOptions) {
     const service = resolveService(this)
-    return service.render(this, component, props, options)
+    return service.render(this, component, props as Record<string, unknown>, options)
   }
 
   proto.defer = function (this: RouterContext, callback: () => unknown, group?: string) {

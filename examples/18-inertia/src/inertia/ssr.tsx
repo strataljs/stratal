@@ -1,3 +1,5 @@
+import './styles/global.css'
+
 import type { Page } from '@inertiajs/core'
 import { createInertiaApp } from '@inertiajs/react'
 import { renderToString } from 'react-dom/server'

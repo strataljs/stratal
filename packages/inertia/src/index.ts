@@ -19,6 +19,7 @@ export type {
   InertiaSharedProps,
   InertiaSsrBundle,
   InertiaSsrResult,
+  InertiaFullPageProps,
   ResolvedInertiaPageProps,
   SharedDataResolver,
   ViteManifest,

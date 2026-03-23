@@ -10,8 +10,19 @@ export type InertiaPageComponent = keyof InertiaPageRegistry extends never
   ? string
   : Extract<keyof InertiaPageRegistry, string>
 
+// Allows each prop value to be wrapped with defer/merge/optional
+type AllowInertiaWrappers<T> = {
+  [K in keyof T]: T[K] | InertiaDeferredProp | InertiaMergeProp | InertiaOptionalProp
+}
+
+// Props the controller passes to ctx.inertia() — page-specific only, shared props are auto-injected
+// Each prop can be the raw value OR a deferred/merge/optional wrapper
 export type ResolvedInertiaPageProps<C extends InertiaPageComponent> =
-  (C extends keyof InertiaPageRegistry ? InertiaPageRegistry[C] : Record<string, unknown>)
+  C extends keyof InertiaPageRegistry ? AllowInertiaWrappers<InertiaPageRegistry[C]> : Record<string, unknown>
+
+// Full props the React page component receives — page-specific + shared (auto-injected)
+export type InertiaFullPageProps<C extends InertiaPageComponent> =
+  ResolvedInertiaPageProps<C>
   & (keyof InertiaSharedProps extends never ? {} : InertiaSharedProps)
 
 export interface InertiaPage {
