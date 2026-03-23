@@ -1,5 +1,5 @@
 import { ROUTE_METADATA_KEYS } from '../constants'
-import type { RouteConfig } from '../types'
+import type { ConventionRouteMetadata, RouteConfig, RouteMetadata } from '../types'
 
 /**
  * Decorator to add OpenAPI metadata to a controller method using convention-based routing.
@@ -79,42 +79,46 @@ export function Route(config: Omit<RouteConfig, 'statusCode'>) {
     propertyKey: string,
     descriptor: PropertyDescriptor
   ) {
-    // Store route config metadata on the method
+    const metadata: ConventionRouteMetadata = {
+      type: 'convention',
+      config,
+    }
+
     Reflect.defineMetadata(
       ROUTE_METADATA_KEYS.ROUTE_CONFIG,
-      config,
+      metadata,
       target,
       propertyKey
     )
+
+    // Track this method as decorated on the prototype
+    const existing: string[] =
+      (Reflect.getOwnMetadata(ROUTE_METADATA_KEYS.DECORATED_METHODS, target) as string[] | undefined) ?? []
+    existing.push(propertyKey)
+    Reflect.defineMetadata(ROUTE_METADATA_KEYS.DECORATED_METHODS, existing, target)
 
     return descriptor
   }
 }
 
 /**
- * Get the route configuration from a controller method
+ * Get the route metadata from a controller method
  *
  * @param target - Controller instance or prototype
  * @param methodName - Name of the method
- * @returns Route configuration or undefined if not decorated
+ * @returns Route metadata or undefined if not decorated
  */
-export function getRouteConfig(target: object, methodName: string): RouteConfig | undefined {
-  return Reflect.getMetadata(ROUTE_METADATA_KEYS.ROUTE_CONFIG, target, methodName) as RouteConfig | undefined
+export function getRouteMetadata(target: object, methodName: string): RouteMetadata | undefined {
+  return Reflect.getMetadata(ROUTE_METADATA_KEYS.ROUTE_CONFIG, target, methodName) as RouteMetadata | undefined
 }
 
 /**
- * Get all methods with @Route() decorator from a controller
+ * Get all methods with route decorators (@Route, @Get, @Post, etc.) from a controller
  *
  * @param ControllerClass - Controller class
- * @returns Array of method names that have route config
+ * @returns Array of method names that have route metadata
  */
-export function getDecoratedMethods(ControllerClass: new (...args: unknown[]) => object): string[] {
-  const prototype = ControllerClass.prototype as Record<string, unknown>
-  const methodNames = Object.getOwnPropertyNames(prototype).filter(
-    name => name !== 'constructor' && typeof prototype[name] === 'function'
-  )
-
-  return methodNames.filter(methodName =>
-    Reflect.hasMetadata(ROUTE_METADATA_KEYS.ROUTE_CONFIG, prototype, methodName)
-  )
+export function getRouteDecoratedMethods(ControllerClass: new (...args: unknown[]) => object): string[] {
+  const prototype = ControllerClass.prototype as object
+  return (Reflect.getOwnMetadata(ROUTE_METADATA_KEYS.DECORATED_METHODS, prototype) as string[] | undefined) ?? []
 }

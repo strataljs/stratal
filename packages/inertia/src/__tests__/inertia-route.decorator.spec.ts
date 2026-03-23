@@ -1,4 +1,4 @@
-import { getRouteConfig } from 'stratal/router'
+import { type ConventionRouteMetadata, getRouteMetadata } from 'stratal/router'
 import { z } from 'stratal/validation'
 import { describe, expect, it } from 'vitest'
 import { InertiaRoute } from '../decorators/inertia-route.decorator'
@@ -34,14 +34,15 @@ class TestController {
 describe('InertiaRoute decorator', () => {
   const prototype = TestController.prototype
 
-  it('should store route config metadata on the method', () => {
-    const config = getRouteConfig(prototype, 'index')
-    expect(config).toBeDefined()
+  it('should store route metadata with convention type', () => {
+    const meta = getRouteMetadata(prototype, 'index')
+    expect(meta).toBeDefined()
+    expect(meta!.type).toBe('convention')
   })
 
   it('should auto-set response schema matching InertiaPage shape', () => {
-    const config = getRouteConfig(prototype, 'index')!
-    const response = config.response as { schema: z.ZodType; description: string; contentType: string }
+    const meta = getRouteMetadata(prototype, 'index') as ConventionRouteMetadata
+    const response = meta.config.response as { schema: z.ZodType; description: string; contentType: string }
 
     expect(response.description).toBe('Inertia page response')
     expect(response.contentType).toBe('text/html')
@@ -61,30 +62,31 @@ describe('InertiaRoute decorator', () => {
   })
 
   it('should default hideFromDocs to true', () => {
-    const config = getRouteConfig(prototype, 'index')!
-    expect(config.hideFromDocs).toBe(true)
+    const meta = getRouteMetadata(prototype, 'index') as ConventionRouteMetadata
+    expect(meta.config.hideFromDocs).toBe(true)
   })
 
   it('should allow overriding hideFromDocs to false', () => {
-    const config = getRouteConfig(prototype, 'visible')!
-    expect(config.hideFromDocs).toBe(false)
+    const meta = getRouteMetadata(prototype, 'visible') as ConventionRouteMetadata
+    expect(meta.config.hideFromDocs).toBe(false)
   })
 
   it('should pass through query schema', () => {
-    const config = getRouteConfig(prototype, 'list')!
-    expect(config.query).toBeDefined()
+    const meta = getRouteMetadata(prototype, 'list') as ConventionRouteMetadata
 
-    const result = (config.query as z.ZodType).safeParse({ page: '2' })
+    expect(meta.config.query).toBeDefined()
+
+    const result = (meta.config.query as z.ZodType).safeParse({ page: '2' })
     expect(result.success).toBe(true)
   })
 
   it('should pass through params, body, tags, summary, and description', () => {
-    const config = getRouteConfig(prototype, 'show')!
+    const meta = getRouteMetadata(prototype, 'show') as ConventionRouteMetadata
 
-    expect(config.params).toBeDefined()
-    expect(config.body).toBeDefined()
-    expect(config.tags).toEqual(['Notes'])
-    expect(config.summary).toBe('Show note')
-    expect(config.description).toBe('Shows a note')
+    expect(meta.config.params).toBeDefined()
+    expect(meta.config.body).toBeDefined()
+    expect(meta.config.tags).toEqual(['Notes'])
+    expect(meta.config.summary).toBe('Show note')
+    expect(meta.config.description).toBe('Shows a note')
   })
 })

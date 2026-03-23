@@ -107,7 +107,7 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
 
     // OpenAPI endpoints
     const openAPIService = this._container.resolve<OpenAPIService>(OPENAPI_TOKENS.OpenAPIService)
-    openAPIService.setupEndpoints(this, controllers, this._container)
+    openAPIService.setupEndpoints(this, this._container)
 
     // Controller routes
     const routeRegistrationService = new RouteRegistrationService(this._logger, versioningOptions ?? null)

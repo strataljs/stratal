@@ -112,7 +112,7 @@ export class RouterContext<T extends RouterEnv = RouterEnv> {
    * @param key - Query parameter name
    */
   query<R extends Record<string, unknown> | undefined = undefined, K extends string | undefined = undefined>(key?: K): ContextQueryResult<R, K> {
-    const validated = (this.c.req as unknown as { valid(target: 'query'): Record<string, unknown> | null }).valid('query') ?? this.c.req.query()
+    const validated = (this.c.req as unknown as { valid(target: 'query'): Record<string, unknown> }).valid('query')
     return key ? validated[key] as ContextQueryResult<R, K> : validated as ContextQueryResult<R, K>
   }
 
