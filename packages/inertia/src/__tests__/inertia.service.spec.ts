@@ -172,6 +172,25 @@ describe('InertiaService', () => {
       expect(body.deferredProps).toEqual({ default: ['comments'] })
       expect(body.props).not.toHaveProperty('comments')
     })
+
+    it('should resolve deferred props on partial reload and exclude from deferredProps', async () => {
+      const ctx = createMockContext({
+        isInertia: true,
+        headers: {
+          'x-inertia-partial-component': 'Home',
+          'x-inertia-partial-data': 'comments',
+        },
+      })
+
+      const response = await service.render(ctx, 'Home', {
+        name: 'John',
+        comments: service.defer(() => ['comment1']),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.props).toEqual({ comments: ['comment1'] })
+      expect(body.deferredProps).toEqual({})
+    })
   })
 
   describe('merge()', () => {

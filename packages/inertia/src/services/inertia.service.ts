@@ -148,12 +148,11 @@ export class InertiaService {
     for (const [key, value] of Object.entries(allProps)) {
       // Handle deferred props
       if (this.isDeferredProp(value)) {
-        deferredProps[value.group] ??= []
-        deferredProps[value.group].push(key)
-
-        // Only resolve if explicitly requested in partial reload
         if (isPartialReload && requestedProps.includes(key)) {
           resolvedProps[key] = await value.callback()
+        } else if (!isPartialReload) {
+          deferredProps[value.group] ??= []
+          deferredProps[value.group].push(key)
         }
         continue
       }
