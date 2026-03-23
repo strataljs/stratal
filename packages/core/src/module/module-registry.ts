@@ -22,11 +22,13 @@ import { isCommand } from '../quarry/is-command'
 import { isSeeder } from '../seeder/is-seeder'
 import type { Constructor } from '../types'
 import { getModuleOptions } from './module.decorator'
+import type { ExceptionHandler } from '../errors/exception-handler'
 import type {
   DynamicModule,
   ModuleClass,
   ModuleContext,
   ModuleOptions,
+  OnException,
   OnInitialize,
   OnShutdown,
   Provider,
@@ -228,6 +230,21 @@ export class ModuleRegistry {
   }
 
   /**
+   * Call `onException()` on all modules that implement the OnException interface.
+   * Invoked by Application after the ExceptionHandler is resolved and `register()` is called.
+   *
+   * @param handler - The resolved ExceptionHandler instance
+   */
+  configureExceptionHandlers(handler: ExceptionHandler): void {
+    for (const { moduleClass, instance } of this.modules) {
+      if (instance && this.hasOnException(instance)) {
+        this.logger.debug(`Configuring exception handlers for: ${moduleClass.name}`)
+        instance.onException(handler)
+      }
+    }
+  }
+
+  /**
    * Shutdown all modules (call onShutdown hooks in reverse order)
    */
   async shutdown(): Promise<void> {
@@ -287,6 +304,18 @@ export class ModuleRegistry {
       instance !== null &&
       'onShutdown' in instance &&
       typeof (instance as OnShutdown).onShutdown === 'function'
+    )
+  }
+
+  /**
+   * Type guard for OnException
+   */
+  private hasOnException(instance: unknown): instance is OnException {
+    return (
+      typeof instance === 'object' &&
+      instance !== null &&
+      'onException' in instance &&
+      typeof (instance as OnException).onException === 'function'
     )
   }
 

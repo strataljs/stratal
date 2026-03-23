@@ -46,7 +46,7 @@ export interface CronJob {
 	/**
 	 * Optional error handler for job execution failures
 	 *
-	 * If not provided, errors are logged via GlobalErrorHandler
+	 * If not provided, errors are logged via ExceptionHandler
 	 *
 	 * @param error - Error that occurred during execution
 	 * @param controller - Cloudflare ScheduledController

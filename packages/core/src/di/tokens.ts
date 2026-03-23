@@ -13,7 +13,7 @@ export const DI_TOKENS = {
   Container: CONTAINER_TOKEN,
   Application: Symbol.for('stratal:application'),
   ModuleRegistry: Symbol.for('stratal:module:registry'),
-  ErrorHandler: Symbol.for('stratal:error:handler'),
+  ExceptionHandler: Symbol.for('stratal:exception:handler'),
   Database: Symbol.for('stratal:database:service'),
   Queue: Symbol.for('stratal:queue:manager'),
   ConsumerRegistry: Symbol.for('stratal:consumer:registry'),

@@ -1,5 +1,7 @@
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
+import type { ApplicationError } from './application-error'
 import { ERROR_CODES } from './error-codes'
+import { HttpException } from './http-exception'
 
 /**
  * Maps error codes to HTTP status codes
@@ -66,4 +68,20 @@ export function getHttpStatus(code: number): ContentfulStatusCode {
 
   // Default to 500 for unknown codes
   return 500
+}
+
+/**
+ * Resolve the HTTP status code for an ApplicationError.
+ *
+ * If the error is an {@link HttpException}, its `httpStatus` property takes precedence.
+ * Otherwise, falls back to the code-range-based mapping via {@link getHttpStatus}.
+ *
+ * @param error - The application error to resolve the status for
+ * @returns HTTP status code
+ */
+export function resolveHttpStatus(error: ApplicationError): ContentfulStatusCode {
+  if (error instanceof HttpException) {
+    return error.httpStatus
+  }
+  return getHttpStatus(error.code)
 }

@@ -3,7 +3,7 @@
  *
  * Quarry catches this in `call()` and puts the message into `CommandResult.errors`.
  * Does NOT extend `ApplicationError` (which requires i18n keys + error codes).
- * Not routed through GlobalErrorHandler.
+ * Not routed through ExceptionHandler.
  */
 export class CommandError extends Error {
   constructor(message: string) {

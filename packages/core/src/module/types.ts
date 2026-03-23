@@ -9,6 +9,7 @@ import type { DependencyContainer } from 'tsyringe'
 import type InjectionToken from 'tsyringe/dist/typings/providers/injection-token'
 import type { Container } from '../di/container'
 import type { Scope } from '../di/types'
+import { type ExceptionHandler } from '../errors/exception-handler'
 import type { LoggerService } from '../logger'
 import type { Constructor } from '../types'
 
@@ -246,6 +247,30 @@ export interface OnInitialize {
  */
 export interface OnShutdown {
   onShutdown(context: ModuleContext): void | Promise<void>
+}
+
+/**
+ * Lifecycle hook: called after the {@link ExceptionHandler} is initialized.
+ *
+ * Implement this interface on a module class to contribute custom
+ * `reportable()`, `renderable()`, `dontReport()`, etc. registrations
+ * to the application's exception handler.
+ *
+ * @example
+ * ```typescript
+ * @Module({ providers: [PaymentService] })
+ * export class PaymentModule implements OnException {
+ *   onException(handler: ExceptionHandler): void {
+ *     handler.reportable(PaymentError, (e) => { ... })
+ *     handler.renderable(PaymentDeclinedError, (e, ctx) => {
+ *       if (ctx.type === 'http') return ctx.ctx.json({ retryable: true }, 402)
+ *     })
+ *   }
+ * }
+ * ```
+ */
+export interface OnException {
+  onException(handler: ExceptionHandler): void
 }
 
 /**

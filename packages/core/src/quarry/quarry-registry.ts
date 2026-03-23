@@ -2,7 +2,8 @@ import { inject } from 'tsyringe'
 import type { Container } from '../di/container'
 import { Transient } from '../di/decorators'
 import { DI_TOKENS } from '../di/tokens'
-import type { GlobalErrorHandler } from '../errors/global-error-handler'
+import { createCliExceptionContext } from '../errors/exception-context'
+import type { ExceptionHandler } from '../errors/exception-handler'
 import type { Constructor } from '../types'
 import { Command } from './command'
 import { getCommandResult, setCommandInputs, setCommandQuarry } from './command-internals'
@@ -80,7 +81,7 @@ export class QuarryRegistry implements Quarry {
         return { exitCode: 1, output: [], errors: [error.message] }
       }
 
-      const errorMessage = this.handleError(error)
+      const errorMessage = this.handleError(error, resolvedName)
 
       if (command) {
         const result = getCommandResult(command)
@@ -211,10 +212,12 @@ export class QuarryRegistry implements Quarry {
     }
   }
 
-  private handleError(error: unknown): string {
-    const errorHandler = this.container.resolve<GlobalErrorHandler>(DI_TOKENS.ErrorHandler)
-    const response = errorHandler.handle(error)
-    return response.message
+  private handleError(error: unknown, commandName: string): string {
+    const handler = this.container.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
+    const ctx = createCliExceptionContext(commandName)
+    // Fire-and-forget — reporting happens via waitUntil internally
+    void handler.handle(error, ctx)
+    return error instanceof Error ? error.message : String(error)
   }
 
   private resolveName(name: string): string {

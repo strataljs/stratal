@@ -1,7 +1,8 @@
 import type { Context, MiddlewareHandler } from 'hono'
 import type { Container } from '../di/container'
 import { DI_TOKENS } from '../di/tokens'
-import { getHttpStatus, type GlobalErrorHandler } from '../errors'
+import { createHttpExceptionContext } from '../errors/exception-context'
+import type { ExceptionHandler } from '../errors/exception-handler'
 import { OpenAPIHono } from '../i18n/validation'
 import type { LoggerService } from '../logger'
 import {
@@ -56,10 +57,10 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
       defaultHook: (result, c) => {
         if (!result.success) {
           const requestContainer = c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER)
-          const errorHandler = requestContainer.resolve<GlobalErrorHandler>(DI_TOKENS.ErrorHandler)
+          const handler = requestContainer.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
           const validationError = new SchemaValidationError(result.error)
-          const errorResponse = errorHandler.handle(validationError)
-          return c.json(errorResponse, getHttpStatus(errorResponse.code))
+          const ctx = createHttpExceptionContext(c)
+          return handler.handle(validationError, ctx)
         }
       },
     })
@@ -136,9 +137,9 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
     this.nativeUse('*', createLoggerMiddleware(this._logger) as MiddlewareHandler<RouterEnv>)
     this.onError((err, c) => {
       const requestContainer = c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER)
-      const errorHandler = requestContainer.resolve<GlobalErrorHandler>(DI_TOKENS.ErrorHandler)
-      const errorResponse = errorHandler.handle(err)
-      return c.json(errorResponse, getHttpStatus(errorResponse.code))
+      const handler = requestContainer.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
+      const ctx = createHttpExceptionContext(c)
+      return handler.handle(err, ctx)
     })
   }
 

@@ -1,0 +1,559 @@
+import 'reflect-metadata'
+
+import { injectable, container as tsyringeRootContainer } from 'tsyringe'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Container } from '../../di/container'
+import { DI_TOKENS } from '../../di/tokens'
+import { I18N_TOKENS } from '../../i18n/i18n.tokens'
+import type { MessageKeys } from '../../i18n/i18n.types'
+import { LOGGER_TOKENS } from '../../logger'
+import { ApplicationError } from '../application-error'
+import { DefaultExceptionHandler } from '../default-exception-handler'
+import { ERROR_CODES, type ErrorCode } from '../error-codes'
+import type { ExceptionContext } from '../exception-context'
+import { createCliExceptionContext, createCronExceptionContext, createHttpExceptionContext, createQueueExceptionContext } from '../exception-context'
+import { ExceptionHandler } from '../exception-handler'
+import { HttpException } from '../http-exception'
+import { InternalError } from '../internal-error'
+
+// ── Test Fixtures ───────────────────────────────────────────────────
+
+class TestError extends ApplicationError {
+  constructor(message = 'errors.testError', code: number = ERROR_CODES.VALIDATION.GENERIC) {
+    super(message as MessageKeys, code as ErrorCode, { detail: 'test' })
+  }
+}
+
+class ChildTestError extends TestError {
+  constructor() {
+    super('errors.childError', ERROR_CODES.VALIDATION.GENERIC)
+  }
+}
+
+class SelfReportingError extends HttpException {
+  reportCalled = false
+
+  constructor() {
+    super(422, 'errors.selfReporting')
+  }
+
+  report(): void {
+    this.reportCalled = true
+  }
+}
+
+class SelfReportingWithFallback extends HttpException {
+  constructor() {
+    super(422, 'errors.selfReportingFallback')
+  }
+
+  report(): false {
+    return false
+  }
+}
+
+class SelfRenderingError extends HttpException {
+  constructor() {
+    super(503, 'errors.selfRendering')
+  }
+
+  render(ctx: ExceptionContext): Response | undefined {
+    if (ctx.type === 'http') {
+      return new Response('custom render', { status: 503 })
+    }
+    return undefined
+  }
+}
+
+// ── Test Setup ──────────────────────────────────────────────────────
+
+const mockLogger = {
+  error: vi.fn(),
+  warn: vi.fn(),
+  info: vi.fn(),
+  debug: vi.fn(),
+}
+
+const mockI18n = {
+  t: vi.fn((key: string) => `translated:${key}`),
+  getLocale: vi.fn(() => 'en'),
+}
+
+const mockWaitUntil = vi.fn((p: Promise<unknown>) => {
+  p.catch(() => {
+    //
+  })
+})
+const mockExecutionContext = { waitUntil: mockWaitUntil }
+
+function createHandler(HandlerClass: typeof ExceptionHandler = DefaultExceptionHandler): ExceptionHandler {
+  const childContainer = tsyringeRootContainer.createChildContainer()
+  const container = new Container({ container: childContainer })
+
+  container.registerValue(LOGGER_TOKENS.LoggerService, mockLogger)
+  container.registerValue(DI_TOKENS.CloudflareEnv, { ENVIRONMENT: 'test' })
+  container.registerValue(DI_TOKENS.ExecutionContext, mockExecutionContext)
+  container.registerValue(I18N_TOKENS.I18nService, mockI18n)
+
+  // Ensure tsyringe has decorator metadata for the handler class
+  injectable()(HandlerClass as never)
+  container.register(DI_TOKENS.ExceptionHandler, HandlerClass as never)
+  const handler = container.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
+  handler.register()
+  return handler
+}
+
+describe('ExceptionHandler', () => {
+  const cliCtx = createCliExceptionContext('test-cmd')
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  // ── Default Behavior ────────────────────────────────────────────
+
+  describe('default handling', () => {
+    it('should normalize non-ApplicationError into InternalError', async () => {
+      const handler = createHandler()
+      const response = await handler.handle('some string error', cliCtx)
+
+      expect(response).toBeInstanceOf(Response)
+      const body: Record<string, unknown> = await response.json()
+      expect(body.code).toBe(ERROR_CODES.SYSTEM.INTERNAL_ERROR)
+    })
+
+    it('should translate and render ApplicationError as JSON', async () => {
+      const handler = createHandler()
+      const error = new TestError()
+      const response = await handler.handle(error, cliCtx)
+
+      const body: Record<string, unknown> = await response.json()
+      expect(body.code).toBe(ERROR_CODES.VALIDATION.GENERIC)
+      expect(body.message).toBe('translated:errors.testError')
+    })
+
+    it('should set correct HTTP status from error code', async () => {
+      const handler = createHandler()
+      const error = new TestError('errors.notFound', ERROR_CODES.RESOURCE.NOT_FOUND)
+      const response = await handler.handle(error, cliCtx)
+
+      expect(response.status).toBe(404)
+    })
+
+    it('should use HttpException httpStatus for status code', async () => {
+      const handler = createHandler()
+      const error = new HttpException(418 as never, 'Teapot')
+      const response = await handler.handle(error, cliCtx)
+
+      expect(response.status).toBe(418)
+    })
+
+    it('should report via waitUntil', async () => {
+      const handler = createHandler()
+      await handler.handle(new TestError(), cliCtx)
+
+      expect(mockWaitUntil).toHaveBeenCalledOnce()
+    })
+
+    it('should log with correct severity for validation errors (info)', async () => {
+      const handler = createHandler()
+      await handler.handle(new TestError('errors.val', ERROR_CODES.VALIDATION.GENERIC), cliCtx)
+
+      // waitUntil fires the promise; flush it
+      await mockWaitUntil.mock.calls[0][0]
+      expect(mockLogger.info).toHaveBeenCalled()
+    })
+
+    it('should log with correct severity for system errors (error)', async () => {
+      const handler = createHandler()
+      await handler.handle(new InternalError(), cliCtx)
+
+      await mockWaitUntil.mock.calls[0][0]
+      expect(mockLogger.error).toHaveBeenCalled()
+    })
+  })
+
+  // ── reportable() ───────────────────────────────────────────────
+
+  describe('reportable', () => {
+    it('should call custom reporter for matching error', async () => {
+      const spy = vi.fn()
+
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.reportable(TestError, spy)
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      await handler.handle(new TestError(), cliCtx)
+
+      await mockWaitUntil.mock.calls[0][0]
+      expect(spy).toHaveBeenCalledOnce()
+    })
+
+    it('should still run default logger when .stop() is not called', async () => {
+      const spy = vi.fn()
+
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.reportable(TestError, spy)
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      await handler.handle(new TestError(), cliCtx)
+
+      await mockWaitUntil.mock.calls[0][0]
+      expect(spy).toHaveBeenCalledOnce()
+      expect(mockLogger.info).toHaveBeenCalled()
+    })
+
+    it('should skip default logger when .stop() is called', async () => {
+      const spy = vi.fn()
+
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.reportable(TestError, spy).stop()
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      await handler.handle(new TestError(), cliCtx)
+
+      await mockWaitUntil.mock.calls[0][0]
+      expect(spy).toHaveBeenCalledOnce()
+      expect(mockLogger.info).not.toHaveBeenCalled()
+      expect(mockLogger.error).not.toHaveBeenCalled()
+      expect(mockLogger.warn).not.toHaveBeenCalled()
+    })
+
+    it('should match most-specific class (subclass over base)', async () => {
+      const baseSpy = vi.fn()
+      const childSpy = vi.fn()
+
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.reportable(TestError, baseSpy)
+          this.reportable(ChildTestError, childSpy)
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      await handler.handle(new ChildTestError(), cliCtx)
+
+      await mockWaitUntil.mock.calls[0][0]
+      expect(childSpy).toHaveBeenCalledOnce()
+      expect(baseSpy).not.toHaveBeenCalled()
+    })
+  })
+
+  // ── renderable() ──────────────────────────────────────────────
+
+  describe('renderable', () => {
+    it('should use custom renderer for matching error', async () => {
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.renderable(TestError, () => {
+            return new Response('custom', { status: 422 })
+          })
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      const response = await handler.handle(new TestError(), cliCtx)
+
+      expect(response.status).toBe(422)
+      expect(await response.text()).toBe('custom')
+    })
+
+    it('should fall through to default when renderer returns undefined', async () => {
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.renderable(TestError, () => undefined)
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      const response = await handler.handle(new TestError(), cliCtx)
+      const body: Record<string, unknown> = await response.json()
+
+      expect(body.code).toBe(ERROR_CODES.VALIDATION.GENERIC)
+    })
+  })
+
+  // ── dontReport() ──────────────────────────────────────────────
+
+  describe('dontReport', () => {
+    it('should suppress reporting for listed errors', async () => {
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.dontReport([TestError])
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      await handler.handle(new TestError(), cliCtx)
+
+      await mockWaitUntil.mock.calls[0][0]
+      expect(mockLogger.info).not.toHaveBeenCalled()
+      expect(mockLogger.error).not.toHaveBeenCalled()
+    })
+
+    it('should still render the error response', async () => {
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.dontReport([TestError])
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      const response = await handler.handle(new TestError(), cliCtx)
+      const body: Record<string, unknown> = await response.json()
+
+      expect(body.code).toBe(ERROR_CODES.VALIDATION.GENERIC)
+    })
+  })
+
+  // ── level() ───────────────────────────────────────────────────
+
+  describe('level', () => {
+    it('should override log severity for specific error', async () => {
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.level(TestError, 'debug')
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      await handler.handle(new TestError(), cliCtx)
+
+      await mockWaitUntil.mock.calls[0][0]
+      expect(mockLogger.debug).toHaveBeenCalled()
+      expect(mockLogger.info).not.toHaveBeenCalled()
+    })
+  })
+
+  // ── context() ─────────────────────────────────────────────────
+
+  describe('context', () => {
+    it('should merge global context into log entries', async () => {
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.context(() => ({ appVersion: '1.0.0' }))
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      await handler.handle(new TestError(), cliCtx)
+
+      await mockWaitUntil.mock.calls[0][0]
+      const logCall = mockLogger.info.mock.calls[0]
+      expect(logCall[1]).toMatchObject({ appVersion: '1.0.0' })
+    })
+  })
+
+  // ── respond() ─────────────────────────────────────────────────
+
+  describe('respond', () => {
+    it('should post-process the response', async () => {
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.respond((response, error) => {
+            response.headers.set('X-Error-Code', String(error.code))
+            return response
+          })
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      const response = await handler.handle(new TestError(), cliCtx)
+
+      expect(response.headers.get('X-Error-Code')).toBe(String(ERROR_CODES.VALIDATION.GENERIC))
+    })
+
+    it('should chain multiple respond callbacks', async () => {
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.respond((res) => {
+            res.headers.set('X-First', 'true')
+            return res
+          })
+          this.respond((res) => {
+            res.headers.set('X-Second', 'true')
+            return res
+          })
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      const response = await handler.handle(new TestError(), cliCtx)
+
+      expect(response.headers.get('X-First')).toBe('true')
+      expect(response.headers.get('X-Second')).toBe('true')
+    })
+  })
+
+  // ── Self-reporting / Self-rendering ───────────────────────────
+
+  describe('self-reporting', () => {
+    it('should call error.report() and skip default logging', async () => {
+      const handler = createHandler()
+      const error = new SelfReportingError()
+      await handler.handle(error, cliCtx)
+
+      await mockWaitUntil.mock.calls[0][0]
+      expect(error.reportCalled).toBe(true)
+      expect(mockLogger.info).not.toHaveBeenCalled()
+      expect(mockLogger.warn).not.toHaveBeenCalled()
+      expect(mockLogger.error).not.toHaveBeenCalled()
+    })
+
+    it('should also run default logging when report() returns false', async () => {
+      const handler = createHandler()
+      await handler.handle(new SelfReportingWithFallback(), cliCtx)
+
+      await mockWaitUntil.mock.calls[0][0]
+      // Returns false → default reporting also runs
+      expect(mockLogger.info).toHaveBeenCalled()
+    })
+  })
+
+  describe('self-rendering', () => {
+    it('should use error.render() when it returns a Response', async () => {
+      const handler = createHandler()
+      const mockHonoCtx = { req: { method: 'GET' } } as never
+      const httpCtx = createHttpExceptionContext(mockHonoCtx)
+
+      const response = await handler.handle(new SelfRenderingError(), httpCtx)
+
+      expect(response.status).toBe(503)
+      expect(await response.text()).toBe('custom render')
+    })
+
+    it('should fall back to default when render() returns undefined (non-HTTP)', async () => {
+      const handler = createHandler()
+      const response = await handler.handle(new SelfRenderingError(), cliCtx)
+
+      // In CLI context, render() returns undefined → default rendering
+      const body: Record<string, unknown> = await response.json()
+      expect(body.code).toBe(ERROR_CODES.SYSTEM.INTERNAL_ERROR)
+    })
+  })
+
+  // ── Priority ──────────────────────────────────────────────────
+
+  describe('priority', () => {
+    it('self-report takes precedence over registered reportable', async () => {
+      const spy = vi.fn()
+
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.reportable(SelfReportingError, spy)
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      const error = new SelfReportingError()
+      await handler.handle(error, cliCtx)
+
+      await mockWaitUntil.mock.calls[0][0]
+      expect(error.reportCalled).toBe(true)
+      expect(spy).not.toHaveBeenCalled()
+    })
+
+    it('self-render takes precedence over registered renderable', async () => {
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.renderable(SelfRenderingError, () => new Response('from-renderable', { status: 500 }))
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      const mockHonoCtx = { req: { method: 'GET' } } as never
+      const httpCtx = createHttpExceptionContext(mockHonoCtx)
+
+      const response = await handler.handle(new SelfRenderingError(), httpCtx)
+      expect(await response.text()).toBe('custom render')
+    })
+  })
+
+  // ── Context types ─────────────────────────────────────────────
+
+  describe('context types', () => {
+    it('should handle errors in queue context', async () => {
+      const handler = createHandler()
+      const queueCtx = createQueueExceptionContext('my-queue')
+      const response = await handler.handle(new TestError(), queueCtx)
+
+      expect(response).toBeInstanceOf(Response)
+      expect(response.status).toBe(400)
+    })
+
+    it('should handle errors in cron context', async () => {
+      const handler = createHandler()
+      const cronCtx = createCronExceptionContext()
+      const response = await handler.handle(new InternalError(), cronCtx)
+
+      expect(response.status).toBe(500)
+    })
+
+    it('should handle errors in CLI context', async () => {
+      const handler = createHandler()
+      const response = await handler.handle(new TestError(), cliCtx)
+
+      expect(response.status).toBe(400)
+    })
+  })
+
+  // ── Translation ───────────────────────────────────────────────
+
+  describe('translation', () => {
+    it('should translate i18n keys via i18n service', async () => {
+      const handler = createHandler()
+      const response = await handler.handle(new TestError('errors.myKey'), cliCtx)
+      const body: Record<string, unknown> = await response.json()
+
+      expect(body.message).toBe('translated:errors.myKey')
+      expect(mockI18n.t).toHaveBeenCalledWith('errors.myKey', { detail: 'test' })
+    })
+
+    it('should fall back to raw message when i18n is unavailable', async () => {
+      // Create handler without I18n registered
+      const childContainer = tsyringeRootContainer.createChildContainer()
+      const container = new Container({ container: childContainer })
+      container.registerValue(LOGGER_TOKENS.LoggerService, mockLogger)
+      container.registerValue(DI_TOKENS.CloudflareEnv, { ENVIRONMENT: 'test' })
+      container.registerValue(DI_TOKENS.ExecutionContext, mockExecutionContext)
+      // No I18N_TOKENS.I18nService registered
+
+      container.registerSingleton(DI_TOKENS.ExceptionHandler, DefaultExceptionHandler as never)
+      const handler = container.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
+      handler.register()
+
+      const response = await handler.handle(new HttpException(404, 'Not Found'), cliCtx)
+      const body: Record<string, unknown> = await response.json()
+
+      expect(body.message).toBe('Not Found')
+    })
+  })
+
+  // ── resolve() ─────────────────────────────────────────────────
+
+  describe('resolve', () => {
+    it('should resolve services from the DI container', () => {
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          const logger = this.resolve(LOGGER_TOKENS.LoggerService)
+          expect(logger).toBe(mockLogger)
+        }
+      }
+
+      createHandler(CustomHandler)
+    })
+  })
+})
