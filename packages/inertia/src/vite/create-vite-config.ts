@@ -21,6 +21,7 @@ export async function createInertiaViteConfig(options: InertiaViteConfigOptions)
 
   const { cloudflare } = await import('@cloudflare/vite-plugin') as unknown as { cloudflare: () => Plugin }
 
+  const { stratalInertiaDevCss } = await import('./inertia-dev-css-plugin')
   const { stratalInertiaTypes } = await import('./inertia-types-plugin')
 
   const optimizeDepsExclude = ['@cloudflare/vite-plugin', 'wrangler', 'blake3-wasm']
@@ -28,6 +29,7 @@ export async function createInertiaViteConfig(options: InertiaViteConfigOptions)
   const baseConfig: UserConfig = {
     plugins: [
       cloudflare(),
+      stratalInertiaDevCss({ entries: ['/' + options.entryPath] }),
       stratalInertiaTypes(),
       {
         name: 'stratal:optimize-deps-fix',
@@ -40,6 +42,7 @@ export async function createInertiaViteConfig(options: InertiaViteConfigOptions)
         },
       },
     ],
+    publicDir: join(options.cwd, 'src', 'inertia', 'public'),
     build: {
       ...(options.outDir ? { outDir: options.outDir } : {}),
       rolldownOptions: {

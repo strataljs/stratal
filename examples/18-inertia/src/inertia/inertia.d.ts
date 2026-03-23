@@ -4,3 +4,5 @@ declare module '@stratal/inertia' {
     'Home': { message: string; }
   }
 }
+
+export {}

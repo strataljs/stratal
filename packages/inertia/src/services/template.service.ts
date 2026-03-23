@@ -12,10 +12,10 @@ export class TemplateService {
   ) { }
 
   render(page: InertiaPage, ssrHead: string[], ssrBody: string): string {
-    const pageJson = this.escapePageJson(JSON.stringify(page))
-    const appHtml = ssrBody
-      ? `<div id="app" data-page="${pageJson}">${ssrBody}</div>`
-      : `<div id="app" data-page="${pageJson}"></div>`
+    // When SSR body is present, Inertia's buildSSRBody already returns the
+    // <script data-page="app"> tag + <div id="app" data-server-rendered="true">.
+    // Without SSR, we generate both elements ourselves for client-side hydration.
+    const appHtml = ssrBody || this.buildClientOnlyBody(page)
 
     const headTags = ssrHead.length > 0 ? ssrHead.join('\n') : ''
     const viteHead = this.manifest.getHeadTags()
@@ -30,12 +30,8 @@ export class TemplateService {
     return html
   }
 
-  private escapePageJson(json: string): string {
-    return json
-      .replace(/&/g, '&amp;')
-      .replace(/'/g, '&#039;')
-      .replace(/"/g, '&quot;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
+  private buildClientOnlyBody(page: InertiaPage): string {
+    const json = JSON.stringify(page).replace(/\//g, '\\/')
+    return `<script data-page="app" type="application/json">${json}</script><div id="app"></div>`
   }
 }

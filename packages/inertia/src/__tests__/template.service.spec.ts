@@ -1,13 +1,14 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { InertiaModuleOptions } from '../inertia.options'
 import type { InertiaPage } from '../types'
 import { ManifestService } from '../services/manifest.service'
 import { TemplateService } from '../services/template.service'
 
-describe('TemplateService', () => {
-  let service: TemplateService
-  let manifest: ManifestService
+function createManifest(options: Partial<InertiaModuleOptions> = {}): ManifestService {
+  return new (ManifestService as any)({ rootView: '', ...options })
+}
 
+describe('TemplateService', () => {
   const rootView = `<!DOCTYPE html>
 <html>
 <head>@viteHead
@@ -29,46 +30,55 @@ describe('TemplateService', () => {
     clearHistory: false,
   }
 
-  beforeEach(() => {
-    manifest = new ManifestService()
-    service = new TemplateService(options, manifest)
-  })
-
-  it('should replace @inertia with data-page div', () => {
+  it('should output script tag with page JSON and empty #app div without SSR', () => {
+    const manifest = createManifest()
+    const service = new (TemplateService as any)(options, manifest)
     const html = service.render(page, [], '')
-    expect(html).toContain('<div id="app" data-page="')
-    expect(html).toContain('</div>')
+    expect(html).toContain('<script data-page="app" type="application/json">')
+    expect(html).toContain('<div id="app"></div>')
   })
 
-  it('should include SSR body inside the app div', () => {
-    const html = service.render(page, [], '<h1>Hello</h1>')
-    expect(html).toContain('<h1>Hello</h1></div>')
+  it('should use SSR body directly as the app container', () => {
+    const manifest = createManifest()
+    const service = new (TemplateService as any)(options, manifest)
+    const ssrBody = '<script data-page="app" type="application/json">{}</script><div id="app" data-server-rendered="true"><h1>Hello</h1></div>'
+    const html = service.render(page, [], ssrBody)
+    expect(html).toContain(ssrBody)
+    // Should NOT double-wrap in another #app div
+    expect(html).not.toMatch(/<div id="app"[^>]*>.*<div id="app"/s)
   })
 
   it('should replace @inertiaHead with SSR head tags', () => {
+    const manifest = createManifest()
+    const service = new (TemplateService as any)(options, manifest)
     const html = service.render(page, ['<title>Test</title>', '<meta name="desc" />'], '')
     expect(html).toContain('<title>Test</title>')
     expect(html).toContain('<meta name="desc" />')
   })
 
-  it('should escape HTML entities in data-page JSON', () => {
+  it('should escape forward slashes in page JSON', () => {
+    const manifest = createManifest()
+    const service = new (TemplateService as any)(options, manifest)
     const xssPage: InertiaPage = {
       ...page,
-      props: { html: '<script>alert("xss")</script>' },
+      props: { html: '</script><script>alert("xss")' },
     }
     const html = service.render(xssPage, [], '')
-    expect(html).not.toContain('<script>alert')
-    expect(html).toContain('&lt;script&gt;')
+    expect(html).not.toContain('</script><script>alert')
+    expect(html).toContain('<\\/script>')
   })
 
   it('should replace @viteHead and @viteScripts with manifest tags', () => {
-    manifest.setManifest({
-      'src/inertia/app.tsx': {
-        file: 'assets/app-abc.js',
-        css: ['assets/app-abc.css'],
-        isEntry: true,
+    const manifest = createManifest({
+      manifest: {
+        'src/inertia/app.tsx': {
+          file: 'assets/app-abc.js',
+          css: ['assets/app-abc.css'],
+          isEntry: true,
+        },
       },
     })
+    const service = new (TemplateService as any)(options, manifest)
 
     const html = service.render(page, [], '')
     expect(html).toContain('<link rel="stylesheet" href="/assets/app-abc.css" />')

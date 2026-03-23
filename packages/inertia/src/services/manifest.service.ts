@@ -1,30 +1,33 @@
-import { Transient } from 'stratal/di'
+import { Transient, inject } from 'stratal/di'
+import type { InertiaModuleOptions } from '../inertia.options'
+import { INERTIA_TOKENS } from '../inertia.tokens'
 import type { ViteManifest } from '../types'
+
+const DEFAULT_ENTRY_CLIENT_PATH = 'src/inertia/app.tsx'
 
 @Transient()
 export class ManifestService {
-  private manifest: ViteManifest | null = null
-  private devServerUrl: string | null = null
+  private readonly manifest: ViteManifest | null
+  private readonly entryClientPath: string
 
-  setManifest(manifest: ViteManifest): void {
-    this.manifest = manifest
+  constructor(
+    @inject(INERTIA_TOKENS.Options) options: InertiaModuleOptions,
+  ) {
+    this.manifest = options.manifest ?? null
+    this.entryClientPath = options.entryClientPath ?? DEFAULT_ENTRY_CLIENT_PATH
   }
 
-  setDevServerUrl(url: string): void {
-    this.devServerUrl = url
+  private get isDev(): boolean {
+    return this.manifest === null
   }
 
   getHeadTags(): string {
-    if (this.devServerUrl) {
-      return ''
-    }
-
-    if (!this.manifest) {
-      return ''
+    if (this.isDev) {
+      return '<link rel="stylesheet" href="/__inertia/ssr-css" data-ssr-css />'
     }
 
     const tags: string[] = []
-    for (const entry of Object.values(this.manifest)) {
+    for (const entry of Object.values(this.manifest!)) {
       if (entry.css) {
         for (const cssFile of entry.css) {
           tags.push(`<link rel="stylesheet" href="/${cssFile}" />`)
@@ -36,19 +39,22 @@ export class ManifestService {
   }
 
   getScriptTags(): string {
-    if (this.devServerUrl) {
+    if (this.isDev) {
       return [
-        `<script type="module" src="${this.devServerUrl}/@vite/client"></script>`,
-        `<script type="module" src="${this.devServerUrl}/src/inertia/app.tsx"></script>`,
+        '<script type="module" src="/@vite/client"></script>',
+        `<script type="module">
+import { createHotContext } from "/@vite/client";
+const hot = createHotContext("/__ssr_css");
+hot.on("vite:afterUpdate", () => {
+  document.querySelectorAll("[data-ssr-css]").forEach(el => el.remove());
+});
+</script>`,
+        `<script type="module" src="/${this.entryClientPath}"></script>`,
       ].join('\n')
     }
 
-    if (!this.manifest) {
-      return ''
-    }
-
     const tags: string[] = []
-    for (const entry of Object.values(this.manifest)) {
+    for (const entry of Object.values(this.manifest!)) {
       if (entry.isEntry) {
         tags.push(`<script type="module" src="/${entry.file}"></script>`)
       }

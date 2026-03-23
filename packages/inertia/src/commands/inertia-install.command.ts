@@ -78,6 +78,14 @@ export class InertiaInstallCommand extends Command {
     this.info('Creating src/inertia/ directory...')
     mkdirSync(pagesDir, { recursive: true })
 
+    const publicDir = join(inertiaDir, 'public')
+    mkdirSync(publicDir, { recursive: true })
+    const gitkeepPath = join(publicDir, '.gitkeep')
+    if (!existsSync(gitkeepPath)) {
+      writeFileSync(gitkeepPath, '', 'utf-8')
+    }
+    this.success('Created src/inertia/public/')
+
     // Write template files
     const files = [
       { path: join(inertiaDir, 'root.html'), content: ROOT_HTML, name: 'root.html' },
