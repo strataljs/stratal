@@ -12,8 +12,8 @@ export class InertiaDevCommand extends Command {
     const host = this.boolean('host')
     const cwd = process.cwd()
 
-    const entryPath = join(cwd, 'src', 'inertia', 'app.tsx')
-    if (!existsSync(entryPath)) {
+    const entryPath = 'src/inertia/app.tsx'
+    if (!existsSync(join(cwd, entryPath))) {
       this.fail('src/inertia/app.tsx not found. Run `quarry inertia:install` first.')
       return 1
     }

@@ -33,9 +33,13 @@ export class SsrRendererService {
   private async ensureBundle(): Promise<void> {
     if (this.bundle) return
 
-    this.loadPromise ??= this.loadBundle();
+    this.loadPromise ??= this.loadBundle()
 
-    await this.loadPromise
+    try {
+      await this.loadPromise
+    } catch {
+      // loadBundle already clears loadPromise on failure
+    }
   }
 
   private async loadBundle(): Promise<void> {

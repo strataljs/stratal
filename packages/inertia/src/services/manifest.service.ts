@@ -14,7 +14,7 @@ export class ManifestService {
     @inject(INERTIA_TOKENS.Options) options: InertiaModuleOptions,
   ) {
     this.manifest = options.manifest ?? null
-    this.entryClientPath = options.entryClientPath ?? DEFAULT_ENTRY_CLIENT_PATH
+    this.entryClientPath = (options.entryClientPath ?? DEFAULT_ENTRY_CLIENT_PATH).replace(/^\/+/, '')
   }
 
   private get isDev(): boolean {

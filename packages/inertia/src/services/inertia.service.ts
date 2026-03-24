@@ -61,7 +61,7 @@ export class InertiaService {
     const isInertia = ctx.c.get('inertia')
 
     // Resolve shared data from module options
-    const resolvedShared = this.resolveSharedData(ctx)
+    const resolvedShared = await this.resolveSharedData(ctx)
 
     // Merge shared data with route props
     const allProps = { ...resolvedShared, ...this.sharedData, ...props }
@@ -111,7 +111,7 @@ export class InertiaService {
     })
   }
 
-  private resolveSharedData(ctx: RouterContext): Record<string, unknown> {
+  private async resolveSharedData(ctx: RouterContext): Promise<Record<string, unknown>> {
     const shared: Record<string, unknown> = {}
     const configShared = this.options.sharedData
 
@@ -119,7 +119,7 @@ export class InertiaService {
 
     for (const [key, value] of Object.entries(configShared)) {
       if (typeof value === 'function') {
-        shared[key] = (value as SharedDataResolver)(ctx)
+        shared[key] = await (value as SharedDataResolver)(ctx)
       } else {
         shared[key] = value
       }
@@ -218,7 +218,8 @@ export class InertiaService {
     if (!patterns || patterns.length === 0) return false
 
     return patterns.some((pattern) => {
-      const regex = new RegExp(`^/${pattern.replace(/\*/g, '.*')}$`)
+      const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+      const regex = new RegExp(`^/${escaped.replace(/\*/g, '[^/]*')}$`)
       return regex.test(pathname)
     })
   }

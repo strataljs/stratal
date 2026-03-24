@@ -97,7 +97,8 @@ export function stratalInertiaDevCss(options: InertiaDevCssOptions): Plugin {
       server = devServer
 
       server.middlewares.use((req, res, next) => {
-        if (req.url !== '/__inertia/ssr-css') { next(); return; }
+        const pathname = new URL(req.url ?? '', 'http://localhost').pathname
+        if (pathname !== '/__inertia/ssr-css') { next(); return; }
 
         collectStyle(server, options.entries).then((css) => {
           res.setHeader('Content-Type', 'text/css')

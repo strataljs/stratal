@@ -149,8 +149,11 @@ function expandTypeToInline(type: Type, tsObj: TsObj, visited = new Set<Type>())
     if (properties.length === 0) return 'Record<string, never>'
 
     const members = properties.map((prop) => {
-      const propType = prop.getTypeAtLocation(prop.getDeclarations()[0] ?? prop.getValueDeclaration()!)
+      const decl = prop.getDeclarations()[0] ?? prop.getValueDeclaration()
       const isOptional = prop.isOptional()
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- defensive: ambient/synthetic symbols may lack declarations at runtime
+      if (!decl) return `${prop.getName()}${isOptional ? '?' : ''}: unknown`
+      const propType = prop.getTypeAtLocation(decl)
       const propTypeStr = expandTypeToInline(propType, tsObj, visited)
       return `${prop.getName()}${isOptional ? '?' : ''}: ${propTypeStr}`
     })

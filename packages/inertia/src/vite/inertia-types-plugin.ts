@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { isAbsolute, relative } from 'node:path'
 import type { Plugin } from 'vite'
 import { findPagesDir, runTypeGeneration } from '../generator/type-generator'
 
@@ -18,19 +19,20 @@ export function stratalInertiaTypes(): Plugin {
       if (!existsSync(pagesDir)) return
       try {
         await runTypeGeneration(cwd)
-      } catch {
-        // Silently skip if type generation fails during build
+      } catch (error) {
+        console.warn('[stratal:inertia-types] Type generation failed during build:', error)
       }
     },
 
     async handleHotUpdate({ file }) {
-      if (!file.startsWith(pagesDir)) return
+      const rel = relative(pagesDir, file)
+      if (rel.startsWith('..') || isAbsolute(rel)) return
       if (!/\.(tsx|ts)$/.test(file)) return
 
       try {
         await runTypeGeneration(cwd)
-      } catch {
-        // Silently skip if type generation fails during HMR
+      } catch (error) {
+        console.warn('[stratal:inertia-types] Type generation failed during HMR:', error)
       }
     },
   }

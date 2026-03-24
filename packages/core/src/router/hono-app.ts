@@ -121,7 +121,12 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
       const routerContext = new RouterContext(c)
       const requestContainer = this._container.createRequestScope(routerContext)
       c.set(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER, requestContainer)
-      await next()
+      try {
+        await next()
+      } finally {
+        //@ts-expect-error  Type 'void' is not assignable to type 'Promise<any>'
+        c.executionCtx.waitUntil(requestContainer.dispose())
+      }
     })
   }
 
