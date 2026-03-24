@@ -81,8 +81,8 @@ export class InertiaService {
       version: this.options.version ?? '',
       mergeProps,
       deferredProps,
-      encryptHistory: renderOptions.encryptHistory ?? false,
-      clearHistory: renderOptions.clearHistory ?? false,
+      ...(renderOptions.encryptHistory ? { encryptHistory: true } : {}),
+      ...(renderOptions.clearHistory ? { clearHistory: true } : {}),
     }
 
     if (isInertia) {
@@ -96,8 +96,11 @@ export class InertiaService {
       })
     }
 
-    // Full page render with SSR
-    const ssrResult = await this.ssr.render(page)
+    // Full page render — skip SSR if disabled for this route
+    const ssrDisabled = ctx.c.get('withoutSsr') || this.isSsrDisabled(url)
+    const ssrResult = ssrDisabled
+      ? { head: [] as string[], body: '' }
+      : await this.ssr.render(page)
     const html = this.template.render(page, ssrResult.head, ssrResult.body)
 
     return new Response(html, {
@@ -148,7 +151,7 @@ export class InertiaService {
     for (const [key, value] of Object.entries(allProps)) {
       // Handle deferred props
       if (this.isDeferredProp(value)) {
-        if (isPartialReload && requestedProps.includes(key)) {
+        if (isPartialReload && this.isRequested(key, requestedProps)) {
           resolvedProps[key] = await value.callback()
         } else if (!isPartialReload) {
           deferredProps[value.group] ??= []
@@ -159,7 +162,7 @@ export class InertiaService {
 
       // Handle merge props
       if (this.isMergeProp(value)) {
-        if (isPartialReload && !requestedProps.includes(key)) {
+        if (isPartialReload && !this.isRequested(key, requestedProps)) {
           continue
         }
         mergeProps.push(key)
@@ -170,7 +173,7 @@ export class InertiaService {
       // Handle optional props
       if (this.isOptionalProp(value)) {
         // Only include on partial reloads when explicitly requested
-        if (isPartialReload && requestedProps.includes(key)) {
+        if (isPartialReload && this.isRequested(key, requestedProps)) {
           resolvedProps[key] = await value.callback()
         }
         continue
@@ -179,7 +182,7 @@ export class InertiaService {
       // Regular props
       if (isPartialReload) {
         // On partial reload, only include requested props
-        if (requestedProps.includes(key)) {
+        if (this.isRequested(key, requestedProps)) {
           resolvedProps[key] = value
         }
       } else {
@@ -188,6 +191,14 @@ export class InertiaService {
     }
 
     return { resolvedProps, mergeProps, deferredProps }
+  }
+
+  /**
+   * Check if a prop key is requested — supports dot-notation (e.g., `user.permissions`
+   * matches the top-level `user` key).
+   */
+  private isRequested(key: string, requestedProps: string[]): boolean {
+    return requestedProps.some((prop) => prop === key || prop.startsWith(`${key}.`))
   }
 
   private isOptionalProp(value: unknown): value is InertiaOptionalProp {
@@ -200,5 +211,15 @@ export class InertiaService {
 
   private isMergeProp(value: unknown): value is InertiaMergeProp {
     return typeof value === 'object' && value !== null && INERTIA_PROP_MERGE in value
+  }
+
+  private isSsrDisabled(pathname: string): boolean {
+    const patterns = this.options.ssr?.disabled
+    if (!patterns || patterns.length === 0) return false
+
+    return patterns.some((pattern) => {
+      const regex = new RegExp(`^/${pattern.replace(/\*/g, '.*')}$`)
+      return regex.test(pathname)
+    })
   }
 }

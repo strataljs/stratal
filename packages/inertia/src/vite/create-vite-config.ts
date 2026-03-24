@@ -24,11 +24,32 @@ export async function createInertiaViteConfig(options: InertiaViteConfigOptions)
   const { stratalInertiaDevCss } = await import('./inertia-dev-css-plugin')
   const { stratalInertiaTypes } = await import('./inertia-types-plugin')
 
+  // Check if user's config already includes the @inertiajs/vite plugin
+  const userPlugins = Array.isArray((userConfig as UserConfig).plugins)
+    ? (userConfig as UserConfig).plugins!.flat()
+    : []
+  const hasInertiaPlugin = userPlugins.some(
+    (p) => p && typeof p === 'object' && 'name' in p && (p as Plugin).name === 'inertia',
+  )
+
+  const inertiaPlugins: Plugin[] = []
+  if (!hasInertiaPlugin) {
+    try {
+      const { default: inertia } = await import('@inertiajs/vite') as { default: (opts?: Record<string, unknown>) => Plugin }
+      inertiaPlugins.push(inertia({
+        pages: { path: './src/inertia/pages', extension: '.tsx' },
+      }))
+    } catch {
+      // @inertiajs/vite not installed — skip
+    }
+  }
+
   const optimizeDepsExclude = ['@cloudflare/vite-plugin', 'wrangler', 'blake3-wasm']
 
   const baseConfig: UserConfig = {
     plugins: [
       cloudflare(),
+      ...inertiaPlugins,
       stratalInertiaDevCss({ entries: ['/' + options.entryPath] }),
       stratalInertiaTypes(),
       {

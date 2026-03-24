@@ -24,6 +24,7 @@ declare module 'stratal/router' {
     defer(callback: () => unknown, group?: string): InertiaDeferredProp
     optional(callback: () => unknown): InertiaOptionalProp
     merge(callback: () => unknown): InertiaMergeProp
+    withoutSsr(): void
   }
 }
 
@@ -63,5 +64,9 @@ export function augmentRouterContext(resolveService: (ctx: RouterContext) => Ine
   proto.merge = function (this: RouterContext, callback: () => unknown) {
     const service = resolveService(this)
     return service.merge(callback)
+  }
+
+  proto.withoutSsr = function (this: RouterContext) {
+    this.c.set('withoutSsr', true)
   }
 }

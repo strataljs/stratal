@@ -1,10 +1,12 @@
+import type { SharedPageProps } from '@inertiajs/core'
 import type { RouterContext } from 'stratal/router'
 
- 
+
 export interface InertiaPageRegistry {}
 
- 
-export interface InertiaSharedProps {}
+// Derive shared props from @inertiajs/core's InertiaConfig.sharedPageProps.
+// Users augment InertiaConfig in their global.d.ts — this type stays in sync automatically.
+export type InertiaSharedProps = SharedPageProps
 
 export type InertiaPageComponent = keyof InertiaPageRegistry extends never
   ? string
@@ -22,8 +24,7 @@ export type ResolvedInertiaPageProps<C extends InertiaPageComponent> =
 
 // Full props the React page component receives — page-specific + shared (auto-injected)
 export type InertiaFullPageProps<C extends InertiaPageComponent> =
-  ResolvedInertiaPageProps<C>
-  & (keyof InertiaSharedProps extends never ? {} : InertiaSharedProps)
+  ResolvedInertiaPageProps<C> & InertiaSharedProps
 
 export interface InertiaPage {
   component: string
@@ -32,8 +33,8 @@ export interface InertiaPage {
   version: string
   mergeProps: string[]
   deferredProps: Record<string, string[]>
-  encryptHistory: boolean
-  clearHistory: boolean
+  encryptHistory?: boolean
+  clearHistory?: boolean
 }
 
 export interface InertiaRenderOptions {

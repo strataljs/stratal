@@ -16,6 +16,7 @@ export class InertiaMiddleware implements Middleware {
     // Store Inertia state on context for services to access
     ctx.c.set('inertia', isInertia)
     ctx.c.set('inertiaPrefetch', isPrefetch)
+    ctx.c.set('withoutSsr', false)
 
     // Version mismatch check on GET requests
     if (isInertia && ctx.c.req.method === 'GET') {

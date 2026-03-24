@@ -257,11 +257,18 @@ export function generateInertiaTypes(pages: PageTypeInfo[], sharedData?: SharedD
   }
   lines.push('  }')
 
+  lines.push('}')
+
   if (sharedData) {
-    lines.push('  interface InertiaSharedProps ', `    ${sharedData.propsType}`)
+    lines.push('')
+    lines.push("declare module '@inertiajs/core' {")
+    lines.push('  interface InertiaConfig {')
+    lines.push(`    sharedPageProps: ${sharedData.propsType}`)
+    lines.push('  }')
+    lines.push('}')
   }
 
-  lines.push('}', '', 'export {}', '')
+  lines.push('', 'export {}', '')
 
   return lines.join('\n')
 }

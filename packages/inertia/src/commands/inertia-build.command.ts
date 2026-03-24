@@ -4,11 +4,12 @@ import { Command } from 'stratal/quarry'
 import { createInertiaViteConfig } from '../vite/create-vite-config'
 
 export class InertiaBuildCommand extends Command {
-  static command = 'inertia:build {--outDir=dist : Output directory}'
+  static command = 'inertia:build {--outDir=dist : Output directory} {--ssr : Also build SSR bundle}'
   static description = 'Build Inertia.js frontend for production'
 
   async handle(): Promise<number | undefined> {
     const outDir = this.string('outDir') || 'dist'
+    const shouldBuildSsr = this.boolean('ssr')
     const cwd = process.cwd()
 
     const entryPath = join(cwd, 'src', 'inertia', 'app.tsx')
@@ -29,8 +30,21 @@ export class InertiaBuildCommand extends Command {
       })
 
       await build(config)
+      this.success('Client build complete!')
 
-      this.success(`Build complete! Output in ${outDir}/`)
+      if (shouldBuildSsr) {
+        this.info('Building SSR bundle...')
+        await build({
+          ...config,
+          build: {
+            ...config.build,
+            ssr: true,
+          },
+        })
+        this.success('SSR build complete!')
+      }
+
+      this.success(`Output in ${outDir}/`)
     } catch (err) {
       this.fail(`Build failed: ${(err as Error).message}`)
       return 1

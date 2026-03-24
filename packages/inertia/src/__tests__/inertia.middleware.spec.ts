@@ -48,6 +48,7 @@ describe('InertiaMiddleware', () => {
 
     expect(c.set).toHaveBeenCalledWith('inertia', true)
     expect(c.set).toHaveBeenCalledWith('inertiaPrefetch', true)
+    expect(c.set).toHaveBeenCalledWith('withoutSsr', false)
   })
 
   it('should set inertia to false for non-Inertia requests', async () => {

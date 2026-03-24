@@ -2130,6 +2130,33 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@inertiajs/core@npm:3.0.0-beta.5, @inertiajs/core@npm:^3.0.0-beta.5":
+  version: 3.0.0-beta.5
+  resolution: "@inertiajs/core@npm:3.0.0-beta.5"
+  dependencies:
+    "@jridgewell/trace-mapping": "npm:^0.3.31"
+    es-toolkit: "npm:^1.33.0"
+    laravel-precognition: "npm:2.0.0-beta.5"
+  peerDependencies:
+    axios: ^1.13.2
+  peerDependenciesMeta:
+    axios:
+      optional: true
+  checksum: 10c0/c65989552763e3514585a5269b2f3383c04b4198def45fb3e4aff4f3e7195853243df0d01033e3c5d756c2b453d06e8f4b00db59f18b9891786a7bb1799f0937
+  languageName: node
+  linkType: hard
+
+"@inertiajs/vite@npm:^3.0.0-beta.5":
+  version: 3.0.0-beta.5
+  resolution: "@inertiajs/vite@npm:3.0.0-beta.5"
+  dependencies:
+    "@inertiajs/core": "npm:3.0.0-beta.5"
+  peerDependencies:
+    vite: ^7.0.0 || ^8.0.0
+  checksum: 10c0/b8bd7ea6ae680ef32999d7814c65c5152bf2ea1c6d19853f55206fdd78de51302667f28fc8979be44d8d0a89bbbf093351363f43d63e7279fa154966d65e7497
+  languageName: node
+  linkType: hard
+
 "@inquirer/ansi@npm:^1.0.2":
   version: 1.0.2
   resolution: "@inquirer/ansi@npm:1.0.2"
@@ -3991,6 +4018,8 @@ __metadata:
   resolution: "@stratal/inertia@workspace:packages/inertia"
   dependencies:
     "@cloudflare/workers-types": "npm:4.20260317.1"
+    "@inertiajs/core": "npm:^3.0.0-beta.5"
+    "@inertiajs/vite": "npm:^3.0.0-beta.5"
     "@stratal/testing": "workspace:*"
     "@types/node": "npm:^25.5.0"
     "@types/react": "npm:^19.2.14"
@@ -4008,14 +4037,20 @@ __metadata:
     vite: "npm:^8.0.1"
     vitest: "npm:~4.1.0"
   peerDependencies:
-    "@inertiajs/react": ^3.0.0
+    "@inertiajs/core": ^3.0.0-beta.5
+    "@inertiajs/react": ^3.0.0-beta.5
+    "@inertiajs/vite": ^3.0.0-beta.5
     hono: ^4.12.8
     react: ^19.0.0
     react-dom: ^19.0.0
     reflect-metadata: ^0.2.2
     stratal: ^0.0.17
   peerDependenciesMeta:
+    "@inertiajs/core":
+      optional: true
     "@inertiajs/react":
+      optional: true
+    "@inertiajs/vite":
       optional: true
     react:
       optional: true
@@ -6118,6 +6153,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"es-toolkit@npm:^1.32.0, es-toolkit@npm:^1.33.0":
+  version: 1.45.1
+  resolution: "es-toolkit@npm:1.45.1"
+  dependenciesMeta:
+    "@trivago/prettier-plugin-sort-imports@4.3.0":
+      unplugged: true
+    prettier-plugin-sort-re-exports@0.0.1:
+      unplugged: true
+  checksum: 10c0/b19180c778af8fe2fb450e8e05a5793166c91e0aa66b87d9fcfcc5618bd33e6ceec9c103e074458d32b2044972dc4fc63631b3b615834fde261917e9561f6f59
+  languageName: node
+  linkType: hard
+
 "esbuild@npm:0.27.3":
   version: 0.27.3
   resolution: "esbuild@npm:0.27.3"
@@ -7481,6 +7528,20 @@ __metadata:
     vscode-languageserver-textdocument: "npm:~1.0.11"
     vscode-uri: "npm:~3.0.8"
   checksum: 10c0/3923b03aaaa92533584074114f3c0e26f64a2777926638c758fc105ea038bfb0701eda911561a7c5b7d0681bef1caae9618f68ede85c398ae44ec38613dc3fb2
+  languageName: node
+  linkType: hard
+
+"laravel-precognition@npm:2.0.0-beta.5":
+  version: 2.0.0-beta.5
+  resolution: "laravel-precognition@npm:2.0.0-beta.5"
+  dependencies:
+    es-toolkit: "npm:^1.32.0"
+  peerDependencies:
+    axios: ^1.4.0
+  peerDependenciesMeta:
+    axios:
+      optional: true
+  checksum: 10c0/e158721bff6e149e0bf78e1c4b3fc16eacaf548427a7291fa55ba8aaf33423c426c575a53e3ca6264c7df9f55e51072c4c02d9fba6284d51562b559120a5bcbe
   languageName: node
   linkType: hard
 

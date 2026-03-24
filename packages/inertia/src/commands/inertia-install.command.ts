@@ -18,42 +18,8 @@ const ROOT_HTML = `<!DOCTYPE html>
 </html>`
 
 const APP_TSX = `import { createInertiaApp } from '@inertiajs/react'
-import { hydrateRoot } from 'react-dom/client'
 
-const pages = import.meta.glob('./pages/**/*.tsx', { eager: true }) as Record<string, { default: React.ComponentType }>
-
-createInertiaApp({
-  resolve: (name) => {
-    const page = pages[\`./pages/\${name}.tsx\`]
-    if (!page) {
-      throw new Error(\`Page not found: \${name}\`)
-    }
-    return page
-  },
-  setup({ el, App, props }) {
-    hydrateRoot(el, <App {...props} />)
-  },
-})`
-
-const SSR_TSX = `import { createInertiaApp } from '@inertiajs/react'
-import { renderToString } from 'react-dom/server'
-
-const pages = import.meta.glob('./pages/**/*.tsx', { eager: true }) as Record<string, { default: React.ComponentType }>
-
-export async function render(page: unknown) {
-  return createInertiaApp({
-    page,
-    render: renderToString,
-    resolve: (name) => {
-      const mod = pages[\`./pages/\${name}.tsx\`]
-      if (!mod) {
-        throw new Error(\`Page not found: \${name}\`)
-      }
-      return mod
-    },
-    setup: ({ App, props }) => <App {...props} />,
-  })
-}`
+createInertiaApp()`
 
 const HOME_TSX = `export default function Home({ message }: { message: string }) {
   return (
@@ -90,7 +56,6 @@ export class InertiaInstallCommand extends Command {
     const files = [
       { path: join(inertiaDir, 'root.html'), content: ROOT_HTML, name: 'root.html' },
       { path: join(inertiaDir, 'app.tsx'), content: APP_TSX, name: 'app.tsx' },
-      { path: join(inertiaDir, 'ssr.tsx'), content: SSR_TSX, name: 'ssr.tsx' },
       { path: join(pagesDir, 'Home.tsx'), content: HOME_TSX, name: 'pages/Home.tsx' },
     ]
 
@@ -130,7 +95,7 @@ export class InertiaInstallCommand extends Command {
     if (!skipDeps) {
       this.newLine()
       this.info('Install the following dependencies:')
-      this.line('  npm install @stratal/inertia @inertiajs/react react react-dom')
+      this.line('  npm install @stratal/inertia @inertiajs/react @inertiajs/vite react react-dom')
       this.line('  npm install -D @types/react @types/react-dom vite @cloudflare/vite-plugin')
     }
 
@@ -185,13 +150,13 @@ export class InertiaInstallCommand extends Command {
         const initializer = importsProp.asKind(SyntaxKind.PropertyAssignment)?.getInitializer()
         const arrayLiteral = initializer?.asKind(SyntaxKind.ArrayLiteralExpression)
         if (arrayLiteral) {
-          arrayLiteral.addElement(`InertiaModule.forRoot({\n    rootView,\n    ssr: { bundle: () => import('./inertia/ssr') },\n  })`)
+          arrayLiteral.addElement(`InertiaModule.forRoot({\n    rootView,\n  })`)
         }
       } else {
         // Add imports property
         objLiteral.addPropertyAssignment({
           name: 'imports',
-          initializer: `[\n    InertiaModule.forRoot({\n      rootView,\n      ssr: { bundle: () => import('./inertia/ssr') },\n    }),\n  ]`,
+          initializer: `[\n    InertiaModule.forRoot({\n      rootView,\n    }),\n  ]`,
         })
       }
 

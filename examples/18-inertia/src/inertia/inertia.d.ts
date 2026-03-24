@@ -8,8 +8,12 @@ declare module '@stratal/inertia' {
     'notes/Index': { notes: Note[]; stats?: Stats | undefined; page: number; }
     'notes/Show': { note: Note; comments?: Comment[] | undefined; }
   }
-  interface InertiaSharedProps 
-    { appName: "Stratal Notes"; flash: string | null }
+}
+
+declare module '@inertiajs/core' {
+  interface InertiaConfig {
+    sharedPageProps: { appName: "Stratal Notes"; flash: string | null }
+  }
 }
 
 export {}

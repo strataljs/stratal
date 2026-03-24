@@ -58,7 +58,9 @@
     "ts-morph": "^27.0.2"
   },
   "peerDependencies": {
-    "@inertiajs/react": "^3.0.0",
+    "@inertiajs/core": "^3.0.0-beta.5",
+    "@inertiajs/react": "^3.0.0-beta.5",
+    "@inertiajs/vite": "^3.0.0-beta.5",
     "hono": "^4.12.8",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -66,7 +68,13 @@
     "stratal": "^0.0.17"
   },
   "peerDependenciesMeta": {
+    "@inertiajs/core": {
+      "optional": true
+    },
     "@inertiajs/react": {
+      "optional": true
+    },
+    "@inertiajs/vite": {
       "optional": true
     },
     "react": {
@@ -78,6 +86,8 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "4.20260317.1",
+    "@inertiajs/core": "^3.0.0-beta.5",
+    "@inertiajs/vite": "^3.0.0-beta.5",
     "@stratal/testing": "workspace:*",
     "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",
