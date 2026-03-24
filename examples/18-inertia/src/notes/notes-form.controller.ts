@@ -1,3 +1,4 @@
+import { abort } from 'stratal/errors'
 import { Controller, Get, type RouterContext } from 'stratal/router'
 import { z } from 'stratal/validation'
 import { inject } from 'tsyringe'
@@ -22,7 +23,7 @@ export class NotesFormController {
     const note = await this.notes.findById(id)
 
     if (!note) {
-      return ctx.json({ error: 'Note not found' }, 404)
+      abort(404, 'Note not found')
     }
 
     return ctx.inertia('notes/Edit', { note })

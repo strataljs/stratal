@@ -1,5 +1,6 @@
 import type { InertiaService } from '@stratal/inertia'
 import { INERTIA_TOKENS, InertiaRoute } from '@stratal/inertia'
+import { abort } from 'stratal/errors'
 import { Controller, type IController, type RouterContext } from 'stratal/router'
 import { z } from 'stratal/validation'
 import { inject } from 'tsyringe'
@@ -31,7 +32,7 @@ export class NotesController implements IController {
     const note = await this.notes.findById(id)
 
     if (!note) {
-      return ctx.json({ error: 'Note not found' }, 404)
+      abort(404, 'Note not found')
     }
 
     this.inertia.share('currentNote', note.title)
@@ -61,7 +62,7 @@ export class NotesController implements IController {
     const note = await this.notes.update(id, { title, content })
 
     if (!note) {
-      return ctx.json({ error: 'Note not found' }, 404)
+      abort(404, 'Note not found')
     }
 
     return ctx.redirect(`/notes/${id}`)
