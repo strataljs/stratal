@@ -1,7 +1,7 @@
-import type { InertiaSsrResult, ViteManifest } from './types'
+import type { InertiaPage, InertiaSsrResult, ViteManifest } from './types'
 
 interface SsrBundleModule {
-  render(...args: never[]): Promise<InertiaSsrResult>
+  render(page: InertiaPage): Promise<InertiaSsrResult>
 }
 
 export interface InertiaSsrOptions {

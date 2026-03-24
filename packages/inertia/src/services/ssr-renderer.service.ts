@@ -41,8 +41,12 @@ export class SsrRendererService {
   private async loadBundle(): Promise<void> {
     if (!this.options.ssr) return
 
-    const mod = await this.options.ssr.bundle()
-    const resolved = ('default' in mod ? mod.default : mod) as LoadedSsrBundle
-    this.bundle = resolved
+    try {
+      const mod = await this.options.ssr.bundle()
+      const resolved = ('default' in mod ? mod.default : mod) as LoadedSsrBundle
+      this.bundle = resolved
+    } catch {
+      this.loadPromise = null
+    }
   }
 }

@@ -11,7 +11,7 @@ export function stratalInertiaTypes(): Plugin {
 
     configResolved(config) {
       cwd = config.root
-      pagesDir = findPagesDir(cwd)
+      pagesDir = findPagesDir(cwd) + '/'
     },
 
     async buildStart() {

@@ -60,7 +60,8 @@ async function collectStyle(server: ViteDevServer, entries: string[]): Promise<s
 
   for (const url of urls) {
     try {
-      const result = await server.transformRequest(url + '?direct')
+      const separator = url.includes('?') ? '&' : '?'
+      const result = await server.transformRequest(url + separator + 'direct')
       if (result?.code) {
         styles.push(result.code)
       }

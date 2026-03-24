@@ -22,9 +22,9 @@ type AllowInertiaWrappers<T> = {
 export type ResolvedInertiaPageProps<C extends InertiaPageComponent> =
   C extends keyof InertiaPageRegistry ? AllowInertiaWrappers<InertiaPageRegistry[C]> : Record<string, unknown>
 
-// Full props the React page component receives — page-specific + shared (auto-injected)
+// Full props the React page component receives — page-specific + shared (auto-injected), no wrappers
 export type InertiaFullPageProps<C extends InertiaPageComponent> =
-  ResolvedInertiaPageProps<C> & InertiaSharedProps
+  (C extends keyof InertiaPageRegistry ? InertiaPageRegistry[C] : Record<string, unknown>) & InertiaSharedProps
 
 export interface InertiaPage {
   component: string

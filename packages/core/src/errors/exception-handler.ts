@@ -544,10 +544,19 @@ export abstract class ExceptionHandler {
    */
   private resolveSeverity(error: ApplicationError): LogSeverity {
     // Check registered overrides (most-specific class wins)
+    let bestClass: ApplicationErrorConstructor | undefined
+    let bestSeverity: LogSeverity | undefined
+
     for (const [cls, severity] of this.levelOverrides) {
-      if (error instanceof cls) return severity
+      if (error instanceof cls) {
+        if (!bestClass || cls.prototype instanceof bestClass) {
+          bestClass = cls
+          bestSeverity = severity
+        }
+      }
     }
-    return this.getDefaultSeverity(error.code)
+
+    return bestSeverity ?? this.getDefaultSeverity(error.code)
   }
 
   /**

@@ -27,9 +27,12 @@ export class ManifestService {
     }
 
     const tags: string[] = []
+    const seen = new Set<string>()
     for (const entry of Object.values(this.manifest!)) {
       if (entry.css) {
         for (const cssFile of entry.css) {
+          if (seen.has(cssFile)) continue
+          seen.add(cssFile)
           tags.push(`<link rel="stylesheet" href="/${cssFile}" />`)
         }
       }

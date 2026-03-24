@@ -4,7 +4,7 @@ import { Command } from 'stratal/quarry'
 import { runTypeGeneration } from '../generator/type-generator'
 
 const ROOT_HTML = `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -73,8 +73,12 @@ export class InertiaInstallCommand extends Command {
     if (existsSync(appModulePath)) {
       this.info('Updating src/app.module.ts...')
       try {
-        await this.updateAppModule(appModulePath)
-        this.success('Updated src/app.module.ts with InertiaModule')
+        const updated = await this.updateAppModule(appModulePath)
+        if (updated) {
+          this.success('Updated src/app.module.ts with InertiaModule')
+        } else {
+          this.info('InertiaModule already configured in app.module.ts')
+        }
       } catch (err) {
         this.warn(`Could not auto-update app.module.ts: ${(err as Error).message}`)
         this.info('Please manually add InertiaModule.forRoot() to your module imports')
@@ -106,7 +110,7 @@ export class InertiaInstallCommand extends Command {
     return 0
   }
 
-  private async updateAppModule(modulePath: string): Promise<void> {
+  private async updateAppModule(modulePath: string): Promise<boolean> {
     const { Project, SyntaxKind } = await import('ts-morph')
 
     const project = new Project({ useInMemoryFileSystem: false })
@@ -117,7 +121,7 @@ export class InertiaInstallCommand extends Command {
       decl.getModuleSpecifierValue() === '@stratal/inertia',
     )
     if (existingImport) {
-      return
+      return false
     }
 
     // Add rootView import
@@ -164,5 +168,6 @@ export class InertiaInstallCommand extends Command {
     }
 
     await sourceFile.save()
+    return true
   }
 }

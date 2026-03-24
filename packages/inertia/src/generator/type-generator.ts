@@ -1,5 +1,5 @@
-import { existsSync, writeFileSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { dirname, join, relative } from 'node:path'
 
 export interface PageTypeInfo {
   componentName: string
@@ -47,6 +47,9 @@ export async function extractPageTypes(pagesDir: string, tsConfigPath?: string):
     const relPath = relative(pagesDir, filePath)
 
     if (relPath.includes('__tests__') || relPath.includes('.spec.') || relPath.includes('.test.')) continue
+
+    const fileName = relPath.split('/').pop()!
+    if (fileName.startsWith("_") || /^Layout\.(tsx|ts)$/.test(fileName)) continue
 
     const componentName = relPath
       .replace(/\.(tsx|ts)$/, '')
@@ -137,7 +140,10 @@ function typeToString(type: Type, tsObj: TsObj): string {
   return text
 }
 
-function expandTypeToInline(type: Type, tsObj: TsObj): string {
+function expandTypeToInline(type: Type, tsObj: TsObj, visited = new Set<Type>()): string {
+  if (visited.has(type)) return 'Record<string, unknown>'
+  visited.add(type)
+
   if (type.isObject() && !type.isArray()) {
     const properties = type.getProperties()
     if (properties.length === 0) return 'Record<string, never>'
@@ -145,7 +151,7 @@ function expandTypeToInline(type: Type, tsObj: TsObj): string {
     const members = properties.map((prop) => {
       const propType = prop.getTypeAtLocation(prop.getDeclarations()[0] ?? prop.getValueDeclaration()!)
       const isOptional = prop.isOptional()
-      const propTypeStr = expandTypeToInline(propType, tsObj)
+      const propTypeStr = expandTypeToInline(propType, tsObj, visited)
       return `${prop.getName()}${isOptional ? '?' : ''}: ${propTypeStr}`
     })
 
@@ -155,16 +161,16 @@ function expandTypeToInline(type: Type, tsObj: TsObj): string {
   if (type.isArray()) {
     const elementType = type.getArrayElementType()
     if (elementType) {
-      return `Array<${expandTypeToInline(elementType, tsObj)}>`
+      return `Array<${expandTypeToInline(elementType, tsObj, visited)}>`
     }
   }
 
   if (type.isUnion()) {
-    return type.getUnionTypes().map((t) => expandTypeToInline(t, tsObj)).join(' | ')
+    return type.getUnionTypes().map((t) => expandTypeToInline(t, tsObj, visited)).join(' | ')
   }
 
   if (type.isIntersection()) {
-    return type.getIntersectionTypes().map((t) => expandTypeToInline(t, tsObj)).join(' & ')
+    return type.getIntersectionTypes().map((t) => expandTypeToInline(t, tsObj, visited)).join(' & ')
   }
 
   const text = type.getText(undefined, tsObj.TypeFormatFlags.NoTruncation)
@@ -274,6 +280,7 @@ export function generateInertiaTypes(pages: PageTypeInfo[], sharedData?: SharedD
 }
 
 export function writeInertiaTypes(outputPath: string, content: string): void {
+  mkdirSync(dirname(outputPath), { recursive: true })
   writeFileSync(outputPath, content, 'utf-8')
 }
 

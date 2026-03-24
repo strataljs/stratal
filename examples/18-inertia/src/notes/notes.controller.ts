@@ -14,9 +14,9 @@ export class NotesController implements IController {
   ) { }
 
   // Demonstrates: merge props (paginated list), optional props (stats)
-  @InertiaRoute({ query: z.object({ page: z.string().optional() }) })
+  @InertiaRoute({ query: z.object({ page: z.coerce.number().int().min(1).optional().default(1) }) })
   async index(ctx: RouterContext) {
-    const page = Number(ctx.query('page') ?? '1')
+    const page = ctx.query('page') as unknown as number
 
     return ctx.inertia('notes/Index', {
       notes: ctx.merge(() => this.notes.findAll(page)),

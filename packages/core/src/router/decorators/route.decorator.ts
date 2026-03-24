@@ -119,6 +119,16 @@ export function getRouteMetadata(target: object, methodName: string): RouteMetad
  * @returns Array of method names that have route metadata
  */
 export function getRouteDecoratedMethods(ControllerClass: new (...args: unknown[]) => object): string[] {
-  const prototype = ControllerClass.prototype as object
-  return (Reflect.getOwnMetadata(ROUTE_METADATA_KEYS.DECORATED_METHODS, prototype) as string[] | undefined) ?? []
+  const methods = new Set<string>()
+  let proto: object | null = ControllerClass.prototype as object
+
+  while (proto && proto !== Object.prototype) {
+    const own = Reflect.getOwnMetadata(ROUTE_METADATA_KEYS.DECORATED_METHODS, proto) as string[] | undefined
+    if (own) {
+      for (const m of own) methods.add(m)
+    }
+    proto = Object.getPrototypeOf(proto) as object | null
+  }
+
+  return [...methods]
 }
