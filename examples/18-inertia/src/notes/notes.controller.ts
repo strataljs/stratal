@@ -1,20 +1,20 @@
 import type { InertiaService } from '@stratal/inertia'
-import { INERTIA_TOKENS, InertiaRoute } from '@stratal/inertia'
+import { INERTIA_TOKENS, InertiaDelete, InertiaGet, InertiaPost, InertiaPut } from '@stratal/inertia'
 import { abort } from 'stratal/errors'
-import { Controller, type IController, type RouterContext } from 'stratal/router'
+import { Controller, Get, type RouterContext } from 'stratal/router'
 import { z } from 'stratal/validation'
 import { inject } from 'tsyringe'
 import { NotesService } from './notes.service'
 
 @Controller('/notes')
-export class NotesController implements IController {
+export class NotesController {
   constructor(
     @inject(NotesService) private readonly notes: NotesService,
     @inject(INERTIA_TOKENS.InertiaService) private readonly inertia: InertiaService,
   ) { }
 
   // Demonstrates: merge props (paginated list), optional props (stats)
-  @InertiaRoute({ query: z.object({ page: z.coerce.number().int().min(1).optional().default(1) }) })
+  @InertiaGet('/', { query: z.object({ page: z.coerce.number().int().min(1).optional().default(1) }) })
   async index(ctx: RouterContext) {
     // casting to unknown is needed because ctx.query return type is string
     const page = ctx.query('page') as unknown as number
@@ -27,7 +27,7 @@ export class NotesController implements IController {
   }
 
   // Demonstrates: deferred props (comments), render options (encryptHistory), per-request share
-  @InertiaRoute({ params: z.object({ id: z.string() }) })
+  @InertiaGet('/:id', { params: z.object({ id: z.string() }) })
   async show(ctx: RouterContext) {
     const id = ctx.param('id')
     const note = await this.notes.findById(id)
@@ -44,8 +44,27 @@ export class NotesController implements IController {
     }, { encryptHistory: true })
   }
 
+  // Form page: create new note
+  @InertiaGet('/create')
+  async createForm(ctx: RouterContext) {
+    return ctx.inertia('notes/Create')
+  }
+
+  // Form page: edit existing note
+  @InertiaGet('/:id/edit', { params: z.object({ id: z.string() }) })
+  async editForm(ctx: RouterContext) {
+    const id = ctx.param('id')
+    const note = await this.notes.findById(id)
+
+    if (!note) {
+      abort(404, 'Note not found')
+    }
+
+    return ctx.inertia('notes/Edit', { note })
+  }
+
   // Demonstrates: form POST handling
-  @InertiaRoute({ body: z.object({ title: z.string(), content: z.string() }) })
+  @InertiaPost('/', { body: z.object({ title: z.string(), content: z.string() }) })
   async create(ctx: RouterContext) {
     const { title, content } = await ctx.body<{ title: string; content: string }>()
     const note = await this.notes.create({ title, content })
@@ -53,7 +72,7 @@ export class NotesController implements IController {
   }
 
   // Demonstrates: form PUT handling
-  @InertiaRoute({
+  @InertiaPut('/:id', {
     params: z.object({ id: z.string() }),
     body: z.object({ title: z.string().optional(), content: z.string().optional() }),
   })
@@ -70,10 +89,16 @@ export class NotesController implements IController {
   }
 
   // Demonstrates: form DELETE handling
-  @InertiaRoute({ params: z.object({ id: z.string() }) })
+  @InertiaDelete('/:id', { params: z.object({ id: z.string() }) })
   async destroy(ctx: RouterContext) {
     const id = ctx.param('id')
     await this.notes.delete(id)
     return ctx.redirect('/notes')
+  }
+
+  // Demonstrates: inertiaService.location() for external redirects
+  @Get('/export')
+  export(_ctx: RouterContext) {
+    return this.inertia.location('https://example.com/export')
   }
 }

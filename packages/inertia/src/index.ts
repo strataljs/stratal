@@ -33,8 +33,8 @@ export { SsrRendererService } from './services/ssr-renderer.service'
 export { TemplateService } from './services/template.service'
 
 // Decorators
-export { InertiaRoute } from './decorators/inertia-route.decorator'
-export type { InertiaRouteConfig } from './decorators/inertia-route.decorator'
+export { InertiaDelete, InertiaGet, InertiaPatch, InertiaPost, InertiaPut, InertiaRoute } from './decorators/inertia.decorators'
+export type { InertiaRouteConfig } from './decorators/inertia.decorators'
 
 // Middleware
 export { InertiaMiddleware } from './middleware/inertia.middleware'

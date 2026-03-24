@@ -388,14 +388,28 @@ export class RouteRegistrationService {
     const controllerHidden = controllerOpts?.hideFromDocs ?? false
     const controllerGuards = getControllerGuards(ControllerClass)?.guards ?? []
 
-    for (const methodName of decoratedMethods) {
-      const meta = getRouteMetadata(prototype, methodName)
-      if (!meta) continue
+    // Pre-resolve all methods and sort by path specificity (static before dynamic)
+    // This ensures /notes/create registers before /notes/:id regardless of declaration order
+    const resolvedMethods = decoratedMethods
+      .map(methodName => {
+        const meta = getRouteMetadata(prototype, methodName)
+        if (!meta) return null
+        const resolved = this.resolveMethodAndPath(meta, methodName, basePath, className)
+        if (!resolved) return null
+        return { methodName, meta, resolved }
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .sort((a, b) => {
+        const scoreA = this.getPathSpecificityScore(a.resolved.fullPath)
+        const scoreB = this.getPathSpecificityScore(b.resolved.fullPath)
+        if (scoreA !== scoreB) return scoreA - scoreB
+        // Tie-break: more segments = more specific path, register first
+        const segA = a.resolved.fullPath.split('/').filter(Boolean).length
+        const segB = b.resolved.fullPath.split('/').filter(Boolean).length
+        return segB - segA
+      })
 
-      // Resolve HTTP method and path from metadata
-      const resolved = this.resolveMethodAndPath(meta, methodName, basePath, className)
-      if (!resolved) continue
-
+    for (const { methodName, meta, resolved } of resolvedMethods) {
       const { httpMethod, fullPath, routeConfig, statusCodeOverride } = resolved
       const hideFromDocs = routeConfig.hideFromDocs ?? controllerHidden
 
@@ -489,6 +503,24 @@ export class RouteRegistrationService {
   private joinPaths(basePath: string, routePath: string): string {
     if (routePath === '/') return basePath
     return basePath + routePath
+  }
+
+  /**
+   * Compute a specificity score for route path sorting.
+   * Lower score = higher priority (registered first).
+   * Static paths < parameterized paths < wildcard paths.
+   */
+  private getPathSpecificityScore(path: string): number {
+    const segments = path.split('/').filter(Boolean)
+    let score = 0
+    for (const segment of segments) {
+      if (segment.includes('{.+}') || segment.includes('{.*}')) {
+        score += 100
+      } else if (segment.startsWith(':')) {
+        score += 10
+      }
+    }
+    return score
   }
 
 
