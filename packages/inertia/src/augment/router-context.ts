@@ -1,3 +1,4 @@
+import type { RedirectStatusCode } from 'hono/utils/http-status'
 import { RouterContext } from 'stratal/router'
 import type { InertiaService } from '../services/inertia.service'
 import type {
@@ -28,6 +29,20 @@ declare module 'stratal/router' {
 
 export function augmentRouterContext(resolveService: (ctx: RouterContext) => InertiaService): void {
   const proto = RouterContext.prototype
+
+  // Override redirect to auto-convert 302 → 303 for non-GET/HEAD requests
+  // so the browser follows with GET instead of preserving the original method
+  // eslint-disable-next-line @typescript-eslint/unbound-method -- intentionally saving reference, called with .call(this)
+  const originalRedirect = proto.redirect
+  proto.redirect = function (this: RouterContext, url: string, status?: RedirectStatusCode) {
+    if (!status || status === 302) {
+      const method = this.c.req.method
+      if (method !== 'GET' && method !== 'HEAD') {
+        return originalRedirect.call(this, url, 303)
+      }
+    }
+    return originalRedirect.call(this, url, status)
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   proto.inertia = function (this: RouterContext, component: string, props?: any, options?: InertiaRenderOptions) {
