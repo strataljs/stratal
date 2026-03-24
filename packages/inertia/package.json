@@ -4,7 +4,7 @@
   "description": "Inertia.js v3 server adapter for Stratal framework — server-driven React SPAs",
   "type": "module",
   "license": "MIT",
-  "author": "Stratal Contributors",
+  "author": "Temitayo Fadojutimi",
   "homepage": "https://github.com/strataljs/stratal#readme",
   "repository": {
     "type": "git",
@@ -28,7 +28,7 @@
   },
   "publishConfig": {
     "access": "public",
-    "provenance": true
+    "provenance": false
   },
   "files": [
     "dist",
