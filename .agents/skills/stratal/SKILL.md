@@ -38,7 +38,7 @@ Breaking any of these causes runtime failures.
 
 9. **Cron schedules must match `wrangler.jsonc`** — `CronJob.schedule` string must exactly match a trigger in `[triggers]`.
 
-10. **I18nModule must be configured for translations** — `I18nModule.forRoot()` for locale config. `I18nModule.registerMessages()` to add messages. `I18nService.t()` for translation. `withI18n()` for Zod validation messages.
+10. **I18nModule must be configured for translations** — `I18nModule.forRoot()` for locale config with `detection` option (`'cookie'` default, `'header'`, `'querystring'`, `'path'`). `I18nModule.registerMessages()` to add messages. `I18nService.t()` for translation. `withI18n()` for Zod validation messages.
 
 11. **Custom ExceptionHandler must extend `ExceptionHandler`** — Import from `stratal/errors`, implement `register()`, pass to `new Stratal({ exceptionHandler: AppExceptionHandler })`.
 
@@ -76,6 +76,7 @@ Constructor config:
 - `exceptionHandler?` — Custom `ExceptionHandler` subclass
 - `logging?` — `{ level?, formatter? }` (`'json'` | `'pretty'`)
 - `versioning?` — `{ prefix?, defaultVersion? }`
+- `i18n?` — `I18nModuleOptions` (passes detection config to Hono app)
 
 ## Module System
 
@@ -181,7 +182,7 @@ Framework: `@stratal/framework/auth`, `@stratal/framework/context`, `@stratal/fr
 
 Testing: `@stratal/testing`, `@stratal/testing/mocks`, `@stratal/testing/vitest-plugin`
 
-Inertia: `@stratal/inertia`, `@stratal/inertia/vite`
+Inertia: `@stratal/inertia`, `@stratal/inertia/vite`, `@stratal/inertia/react`
 
 ## Workflows
 
@@ -217,9 +218,11 @@ See `references/errors-and-i18n.md` for the full ExceptionHandler API.
 1. Install: `yarn add @stratal/inertia`
 2. Configure `InertiaModule.forRoot({ rootView: 'app', ssr: { bundle: () => import('./ssr') } })` in root module
 3. Use `@InertiaGet('/')` / `@InertiaPost('/')` and `ctx.inertia('page/Name', props)` in controllers (or `@InertiaRoute()` for convention routing)
-4. Run `npx quarry inertia:dev` for development
+4. For flash messages: add `flash: { store: new CookieFlashStore({ secret: env.FLASH_SECRET }) }` and use `ctx.flash(key, value)`
+5. For frontend i18n: add `i18n: { only: ['common', 'nav'] }` and use `useI18n()` from `@stratal/inertia/react`
+6. Run `npx quarry inertia:dev` for development
 
-See `references/inertia.md` for props, shared data, type safety, and Vite setup.
+See `references/inertia.md` for props, shared data, flash messages, i18n integration, type safety, and Vite setup.
 
 ### Expose API as MCP Server
 
@@ -246,6 +249,8 @@ See `references/quarry-cli.md` for all MCP flags and options.
 **User says "Expose my API as MCP tools"** -> Run `npx quarry mcp:serve`. Use `--tag` or `--path` flags to filter. Preview with `npx quarry mcp:tools`.
 
 **User says "List all routes" / "Debug my app"** -> Run `npx quarry route:list`. Also try `event:list`, `schedule:list`, `queue:list` to inspect other registrations.
+
+**User says "Set up i18n with Accept-Language header"** -> Read `references/errors-and-i18n.md`. Configure `I18nModule.forRoot({ detection: { strategy: 'header' } })`. Register messages with `I18nModule.registerMessages()`.
 
 **User says "I have an existing Hono app"** -> Read `references/incremental-adoption.md`. Mount Stratal as sub-app via `stratal.hono`.
 
@@ -289,5 +294,7 @@ Load these when the task needs deeper knowledge:
 **ExceptionHandler `register()` not called** -> Did you pass `exceptionHandler` to `new Stratal()`? The handler class must also have `@Transient()`.
 
 **Inertia returns JSON instead of full HTML** -> Missing SSR bundle configuration. Check `ssr.bundle` in `InertiaModule.forRoot()` options.
+
+**Locale not detected** -> Check `detection` strategy in `I18nModule.forRoot()`. Default is `'cookie'` (reads `locale` cookie). Use `'header'` for `Accept-Language`, `'querystring'` for `?locale=`, `'path'` for URL prefix.
 
 **Routes not showing in `route:list`** -> Controller not in module's `controllers` array, or module not imported in root module.

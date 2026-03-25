@@ -9,7 +9,7 @@ yarn add @stratal/inertia
 ```
 
 ```typescript
-import { InertiaModule } from '@stratal/inertia'
+import { InertiaModule, CookieFlashStore } from '@stratal/inertia'
 
 @Module({
   imports: [
@@ -20,6 +20,10 @@ import { InertiaModule } from '@stratal/inertia'
         appName: 'My App',
         auth: (ctx) => ({ user: ctx.c.get('user') }),  // Resolver function
       },
+      flash: {                                   // Flash messages
+        store: new CookieFlashStore({ secret: env.FLASH_SECRET }),
+      },
+      i18n: { only: ['common', 'nav'] },         // Share translations with frontend
       ssr: {
         bundle: () => import('./ssr-bundle'),     // SSR bundle (async import)
         disabled: ['admin/*'],                    // Glob patterns to skip SSR
@@ -45,9 +49,11 @@ InertiaModule.forRootAsync({
 ### Options
 
 - `rootView` (required) — Root HTML template name
-- `version?` — Asset version for cache busting
+- `version?` — Asset version for cache busting (nullable)
 - `ssr?` — `{ bundle: () => Promise<SsrModule>, disabled?: string[] }`
 - `sharedData?` — Static values or `(ctx: RouterContext) => any` resolver functions
+- `flash?` — `{ store: FlashStore }` — flash message storage (use `CookieFlashStore`)
+- `i18n?` — `{ only?: string[] }` — share backend translations with frontend
 - `manifest?` — Vite manifest object for asset resolution
 - `entryClientPath?` — Client entry point (default: `src/inertia/app.tsx`)
 
@@ -94,7 +100,7 @@ export class NotesController {
 `ctx.inertia(component, props?, options?)`:
 - First request: returns full HTML page with SSR
 - Subsequent Inertia requests (`X-Inertia` header): returns JSON page object
-- `options`: `{ encryptHistory?, clearHistory? }`
+- `options`: `{ encryptHistory?, clearHistory?, preserveFragment? }` (all optional)
 
 ## Inertia Decorators
 
@@ -170,15 +176,53 @@ return ctx.inertia('notes/Index', {
 })
 ```
 
-### Merge Props
+### Once Props
 
-Merged with existing props on partial reload instead of replacing:
+Sent only on the first visit and cached for subsequent requests:
 
 ```typescript
 return ctx.inertia('notes/Index', {
-  notes: ctx.merge(() => this.service.list()),
+  notes: await this.service.list(),
+  serverTime: ctx.once(() => Date.now()),
+  config: ctx.once(() => loadConfig(), { key: 'app-config' }),                   // Custom cache key
+  token: ctx.once(() => generateToken(), { expiresAt: Date.now() + 3600000 }),   // Expires in 1h
 })
 ```
+
+Options: `{ key?: string, expiresAt?: number | null }`
+
+### Always Props
+
+Always evaluated and included, even on partial reload requests:
+
+```typescript
+return ctx.inertia('notes/Index', {
+  notes: await this.service.list(),
+  csrfToken: ctx.always(() => generateCsrfToken()),
+})
+```
+
+### Merge Props
+
+Merged with existing client-side data on partial reload instead of replacing. Supports strategies:
+
+```typescript
+return ctx.inertia('notes/Index', {
+  // Default: append to existing array
+  notes: ctx.merge(() => this.service.list()),
+
+  // Prepend to start of array
+  notifications: ctx.merge(() => this.service.getNotifications(), { strategy: 'prepend' }),
+
+  // Deep merge objects
+  settings: ctx.merge(() => this.service.getSettings(), { strategy: 'deep' }),
+
+  // Append with deduplication by key
+  users: ctx.merge(() => this.service.getUsers(), { matchOn: 'id' }),
+})
+```
+
+Strategies: `'append'` (default), `'prepend'`, `'deep'`. Use `matchOn` to deduplicate array items by a key field.
 
 ## Shared Data
 
@@ -193,12 +237,110 @@ InertiaModule.forRoot({
       user: ctx.c.get('user'),
       isAuthenticated: !!ctx.c.get('user'),
     }),
-    flash: (ctx) => ctx.c.get('flash'),
   },
 })
 ```
 
 Resolvers are called per-request. Static values are shared across all requests.
+
+## Flash Messages
+
+Flash data is stored between requests and automatically shared as Inertia props via the `flash` object.
+
+### Setup
+
+```typescript
+import { InertiaModule, CookieFlashStore } from '@stratal/inertia'
+
+InertiaModule.forRoot({
+  rootView: 'app',
+  flash: {
+    store: new CookieFlashStore({
+      secret: env.FLASH_SECRET,         // Required: signing secret
+      cookie: 'stratal_flash',           // Optional: cookie name (default)
+      cookieOptions: { sameSite: 'Lax' }, // Optional: cookie options
+    }),
+  },
+})
+```
+
+### Setting Flash Data
+
+Use `ctx.flash(key, value)` in controller methods:
+
+```typescript
+@InertiaPost('/')
+async create(ctx: RouterContext): Promise<Response> {
+  await this.service.create(ctx.body())
+  ctx.flash('success', 'Note created successfully')
+  return ctx.redirect('/notes')
+}
+```
+
+Flash data is available on the next Inertia visit in the page `flash` object.
+
+### Custom Flash Stores
+
+Implement `FlashStore` for custom storage backends (e.g., KV, session):
+
+```typescript
+import type { FlashStore } from '@stratal/inertia'
+
+export class KvFlashStore implements FlashStore {
+  async read(ctx: RouterContext): Promise<Record<string, unknown>> { ... }
+  async write(ctx: RouterContext, data: Record<string, unknown>): Promise<void> { ... }
+  async clear(ctx: RouterContext): Promise<void> { ... }
+}
+```
+
+## I18n Integration
+
+Share backend translation messages with your React frontend automatically.
+
+### Setup
+
+Add the `i18n` option to `InertiaModule.forRoot()`:
+
+```typescript
+InertiaModule.forRoot({
+  rootView: 'app',
+  i18n: { only: ['common', 'nav'] },  // Only share specific namespaces
+})
+```
+
+When `i18n` is set, the module auto-injects `locale` (string) and `translations` (flattened messages) as shared props on every page response.
+
+### Frontend Usage
+
+Use the `useI18n()` hook from `@stratal/inertia/react`:
+
+```tsx
+import { useI18n } from '@stratal/inertia/react'
+
+export default function Header() {
+  const { t, locale } = useI18n()
+
+  return (
+    <header>
+      <h1>{t('common.title')}</h1>
+      <p>{t('common.greeting', { name: 'World' })}</p>
+      <span>Locale: {locale}</span>
+    </header>
+  )
+}
+```
+
+`t(key, params?)` works identically to `I18nService.t()` on the backend.
+
+### Filtering Namespaces
+
+Use `only` to limit which message namespaces are sent to the frontend (reduces payload):
+
+```typescript
+i18n: { only: ['common', 'nav'] }           // Top-level namespaces
+i18n: { only: ['common.actions'] }           // Nested prefix
+i18n: {}                                      // All messages (omit only)
+```
 
 ## SSR
 
@@ -272,5 +414,6 @@ export default createViteConfig({
 
 ## Sub-Path Imports
 
-- `@stratal/inertia` — Main module, service, decorators, types
+- `@stratal/inertia` — Main module, service, decorators, flash stores, types
 - `@stratal/inertia/vite` — Vite configuration and plugins
+- `@stratal/inertia/react` — React hooks (`useI18n`)

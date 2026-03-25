@@ -131,6 +131,38 @@ const response = await module.http
   .send()
 ```
 
+### Locale Testing
+
+Set the locale for requests. The strategy auto-resolves from your `I18nModule.forRoot()` detection config, or can be overridden:
+
+```typescript
+// Sets locale for all requests from this client
+const response = await module.http
+  .withLocale('fr')
+  .get('/api/v1/notes')
+  .send()
+
+// Sets locale for a single request
+const response = await module.http
+  .get('/api/v1/notes')
+  .withLocale('fr')
+  .send()
+
+// Override strategy for a specific request
+const response = await module.http
+  .get('/api/v1/notes')
+  .withLocale('fr', 'header')
+  .send()
+```
+
+`withLocale(locale, strategy?)` is available on `TestHttpClient`, `TestHttpRequest`, `TestSseRequest`, and `TestWsRequest`.
+
+Strategy determines how the locale is applied:
+- `'cookie'` — sets `Cookie: locale=fr`
+- `'header'` — sets `Accept-Language: fr`
+- `'querystring'` — appends `?locale=fr` to the URL
+- `'path'` — use the URL path directly (e.g., `/fr/api/v1/notes`)
+
 ### Authenticated Requests
 
 ```typescript
@@ -312,6 +344,11 @@ ws.send('hello')
 await ws.assertMessage('echo:hello')
 ws.close()
 await ws.waitForClose()
+
+// With locale
+const ws = await module.ws('/ws/chat')
+  .withLocale('fr')
+  .connect()
 ```
 
 ## SSE Testing
@@ -323,4 +360,9 @@ const sse = await module.sse('/streaming/events')
 
 await sse.assertEvent({ event: 'message', data: 'hello' })
 await sse.waitForEnd()
+
+// With locale
+const sse = await module.sse('/streaming/events')
+  .withLocale('fr')
+  .connect()
 ```

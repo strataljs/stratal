@@ -43,10 +43,18 @@ export default new Stratal({ module: AppModule })
 
 ```typescript
 import { Module } from 'stratal/module'
+import { I18nModule } from 'stratal/i18n'
 import { NotesModule } from './domain/notes/notes.module'
 
 @Module({
-  imports: [NotesModule],
+  imports: [
+    I18nModule.forRoot({
+      defaultLocale: 'en',
+      locales: ['en'],
+      // detection: { strategy: 'cookie' },  // Default. Options: 'cookie', 'header', 'querystring', 'path'
+    }),
+    NotesModule,
+  ],
 })
 export class AppModule {}
 ```
