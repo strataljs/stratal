@@ -113,21 +113,21 @@ describe('Versioning', () => {
       it('should replace paths with locale-prefixed paths when localePathPrefixes is set', () => {
         const service = createService(null, ['en', 'fr'])
         const result = service.resolveVersionedPaths('/users')
-        expect(paths(result)).toEqual(['/:locale{en|fr}/users'])
+        expect(paths(result)).toEqual(['/{locale}/users'])
       })
 
       it('should not hide locale-prefixed paths from docs', () => {
         const service = createService(null, ['en', 'fr'])
         const result = service.resolveVersionedPaths('/users')
         expect(result).toEqual([
-          { path: '/:locale{en|fr}/users', hideFromDocs: false },
+          { path: '/{locale}/users', hideFromDocs: false },
         ])
       })
 
       it('should combine with versioning', () => {
         const service = createService({ defaultVersion: '1' }, ['en', 'fr'])
         const result = service.resolveVersionedPaths('/users')
-        expect(paths(result)).toEqual(['/:locale{en|fr}/v1/users'])
+        expect(paths(result)).toEqual(['/{locale}/v1/users'])
       })
     })
   })

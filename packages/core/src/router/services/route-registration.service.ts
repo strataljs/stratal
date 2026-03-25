@@ -8,7 +8,7 @@ import {
   GuardExecutionService,
 } from '../../guards'
 import type { OpenAPIHono } from '../../i18n/validation'
-import { createRoute } from '../../i18n/validation'
+import { createRoute, z } from '../../i18n/validation'
 import { type LoggerService } from '../../logger'
 import type { Constructor } from '../../types'
 import { getWsOnCloseMethod, getWsOnErrorMethod, getWsOnMessageMethod, isGateway } from '../../websocket/decorators'
@@ -63,17 +63,15 @@ export class RouteRegistrationService {
   private controllerClasses = new Map<string, Constructor<IController>>()
   private upgradeWebSocketFn: UpgradeWebSocket | null = null
 
-  /** Regex-constrained locale prefix for path-based detection, e.g., '/:locale{en|fr}' */
-  private readonly localePrefix: string | null
+  /** Raw locale codes for path-based detection (e.g., ['en', 'fr']) */
+  private readonly localePathPrefixes: string[] | null
 
   constructor(
     private logger: LoggerService,
     private versioningOptions: VersioningOptions | null = null,
     localePathPrefixes: string[] | null = null,
   ) {
-    this.localePrefix = localePathPrefixes
-      ? `/:locale{${localePathPrefixes.join('|')}}`
-      : null
+    this.localePathPrefixes = localePathPrefixes
   }
 
   /**
@@ -294,8 +292,8 @@ export class RouteRegistrationService {
       }
     }
 
-    if (this.localePrefix) {
-      return paths.map(p => ({ path: `${this.localePrefix}${p}`, hideFromDocs: false }))
+    if (this.localePathPrefixes) {
+      return paths.map(p => ({ path: `/{locale}${p}`, hideFromDocs: false }))
     }
 
     return paths.map(p => ({ path: p, hideFromDocs: false }))
@@ -627,6 +625,25 @@ export class RouteRegistrationService {
         route.request = {
           ...route.request,
           params: routeConfig.params,
+        }
+      }
+
+      // Auto-inject locale path parameter when path-based i18n is enabled
+      if (this.localePathPrefixes) {
+        const localeParam = z.object({
+          locale: z.enum(this.localePathPrefixes as [string, ...string[]]).openapi({
+            param: {
+              name: 'locale',
+              in: 'path',
+            },
+          }),
+        })
+
+        route.request = {
+          ...route.request,
+          params: route.request!.params
+            ? (route.request!.params as z.ZodObject<z.ZodRawShape>).extend(localeParam.shape)
+            : localeParam,
         }
       }
 
