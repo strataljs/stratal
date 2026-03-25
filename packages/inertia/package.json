@@ -55,7 +55,9 @@
     "lint:fix": "npx eslint --fix ."
   },
   "dependencies": {
-    "ts-morph": "^27.0.2"
+    "@cloudflare/vite-plugin": "^1.30.0",
+    "ts-morph": "^27.0.2",
+    "vite": "^8.0.1"
   },
   "peerDependencies": {
     "@inertiajs/core": "^3.0.0-beta.5",
@@ -101,7 +103,6 @@
     "stratal": "workspace:*",
     "tsdown": "^0.21.4",
     "typescript": "^5.9.3",
-    "vite": "^8.0.1",
     "vitest": "~4.1.0"
   }
 }

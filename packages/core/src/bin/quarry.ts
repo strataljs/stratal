@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { createRequire, register } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -8,7 +8,6 @@ import { pathToFileURL } from 'node:url'
 import type { QuarryRegistry } from 'stratal/quarry'
 
 import { type Application } from '../application'
-import { StratalNotInitializedError } from '../errors'
 import { errors as errorMessages } from '../i18n/messages/en/errors'
 import { createDynamicCommands } from './commands/dynamic-command'
 
@@ -79,15 +78,35 @@ async function createStrippedConfig(cwdRequire: NodeRequire): Promise<string | u
   return tmpPath
 }
 
+function discoverEnvFiles(): string[] {
+  const cwd = process.cwd()
+  const files = readdirSync(cwd)
+  return files
+    .filter(file => (/^\.dev\.vars($|\.)/.test(file) || /^\.env($|\.)/.test(file)) && !file.endsWith('.example') && !file.endsWith('.sample'))
+    .map(file => join(cwd, file))
+    .sort((a, b) => {
+      // Load .env files before .dev.vars so .dev.vars takes precedence
+      const aIsDevVars = a.startsWith('.dev.vars')
+      const bIsDevVars = b.startsWith('.dev.vars')
+      if (aIsDevVars !== bIsDevVars) return aIsDevVars ? 1 : -1
+      // Within each group, .local files load last (highest precedence)
+      const aIsLocal = a.endsWith('.local')
+      const bIsLocal = b.endsWith('.local')
+      if (aIsLocal !== bIsLocal) return aIsLocal ? 1 : -1
+      return a.localeCompare(b)
+    })
+}
+
 async function main(): Promise<void> {
   const cwdRequire = createRequire(join(process.cwd(), 'package.json'))
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const { getPlatformProxy } = await import(cwdRequire.resolve('wrangler')) as typeof import('wrangler')
 
   const tmpConfigPath = await createStrippedConfig(cwdRequire)
-  const { env, ctx, dispose } = await getPlatformProxy(
-    tmpConfigPath ? { configPath: tmpConfigPath } : undefined,
-  )
+  const envFiles = discoverEnvFiles()
+  const { env, ctx, dispose } = await getPlatformProxy({
+    envFiles, configPath: tmpConfigPath,
+  })
 
   let app: Application | undefined
   try {
@@ -140,10 +159,16 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error: unknown) => {
+main().catch(async (error: unknown) => {
+  const { ConfigValidationError } = await import('stratal/config')
+  const { StratalNotInitializedError } = await import('stratal/errors')
+
   const message = error instanceof StratalNotInitializedError
     ? errorMessages.stratalNotInitialized
     : error instanceof Error ? error.message : String(error)
   console.error('Fatal error:', message)
+  if (error instanceof ConfigValidationError) {
+    console.error(error.errors.message)
+  }
   process.exit(1)
 })

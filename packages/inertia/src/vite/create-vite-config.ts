@@ -56,9 +56,11 @@ export async function createInertiaViteConfig(options: InertiaViteConfigOptions)
         name: 'stratal:optimize-deps-fix',
         configEnvironment(_name: string, env: EnvironmentOptions) {
           const existing = env.optimizeDeps?.exclude ?? []
+          const existingInclude = env.optimizeDeps?.include ?? []
           env.optimizeDeps = {
             ...env.optimizeDeps,
             exclude: [...existing, ...optimizeDepsExclude],
+            include: [...existingInclude, 'buffer', 'buffer/', 'base64-js', 'ieee754'],
           }
         },
       },

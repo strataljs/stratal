@@ -1,11 +1,12 @@
 {
   "$schema": "https://unpkg.com/@changesets/config@3.1.1/schema.json",
-  "changelog": [
-    "@changesets/changelog-github",
-    { "repo": "strataljs/stratal" }
-  ],
   "commit": false,
-  "fixed": [["stratal", "@stratal/*"]],
+  "fixed": [
+    [
+      "stratal",
+      "@stratal/*"
+    ]
+  ],
   "linked": [],
   "access": "public",
   "baseBranch": "main",

@@ -1,4 +1,4 @@
-import type { SharedPageProps } from '@inertiajs/core'
+import type { Page, SharedPageProps } from '@inertiajs/core'
 import type { RouterContext } from 'stratal/router'
 
 
@@ -48,7 +48,7 @@ export interface InertiaSsrResult {
 }
 
 export interface InertiaSsrBundle {
-  render(page: InertiaPage): Promise<InertiaSsrResult>
+  render(page: Page): Promise<InertiaSsrResult>
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

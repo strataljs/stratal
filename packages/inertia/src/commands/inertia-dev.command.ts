@@ -33,7 +33,7 @@ export class InertiaDevCommand extends Command {
       await server.listen()
       server.printUrls()
     } catch (err) {
-      this.fail(`Failed to start dev server: ${(err as Error).message}`)
+      this.fail(`Failed to start dev server: ${(err as Error).stack}`)
       return 1
     }
 

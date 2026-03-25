@@ -2,7 +2,6 @@
 declare module '@stratal/inertia' {
   interface InertiaPageRegistry {
     'Home': { message: string; noteCount?: number | undefined; }
-    'Layout': { children: React.ReactNode; }
     'notes/Create': Record<string, never>
     'notes/Edit': { note: Note; }
     'notes/Index': { notes: Note[]; stats?: Stats | undefined; page: number; }

@@ -1,3 +1,4 @@
+import type { Page } from '@inertiajs/core'
 import { Transient, inject } from 'stratal/di'
 import type { RouterContext } from 'stratal/router'
 import type { InertiaModuleOptions } from '../inertia.options'
@@ -100,7 +101,7 @@ export class InertiaService {
     const ssrDisabled = ctx.c.get('withoutSsr') || this.isSsrDisabled(url)
     const ssrResult = ssrDisabled
       ? { head: [] as string[], body: '' }
-      : await this.ssr.render(page)
+      : await this.ssr.render(page as unknown as Page)
     const html = this.template.render(page, ssrResult.head, ssrResult.body)
 
     return new Response(html, {
