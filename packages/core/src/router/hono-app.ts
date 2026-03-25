@@ -121,11 +121,8 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
       const routerContext = new RouterContext(c)
       const requestContainer = this._container.createRequestScope(routerContext)
       c.set(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER, requestContainer)
-      try {
-        await next()
-      } finally {
-        c.executionCtx.waitUntil(Promise.resolve(requestContainer.dispose()))
-      }
+
+      await next()
     })
   }
 
