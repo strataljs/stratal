@@ -3,7 +3,7 @@ import { join, relative } from 'node:path'
 import type { Plugin } from 'vite'
 import { findPagesDir, runTypeGeneration } from '../generator/type-generator'
 
-const INERTIA_CALL_PATTERN = /ctx\.inertia\(|\.share\(|ctx\.flash\(/
+const INERTIA_CALL_PATTERN = /ctx\.inertia\(|\.share\(|ctx\.flash\(|ctx\.defer\(|ctx\.optional\(|ctx\.merge\(|ctx\.once\(|ctx\.always\(/
 
 export function stratalInertiaTypes(): Plugin {
   let cwd: string

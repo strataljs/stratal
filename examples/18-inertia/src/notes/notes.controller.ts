@@ -22,7 +22,7 @@ export class NotesController {
     return ctx.inertia('notes/Index', {
       notes: ctx.merge(() => this.notes.findAll(page)),
       stats: ctx.optional(() => this.notes.getStats()),
-      categories: ctx.once(() => ['general', 'work', 'personal']),
+      categories: ctx.once(() => ['general', 'work', 'personal'] as const),
       timestamp: ctx.always(() => Date.now()),
       page,
     })

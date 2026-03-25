@@ -1,10 +1,9 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { dirname, join, relative } from 'node:path'
+import { dirname, join } from 'node:path'
 
 export interface PageTypeInfo {
   componentName: string
   propsType: string
-  source: 'page' | 'controller'
 }
 
 export interface SharedDataTypeInfo {
@@ -29,7 +28,6 @@ type TsMorphModule = Awaited<ReturnType<typeof loadTsMorph>>
 type TsObj = TsMorphModule['ts']
 type Project = InstanceType<TsMorphModule['Project']>
 type SourceFile = InstanceType<TsMorphModule['Project']> extends { getSourceFiles(): (infer S)[] } ? S : never
-type FunctionDeclaration = ReturnType<SourceFile['getFunctions']>[number]
 type Node = ReturnType<SourceFile['getDescendants']>[number]
 type Type = ReturnType<Node['getType']>
 
@@ -51,42 +49,6 @@ async function createProject(tsConfigPath?: string): Promise<{ project: Project;
   })
 
   return { project, SyntaxKind, ts }
-}
-
-// --- Page component extraction (existing, refactored to accept project) ---
-
-export function extractPageTypes(
-  project: Project,
-  SK: TsMorphModule['SyntaxKind'],
-  tsObj: TsObj,
-  pagesDir: string,
-): PageTypeInfo[] {
-  if (!existsSync(pagesDir)) return []
-
-  project.addSourceFilesAtPaths(join(pagesDir, '**/*.{tsx,ts}'))
-
-  const pages: PageTypeInfo[] = []
-
-  for (const sourceFile of project.getSourceFiles()) {
-    const filePath = sourceFile.getFilePath()
-    if (!filePath.includes(pagesDir.replace(/\\/g, '/'))) continue
-
-    const relPath = relative(pagesDir, filePath).replace(/\\/g, '/')
-
-    if (relPath.includes('__tests__') || relPath.includes('.spec.') || relPath.includes('.test.')) continue
-
-    const fileName = relPath.split('/').pop()!
-    if (fileName.startsWith("_") || /^Layout\.(tsx|ts)$/.test(fileName)) continue
-
-    const componentName = relPath.replace(/\.(tsx|ts)$/, '')
-
-    const propsType = extractDefaultExportPropsType(sourceFile, SK, tsObj)
-    if (propsType !== null) {
-      pages.push({ componentName, propsType, source: 'page' })
-    }
-  }
-
-  return pages.sort((a, b) => a.componentName.localeCompare(b.componentName))
 }
 
 // --- Controller ctx.inertia() extraction ---
@@ -112,7 +74,6 @@ export function extractControllerPageTypes(
 
   for (const sourceFile of project.getSourceFiles()) {
     const filePath = sourceFile.getFilePath()
-    // Skip page files — those are handled by extractPageTypes
     if (filePath.includes(pagesDir.replace(/\\/g, '/'))) continue
     // Skip test files
     if (filePath.includes('__tests__') || filePath.includes('.spec.') || filePath.includes('.test.')) continue
@@ -171,7 +132,7 @@ export function extractControllerPageTypes(
   }
 
   return Array.from(pages.entries())
-    .map(([componentName, propsType]) => ({ componentName, propsType, source: 'controller' as const }))
+    .map(([componentName, propsType]) => ({ componentName, propsType }))
     .sort((a, b) => a.componentName.localeCompare(b.componentName))
 }
 
@@ -200,10 +161,39 @@ function unwrapWrapperType(type: Type, tsObj: TsObj): string {
         const callbackType = callbackProp.getTypeAtLocation(decl)
         const callSignatures = callbackType.getCallSignatures()
         if (callSignatures.length > 0) {
-          return typeToString(callSignatures[0].getReturnType(), tsObj)
+          return unwrapPromise(callSignatures[0].getReturnType(), tsObj)
         }
       }
       return 'unknown'
+    }
+  }
+
+  return typeToString(type, tsObj)
+}
+
+function unwrapPromise(type: Type, tsObj: TsObj): string {
+  const text = type.getText(undefined, tsObj.TypeFormatFlags.NoTruncation)
+  if (text.startsWith('Promise<')) {
+    const typeArgs = type.getTypeArguments()
+    if (typeArgs.length > 0) {
+      return stripReadonly(typeArgs[0], tsObj)
+    }
+  }
+  return stripReadonly(type, tsObj)
+}
+
+function stripReadonly(type: Type, tsObj: TsObj): string {
+  if (type.isTuple()) {
+    const elements = type.getTupleElements()
+    const parts = elements.map((e) => typeToString(e, tsObj))
+    return `[${parts.join(', ')}]`
+  }
+
+  const text = type.getText(undefined, tsObj.TypeFormatFlags.NoTruncation)
+  if (text.startsWith('readonly ') && type.isArray()) {
+    const elementType = type.getArrayElementType()
+    if (elementType) {
+      return `Array<${typeToString(elementType, tsObj)}>`
     }
   }
 
@@ -396,26 +386,6 @@ export function extractSharedDataType(
   return null
 }
 
-// --- Merge page types from page files and controller calls ---
-
-export function mergePageTypes(pageTypes: PageTypeInfo[], controllerTypes: PageTypeInfo[]): PageTypeInfo[] {
-  const pageMap = new Map<string, PageTypeInfo>()
-
-  // Page component types take priority
-  for (const page of pageTypes) {
-    pageMap.set(page.componentName, page)
-  }
-
-  // Controller types fill in when page doesn't exist
-  for (const controller of controllerTypes) {
-    if (!pageMap.has(controller.componentName)) {
-      pageMap.set(controller.componentName, controller)
-    }
-  }
-
-  return Array.from(pageMap.values()).sort((a, b) => a.componentName.localeCompare(b.componentName))
-}
-
 // --- Generate output ---
 
 export interface GenerateTypesInput {
@@ -426,17 +396,66 @@ export interface GenerateTypesInput {
   flashTypes: FlashTypeInfo | null
 }
 
+function componentNameToPropsTypeName(componentName: string, segmentCount = 2): string {
+  const segments = componentName.split('/')
+  const used = segments.slice(-segmentCount)
+  return used.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('') + 'PageProps'
+}
+
+function resolvePagePropsTypeNames(pages: PageTypeInfo[]): Map<string, string> {
+  const result = new Map<string, string>()
+
+  // First pass: use last 2 segments
+  const nameToComponents = new Map<string, string[]>()
+  for (const page of pages) {
+    const typeName = componentNameToPropsTypeName(page.componentName)
+    const existing = nameToComponents.get(typeName) ?? []
+    existing.push(page.componentName)
+    nameToComponents.set(typeName, existing)
+  }
+
+  // Second pass: resolve collisions by using all segments
+  for (const [typeName, components] of nameToComponents) {
+    if (components.length === 1) {
+      result.set(components[0], typeName)
+    } else {
+      for (const componentName of components) {
+        const fullSegments = componentName.split('/').length
+        result.set(componentName, componentNameToPropsTypeName(componentName, fullSegments))
+      }
+    }
+  }
+
+  return result
+}
+
 export function generateInertiaTypes(input: GenerateTypesInput): string {
   const { pages, sharedData, shareCallTypes, hasI18n, flashTypes } = input
 
+  // Compute type names with collision resolution
+  const typeNames = resolvePagePropsTypeNames(pages)
+
   const lines: string[] = [
     '// Auto-generated by @stratal/inertia. Do not edit.',
-    "declare module '@stratal/inertia' {",
   ]
 
+  // Global page props types
+  if (pages.length > 0) {
+    lines.push('declare global {')
+    for (const page of pages) {
+      const typeName = typeNames.get(page.componentName)!
+      lines.push(`  type ${typeName} = ${page.propsType}`)
+    }
+    lines.push('}')
+    lines.push('')
+  }
+
+  // InertiaPageRegistry augmentation referencing global types
+  lines.push("declare module '@stratal/inertia' {")
   lines.push('  interface InertiaPageRegistry {')
   for (const page of pages) {
-    lines.push(`    '${page.componentName}': ${page.propsType}`)
+    const typeName = typeNames.get(page.componentName)!
+    lines.push(`    '${page.componentName}': ${typeName}`)
   }
   lines.push('  }')
   lines.push('}')
@@ -495,73 +514,7 @@ export function generateInertiaTypes(input: GenerateTypesInput): string {
   return lines.join('\n')
 }
 
-// --- Type string helpers (unchanged) ---
-
-function extractDefaultExportPropsType(sourceFile: SourceFile, SK: TsMorphModule['SyntaxKind'], tsObj: TsObj): string | null {
-  const defaultExportSymbol = sourceFile.getDefaultExportSymbol()
-  if (!defaultExportSymbol) return null
-
-  const declarations = defaultExportSymbol.getDeclarations()
-  for (const decl of declarations) {
-    if (decl.isKind(SK.FunctionDeclaration)) {
-      return extractPropsFromFunction(decl, tsObj)
-    }
-
-    if (decl.isKind(SK.ExportAssignment)) {
-      const expr = decl.getExpression()
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-      if (!expr) continue
-
-      if (expr.isKind(SK.FunctionExpression)) {
-        return extractPropsFromParams(expr.getParameters(), tsObj)
-      }
-
-      if (expr.isKind(SK.Identifier)) {
-        return resolveIdentifierPropsType(expr, SK, tsObj)
-      }
-
-      if (expr.isKind(SK.ArrowFunction)) {
-        return extractPropsFromParams(expr.getParameters(), tsObj)
-      }
-    }
-  }
-
-  return null
-}
-
-function extractPropsFromFunction(fn: FunctionDeclaration, tsObj: TsObj): string {
-  return extractPropsFromParams(fn.getParameters(), tsObj)
-}
-
-function extractPropsFromParams(params: ReturnType<FunctionDeclaration['getParameters']>, tsObj: TsObj): string {
-  if (params.length === 0) return 'Record<string, never>'
-
-  const firstParam = params[0]
-  const paramType = firstParam.getType()
-
-  return typeToString(paramType, tsObj)
-}
-
-function resolveIdentifierPropsType(identifier: Node, SK: TsMorphModule['SyntaxKind'], tsObj: TsObj): string | null {
-  const symbol = identifier.getSymbol()
-  if (!symbol) return null
-
-  for (const decl of symbol.getDeclarations()) {
-    if (decl.isKind(SK.FunctionDeclaration)) {
-      return extractPropsFromFunction(decl, tsObj)
-    }
-
-    if (decl.isKind(SK.VariableDeclaration)) {
-      const init = decl.getInitializer()
-      if (init?.isKind(SK.ArrowFunction) || init?.isKind(SK.FunctionExpression)) {
-        const fn = init as { getParameters(): ReturnType<FunctionDeclaration['getParameters']> }
-        return extractPropsFromParams(fn.getParameters(), tsObj)
-      }
-    }
-  }
-
-  return null
-}
+// --- Type string helpers ---
 
 function widenLiteralType(type: Type, tsObj: TsObj): string {
   if (type.isStringLiteral()) return 'string'

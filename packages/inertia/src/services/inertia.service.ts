@@ -45,15 +45,15 @@ export class InertiaService {
     })
   }
 
-  optional(callback: () => unknown): InertiaOptionalProp {
+  optional<T>(callback: () => T): InertiaOptionalProp<T> {
     return { [INERTIA_PROP_OPTIONAL]: true, callback }
   }
 
-  defer(callback: () => unknown, group = 'default'): InertiaDeferredProp {
+  defer<T>(callback: () => T, group = 'default'): InertiaDeferredProp<T> {
     return { [INERTIA_PROP_DEFERRED]: true, callback, group }
   }
 
-  merge(callback: () => unknown, options?: InertiaMergeOptions): InertiaMergeProp {
+  merge<T>(callback: () => T, options?: InertiaMergeOptions): InertiaMergeProp<T> {
     return {
       [INERTIA_PROP_MERGE]: true,
       callback,
@@ -62,7 +62,7 @@ export class InertiaService {
     }
   }
 
-  once(callback: () => unknown, options?: InertiaOnceOptions): InertiaOnceProp {
+  once<T>(callback: () => T, options?: InertiaOnceOptions): InertiaOnceProp<T> {
     return {
       [INERTIA_PROP_ONCE]: true,
       callback,
@@ -71,7 +71,7 @@ export class InertiaService {
     }
   }
 
-  always(callback: () => unknown): InertiaAlwaysProp {
+  always<T>(callback: () => T): InertiaAlwaysProp<T> {
     return { [INERTIA_PROP_ALWAYS]: true, callback }
   }
 

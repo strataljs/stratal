@@ -5,20 +5,7 @@ import { Link, router } from '@inertiajs/react'
 import { useState } from 'react'
 import Layout from '../Layout'
 
-interface Note {
-  id: string
-  title: string
-  content: string
-  createdAt: string
-  updatedAt: string
-}
-
-interface Stats {
-  total: number
-  recent: number
-}
-
-export default function Index({ notes, stats, categories, timestamp, page }: { notes: Note[]; stats?: Stats; categories: string[]; timestamp: number; page: number }) {
+export default function Index({ notes, stats, categories, timestamp, page }: NotesIndexPageProps) {
   const [showStats, setShowStats] = useState(false)
 
   function loadMore() {

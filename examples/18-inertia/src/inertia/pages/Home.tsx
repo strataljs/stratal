@@ -1,10 +1,10 @@
-import { Deferred, Link } from '@inertiajs/react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Deferred, Link } from '@inertiajs/react'
 import Layout from './Layout'
 
-export default function Home({ message, noteCount }: { message: string; noteCount?: number }) {
+export default function Home({ message, noteCount }: HomePageProps) {
   return (
     <Layout>
       <div className="space-y-8">

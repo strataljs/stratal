@@ -4,26 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Deferred, Link, router } from '@inertiajs/react'
 import Layout from '../Layout'
 
-interface Note {
-  id: string
-  title: string
-  content: string
-  createdAt: string
-  updatedAt: string
-}
-
-interface Comment {
-  id: string
-  author: string
-  body: string
-}
-
-interface Metadata {
-  viewCount: number
-  lastViewed: string
-}
-
-export default function Show({ note, comments, metadata }: { note: Note; comments?: Comment[]; metadata?: Metadata }) {
+export default function Show({ note, comments, metadata }: NotesShowPageProps) {
   function deleteNote() {
     if (!confirm('Are you sure you want to delete this note?')) return
     router.delete(`/notes/${note.id}`)

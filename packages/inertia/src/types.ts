@@ -62,34 +62,34 @@ export const INERTIA_PROP_MERGE = Symbol.for('stratal:inertia:prop:merge')
 export const INERTIA_PROP_ONCE = Symbol.for('stratal:inertia:prop:once')
 export const INERTIA_PROP_ALWAYS = Symbol.for('stratal:inertia:prop:always')
 
-export interface InertiaOptionalProp {
+export interface InertiaOptionalProp<T = unknown> {
   [INERTIA_PROP_OPTIONAL]: true
-  callback: () => unknown
+  callback: () => T
 }
 
-export interface InertiaDeferredProp {
+export interface InertiaDeferredProp<T = unknown> {
   [INERTIA_PROP_DEFERRED]: true
-  callback: () => unknown
+  callback: () => T
   group: string
 }
 
 export type InertiaMergeStrategy = 'append' | 'prepend' | 'deep'
 
-export interface InertiaMergeProp {
+export interface InertiaMergeProp<T = unknown> {
   [INERTIA_PROP_MERGE]: true
-  callback: () => unknown
+  callback: () => T
   strategy: InertiaMergeStrategy
   matchOn?: string
 }
 
-export interface InertiaOnceProp {
+export interface InertiaOnceProp<T = unknown> {
   [INERTIA_PROP_ONCE]: true
-  callback: () => unknown
+  callback: () => T
   expiresAt?: number | null
   key?: string
 }
 
-export interface InertiaAlwaysProp {
+export interface InertiaAlwaysProp<T = unknown> {
   [INERTIA_PROP_ALWAYS]: true
-  callback: () => unknown
+  callback: () => T
 }
