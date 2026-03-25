@@ -55,6 +55,7 @@ reviews:
     - "!**/node_modules/**"
     - "!**/dist/**"
     - "!**/coverage/**"
+    - "!examples/**"
     - "!**/.yarn/**"
     - "!**/*.tsbuildinfo"
     - "!docs/**"

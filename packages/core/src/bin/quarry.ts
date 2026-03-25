@@ -8,6 +8,8 @@ import { pathToFileURL } from 'node:url'
 import type { QuarryRegistry } from 'stratal/quarry'
 
 import { type Application } from '../application'
+import { StratalNotInitializedError } from '../errors'
+import { errors as errorMessages } from '../i18n/messages/en/errors'
 import { createDynamicCommands } from './commands/dynamic-command'
 
 const require = createRequire(import.meta.url)
@@ -139,6 +141,9 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  console.error('Fatal error:', error instanceof Error ? error.message : String(error))
+  const message = error instanceof StratalNotInitializedError
+    ? errorMessages.stratalNotInitialized
+    : error instanceof Error ? error.message : String(error)
+  console.error('Fatal error:', message)
   process.exit(1)
 })

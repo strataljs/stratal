@@ -1,5 +1,5 @@
 import type { Context, MiddlewareHandler } from 'hono'
-import type { WSContext, WSEvents } from 'hono/ws'
+import type { UpgradeWebSocket, WSContext, WSEvents } from 'hono/ws'
 import { type Container, getMethodInjections } from '../../di'
 import {
   type Guard,
@@ -61,6 +61,7 @@ const invokeHandler = (instance: Record<string, (...args: unknown[]) => unknown>
  */
 export class RouteRegistrationService {
   private controllerClasses = new Map<string, Constructor<IController>>()
+  private upgradeWebSocketFn: UpgradeWebSocket | null = null
 
   constructor(
     private logger: LoggerService,
@@ -92,75 +93,101 @@ export class RouteRegistrationService {
       return 0 // maintain relative order
     })
 
-    // Single-pass partition: gateways vs regular controllers
-    const gateways: Constructor<IController>[] = []
-    const regulars: Constructor<IController>[] = []
-
-    for (const c of sortedControllers) {
-      if (isGateway(c)) {
-        gateways.push(c)
-      } else {
-        regulars.push(c)
-      }
+    // Eagerly load upgradeWebSocket once if any gateway exists
+    if (sortedControllers.some(isGateway)) {
+      const { upgradeWebSocket } = await import('hono/cloudflare-workers')
+      this.upgradeWebSocketFn = upgradeWebSocket
     }
 
-    // Register WebSocket gateways
-    for (const GatewayClass of gateways) {
-      await this.registerGateway(app, GatewayClass)
-    }
-
-    // Register controllers
-    for (const ControllerClass of regulars) {
-      this.registerController(app, ControllerClass)
+    for (const ControllerClass of sortedControllers) {
+      this.registerEntry(app, ControllerClass)
     }
 
     this.logger.info('Controller registration complete')
   }
 
   /**
-   * Register a WebSocket gateway
-   * Applies versioning and guards, then registers an upgradeWebSocket handler
+   * Unified entry point for registering a controller or gateway.
+   * Resolves route, versioning, and guards, then delegates to the appropriate handler.
    */
-  private async registerGateway(app: OpenAPIHono<RouterEnv>, GatewayClass: Constructor<IController>): Promise<void> {
-    const route = getControllerRoute(GatewayClass)
+  private registerEntry(app: OpenAPIHono<RouterEnv>, ControllerClass: Constructor<IController>): void {
+    const isWsGateway = isGateway(ControllerClass)
+    const route = getControllerRoute(ControllerClass)
 
     if (!route) {
       throw new ControllerRegistrationError(
-        GatewayClass.name,
-        'Missing @Gateway decorator or route metadata'
+        ControllerClass.name,
+        isWsGateway
+          ? 'Missing @Gateway decorator or route metadata'
+          : 'Missing @Controller decorator or route metadata'
       )
     }
 
-    const controllerOpts = getControllerOptions(GatewayClass)
-    const paths = this.versioningOptions
-      ? this.resolveVersionedPaths(route, controllerOpts)
-      : [route]
+    const controllerOpts = getControllerOptions(ControllerClass)
+    const controllerGuards = getControllerGuards(ControllerClass)?.guards ?? []
+    const paths = this.resolveVersionedPaths(route, controllerOpts)
+
+    // WebSocket gateway — register as GET with upgradeWebSocket
+    if (isWsGateway) {
+      for (const fullPath of paths) {
+        this.registerGatewayForPath(app, ControllerClass, fullPath, controllerGuards)
+      }
+      return
+    }
+
+    const className = ControllerClass.name
+    this.controllerClasses.set(className, ControllerClass)
+
+    const prototype = ControllerClass.prototype as IController
+
+    // Wildcard routes (non-RESTful controllers with handle())
+    if (prototype.handle) {
+      for (const fullPath of paths) {
+        this.registerWildcardRoute(app, ControllerClass, fullPath)
+      }
+      return
+    }
+
+    // Standard HTTP routes — validate decorated methods
+    const decoratedMethods = getRouteDecoratedMethods(ControllerClass)
+
+    if (decoratedMethods.length === 0) {
+      throw new ControllerRegistrationError(
+        ControllerClass.name,
+        'No route decorators found. Use @Route() or HTTP method decorators (@Get, @Post, etc.) on controller methods.'
+      )
+    }
+
+    // Enforce mutual exclusivity: no mixing @Route() with @Get/@Post/etc.
+    const proto = ControllerClass.prototype as IController
+    const types = new Set(decoratedMethods.map(m => getRouteMetadata(proto, m)?.type))
+    if (types.has('convention') && types.has('explicit')) {
+      throw new ControllerRegistrationError(
+        ControllerClass.name,
+        'Cannot mix @Route() with HTTP method decorators (@Get, @Post, etc.) in the same controller. Use one pattern or the other.'
+      )
+    }
 
     for (const fullPath of paths) {
-      await this.registerGatewayRoute(app, GatewayClass, fullPath)
+      this.registerRoutes(app, ControllerClass, fullPath, decoratedMethods, controllerOpts)
     }
   }
 
   /**
    * Register a single WebSocket gateway route
    */
-  private async registerGatewayRoute(
+  private registerGatewayForPath(
     app: OpenAPIHono<RouterEnv>,
     GatewayClass: Constructor<IController>,
-    fullPath: string
-  ): Promise<void> {
-    // Collect class-level guards
-    const controllerGuards = getControllerGuards(GatewayClass)?.guards ?? []
-
-    // Dynamic import: only load hono/cloudflare-workers when gateways exist
-    const { upgradeWebSocket } = await import('hono/cloudflare-workers')
-
+    fullPath: string,
+    guards: Guard[]
+  ): void {
     // Cache WS metadata once at registration time (not per-connection)
     const onMsgMethod = getWsOnMessageMethod(GatewayClass)
     const onCloseMethod = getWsOnCloseMethod(GatewayClass)
     const onErrMethod = getWsOnErrorMethod(GatewayClass)
 
-    const wsHandler: MiddlewareHandler<RouterEnv> = upgradeWebSocket((c) => {
+    const wsHandler: MiddlewareHandler<RouterEnv> = this.upgradeWebSocketFn!((c) => {
       const routerCtx = new RouterContext(c as Context<RouterEnv>)
       const container = routerCtx.getContainer()
       const gateway = container.resolve(GatewayClass)
@@ -175,12 +202,10 @@ export class RouteRegistrationService {
       ) => {
         return (evt: MessageEvent | CloseEvent | Event, ws: WSContext) => {
           const ctx = new GatewayContext(c as Context<RouterEnv>, ws)
-          c.executionCtx.waitUntil(
-            invokeHandler(gateway as Record<string, (...args: unknown[]) => unknown>, method, evt, ctx).catch((err: unknown) => {
-              this.logger.error(`WebSocket ${method} handler error`, { gateway: GatewayClass.name, error: err instanceof Error ? err.message : String(err) })
-              onCatch?.(err, ws)
-            })
-          )
+          invokeHandler(gateway as Record<string, (...args: unknown[]) => unknown>, method, evt, ctx).catch((err: unknown) => {
+            this.logger.error(`WebSocket ${method} handler error`, { gateway: GatewayClass.name, error: err instanceof Error ? err.message : String(err) })
+            onCatch?.(err, ws)
+          })
         }
       }
 
@@ -206,13 +231,13 @@ export class RouteRegistrationService {
 
     const handlers: MiddlewareHandler<RouterEnv>[] = []
 
-    if (controllerGuards.length > 0) {
+    if (guards.length > 0) {
       this.logger.info('Gateway guards', {
         gateway: GatewayClass.name,
         path: fullPath,
-        guardCount: controllerGuards.length,
+        guardCount: guards.length,
       })
-      handlers.push(this.createGuardMiddleware(controllerGuards))
+      handlers.push(this.createGuardMiddleware(guards))
     }
 
     handlers.push(wsHandler)
@@ -220,70 +245,6 @@ export class RouteRegistrationService {
     // Type assertion needed because Hono's overloaded .get() signatures
     // don't accept a spread of MiddlewareHandler[] alongside upgradeWebSocket's output type
     app.get(fullPath, ...(handlers as [MiddlewareHandler<RouterEnv>]))
-  }
-
-  /**
-   * Register a single controller with all its routes
-   * Validates that controller has access decorator (strict mode)
-   */
-  private registerController(app: OpenAPIHono<RouterEnv>, ControllerClass: Constructor<IController>): void {
-    const route = getControllerRoute(ControllerClass)
-
-    if (!route) {
-      throw new ControllerRegistrationError(
-        ControllerClass.name,
-        'Missing @Controller decorator or route metadata'
-      )
-    }
-
-    const className = ControllerClass.name
-    this.controllerClasses.set(className, ControllerClass)
-
-    const prototype = ControllerClass.prototype as IController
-    const controllerOpts = getControllerOptions(ControllerClass)
-
-    // Handle wildcard routes (non-RESTful controllers) — check once, not per version
-    if (prototype.handle) {
-      if (!this.versioningOptions) {
-        this.registerWildcardRoute(app, ControllerClass, route)
-      } else {
-        for (const versionedRoute of this.resolveVersionedPaths(route, controllerOpts)) {
-          this.registerWildcardRoute(app, ControllerClass, versionedRoute)
-        }
-      }
-      return
-    }
-
-    // Compute decorated methods once (loop-invariant)
-    const decoratedMethods = getRouteDecoratedMethods(ControllerClass)
-
-    if (decoratedMethods.length === 0) {
-      throw new ControllerRegistrationError(
-        ControllerClass.name,
-        'No route decorators found. Use @Route() or HTTP method decorators (@Get, @Post, etc.) on controller methods.'
-      )
-    }
-
-    // Enforce mutual exclusivity: no mixing @Route() with @Get/@Post/etc.
-    const proto = ControllerClass.prototype as IController
-    const types = new Set(decoratedMethods.map(m => getRouteMetadata(proto, m)?.type))
-    if (types.has('convention') && types.has('explicit')) {
-      throw new ControllerRegistrationError(
-        ControllerClass.name,
-        'Cannot mix @Route() with HTTP method decorators (@Get, @Post, etc.) in the same controller. Use one pattern or the other.'
-      )
-    }
-
-    // Fast path: no versioning — inline dispatch, no array allocation, no loop
-    if (!this.versioningOptions) {
-      this.registerRoutes(app, ControllerClass, route, decoratedMethods, controllerOpts)
-      return
-    }
-
-    // Versioning path: resolve versioned paths and register each
-    for (const versionedRoute of this.resolveVersionedPaths(route, controllerOpts)) {
-      this.registerRoutes(app, ControllerClass, versionedRoute, decoratedMethods, controllerOpts)
-    }
   }
 
   /**
@@ -483,10 +444,12 @@ export class RouteRegistrationService {
     if (meta.type === 'convention') {
       const derived = this.deriveHttpMethodAndPath(methodName, basePath)
       if (!derived) {
-        this.logger.warn(`Cannot derive HTTP method/path for ${className}.${methodName}`)
-        return null
+        throw new ControllerRegistrationError(
+          `Cannot derive HTTP method/path for convention-based route "${className}.${methodName}". ` +
+          `Ensure the method name follows the naming convention (e.g., index, create, show).`
+        )
       }
-      return { httpMethod: derived.method, fullPath: derived.path, routeConfig: meta.config }
+      return { httpMethod: derived.method, fullPath: derived.path, routeConfig: meta.config, statusCodeOverride: meta.config.statusCode }
     }
 
     return {
