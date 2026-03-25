@@ -18,7 +18,7 @@ interface Stats {
   recent: number
 }
 
-export default function Index({ notes, stats, page }: { notes: Note[]; stats?: Stats; page: number }) {
+export default function Index({ notes, stats, categories, timestamp, page }: { notes: Note[]; stats?: Stats; categories: string[]; timestamp: number; page: number }) {
   const [showStats, setShowStats] = useState(false)
 
   function loadMore() {
@@ -54,6 +54,15 @@ export default function Index({ notes, stats, page }: { notes: Note[]; stats?: S
             </Button>
           </div>
         </div>
+
+        {categories.length > 0 && (
+          <div className="flex gap-2">
+            {categories.map((cat) => (
+              <Badge key={cat} variant="outline">{cat}</Badge>
+            ))}
+            <span className="text-xs text-muted-foreground">Updated: {new Date(timestamp).toLocaleTimeString()}</span>
+          </div>
+        )}
 
         {showStats && stats && (
           <Card>

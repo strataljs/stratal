@@ -5,12 +5,15 @@ export { InertiaModule } from './inertia.module'
 export { INERTIA_TOKENS } from './inertia.tokens'
 
 // Options
-export type { InertiaI18nOptions, InertiaModuleOptions, InertiaSsrOptions } from './inertia.options'
+export type { InertiaFlashOptions, InertiaI18nOptions, InertiaModuleOptions, InertiaSsrOptions } from './inertia.options'
 
 // Types
 export type {
+  InertiaAlwaysProp,
   InertiaDeferredProp,
   InertiaMergeProp,
+  InertiaMergeStrategy,
+  InertiaOnceProp,
   InertiaOptionalProp,
   InertiaPage,
   InertiaPageComponent,
@@ -23,8 +26,12 @@ export type {
   ResolvedInertiaPageProps,
   SharedDataResolver,
   ViteManifest,
-  ViteManifestEntry
+  ViteManifestEntry,
 } from './types'
+
+// Flash
+export type { FlashStore } from './flash/flash-store'
+export { CookieFlashStore } from './flash/cookie-flash-store'
 
 // Services
 export { InertiaService } from './services/inertia.service'

@@ -1,9 +1,10 @@
-import type { Page } from '@inertiajs/core'
+import type { InertiaAppSSRResponse, Page } from '@inertiajs/core'
 import type { MessageKeyPrefix } from 'stratal/i18n'
-import type { InertiaSsrResult, ViteManifest } from './types'
+import type { FlashStore } from './flash/flash-store'
+import type { ViteManifest } from './types'
 
 interface SsrBundleModule {
-  render(page: Page): Promise<InertiaSsrResult>
+  render(page: Page): Promise<InertiaAppSSRResponse>
 }
 
 export interface InertiaSsrOptions {
@@ -50,10 +51,15 @@ export interface InertiaI18nOptions {
   only?: MessageKeyPrefix[]
 }
 
+export interface InertiaFlashOptions {
+  store: FlashStore
+}
+
 export interface InertiaModuleOptions {
   rootView: string
   version?: string
   ssr?: InertiaSsrOptions
+  flash?: InertiaFlashOptions
   sharedData?: Record<string, unknown>
   /**
    * I18n configuration for sharing backend translation messages with the frontend.

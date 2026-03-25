@@ -1,11 +1,23 @@
 import { describe, expect, it } from 'vitest'
+import type { Page } from '@inertiajs/core'
 import type { InertiaModuleOptions } from '../inertia.options'
-import type { InertiaPage } from '../types'
 import { ManifestService } from '../services/manifest.service'
 import { TemplateService } from '../services/template.service'
 
 function createManifest(options: Partial<InertiaModuleOptions> = {}): ManifestService {
   return new (ManifestService as any)({ rootView: '', ...options })
+}
+
+function createPage(overrides: Partial<Page> = {}): Page {
+  return {
+    component: 'Home',
+    props: { message: 'Hello', errors: {} },
+    url: '/',
+    version: '1.0',
+    flash: {},
+    rememberedState: {},
+    ...overrides,
+  }
 }
 
 describe('TemplateService', () => {
@@ -19,16 +31,7 @@ describe('TemplateService', () => {
 
   const options: InertiaModuleOptions = { rootView }
 
-  const page: InertiaPage = {
-    component: 'Home',
-    props: { message: 'Hello' },
-    url: '/',
-    version: '1.0',
-    mergeProps: [],
-    deferredProps: {},
-    encryptHistory: false,
-    clearHistory: false,
-  }
+  const page = createPage()
 
   it('should output script tag with page JSON and empty #app div without SSR', () => {
     const manifest = createManifest()
@@ -59,10 +62,9 @@ describe('TemplateService', () => {
   it('should escape forward slashes in page JSON', () => {
     const manifest = createManifest()
     const service = new (TemplateService as any)(options, manifest)
-    const xssPage: InertiaPage = {
-      ...page,
-      props: { html: '</script><script>alert("xss")' },
-    }
+    const xssPage = createPage({
+      props: { html: '</script><script>alert("xss")', errors: {} },
+    })
     const html = service.render(xssPage, [], '')
     expect(html).not.toContain('</script><script>alert')
     expect(html).toContain('<\\/script>')

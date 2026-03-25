@@ -2,14 +2,27 @@ import type { RedirectStatusCode } from 'hono/utils/http-status'
 import { RouterContext } from 'stratal/router'
 import type { InertiaService } from '../services/inertia.service'
 import type {
+  InertiaAlwaysProp,
   InertiaDeferredProp,
   InertiaMergeProp,
+  InertiaMergeStrategy,
+  InertiaOnceProp,
   InertiaOptionalProp,
   InertiaPageComponent,
   InertiaPageRegistry,
   InertiaRenderOptions,
   ResolvedInertiaPageProps,
 } from '../types'
+
+export interface InertiaMergeOptions {
+  strategy?: InertiaMergeStrategy
+  matchOn?: string
+}
+
+export interface InertiaOnceOptions {
+  expiresAt?: number | null
+  key?: string
+}
 
 declare module 'stratal/router' {
   interface RouterContext {
@@ -23,7 +36,10 @@ declare module 'stratal/router' {
     ): Promise<Response>
     defer(callback: () => unknown, group?: string): InertiaDeferredProp
     optional(callback: () => unknown): InertiaOptionalProp
-    merge(callback: () => unknown): InertiaMergeProp
+    merge(callback: () => unknown, options?: InertiaMergeOptions): InertiaMergeProp
+    once(callback: () => unknown, options?: InertiaOnceOptions): InertiaOnceProp
+    always(callback: () => unknown): InertiaAlwaysProp
+    flash(key: string, value: unknown): void
     withoutSsr(): void
   }
 }
@@ -61,9 +77,26 @@ export function augmentRouterContext(resolveService: (ctx: RouterContext) => Ine
     return service.optional(callback)
   }
 
-  proto.merge = function (this: RouterContext, callback: () => unknown) {
+  proto.merge = function (this: RouterContext, callback: () => unknown, options?: InertiaMergeOptions) {
     const service = resolveService(this)
-    return service.merge(callback)
+    return service.merge(callback, options)
+  }
+
+  proto.once = function (this: RouterContext, callback: () => unknown, options?: InertiaOnceOptions) {
+    const service = resolveService(this)
+    return service.once(callback, options)
+  }
+
+  proto.always = function (this: RouterContext, callback: () => unknown) {
+    const service = resolveService(this)
+    return service.always(callback)
+  }
+
+  proto.flash = function (this: RouterContext, key: string, value: unknown) {
+    const flashOut = this.c.get('inertiaFlashOut') as Record<string, unknown> | undefined
+    if (flashOut) {
+      flashOut[key] = value
+    }
   }
 
   proto.withoutSsr = function (this: RouterContext) {

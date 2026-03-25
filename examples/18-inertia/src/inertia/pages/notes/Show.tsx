@@ -18,7 +18,12 @@ interface Comment {
   body: string
 }
 
-export default function Show({ note, comments }: { note: Note; comments?: Comment[] }) {
+interface Metadata {
+  viewCount: number
+  lastViewed: string
+}
+
+export default function Show({ note, comments, metadata }: { note: Note; comments?: Comment[]; metadata?: Metadata }) {
   function deleteNote() {
     if (!confirm('Are you sure you want to delete this note?')) return
     router.delete(`/notes/${note.id}`)
@@ -51,6 +56,11 @@ export default function Show({ note, comments }: { note: Note; comments?: Commen
         <Card>
           <CardContent className="prose pt-6">
             <p className="whitespace-pre-wrap">{note.content}</p>
+            {metadata && (
+              <p className="mt-4 text-xs text-muted-foreground">
+                Views: {metadata.viewCount} · Last viewed: {new Date(metadata.lastViewed).toLocaleString()}
+              </p>
+            )}
           </CardContent>
         </Card>
 

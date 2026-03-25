@@ -1,12 +1,11 @@
-import { Page } from '@inertiajs/core'
+import type { InertiaAppSSRResponse, Page } from '@inertiajs/core'
 import { Transient, inject } from 'stratal/di'
 import { LOGGER_TOKENS, LoggerService } from 'stratal/logger'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { INERTIA_TOKENS } from '../inertia.tokens'
-import type { InertiaSsrResult } from '../types'
 
 interface LoadedSsrBundle {
-  render(page: Page): Promise<InertiaSsrResult>
+  render(page: Page): Promise<InertiaAppSSRResponse>
 }
 
 @Transient()
@@ -19,7 +18,7 @@ export class SsrRendererService {
     @inject(LOGGER_TOKENS.LoggerService) private readonly logger: LoggerService
   ) { }
 
-  async render(page: Page): Promise<InertiaSsrResult> {
+  async render(page: Page): Promise<InertiaAppSSRResponse> {
     if (!this.options.ssr) {
       return { head: [], body: '' }
     }

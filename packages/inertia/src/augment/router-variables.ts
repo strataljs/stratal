@@ -3,6 +3,8 @@ declare module 'stratal/router' {
     inertia: boolean
     inertiaPrefetch: boolean
     withoutSsr: boolean
+    inertiaFlash: Record<string, unknown>
+    inertiaFlashOut: Record<string, unknown>
   }
 }
 
