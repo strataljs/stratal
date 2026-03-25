@@ -1,5 +1,112 @@
 # Errors & I18n
 
+## ExceptionHandler
+
+Customize how your app reports and renders errors. Extend `ExceptionHandler` and implement `register()`.
+
+### Setup
+
+```typescript
+import { ExceptionHandler } from 'stratal/errors'
+import type { ExceptionContext } from 'stratal/errors'
+import { Transient } from 'stratal/di'
+
+@Transient()
+export class AppExceptionHandler extends ExceptionHandler {
+  register(): void {
+    // Report specific errors to external services
+    this.reportable(PaymentError, (error, context) => {
+      // Fire-and-forget via waitUntil — runs after response is sent
+      sentry.captureException(error, { extra: error.metadata })
+    })
+
+    // Custom rendering for specific errors
+    this.renderable(MaintenanceError, (error, context) => {
+      return new Response('Service temporarily unavailable', { status: 503 })
+    })
+
+    // Suppress logging for expected errors
+    this.dontReport([NotFoundError, ValidationError])
+
+    // Override log severity
+    this.level(RateLimitError, 'warn')
+
+    // Add global context to all error logs
+    this.context(() => ({
+      region: this.env.CF_REGION,
+      deployId: this.env.DEPLOY_ID,
+    }))
+
+    // Post-process all error responses
+    this.respond((response, error, context) => {
+      response.headers.set('X-Error-Code', String(error.code))
+      return response
+    })
+  }
+}
+```
+
+### Registration
+
+Pass to `Stratal` constructor:
+
+```typescript
+export default new Stratal({
+  module: AppModule,
+  exceptionHandler: AppExceptionHandler,
+})
+```
+
+### Configuration Methods
+
+- `reportable(ErrorClass, callback)` — Custom reporting. Returns `Reportable` — chain `.stop()` to prevent default logging.
+- `renderable(ErrorClass, callback)` — Custom rendering. Callback is async, returns `Response | ErrorResponse | undefined`. Return `undefined` to fall through to default.
+- `dontReport([...classes])` — Suppress logging for these error types.
+- `level(ErrorClass, severity)` — Override log level (`'debug' | 'info' | 'warn' | 'error'`).
+- `context(callback)` — Add key-value pairs to all error log entries.
+- `respond(callback)` — Transform the final Response before sending.
+- `resolve(token)` — Access DI container inside callbacks.
+
+### ExceptionContext
+
+Discriminated union — check `context.type` to determine the error source:
+
+```typescript
+this.renderable(AppError, (error, context) => {
+  if (context.type === 'http') {
+    // context.ctx is RouterContext
+    return context.ctx.json({ error: error.message }, 500)
+  }
+  // context.type === 'queue' | 'cron' | 'cli'
+})
+```
+
+| Type | Available Properties |
+|------|---------------------|
+| `http` | `ctx` (RouterContext) |
+| `queue` | `queueName` (string) |
+| `cron` | (none) |
+| `cli` | `commandName` (string) |
+
+### Content Negotiation
+
+The default handler automatically negotiates response format:
+- **HTML accepted + production** — Renders a minimal branded HTML error page
+- **HTML accepted + development** — Re-throws for runtime error UI
+- **Otherwise** — Returns JSON `ErrorResponse`
+
+Override with `renderable()` or override `wantsHtml(context)` in your subclass.
+
+### Reportable with Stop
+
+Chain `.stop()` to prevent the default logger from also reporting:
+
+```typescript
+this.reportable(ExternalApiError, (error) => {
+  externalLogger.log(error)
+}).stop()  // Only external logger reports, not Stratal's logger
+```
+
 ## ApplicationError
 
 Base class for all structured errors in Stratal. Extend it for custom domain errors.

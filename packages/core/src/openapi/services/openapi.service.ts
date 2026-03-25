@@ -5,36 +5,27 @@ import type { II18nService } from '../../i18n'
 import { I18N_TOKENS } from '../../i18n'
 import type { OpenAPIHono, OpenAPIObject, PathItemObject } from '../../i18n/validation'
 import { ROUTER_CONTEXT_KEYS, SECURITY_SCHEMES } from '../../router/constants'
-import type { IController } from '../../router/controller'
-import { getControllerOptions, getControllerRoute } from '../../router/decorators'
 import type { RouterEnv } from '../../router/types'
-import type { Constructor } from '../../types'
 import { OPENAPI_TOKENS } from '../openapi.tokens'
 import type { IOpenAPIConfigService, OpenAPIEffectiveConfig } from '../types'
-
-/**
- * RouteInfo for hideFromDocs filtering
- */
-interface RouteInfo {
-  hideFromDocs: boolean
-}
 
 /**
  * OpenAPI Service
  *
  * Generates OpenAPI specifications with support for:
  * - Runtime configuration via OpenAPIConfigService
- * - Route filtering via hideFromDocs and custom routeFilter
+ * - Route filtering via custom routeFilter
  * - i18n support for titles and descriptions
  * - Security scheme definitions
+ *
+ * Hidden routes (hideFromDocs) are excluded at registration time via
+ * @hono/zod-openapi's `hide` option and don't appear in the spec.
  *
  * Configuration is resolved per-request from OpenAPIConfigService,
  * allowing middleware to override config based on domain context.
  */
 @Transient(OPENAPI_TOKENS.OpenAPIService)
 export class OpenAPIService {
-  private routeInfoMap = new Map<string, RouteInfo>()
-
 
   /**
    * Generate a filtered OpenAPI spec using the user's config.
@@ -58,11 +49,13 @@ export class OpenAPIService {
     fullSpec.components ??= {}
     fullSpec.components.securitySchemes = this.getSecuritySchemeDefinitions(i18n)
 
-    // Filter routes (hideFromDocs + custom routeFilter)
-    fullSpec.paths = this.filterRoutes(
-      fullSpec.paths as Record<string, PathItemObject>,
-      config,
-    )
+    // Apply custom routeFilter if provided
+    if (config.routeFilter) {
+      fullSpec.paths = this.filterRoutes(
+        fullSpec.paths as Record<string, PathItemObject>,
+        config,
+      )
+    }
 
     // Filter unreferenced schemas
     if (fullSpec.components.schemas) {
@@ -75,10 +68,7 @@ export class OpenAPIService {
   /**
    * Setup OpenAPI documentation endpoints
    */
-  setupEndpoints(app: OpenAPIHono<RouterEnv>, controllers: Constructor<IController>[], container: Container): void {
-    // Build route info map for hideFromDocs filtering
-    this.buildRouteInfoMap(controllers)
-
+  setupEndpoints(app: OpenAPIHono<RouterEnv>, container: Container): void {
     const configService = container.resolve<IOpenAPIConfigService>(OPENAPI_TOKENS.ConfigService)
     const config = configService.getEffectiveConfig()
 
@@ -154,24 +144,7 @@ export class OpenAPIService {
   }
 
   /**
-   * Build route info map from controllers
-   * Maps route prefixes to their hideFromDocs flag
-   */
-  private buildRouteInfoMap(controllers: Constructor<IController>[]): void {
-    for (const ControllerClass of controllers) {
-      const route = getControllerRoute(ControllerClass)
-      const options = getControllerOptions(ControllerClass)
-
-      if (route) {
-        this.routeInfoMap.set(route, {
-          hideFromDocs: options?.hideFromDocs ?? false
-        })
-      }
-    }
-  }
-
-  /**
-   * Filter OpenAPI paths based on hideFromDocs and custom routeFilter
+   * Filter OpenAPI paths using custom routeFilter
    */
   private filterRoutes(
     paths: Record<string, PathItemObject>,
@@ -180,37 +153,14 @@ export class OpenAPIService {
     const filteredPaths: Record<string, PathItemObject> = {}
 
     for (const [path, pathItem] of Object.entries(paths)) {
-      // 1. Check hideFromDocs (always filtered)
-      const routeInfo = this.getRouteInfo(path)
-      if (routeInfo.hideFromDocs) {
+      if (config.routeFilter && !config.routeFilter(path, pathItem)) {
         continue
-      }
-
-      // 2. Apply custom routeFilter if provided
-      if (config.routeFilter) {
-        if (!config.routeFilter(path, pathItem)) {
-          continue
-        }
       }
 
       filteredPaths[path] = pathItem
     }
 
     return filteredPaths
-  }
-
-  /**
-   * Get route info by matching path against controller routes
-   */
-  private getRouteInfo(path: string): RouteInfo {
-    for (const [route, info] of this.routeInfoMap.entries()) {
-      if (path === route || path.startsWith(`${route}/`)) {
-        return info
-      }
-    }
-
-    // Default to visible for unmatched routes
-    return { hideFromDocs: false }
   }
 
   /**

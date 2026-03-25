@@ -1,10 +1,8 @@
-import { Transient } from '../../di/decorators'
 import { ROUTE_METADATA_KEYS } from '../../router/constants'
+import { Controller } from '../../router/decorators/controller.decorator'
 import { type Constructor } from '../../types'
 import type { GatewayOptions } from '../../websocket/types'
 
-const CONTROLLER_ROUTE_KEY = ROUTE_METADATA_KEYS.CONTROLLER_ROUTE
-const CONTROLLER_OPTIONS_KEY = ROUTE_METADATA_KEYS.CONTROLLER_OPTIONS
 const GATEWAY_MARKER_KEY = ROUTE_METADATA_KEYS.GATEWAY_MARKER
 
 /**
@@ -37,12 +35,8 @@ const GATEWAY_MARKER_KEY = ROUTE_METADATA_KEYS.GATEWAY_MARKER
  */
 export function Gateway(route: string, options?: GatewayOptions) {
   return function <T extends Constructor>(target: T) {
-    Transient()(target)
-    Reflect.defineMetadata(CONTROLLER_ROUTE_KEY, route, target)
+    Controller(route, options)(target)
     Reflect.defineMetadata(GATEWAY_MARKER_KEY, true, target)
-    if (options) {
-      Reflect.defineMetadata(CONTROLLER_OPTIONS_KEY, options, target)
-    }
     return target
   }
 }

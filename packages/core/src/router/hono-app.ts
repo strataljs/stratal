@@ -1,7 +1,8 @@
 import type { Context, MiddlewareHandler } from 'hono'
 import type { Container } from '../di/container'
 import { DI_TOKENS } from '../di/tokens'
-import { getHttpStatus, type GlobalErrorHandler } from '../errors'
+import { createHttpExceptionContext } from '../errors/exception-context'
+import type { ExceptionHandler } from '../errors/exception-handler'
 import { OpenAPIHono } from '../i18n/validation'
 import type { LoggerService } from '../logger'
 import {
@@ -53,13 +54,9 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
     logger: LoggerService,
   ) {
     super({
-      defaultHook: (result, c) => {
+      defaultHook: (result) => {
         if (!result.success) {
-          const requestContainer = c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER)
-          const errorHandler = requestContainer.resolve<GlobalErrorHandler>(DI_TOKENS.ErrorHandler)
-          const validationError = new SchemaValidationError(result.error)
-          const errorResponse = errorHandler.handle(validationError)
-          return c.json(errorResponse, getHttpStatus(errorResponse.code))
+          throw new SchemaValidationError(result.error)
         }
       },
     })
@@ -107,7 +104,7 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
 
     // OpenAPI endpoints
     const openAPIService = this._container.resolve<OpenAPIService>(OPENAPI_TOKENS.OpenAPIService)
-    openAPIService.setupEndpoints(this, controllers, this._container)
+    openAPIService.setupEndpoints(this, this._container)
 
     // Controller routes
     const routeRegistrationService = new RouteRegistrationService(this._logger, versioningOptions ?? null)
@@ -127,19 +124,23 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
       try {
         await next()
       } finally {
-        await requestContainer.dispose()
+        c.executionCtx.waitUntil(Promise.resolve(requestContainer.dispose()))
       }
     })
   }
 
   private setupGlobalMiddleware(): void {
     this.nativeUse('*', createLoggerMiddleware(this._logger) as MiddlewareHandler<RouterEnv>)
-    this.onError((err, c) => {
-      const requestContainer = c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER)
-      const errorHandler = requestContainer.resolve<GlobalErrorHandler>(DI_TOKENS.ErrorHandler)
-      const errorResponse = errorHandler.handle(err)
-      return c.json(errorResponse, getHttpStatus(errorResponse.code))
-    })
+    this.onError((err, c) => this.handleException(c, err))
+  }
+
+  private handleException(c: Context<RouterEnv>, err: unknown) {
+    // Fallback to global container if request scope setup failed before storing REQUEST_CONTAINER
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime guard: REQUEST_CONTAINER may be unset if request scope middleware throws
+    const requestContainer = c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER) ?? this._container
+    const handler = requestContainer.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
+    const ctx = createHttpExceptionContext(c)
+    return handler.handle(err, ctx)
   }
 
   private applyMiddlewareClasses(path: string, classes: Constructor<Middleware>[]): this {

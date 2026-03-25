@@ -95,7 +95,7 @@ describe('QuarryRegistry', () => {
     container = new Container({
       container: childContainer,
     })
-    container.registerValue(DI_TOKENS.ErrorHandler, mockErrorHandler)
+    container.registerValue(DI_TOKENS.ExceptionHandler, mockErrorHandler)
     quarry = new QuarryRegistry(container)
     mockErrorHandler.handle.mockClear()
   })
@@ -235,24 +235,19 @@ describe('QuarryRegistry', () => {
     expect(result.errors).toContain('User-facing error')
   })
 
-  it('should handle unexpected errors through GlobalErrorHandler', async () => {
+  it('should handle unexpected errors through ExceptionHandler', async () => {
     registerAll()
     const result = await quarry.call('crash')
     expect(result.exitCode).toBe(1)
-    expect(result.errors).toContain('handled:Unexpected crash')
+    expect(result.errors).toContain('Unexpected crash')
     expect(mockErrorHandler.handle).toHaveBeenCalledOnce()
   })
 
-  it('should route ApplicationError through GlobalErrorHandler', async () => {
+  it('should route ApplicationError through ExceptionHandler', async () => {
     registerAll()
-    mockErrorHandler.handle.mockReturnValueOnce({
-      code: 9999,
-      message: 'Translated app error',
-      timestamp: new Date().toISOString(),
-    })
     const result = await quarry.call('app-error')
     expect(result.exitCode).toBe(1)
-    expect(result.errors).toContain('Translated app error')
+    expect(result.errors).toContain('errors.someAppError')
     expect(mockErrorHandler.handle).toHaveBeenCalledOnce()
   })
 

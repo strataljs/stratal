@@ -1,5 +1,5 @@
 import type { Context, MiddlewareHandler } from 'hono'
-import type { WSContext, WSEvents } from 'hono/ws'
+import type { UpgradeWebSocket, WSContext, WSEvents } from 'hono/ws'
 import { type Container, getMethodInjections } from '../../di'
 import {
   type Guard,
@@ -18,10 +18,8 @@ import type { IController } from '../controller'
 import {
   getControllerOptions,
   getControllerRoute,
-  getDecoratedMethods,
-  getHttpDecoratedMethods,
-  getHttpRouteMetadata,
-  getRouteConfig,
+  getRouteDecoratedMethods,
+  getRouteMetadata,
 } from '../decorators'
 import {
   ControllerMethodNotFoundError,
@@ -36,6 +34,7 @@ import type {
   OpenAPIRouteConfig,
   RouteBodyObject,
   RouteConfig,
+  RouteMetadata,
   RouterEnv,
   SecuritySchemeRecord,
   VersioningOptions,
@@ -62,6 +61,7 @@ const invokeHandler = (instance: Record<string, (...args: unknown[]) => unknown>
  */
 export class RouteRegistrationService {
   private controllerClasses = new Map<string, Constructor<IController>>()
+  private upgradeWebSocketFn: UpgradeWebSocket | null = null
 
   constructor(
     private logger: LoggerService,
@@ -93,75 +93,101 @@ export class RouteRegistrationService {
       return 0 // maintain relative order
     })
 
-    // Single-pass partition: gateways vs regular controllers
-    const gateways: Constructor<IController>[] = []
-    const regulars: Constructor<IController>[] = []
-
-    for (const c of sortedControllers) {
-      if (isGateway(c)) {
-        gateways.push(c)
-      } else {
-        regulars.push(c)
-      }
+    // Eagerly load upgradeWebSocket once if any gateway exists
+    if (sortedControllers.some(isGateway)) {
+      const { upgradeWebSocket } = await import('hono/cloudflare-workers')
+      this.upgradeWebSocketFn = upgradeWebSocket
     }
 
-    // Register WebSocket gateways
-    for (const GatewayClass of gateways) {
-      await this.registerGateway(app, GatewayClass)
-    }
-
-    // Register controllers
-    for (const ControllerClass of regulars) {
-      this.registerController(app, ControllerClass)
+    for (const ControllerClass of sortedControllers) {
+      this.registerEntry(app, ControllerClass)
     }
 
     this.logger.info('Controller registration complete')
   }
 
   /**
-   * Register a WebSocket gateway
-   * Applies versioning and guards, then registers an upgradeWebSocket handler
+   * Unified entry point for registering a controller or gateway.
+   * Resolves route, versioning, and guards, then delegates to the appropriate handler.
    */
-  private async registerGateway(app: OpenAPIHono<RouterEnv>, GatewayClass: Constructor<IController>): Promise<void> {
-    const route = getControllerRoute(GatewayClass)
+  private registerEntry(app: OpenAPIHono<RouterEnv>, ControllerClass: Constructor<IController>): void {
+    const isWsGateway = isGateway(ControllerClass)
+    const route = getControllerRoute(ControllerClass)
 
     if (!route) {
       throw new ControllerRegistrationError(
-        GatewayClass.name,
-        'Missing @Gateway decorator or route metadata'
+        ControllerClass.name,
+        isWsGateway
+          ? 'Missing @Gateway decorator or route metadata'
+          : 'Missing @Controller decorator or route metadata'
       )
     }
 
-    const controllerOpts = getControllerOptions(GatewayClass)
-    const paths = this.versioningOptions
-      ? this.resolveVersionedPaths(route, controllerOpts)
-      : [route]
+    const controllerOpts = getControllerOptions(ControllerClass)
+    const controllerGuards = getControllerGuards(ControllerClass)?.guards ?? []
+    const paths = this.resolveVersionedPaths(route, controllerOpts)
+
+    // WebSocket gateway — register as GET with upgradeWebSocket
+    if (isWsGateway) {
+      for (const fullPath of paths) {
+        this.registerGatewayForPath(app, ControllerClass, fullPath, controllerGuards)
+      }
+      return
+    }
+
+    const className = ControllerClass.name
+    this.controllerClasses.set(className, ControllerClass)
+
+    const prototype = ControllerClass.prototype as IController
+
+    // Wildcard routes (non-RESTful controllers with handle())
+    if (prototype.handle) {
+      for (const fullPath of paths) {
+        this.registerWildcardRoute(app, ControllerClass, fullPath)
+      }
+      return
+    }
+
+    // Standard HTTP routes — validate decorated methods
+    const decoratedMethods = getRouteDecoratedMethods(ControllerClass)
+
+    if (decoratedMethods.length === 0) {
+      throw new ControllerRegistrationError(
+        ControllerClass.name,
+        'No route decorators found. Use @Route() or HTTP method decorators (@Get, @Post, etc.) on controller methods.'
+      )
+    }
+
+    // Enforce mutual exclusivity: no mixing @Route() with @Get/@Post/etc.
+    const proto = ControllerClass.prototype as IController
+    const types = new Set(decoratedMethods.map(m => getRouteMetadata(proto, m)?.type))
+    if (types.has('convention') && types.has('explicit')) {
+      throw new ControllerRegistrationError(
+        ControllerClass.name,
+        'Cannot mix @Route() with HTTP method decorators (@Get, @Post, etc.) in the same controller. Use one pattern or the other.'
+      )
+    }
 
     for (const fullPath of paths) {
-      await this.registerGatewayRoute(app, GatewayClass, fullPath)
+      this.registerRoutes(app, ControllerClass, fullPath, decoratedMethods, controllerOpts)
     }
   }
 
   /**
    * Register a single WebSocket gateway route
    */
-  private async registerGatewayRoute(
+  private registerGatewayForPath(
     app: OpenAPIHono<RouterEnv>,
     GatewayClass: Constructor<IController>,
-    fullPath: string
-  ): Promise<void> {
-    // Collect class-level guards
-    const controllerGuards = getControllerGuards(GatewayClass)?.guards ?? []
-
-    // Dynamic import: only load hono/cloudflare-workers when gateways exist
-    const { upgradeWebSocket } = await import('hono/cloudflare-workers')
-
+    fullPath: string,
+    guards: Guard[]
+  ): void {
     // Cache WS metadata once at registration time (not per-connection)
     const onMsgMethod = getWsOnMessageMethod(GatewayClass)
     const onCloseMethod = getWsOnCloseMethod(GatewayClass)
     const onErrMethod = getWsOnErrorMethod(GatewayClass)
 
-    const wsHandler: MiddlewareHandler<RouterEnv> = upgradeWebSocket((c) => {
+    const wsHandler: MiddlewareHandler<RouterEnv> = this.upgradeWebSocketFn!((c) => {
       const routerCtx = new RouterContext(c as Context<RouterEnv>)
       const container = routerCtx.getContainer()
       const gateway = container.resolve(GatewayClass)
@@ -176,12 +202,10 @@ export class RouteRegistrationService {
       ) => {
         return (evt: MessageEvent | CloseEvent | Event, ws: WSContext) => {
           const ctx = new GatewayContext(c as Context<RouterEnv>, ws)
-          c.executionCtx.waitUntil(
-            invokeHandler(gateway as Record<string, (...args: unknown[]) => unknown>, method, evt, ctx).catch((err: unknown) => {
-              this.logger.error(`WebSocket ${method} handler error`, { gateway: GatewayClass.name, error: err instanceof Error ? err.message : String(err) })
-              onCatch?.(err, ws)
-            })
-          )
+          invokeHandler(gateway as Record<string, (...args: unknown[]) => unknown>, method, evt, ctx).catch((err: unknown) => {
+            this.logger.error(`WebSocket ${method} handler error`, { gateway: GatewayClass.name, error: err instanceof Error ? err.message : String(err) })
+            onCatch?.(err, ws)
+          })
         }
       }
 
@@ -207,13 +231,13 @@ export class RouteRegistrationService {
 
     const handlers: MiddlewareHandler<RouterEnv>[] = []
 
-    if (controllerGuards.length > 0) {
+    if (guards.length > 0) {
       this.logger.info('Gateway guards', {
         gateway: GatewayClass.name,
         path: fullPath,
-        guardCount: controllerGuards.length,
+        guardCount: guards.length,
       })
-      handlers.push(this.createGuardMiddleware(controllerGuards))
+      handlers.push(this.createGuardMiddleware(guards))
     }
 
     handlers.push(wsHandler)
@@ -221,83 +245,6 @@ export class RouteRegistrationService {
     // Type assertion needed because Hono's overloaded .get() signatures
     // don't accept a spread of MiddlewareHandler[] alongside upgradeWebSocket's output type
     app.get(fullPath, ...(handlers as [MiddlewareHandler<RouterEnv>]))
-  }
-
-  /**
-   * Register a single controller with all its routes
-   * Validates that controller has access decorator (strict mode)
-   */
-  private registerController(app: OpenAPIHono<RouterEnv>, ControllerClass: Constructor<IController>): void {
-    const route = getControllerRoute(ControllerClass)
-
-    if (!route) {
-      throw new ControllerRegistrationError(
-        ControllerClass.name,
-        'Missing @Controller decorator or route metadata'
-      )
-    }
-
-    const className = ControllerClass.name
-    this.controllerClasses.set(className, ControllerClass)
-
-    const prototype = ControllerClass.prototype as IController
-    const controllerOpts = getControllerOptions(ControllerClass)
-
-    // Handle wildcard routes (non-RESTful controllers) — check once, not per version
-    if (prototype.handle) {
-      if (!this.versioningOptions) {
-        this.registerWildcardRoute(app, ControllerClass, route)
-      } else {
-        for (const versionedRoute of this.resolveVersionedPaths(route, controllerOpts)) {
-          this.registerWildcardRoute(app, ControllerClass, versionedRoute)
-        }
-      }
-      return
-    }
-
-    // Compute decorated methods once (loop-invariant)
-    const decoratedMethods = getDecoratedMethods(ControllerClass)
-    const httpDecoratedMethods = getHttpDecoratedMethods(ControllerClass)
-
-    // Enforce mutual exclusivity once
-    if (decoratedMethods.length > 0 && httpDecoratedMethods.length > 0) {
-      throw new ControllerRegistrationError(
-        ControllerClass.name,
-        'Cannot mix @Route() with HTTP method decorators (@Get, @Post, etc.) in the same controller. Use one pattern or the other.'
-      )
-    }
-
-    // Fast path: no versioning — inline dispatch, no array allocation, no loop
-    if (!this.versioningOptions) {
-      this.dispatchRoutes(app, ControllerClass, route, decoratedMethods, httpDecoratedMethods, controllerOpts, prototype)
-      return
-    }
-
-    // Versioning path: resolve versioned paths and register each
-    for (const versionedRoute of this.resolveVersionedPaths(route, controllerOpts)) {
-      this.dispatchRoutes(app, ControllerClass, versionedRoute, decoratedMethods, httpDecoratedMethods, controllerOpts, prototype)
-    }
-  }
-
-  /**
-   * Dispatch route registration based on decorator type
-   */
-  private dispatchRoutes(
-    app: OpenAPIHono<RouterEnv>,
-    ControllerClass: Constructor<IController>,
-    path: string,
-    decoratedMethods: string[],
-    httpDecoratedMethods: string[],
-    controllerOpts: ControllerOptions | undefined,
-    prototype: IController
-  ): void {
-    if (httpDecoratedMethods.length > 0) {
-      this.registerHttpRoutes(app, ControllerClass, path, httpDecoratedMethods, controllerOpts)
-    } else if (decoratedMethods.length > 0) {
-      this.registerOpenAPIRoutes(app, ControllerClass, path, decoratedMethods, controllerOpts)
-    } else {
-      this.registerRESTfulRoutes(app, ControllerClass, path, prototype)
-    }
   }
 
   /**
@@ -386,192 +333,130 @@ export class RouteRegistrationService {
   }
 
   /**
-   * Register OpenAPI routes with metadata
+   * Register routes for a controller using unified route metadata.
+   * Handles both convention-based (@Route) and explicit (@Get, @Post, etc.) routes.
+   * @All routes are registered without OpenAPI; all others go through OpenAPI with optional `hide`.
    */
-  private registerOpenAPIRoutes(
+  private registerRoutes(
     app: OpenAPIHono<RouterEnv>,
     ControllerClass: Constructor<IController>,
-    route: string,
+    basePath: string,
     decoratedMethods: string[],
     controllerOpts: ControllerOptions | undefined
   ): void {
     const className = ControllerClass.name
     const prototype = ControllerClass.prototype as IController
-
-    // Check if entire controller is hidden from docs
     const controllerHidden = controllerOpts?.hideFromDocs ?? false
-
-    // Collect controller-level guards
     const controllerGuards = getControllerGuards(ControllerClass)?.guards ?? []
 
-    for (const methodName of decoratedMethods) {
-      const routeConfig = getRouteConfig(prototype, methodName)
-      if (!routeConfig) continue
+    // Pre-resolve all methods and sort by path specificity (static before dynamic)
+    // This ensures /notes/create registers before /notes/:id regardless of declaration order
+    const resolvedMethods = decoratedMethods
+      .map(methodName => {
+        const meta = getRouteMetadata(prototype, methodName)
+        if (!meta) return null
+        const resolved = this.resolveMethodAndPath(meta, methodName, basePath, className)
+        if (!resolved) return null
+        return { methodName, meta, resolved }
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .sort((a, b) => {
+        const scoreA = this.getPathSpecificityScore(a.resolved.fullPath)
+        const scoreB = this.getPathSpecificityScore(b.resolved.fullPath)
+        if (scoreA !== scoreB) return scoreA - scoreB
+        // Tie-break: more segments = more specific path, register first
+        const segA = a.resolved.fullPath.split('/').filter(Boolean).length
+        const segB = b.resolved.fullPath.split('/').filter(Boolean).length
+        return segB - segA
+      })
 
-      const derived = this.deriveHttpMethodAndPath(methodName, route)
-      if (!derived) {
-        this.logger.warn(`Cannot derive HTTP method/path for ${className}.${methodName}`)
-        continue
-      }
-
-      // Check if route is hidden (route-level overrides controller-level)
+    for (const { methodName, meta, resolved } of resolvedMethods) {
+      const { httpMethod, fullPath, routeConfig, statusCodeOverride } = resolved
       const hideFromDocs = routeConfig.hideFromDocs ?? controllerHidden
 
-      if (hideFromDocs) {
-        // Register route handler without OpenAPI metadata
-        this.logger.info(`Registering hidden route (no OpenAPI)`, {
-          controller: className,
-          method: derived.method.toUpperCase(),
-          path: derived.path,
-          methodName,
-        })
-
-        this.registerRouteWithoutOpenAPI(app, ControllerClass, methodName, derived)
-        continue
-      }
-
-      // Collect method-level guards
+      // Collect guards (controller + method)
       const methodGuards = getMethodGuards(prototype, methodName)?.guards ?? []
-
-      // Combine controller and method guards
-      // Controller guards run first, then method guards
       const allGuards: Guard[] = [...controllerGuards, ...methodGuards]
 
       if (allGuards.length > 0) {
         this.logger.info(`Route guards`, {
           controller: className,
-          method: derived.method.toUpperCase(),
-          path: derived.path,
+          method: httpMethod.toUpperCase(),
+          path: fullPath,
           methodName,
           guardCount: allGuards.length,
         })
       }
 
-      // Build and register OpenAPI route
+      const handler = this.createControllerHandler(ControllerClass, methodName)
+
+      // @All routes can't use OpenAPI — register directly with guards
+      if (httpMethod === 'all') {
+        this.logger.info(`Registering @All route`, {
+          controller: className,
+          path: fullPath,
+          methodName,
+        })
+
+        if (allGuards.length > 0) {
+          app.all(fullPath, this.createGuardMiddleware(allGuards), handler)
+        } else {
+          app.all(fullPath, handler)
+        }
+        continue
+      }
+
+      // Build and register OpenAPI route (with optional hide for docs exclusion)
       const metadata = this.mergeMetadata(controllerOpts, routeConfig, ControllerClass, methodName)
       const openApiRoute = this.buildOpenAPIRoute(
-        derived.method,
-        derived.path,
+        httpMethod,
+        fullPath,
         routeConfig,
         metadata,
         allGuards,
-        methodName
+        hideFromDocs,
+        meta.type === 'convention' ? methodName : undefined,
+        statusCodeOverride,
       )
 
-      this.logger.info(`Registering OpenAPI route`, {
+      this.logger.info(`Registering route`, {
         controller: className,
-        method: derived.method.toUpperCase(),
-        path: derived.path,
+        method: httpMethod.toUpperCase(),
+        path: fullPath,
         methodName,
         tags: metadata.tags,
+        hidden: hideFromDocs,
       })
 
-      // Register OpenAPI route with handler
-      const handler = async (c: Context<RouterEnv>) => {
-        const ctx = new RouterContext(c)
-        const requestContainer = ctx.getContainer()
-        const controller = requestContainer.resolve<IController>(ControllerClass)
-        const method = controller[methodName as keyof IController]
-        if (typeof method === 'function') {
-          const injectedArgs = this.resolveMethodInjections(prototype, methodName, requestContainer)
-          return await (method as (...args: unknown[]) => Promise<Response>).call(controller, ctx, ...injectedArgs)
-        }
-        throw new ControllerMethodNotFoundError(methodName, className)
-      }
-      this.nameHandler(handler, className, methodName)
       app.openapi(openApiRoute, handler)
     }
   }
 
   /**
-   * Register routes using HTTP method decorators (@Get, @Post, etc.)
-   * These use explicit method + path instead of convention-based derivation
+   * Resolve HTTP method, path, route config, and status code from route metadata.
    */
-  private registerHttpRoutes(
-    app: OpenAPIHono<RouterEnv>,
-    ControllerClass: Constructor<IController>,
+  private resolveMethodAndPath(
+    meta: RouteMetadata,
+    methodName: string,
     basePath: string,
-    httpDecoratedMethods: string[],
-    controllerOpts: ControllerOptions | undefined
-  ): void {
-    const className = ControllerClass.name
-    const prototype = ControllerClass.prototype as IController
-
-    const controllerHidden = controllerOpts?.hideFromDocs ?? false
-    const controllerGuards = getControllerGuards(ControllerClass)?.guards ?? []
-
-    for (const methodName of httpDecoratedMethods) {
-      const httpMeta = getHttpRouteMetadata(prototype, methodName)
-      if (!httpMeta) continue
-
-      const fullPath = this.joinPaths(basePath, httpMeta.path)
-      const routeConfig = httpMeta.config
-      const hideFromDocs = routeConfig.hideFromDocs ?? controllerHidden
-
-      // @All routes or hidden routes are registered without OpenAPI
-      if (httpMeta.method === 'all' || hideFromDocs) {
-        this.logger.info(`Registering route (no OpenAPI)`, {
-          controller: className,
-          method: httpMeta.method.toUpperCase(),
-          path: fullPath,
-          methodName,
-        })
-
-        this.registerRouteWithoutOpenAPI(app, ControllerClass, methodName, {
-          method: httpMeta.method,
-          path: fullPath,
-        })
-        continue
+    className: string
+  ): { httpMethod: HttpMethod; fullPath: string; routeConfig: RouteConfig; statusCodeOverride?: number } | null {
+    if (meta.type === 'convention') {
+      const derived = this.deriveHttpMethodAndPath(methodName, basePath)
+      if (!derived) {
+        throw new ControllerRegistrationError(
+          `Cannot derive HTTP method/path for convention-based route "${className}.${methodName}". ` +
+          `Ensure the method name follows the naming convention (e.g., index, create, show).`
+        )
       }
+      return { httpMethod: derived.method, fullPath: derived.path, routeConfig: meta.config, statusCodeOverride: meta.config.statusCode }
+    }
 
-      // Collect method-level guards
-      const methodGuards = getMethodGuards(prototype, methodName)?.guards ?? []
-      const allGuards: Guard[] = [...controllerGuards, ...methodGuards]
-
-      if (allGuards.length > 0) {
-        this.logger.info(`Route guards`, {
-          controller: className,
-          method: httpMeta.method.toUpperCase(),
-          path: fullPath,
-          methodName,
-          guardCount: allGuards.length,
-        })
-      }
-
-      // Build and register OpenAPI route
-      const metadata = this.mergeMetadata(controllerOpts, routeConfig, ControllerClass, methodName)
-      const statusCode = routeConfig.statusCode ?? 200
-      const openApiRoute = this.buildOpenAPIRoute(
-        httpMeta.method,
-        fullPath,
-        routeConfig,
-        metadata,
-        allGuards,
-        undefined,
-        statusCode
-      )
-
-      this.logger.info(`Registering OpenAPI route`, {
-        controller: className,
-        method: httpMeta.method.toUpperCase(),
-        path: fullPath,
-        methodName,
-        tags: metadata.tags,
-      })
-
-      const handler = async (c: Context<RouterEnv>) => {
-        const ctx = new RouterContext(c)
-        const requestContainer = ctx.getContainer()
-        const controller = requestContainer.resolve<IController>(ControllerClass)
-        const method = controller[methodName as keyof IController]
-        if (typeof method === 'function') {
-          const injectedArgs = this.resolveMethodInjections(prototype, methodName, requestContainer)
-          return await (method as (...args: unknown[]) => Promise<Response>).call(controller, ctx, ...injectedArgs)
-        }
-        throw new ControllerMethodNotFoundError(methodName, className)
-      }
-      this.nameHandler(handler, className, methodName)
-      app.openapi(openApiRoute, handler)
+    return {
+      httpMethod: meta.method,
+      fullPath: this.joinPaths(basePath, meta.path),
+      routeConfig: meta.config,
+      statusCodeOverride: meta.config.statusCode,
     }
   }
 
@@ -580,92 +465,29 @@ export class RouteRegistrationService {
    */
   private joinPaths(basePath: string, routePath: string): string {
     if (routePath === '/') return basePath
+    if (basePath !== '/' && basePath.endsWith('/')) basePath = basePath.slice(0, -1)
+    if (routePath && !routePath.startsWith('/')) routePath = '/' + routePath
     return basePath + routePath
   }
 
   /**
-   * Register route without OpenAPI metadata (for hidden routes)
-   * Route is functional but won't appear in documentation
+   * Compute a specificity score for route path sorting.
+   * Lower score = higher priority (registered first).
+   * Static paths < parameterized paths < wildcard paths.
    */
-  private registerRouteWithoutOpenAPI(
-    app: OpenAPIHono<RouterEnv>,
-    ControllerClass: Constructor<IController>,
-    methodName: string,
-    derived: { method: HttpMethod; path: string }
-  ): void {
-    // Create handler function
-    const prototype = ControllerClass.prototype as IController
-    const handler = async (c: Context<RouterEnv>) => {
-      const ctx = new RouterContext(c)
-      const requestContainer = ctx.getContainer()
-      const controller = requestContainer.resolve<IController>(ControllerClass)
-      const method = controller[methodName as keyof IController]
-      if (typeof method === 'function') {
-        const injectedArgs = this.resolveMethodInjections(prototype, methodName, requestContainer)
-        return await (method as (...args: unknown[]) => Promise<Response>).call(controller, ctx, ...injectedArgs)
+  private getPathSpecificityScore(path: string): number {
+    const segments = path.split('/').filter(Boolean)
+    let score = 0
+    for (const segment of segments) {
+      if (segment.includes('{.+}') || segment.includes('{.*}')) {
+        score += 100
+      } else if (segment.startsWith(':')) {
+        score += 10
       }
-      throw new ControllerMethodNotFoundError(methodName, ControllerClass.name)
     }
-    this.nameHandler(handler, ControllerClass.name, methodName)
-
-    // Register route handler without OpenAPI metadata using type-safe method dispatch
-    // Note: Only common HTTP methods (get, post, put, patch, delete) are supported
-    // For other methods, we fall back to all() which accepts any HTTP method
-    switch (derived.method) {
-      case 'get':
-        app.get(derived.path, handler)
-        break
-      case 'post':
-        app.post(derived.path, handler)
-        break
-      case 'put':
-        app.put(derived.path, handler)
-        break
-      case 'patch':
-        app.patch(derived.path, handler)
-        break
-      case 'delete':
-        app.delete(derived.path, handler)
-        break
-      case 'all':
-        app.all(derived.path, handler)
-        break
-      default:
-        // For head, options, trace, or any other method, use all()
-        app.all(derived.path, handler)
-        break
-    }
+    return score
   }
 
-
-  /**
-   * Register traditional RESTful routes without OpenAPI
-   */
-  private registerRESTfulRoutes(
-    app: OpenAPIHono<RouterEnv>,
-    ControllerClass: Constructor<IController>,
-    route: string,
-    prototype: IController
-  ): void {
-    if (prototype.index) {
-      app.get(route, this.createControllerHandler(ControllerClass, 'index'))
-    }
-    if (prototype.show) {
-      app.get(`${route}/:id`, this.createControllerHandler(ControllerClass, 'show'))
-    }
-    if (prototype.create) {
-      app.post(route, this.createControllerHandler(ControllerClass, 'create'))
-    }
-    if (prototype.update) {
-      app.put(`${route}/:id`, this.createControllerHandler(ControllerClass, 'update'))
-    }
-    if (prototype.patch) {
-      app.patch(`${route}/:id`, this.createControllerHandler(ControllerClass, 'patch'))
-    }
-    if (prototype.destroy) {
-      app.delete(`${route}/:id`, this.createControllerHandler(ControllerClass, 'destroy'))
-    }
-  }
 
   /**
    * Auto-derive HTTP method and path from controller method name
@@ -738,15 +560,21 @@ export class RouteRegistrationService {
     routeConfig: RouteConfig,
     metadata: { tags: string[]; security: Record<string, string[]>[] },
     guards: Guard[],
+    hideFromDocs: boolean,
     methodName?: string,
     statusCodeOverride?: number
   ): OpenAPIRouteConfig {
     try {
-      const route: Partial<OpenAPIRouteConfig> = {
+      const route: Partial<OpenAPIRouteConfig> & { hide?: boolean } = {
         method,
         path,
         request: {},
         responses: {},
+      }
+
+      // Hide from OpenAPI docs while keeping validation active
+      if (hideFromDocs) {
+        route.hide = true
       }
 
       // Add guard execution middleware using Hono's built-in middleware property
@@ -892,43 +720,23 @@ export class RouteRegistrationService {
    */
   private createControllerHandler(
     ControllerClass: new (...args: unknown[]) => IController,
-    methodName: keyof IController
+    methodName: string
   ): (c: Context<RouterEnv>) => Promise<Response> {
     const handler = async (c: Context<RouterEnv>) => {
-      this.logger.info('Handler invoked', {
-        path: c.req.path,
-        method: c.req.method,
-        controller: ControllerClass.name,
-        methodName: methodName as string,
-      })
+      const ctx = new RouterContext(c)
+      const requestContainer = ctx.getContainer()
+      const controller = requestContainer.resolve<IController>(ControllerClass)
 
-      try {
-        const ctx = new RouterContext(c)
-        const requestContainer = ctx.getContainer()
-
-        // Resolve controller from request-scoped container
-        // Controller will get request-scoped TenancyContext via DI
-        const controller = requestContainer.resolve<IController>(ControllerClass)
-
-        const method = controller[methodName]
-        if (typeof method === 'function') {
-          const injectedArgs = this.resolveMethodInjections(ControllerClass.prototype as object, methodName as string, requestContainer)
-          return await (method as (...args: unknown[]) => Promise<Response>).apply(controller, [ctx, ...injectedArgs])
-        }
-
-        throw new ControllerMethodNotFoundError(methodName as string, ControllerClass.name)
-      } catch (error) {
-        this.logger.error('Error in controller handler', {
-          controller: ControllerClass.name,
-          methodName: methodName as string,
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        })
-        throw error
+      const method = controller[methodName as keyof IController]
+      if (typeof method === 'function') {
+        const injectedArgs = this.resolveMethodInjections(ControllerClass.prototype as object, methodName, requestContainer)
+        return await (method as (...args: unknown[]) => Promise<Response>).apply(controller, [ctx, ...injectedArgs])
       }
+
+      throw new ControllerMethodNotFoundError(methodName, ControllerClass.name)
     }
 
-    this.nameHandler(handler, ControllerClass.name, methodName as string)
+    this.nameHandler(handler, ControllerClass.name, methodName)
     return handler
   }
 }

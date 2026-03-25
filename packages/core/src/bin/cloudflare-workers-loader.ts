@@ -1,12 +1,17 @@
 /**
- * ESM loader hook that provides a virtual `cloudflare:workers` module.
+ * ESM loader hook that provides a virtual `cloudflare:workers` module
+ * and handles Vite-style `?raw` imports (returning file contents as a string).
  *
  * When registered via `node --import` or `register()`, this intercepts
  * `import('cloudflare:workers')` and returns a module that reads `env`
  * and `waitUntil` from `globalThis.__stratalPlatformProxy`.
  */
 
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
 const VIRTUAL_URL = 'cloudflare-workers:virtual'
+const RAW_SUFFIX = '?raw'
 
 interface ResolveContext {
   parentURL?: string
@@ -27,6 +32,11 @@ export async function resolve(
 ): Promise<ResolveResult> {
   if (specifier === 'cloudflare:workers') {
     return { url: VIRTUAL_URL, shortCircuit: true }
+  }
+  if (specifier.endsWith(RAW_SUFFIX)) {
+    const base = specifier.slice(0, -RAW_SUFFIX.length)
+    const resolved = await nextResolve(base, context)
+    return { url: resolved.url + RAW_SUFFIX, shortCircuit: true }
   }
   return nextResolve(specifier, context)
 }
@@ -49,6 +59,16 @@ export async function load(
   context: LoadContext,
   nextLoad: NextLoad,
 ): Promise<LoadResult> {
+  if (url.endsWith(RAW_SUFFIX)) {
+    const fileUrl = url.slice(0, -RAW_SUFFIX.length)
+    const filePath = fileURLToPath(fileUrl)
+    const content = readFileSync(filePath, 'utf-8')
+    return {
+      format: 'module',
+      shortCircuit: true,
+      source: `export default ${JSON.stringify(content)}`,
+    }
+  }
   if (url === VIRTUAL_URL) {
     return {
       format: 'module',

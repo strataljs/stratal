@@ -90,5 +90,5 @@ const stratalPlugin: Plugin = {
  * @returns An array of Vite plugins
  */
 export function stratalTest(options: CloudflareTestOptions = {}): Plugin[] {
-  return [cloudflareTest(options), stratalPlugin]
+  return [cloudflareTest(options) as unknown as Plugin, stratalPlugin]
 }

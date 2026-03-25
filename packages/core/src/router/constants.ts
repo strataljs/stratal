@@ -17,8 +17,6 @@ export const ROUTE_METADATA_KEYS = {
   CONTROLLER_MIDDLEWARES: Symbol.for('stratal:controller:middlewares'),
   ROUTE_CONFIG: Symbol.for('stratal:route:config'),
   DECORATED_METHODS: Symbol.for('stratal:decorated:methods'),
-  HTTP_ROUTE_CONFIG: Symbol.for('stratal:http-route:config'),
-  HTTP_DECORATED_METHODS: Symbol.for('stratal:http-decorated:methods'),
   AUTH_GUARD: Symbol.for('stratal:auth:guard'),
   GATEWAY_MARKER: Symbol.for('stratal:gateway:marker'),
   WS_ON_MESSAGE: Symbol.for('stratal:ws:on-message'),

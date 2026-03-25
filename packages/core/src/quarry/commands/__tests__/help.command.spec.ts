@@ -23,7 +23,7 @@ class GreetCommand extends Command {
 beforeEach(() => {
   const tsyringe = tsyringeRootContainer.createChildContainer()
   childContainer = new Container({ container: tsyringe })
-  childContainer.registerValue(DI_TOKENS.ErrorHandler, { handle: (e: unknown) => ({ message: String(e) }) })
+  childContainer.registerValue(DI_TOKENS.ExceptionHandler, { handle: (e: unknown) => ({ message: String(e) }) })
   quarry = new QuarryRegistry(childContainer)
 
   childContainer.registerValue(DI_TOKENS.Quarry, quarry)

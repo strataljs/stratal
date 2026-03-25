@@ -71,14 +71,14 @@ export class CronManager {
 						await job.onError(err, controller)
 					} catch {
 						// If onError() itself fails, we just continue
-						// The error will be logged by GlobalErrorHandler
+						// The error will be logged by ExceptionHandler
 					}
 				}
 			}
 		}
 
 		// If any jobs failed, throw an aggregate error
-		// This ensures the error is logged by GlobalErrorHandler
+		// This ensures the error is logged by ExceptionHandler
 		if (errors.length > 0) {
 			const jobNames = errors
 				.map(({ job, error }) => `${job}: ${error.message}`)

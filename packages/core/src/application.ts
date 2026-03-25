@@ -6,7 +6,10 @@ import { Container } from './di/container'
 import { DI_TOKENS } from './di/tokens'
 import { Scope } from './di/types'
 import { type StratalEnv } from './env'
-import { ApplicationError, GlobalErrorHandler } from './errors'
+import { ApplicationError } from './errors'
+import { DefaultExceptionHandler } from './errors/default-exception-handler'
+import { createCliExceptionContext, createCronExceptionContext, createQueueExceptionContext } from './errors/exception-context'
+import type { ExceptionHandler } from './errors/exception-handler'
 import type { EventHandler } from './events'
 import { EventRegistry, getListenerHandlers } from './events'
 import type { StratalExecutionContext } from './execution-context'
@@ -49,6 +52,24 @@ export interface ApplicationConfig {
    * When provided, enables URI-based versioning for controllers.
    */
   versioning?: VersioningOptions
+  /**
+   * Custom exception handler class.
+   *
+   * Extend {@link ExceptionHandler} and override `register()` to configure
+   * custom reporting, rendering, and post-processing of exceptions.
+   *
+   * When not provided, {@link DefaultExceptionHandler} is used (standard
+   * severity-based logging and JSON error responses).
+   *
+   * @example
+   * ```typescript
+   * new Stratal({
+   *   module: AppModule,
+   *   exceptionHandler: AppExceptionHandler,
+   * })
+   * ```
+   */
+  exceptionHandler?: Constructor<ExceptionHandler>
 }
 
 export interface ApplicationOptions extends ApplicationConfig {
@@ -134,6 +155,13 @@ export class Application {
     return this.honoApp
   }
 
+  /**
+   * Get the application configuration
+   */
+  get config(): ApplicationConfig {
+    return this.appConfig
+  }
+
   async initialize(): Promise<void> {
     if (this.initialized) {
       return
@@ -152,6 +180,9 @@ export class Application {
 
     // Phase 3: Initialize all modules
     await this.moduleRegistry.initialize()
+
+    // Phase 3.5: Initialize ExceptionHandler and call module onException hooks
+    this.initializeExceptionHandler()
 
     // Phase 4: Resolve managers from container
     this.consumerRegistry = this._container.resolve<ConsumerRegistry>(DI_TOKENS.ConsumerRegistry)
@@ -182,9 +213,11 @@ export class Application {
     try {
       return this._container.resolve(token)
     } catch (error) {
-      const errorHandler = this._container.resolve<GlobalErrorHandler>(DI_TOKENS.ErrorHandler)
-      const errorResponse = errorHandler.handle(error)
-      throw errorResponse as unknown as Error
+      const handler = this._container.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
+      const ctx = createCliExceptionContext('resolve')
+      // Fire-and-forget — reporting happens via waitUntil internally
+      void handler.handle(error, ctx)
+      throw error
     }
   }
 
@@ -201,8 +234,8 @@ export class Application {
         const queueManager = requestContainer.resolve<QueueManager>(DI_TOKENS.Queue)
         await queueManager.processBatch(queueName, batch)
       } catch (error) {
-        const errorHandler = requestContainer.resolve<GlobalErrorHandler>(DI_TOKENS.ErrorHandler)
-        errorHandler.handle(error)
+        const handler = requestContainer.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
+        await handler.handle(error, createQueueExceptionContext(queueName))
         throw error
       }
     })
@@ -218,8 +251,8 @@ export class Application {
       try {
         await this.cronManager.executeScheduled(controller)
       } catch (error) {
-        const errorHandler = requestContainer.resolve<GlobalErrorHandler>(DI_TOKENS.ErrorHandler)
-        errorHandler.handle(error)
+        const handler = requestContainer.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
+        await handler.handle(error, createCronExceptionContext())
         throw error
       }
     })
@@ -353,9 +386,21 @@ export class Application {
    */
   private registerCoreServices(): void {
     this._container.registerSingleton(DI_TOKENS.Cron, CronManager)
-    this._container.register(DI_TOKENS.ErrorHandler, GlobalErrorHandler)
+    this._container.registerSingleton(
+      DI_TOKENS.ExceptionHandler,
+      (this.appConfig.exceptionHandler ?? DefaultExceptionHandler) as Constructor,
+    )
     this._container.registerSingleton(DI_TOKENS.EventRegistry, EventRegistry)
     this._container.registerSingleton(DI_TOKENS.Quarry, QuarryRegistry)
     this._container.registerValue(SEEDER_TOKENS.SeederRegistry, new SeederRegistry(this))
+  }
+
+  /**
+   * Initialize the ExceptionHandler: call register(), then module onException hooks.
+   */
+  private initializeExceptionHandler(): void {
+    const handler = this._container.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
+    handler.register()
+    this.moduleRegistry.configureExceptionHandlers(handler)
   }
 }

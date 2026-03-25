@@ -58,7 +58,7 @@ const DEFAULT_OPTIONS: OpenAPIModuleOptions = {
   providers: [
     // OpenAPI config service (request-scoped, supports runtime overrides)
     { provide: OPENAPI_TOKENS.ConfigService, useClass: OpenAPIConfigService, scope: Scope.Request },
-    // OpenAPI service (singleton — shared routeInfoMap, serves endpoints)
+    // OpenAPI service (singleton — serves spec and docs endpoints)
     { provide: OPENAPI_TOKENS.OpenAPIService, useClass: OpenAPIService, scope: Scope.Singleton },
   ],
 })

@@ -8,6 +8,7 @@ import { LogLevel } from '../logger'
 import { Module } from '../module/module.decorator'
 import { Controller } from '../router/decorators/controller.decorator'
 import { Route } from '../router/decorators/route.decorator'
+import { ControllerRegistrationError } from '../router/errors'
 import type { RouterContext } from '../router/router-context'
 
 // Fixtures
@@ -37,6 +38,14 @@ class TestController {
   controllers: [TestController],
 })
 class TestAppModule { }
+
+@Controller('/no-decorators')
+class NoDecoratorController {
+  index(_ctx: RouterContext) { return _ctx.json({ ok: true }) }
+}
+
+@Module({ controllers: [NoDecoratorController] })
+class NoDecoratorModule { }
 
 const mockEnv = { ENVIRONMENT: 'test' } as StratalEnv
 const mockCtx = {
@@ -142,5 +151,10 @@ describe('Application (eager bootstrap)', () => {
   it('should clean up on shutdown()', async () => {
     await app.shutdown()
     // No error thrown
+  })
+
+  it('should throw ControllerRegistrationError for controller without route decorators', async () => {
+    const noDecoratorApp = createTestApp({ module: NoDecoratorModule })
+    await expect(noDecoratorApp.initialize()).rejects.toThrow(ControllerRegistrationError)
   })
 })

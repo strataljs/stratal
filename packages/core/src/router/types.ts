@@ -146,14 +146,30 @@ export interface RouteConfig {
 }
 
 /**
- * Metadata stored by HTTP method decorators (@Get, @Post, etc.)
- * Contains the explicit HTTP method, path, and route configuration
+ * Metadata for convention-based routes (@Route decorator)
+ * HTTP method and path are auto-derived from the method name
  */
-export interface HttpRouteMetadata {
+export interface ConventionRouteMetadata {
+  type: 'convention'
+  config: RouteConfig
+}
+
+/**
+ * Metadata for explicit routes (@Get, @Post, @Put, @Patch, @Delete, @All decorators)
+ * HTTP method and path are explicitly specified
+ */
+export interface ExplicitRouteMetadata {
+  type: 'explicit'
   method: HttpMethod
   path: string
   config: RouteConfig
 }
+
+/**
+ * Discriminated union for all route metadata
+ * Stored under a single metadata key for unified registration
+ */
+export type RouteMetadata = ConventionRouteMetadata | ExplicitRouteMetadata
 
 /**
  * Controller options for @Controller() decorator

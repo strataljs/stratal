@@ -1,4 +1,5 @@
 import type { Environment, ErrorResponse } from './error-response'
+import type { ExceptionContext } from './exception-context'
 import type { MessageKeys } from '../i18n'
 import type { ErrorCode } from './error-codes'
 
@@ -6,22 +7,27 @@ import type { ErrorCode } from './error-codes'
  * ApplicationError
  *
  * Abstract base class for all application errors.
- * This class should never be used directly - always extend it to create specific error types.
+ *
+ * @deprecated Use {@link HttpException} for new error classes. `HttpException` provides
+ * a simpler constructor that takes `(httpStatus, message?)` and derives the error code
+ * automatically. Existing subclasses will continue to work but should be migrated over time.
  *
  * Features:
  * - Type-safe error codes from ERROR_CODES registry
  * - Type-safe message keys from i18n module
- * - Localized message keys (translated by GlobalErrorHandler)
+ * - Localized message keys (translated by ExceptionHandler)
  * - Structured metadata for logging and interpolation
  * - Proper Error prototype chain
  * - Automatic timestamp generation
  * - Serialization for RPC transmission
+ * - Optional self-reporting via `report()` method
+ * - Optional self-rendering via `render()` method
  *
  * Message Localization:
  * - Each error class passes an i18n key (e.g., 'errors.userNotFound') to super()
  * - `Error.message` contains the i18n key for useful stack traces and fallback display
  * - Metadata provides interpolation parameters (e.g., { userId: '123' })
- * - GlobalErrorHandler translates the message key using I18nService before sending response
+ * - ExceptionHandler translates the message key using I18nService before sending response
  * - This ensures errors are localized based on the user's locale (from X-Locale header)
  */
 export abstract class ApplicationError extends Error {
@@ -122,7 +128,7 @@ export abstract class ApplicationError extends Error {
    * Serialize error to ErrorResponse format for RPC transmission
    *
    * @param env - Environment (development | production)
-   * @param translatedMessage - Optional translated message (from GlobalErrorHandler)
+   * @param translatedMessage - Optional translated message (from ExceptionHandler)
    * @returns ErrorResponse object suitable for JSON serialization
    */
   toErrorResponse(env: Environment, translatedMessage?: string): ErrorResponse {
@@ -145,9 +151,58 @@ export abstract class ApplicationError extends Error {
   /**
    * JSON serialization (used by JSON.stringify)
    * Defaults to development mode for backward compatibility
-   * Note: This will use the untranslated message key - use GlobalErrorHandler for proper localization
+   * Note: This will use the untranslated message key - use ExceptionHandler for proper localization
    */
   toJSON(): ErrorResponse {
     return this.toErrorResponse('development')
   }
+
+  /**
+   * Self-reporting hook. Override in subclasses to define custom reporting logic
+   * that runs instead of the default logger.
+   *
+   * - Return `void` (or nothing) to **skip** default reporting after this runs.
+   * - Return `false` to **also run** default reporting after this runs.
+   *
+   * @example
+   * ```typescript
+   * class PaymentError extends HttpException {
+   *   report(): void {
+   *     sentry.captureException(this)
+   *     // Default logging is skipped
+   *   }
+   * }
+   *
+   * class SoftError extends HttpException {
+   *   report(): false {
+   *     analytics.track(this)
+   *     return false // Default logging also runs
+   *   }
+   * }
+   * ```
+   */
+  // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
+  report?(): void | false
+
+  /**
+   * Self-rendering hook. Override in subclasses to define how this error
+   * is rendered into a Response.
+   *
+   * Return `undefined` to fall through to the default renderer.
+   *
+   * @param ctx - The execution context (narrow via `ctx.type` for HTTP helpers)
+   * @returns A Response, ErrorResponse, or undefined to use default rendering
+   *
+   * @example
+   * ```typescript
+   * class MaintenanceError extends HttpException {
+   *   render(ctx: ExceptionContext): Response | undefined {
+   *     if (ctx.type === 'http') {
+   *       return ctx.ctx.html('<h1>Down for maintenance</h1>', 503)
+   *     }
+   *   }
+   * }
+   * ```
+   */
+  render?(ctx: ExceptionContext): Response | ErrorResponse | undefined
 }

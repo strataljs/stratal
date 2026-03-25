@@ -171,13 +171,18 @@ jobs:
 
           echo "$OUTPUT"
 
-          if [ $EXIT_CODE -ne 0 ]; then
+          # Extract published packages for the PR comment
+          PUBLISHED=$(echo "$OUTPUT" | grep -E '^\S+@' || true)
+
+          if [ -z "$PUBLISHED" ] && [ $EXIT_CODE -ne 0 ]; then
             echo "::error::Canary publish failed with exit code $EXIT_CODE"
             exit $EXIT_CODE
           fi
 
-          # Extract published packages for the PR comment
-          PUBLISHED=$(echo "$OUTPUT" | grep -E '^\S+@' || true)
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "::warning::Some packages failed to publish (exit code $EXIT_CODE), but others succeeded"
+          fi
+
           {
             echo "published<<EOF"
             echo "$PUBLISHED"
