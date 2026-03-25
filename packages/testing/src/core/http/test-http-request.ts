@@ -1,7 +1,9 @@
 import type { AuthService } from '@stratal/framework/auth'
 import { AUTH_SERVICE } from '@stratal/framework/auth'
+import type { DetectionStrategy } from 'stratal/i18n'
 import { ActingAs } from '../../auth'
 import type { TestingModule } from '../testing-module'
+import { applyLocaleToHeaders, applyLocaleToUrl, resolveLocaleStrategy } from './locale-helper'
 import { TestResponse } from './test-response'
 
 /**
@@ -30,15 +32,18 @@ export class TestHttpRequest {
 	private body: unknown = null
 	private requestHeaders: Headers
 	private actingAsUser: { id: string } | null = null
+	private localeConfig: { locale: string; strategy: DetectionStrategy } | null
 
 	constructor(
 		private readonly method: string,
 		private readonly path: string,
 		headers: Headers,
 		private readonly module: TestingModule,
-		private readonly host: string | null = null
+		private readonly host: string | null = null,
+		localeConfig: { locale: string; strategy: DetectionStrategy } | null = null,
 	) {
 		this.requestHeaders = new Headers(headers)
+		this.localeConfig = localeConfig
 	}
 
 	/**
@@ -56,6 +61,20 @@ export class TestHttpRequest {
 		for (const [key, value] of Object.entries(headers)) {
 			this.requestHeaders.set(key, value)
 		}
+		return this
+	}
+
+	/**
+	 * Set the locale for this request.
+	 * If strategy is not provided, resolves from the module's I18n configuration.
+	 *
+	 * @param locale - Locale code (e.g., 'en', 'fr')
+	 * @param strategy - Detection strategy override
+	 */
+	withLocale(locale: string, strategy?: DetectionStrategy): this {
+		const resolved = strategy ?? resolveLocaleStrategy(this.module)
+		this.localeConfig = { locale, strategy: resolved }
+		applyLocaleToHeaders(this.requestHeaders, locale, resolved)
 		return this
 	}
 
@@ -90,6 +109,12 @@ export class TestHttpRequest {
 
 		// Build request
 		const url = new URL(this.path, `http://${this.host ?? 'localhost'}`)
+
+		// Apply locale to URL for querystring strategy
+		if (this.localeConfig) {
+			applyLocaleToUrl(url, this.localeConfig.locale, this.localeConfig.strategy)
+		}
+
 		const request = new Request(url.toString(), {
 			method: this.method,
 			headers: this.requestHeaders,

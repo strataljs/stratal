@@ -1,8 +1,10 @@
 import type { AuthService } from '@stratal/framework/auth'
 import { AUTH_SERVICE } from '@stratal/framework/auth'
+import type { DetectionStrategy } from 'stratal/i18n'
 import { expect } from 'vitest'
 import { ActingAs } from '../../auth'
 import type { TestingModule } from '../testing-module'
+import { applyLocaleToHeaders, resolveLocaleStrategy } from '../http/locale-helper'
 import { TestWsConnection } from './test-ws-connection'
 
 /**
@@ -39,6 +41,16 @@ export class TestWsRequest {
 		for (const [key, value] of Object.entries(headers)) {
 			this.requestHeaders.set(key, value)
 		}
+		return this
+	}
+
+	/**
+	 * Set the locale for this WebSocket connection.
+	 * If strategy is not provided, resolves from the module's I18n configuration.
+	 */
+	withLocale(locale: string, strategy?: DetectionStrategy): this {
+		const resolved = strategy ?? resolveLocaleStrategy(this.module)
+		applyLocaleToHeaders(this.requestHeaders, locale, resolved)
 		return this
 	}
 

@@ -16,7 +16,7 @@ describe('Localization Integration', () => {
   })
 
   describe('404 Route Not Found', () => {
-    it('returns English message by default (no header)', async () => {
+    it('returns English message by default (no locale)', async () => {
       const response = await module.http
         .get('/api/nonexistent')
         .send()
@@ -25,9 +25,9 @@ describe('Localization Integration', () => {
       await response.assertJsonPath('message', 'Route not found: GET /api/nonexistent')
     })
 
-    it('returns English message with explicit x-locale: en', async () => {
+    it('returns English message with explicit locale: en', async () => {
       const response = await module.http
-        .withHeaders({ 'x-locale': 'en' })
+        .withLocale('en')
         .get('/api/nonexistent')
         .send()
 
@@ -35,9 +35,9 @@ describe('Localization Integration', () => {
       await response.assertJsonPath('message', 'Route not found: GET /api/nonexistent')
     })
 
-    it('returns French message with x-locale: fr', async () => {
+    it('returns French message with locale: fr', async () => {
       const response = await module.http
-        .withHeaders({ 'x-locale': 'fr' })
+        .withLocale('fr')
         .get('/api/nonexistent')
         .send()
 
@@ -47,7 +47,7 @@ describe('Localization Integration', () => {
 
     it('falls back to English for unsupported locale', async () => {
       const response = await module.http
-        .withHeaders({ 'x-locale': 'de' })
+        .withLocale('de')
         .get('/api/nonexistent')
         .send()
 
@@ -57,9 +57,9 @@ describe('Localization Integration', () => {
   })
 
   describe('Schema Validation Errors', () => {
-    it('returns French validation error with x-locale: fr (missing field)', async () => {
+    it('returns French validation error with locale: fr (missing field)', async () => {
       const response = await module.http
-        .withHeaders({ 'x-locale': 'fr' })
+        .withLocale('fr')
         .post('/api/bench/items')
         .withBody({})
         .send()
@@ -77,9 +77,9 @@ describe('Localization Integration', () => {
       )
     })
 
-    it('returns French validation error with x-locale: fr (empty string)', async () => {
+    it('returns French validation error with locale: fr (empty string)', async () => {
       const response = await module.http
-        .withHeaders({ 'x-locale': 'fr' })
+        .withLocale('fr')
         .post('/api/bench/items')
         .withBody({ name: '' })
         .send()
@@ -92,9 +92,9 @@ describe('Localization Integration', () => {
       )
     })
 
-    it('returns English validation error with x-locale: en', async () => {
+    it('returns English validation error with locale: en', async () => {
       const response = await module.http
-        .withHeaders({ 'x-locale': 'en' })
+        .withLocale('en')
         .post('/api/bench/items')
         .withBody({})
         .send()
@@ -109,9 +109,9 @@ describe('Localization Integration', () => {
   })
 
   describe('Successful responses are unaffected by locale', () => {
-    it('returns 200 with normal response for GET with x-locale: fr', async () => {
+    it('returns 200 with normal response for GET with locale: fr', async () => {
       const response = await module.http
-        .withHeaders({ 'x-locale': 'fr' })
+        .withLocale('fr')
         .get('/api/bench')
         .send()
 
@@ -119,9 +119,9 @@ describe('Localization Integration', () => {
       await response.assertJsonPath('ok', true)
     })
 
-    it('returns 201 with normal response for valid POST with x-locale: fr', async () => {
+    it('returns 201 with normal response for valid POST with locale: fr', async () => {
       const response = await module.http
-        .withHeaders({ 'x-locale': 'fr' })
+        .withLocale('fr')
         .post('/api/bench/items')
         .withBody({ name: 'test-item' })
         .send()

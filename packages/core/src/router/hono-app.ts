@@ -1,8 +1,11 @@
 import type { Context, MiddlewareHandler } from 'hono'
+import { languageDetector } from 'hono/language'
 import type { Container } from '../di/container'
 import { DI_TOKENS } from '../di/tokens'
 import { createHttpExceptionContext } from '../errors/exception-context'
 import type { ExceptionHandler } from '../errors/exception-handler'
+import type { I18nModuleOptions } from '../i18n/i18n.options'
+import { buildDetectorOptions } from '../i18n/i18n.options'
 import { OpenAPIHono } from '../i18n/validation'
 import type { LoggerService } from '../logger'
 import {
@@ -32,6 +35,7 @@ const isMiddlewareClass = (arg: unknown): arg is Constructor<Middleware> =>
  *
  * Absorbs all Hono-related setup from the former RouterService and RequestScopeService:
  * - Request scope middleware (child container per request)
+ * - Language detection via Hono's languageDetector middleware
  * - Global middleware (CORS, logging, error handling)
  * - defaultHook for validation errors
  * - `use()` overload for Stratal middleware classes
@@ -41,6 +45,8 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
   private configured = false
   private readonly _container: Container
   private readonly _logger: LoggerService
+  private readonly _pathDetectionEnabled: boolean
+  private readonly _localePathPrefixes: string[] | null
 
   /**
    * Reference to the original Hono `use` implementation.
@@ -52,6 +58,7 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
   constructor(
     container: Container,
     logger: LoggerService,
+    i18nOptions?: I18nModuleOptions,
   ) {
     super({
       defaultHook: (result) => {
@@ -63,6 +70,13 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
 
     this._container = container
     this._logger = logger
+
+    // Determine path detection state for route registration
+    const detection = i18nOptions?.detection
+    const detectionEnabled = detection ? detection.enabled !== false : true
+    const strategy = (detection && 'strategy' in detection && detection.strategy) ?? 'cookie'
+    this._pathDetectionEnabled = detectionEnabled && strategy === 'path'
+    this._localePathPrefixes = this._pathDetectionEnabled ? (i18nOptions?.locales ?? ['en']) : null
 
     // Capture Hono's original `use` (set by super() as an instance property)
     this.nativeUse = this.use
@@ -84,6 +98,9 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
 
     // Internal setup — uses nativeUse to bypass the override
     this.setupRequestScope()
+    if (detectionEnabled) {
+      this.setupLanguageDetection(i18nOptions)
+    }
     this.setupGlobalMiddleware()
   }
 
@@ -107,7 +124,7 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
     openAPIService.setupEndpoints(this, this._container)
 
     // Controller routes
-    const routeRegistrationService = new RouteRegistrationService(this._logger, versioningOptions ?? null)
+    const routeRegistrationService = new RouteRegistrationService(this._logger, versioningOptions ?? null, this._localePathPrefixes)
     await routeRegistrationService.configure(this, controllers)
 
     // 404 handler (must be last)
@@ -122,6 +139,26 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
       const requestContainer = this._container.createRequestScope(routerContext)
       c.set(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER, requestContainer)
 
+      await next()
+    })
+  }
+
+  /**
+   * Apply Hono's languageDetector middleware and bridge the detected language
+   * to Stratal's LOCALE context variable.
+   */
+  private setupLanguageDetection(i18nOptions?: I18nModuleOptions): void {
+    const detectorOptions = buildDetectorOptions(i18nOptions)
+
+    // Apply Hono's languageDetector
+    this.nativeUse('*', languageDetector(detectorOptions) as MiddlewareHandler<RouterEnv>)
+
+    // Bridge: sync Hono's 'language' variable to Stratal's LOCALE context key
+    this.nativeUse('*', async (c: Context<RouterEnv>, next: () => Promise<void>) => {
+      const language = (c as unknown as { get(key: 'language'): string | undefined }).get('language')
+      if (language) {
+        c.set(ROUTER_CONTEXT_KEYS.LOCALE, language)
+      }
       await next()
     })
   }

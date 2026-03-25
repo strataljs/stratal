@@ -63,10 +63,18 @@ export class RouteRegistrationService {
   private controllerClasses = new Map<string, Constructor<IController>>()
   private upgradeWebSocketFn: UpgradeWebSocket | null = null
 
+  /** Regex-constrained locale prefix for path-based detection, e.g., '/:locale{en|fr}' */
+  private readonly localePrefix: string | null
+
   constructor(
     private logger: LoggerService,
     private versioningOptions: VersioningOptions | null = null,
-  ) { }
+    localePathPrefixes: string[] | null = null,
+  ) {
+    this.localePrefix = localePathPrefixes
+      ? `/:locale{${localePathPrefixes.join('|')}}`
+      : null
+  }
 
   /**
    * Configure router with controllers
@@ -125,11 +133,11 @@ export class RouteRegistrationService {
 
     const controllerOpts = getControllerOptions(ControllerClass)
     const controllerGuards = getControllerGuards(ControllerClass)?.guards ?? []
-    const paths = this.resolveVersionedPaths(route, controllerOpts)
+    const resolvedPaths = this.resolveVersionedPaths(route, controllerOpts)
 
     // WebSocket gateway — register as GET with upgradeWebSocket
     if (isWsGateway) {
-      for (const fullPath of paths) {
+      for (const { path: fullPath } of resolvedPaths) {
         this.registerGatewayForPath(app, ControllerClass, fullPath, controllerGuards)
       }
       return
@@ -142,7 +150,7 @@ export class RouteRegistrationService {
 
     // Wildcard routes (non-RESTful controllers with handle())
     if (prototype.handle) {
-      for (const fullPath of paths) {
+      for (const { path: fullPath } of resolvedPaths) {
         this.registerWildcardRoute(app, ControllerClass, fullPath)
       }
       return
@@ -168,8 +176,8 @@ export class RouteRegistrationService {
       )
     }
 
-    for (const fullPath of paths) {
-      this.registerRoutes(app, ControllerClass, fullPath, decoratedMethods, controllerOpts)
+    for (const { path: fullPath, hideFromDocs: forceHide } of resolvedPaths) {
+      this.registerRoutes(app, ControllerClass, fullPath, decoratedMethods, controllerOpts, forceHide)
     }
   }
 
@@ -254,37 +262,43 @@ export class RouteRegistrationService {
    * @param controllerOpts - Controller options (may contain version)
    * @returns Array of resolved paths (with version prefix if applicable)
    */
-  private resolveVersionedPaths(basePath: string, controllerOpts?: ControllerOptions): string[] {
+  private resolveVersionedPaths(basePath: string, controllerOpts?: ControllerOptions): { path: string; hideFromDocs: boolean }[] {
+    let paths: string[]
+
     // Versioning disabled — always return base path
     if (!this.versioningOptions) {
-      return [basePath]
+      paths = [basePath]
+    } else {
+      const version = controllerOpts?.version
+
+      // VERSION_NEUTRAL — explicitly opt out of versioning
+      if (version === VERSION_NEUTRAL) {
+        paths = [basePath]
+      } else {
+        const prefix = this.versioningOptions.prefix ?? 'v'
+
+        // Explicit version(s) on the controller
+        if (version !== undefined) {
+          const versions = Array.isArray(version) ? version : [version]
+          paths = versions.map(v => `/${prefix}${v}${basePath}`)
+        } else if (this.versioningOptions.defaultVersion !== undefined) {
+          // No explicit version — apply defaultVersion if set
+          const defaults = Array.isArray(this.versioningOptions.defaultVersion)
+            ? this.versioningOptions.defaultVersion
+            : [this.versioningOptions.defaultVersion]
+          paths = defaults.map(v => `/${prefix}${v}${basePath}`)
+        } else {
+          // Versioning enabled but no version and no default — no prefix
+          paths = [basePath]
+        }
+      }
     }
 
-    const version = controllerOpts?.version
-
-    // VERSION_NEUTRAL — explicitly opt out of versioning
-    if (version === VERSION_NEUTRAL) {
-      return [basePath]
+    if (this.localePrefix) {
+      return paths.map(p => ({ path: `${this.localePrefix}${p}`, hideFromDocs: false }))
     }
 
-    const prefix = this.versioningOptions.prefix ?? 'v'
-
-    // Explicit version(s) on the controller
-    if (version !== undefined) {
-      const versions = Array.isArray(version) ? version : [version]
-      return versions.map(v => `/${prefix}${v}${basePath}`)
-    }
-
-    // No explicit version — apply defaultVersion if set
-    if (this.versioningOptions.defaultVersion !== undefined) {
-      const defaults = Array.isArray(this.versioningOptions.defaultVersion)
-        ? this.versioningOptions.defaultVersion
-        : [this.versioningOptions.defaultVersion]
-      return defaults.map(v => `/${prefix}${v}${basePath}`)
-    }
-
-    // Versioning enabled but no version and no default — no prefix
-    return [basePath]
+    return paths.map(p => ({ path: p, hideFromDocs: false }))
   }
 
   /**
@@ -342,11 +356,12 @@ export class RouteRegistrationService {
     ControllerClass: Constructor<IController>,
     basePath: string,
     decoratedMethods: string[],
-    controllerOpts: ControllerOptions | undefined
+    controllerOpts: ControllerOptions | undefined,
+    forceHideFromDocs = false,
   ): void {
     const className = ControllerClass.name
     const prototype = ControllerClass.prototype as IController
-    const controllerHidden = controllerOpts?.hideFromDocs ?? false
+    const controllerHidden = forceHideFromDocs || (controllerOpts?.hideFromDocs ?? false)
     const controllerGuards = getControllerGuards(ControllerClass)?.guards ?? []
 
     // Pre-resolve all methods and sort by path specificity (static before dynamic)

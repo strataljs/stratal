@@ -14,6 +14,8 @@ import type { EventHandler } from './events'
 import { EventRegistry, getListenerHandlers } from './events'
 import type { StratalExecutionContext } from './execution-context'
 import { I18nModule } from './i18n/i18n.module'
+import type { I18nModuleOptions } from './i18n/i18n.options'
+import { I18N_TOKENS } from './i18n/i18n.tokens'
 import { ConsoleTransport, JsonFormatter, LOGGER_TOKENS, LoggerService, LogLevel, PrettyFormatter } from './logger'
 import { ModuleRegistry } from './module/module-registry'
 import type { DynamicModule, ModuleClass } from './module/types'
@@ -191,7 +193,10 @@ export class Application {
 
     // Phase 5: Create & configure HonoApp
     const logger = this._container.resolve<LoggerService>(LOGGER_TOKENS.LoggerService)
-    this.honoApp = new HonoApp(this._container, logger)
+    const i18nOptions = this._container.isRegistered(I18N_TOKENS.Options)
+      ? this._container.resolve<I18nModuleOptions>(I18N_TOKENS.Options)
+      : undefined
+    this.honoApp = new HonoApp(this._container, logger, i18nOptions)
     const middlewareConfigs = this.moduleRegistry.getAllMiddlewareConfigs()
     const controllers = this.moduleRegistry.getAllControllers() as Constructor<IController>[]
     await this.honoApp.configure(middlewareConfigs, controllers, this.appConfig.versioning)

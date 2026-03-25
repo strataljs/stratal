@@ -36,7 +36,6 @@ import type { DynamicModule } from '../module/types'
 import type { I18nModuleOptions } from './i18n.options'
 import { I18N_TOKENS } from './i18n.tokens'
 import { I18nContextMiddleware } from './middleware/i18n-context.middleware'
-import { LocaleExtractionMiddleware } from './middleware/locale-extraction.middleware'
 import { I18nService } from './services/i18n.service'
 import { MessageLoaderService } from './services/message-loader.service'
 import { MessageRegistry } from './services/message-registry'
@@ -110,7 +109,7 @@ export class I18nModule implements MiddlewareConfigurable {
 
   configure(consumer: MiddlewareConsumer): void {
     consumer
-      .apply(LocaleExtractionMiddleware, I18nContextMiddleware)
+      .apply(I18nContextMiddleware)
       .forRoutes('*')
   }
 }

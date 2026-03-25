@@ -64,7 +64,6 @@ export class RouterContext<T extends RouterEnv = RouterEnv> {
 
   /**
    * Set locale for the current request
-   * Locale is determined by X-Locale header or defaults to config
    *
    * @param locale - Locale code (e.g., 'en', 'fr')
    */
