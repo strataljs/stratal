@@ -30,7 +30,7 @@ Breaking any of these causes runtime failures.
 
 5. **`experimentalDecorators` and `emitDecoratorMetadata` must be `true`** in tsconfig.
 
-6. **Convention routing and HTTP method decorators cannot mix** — Per controller, use EITHER convention-based (`@Route()` + method names `index/show/create/update/patch/destroy`) OR explicit (`@Get()/@Post()`). Never both.
+6. **Convention routing and explicit HTTP decorators cannot mix** — Per controller, use EITHER convention-based (`@Route()` / `@InertiaRoute()` + method names `index/show/create/update/patch/destroy`) OR explicit (`@Get()/@Post()` / `@InertiaGet()/@InertiaPost()`). Never both. You CAN mix regular decorators (`@Get`) with Inertia explicit decorators (`@InertiaGet`) in the same controller.
 
 7. **ESM-only** — `"type": "module"` in package.json.
 
@@ -216,7 +216,7 @@ See `references/errors-and-i18n.md` for the full ExceptionHandler API.
 
 1. Install: `yarn add @stratal/inertia`
 2. Configure `InertiaModule.forRoot({ rootView: 'app', ssr: { bundle: () => import('./ssr') } })` in root module
-3. Use `@InertiaRoute()` and `ctx.inertia('page/Name', props)` in controllers
+3. Use `@InertiaGet('/')` / `@InertiaPost('/')` and `ctx.inertia('page/Name', props)` in controllers (or `@InertiaRoute()` for convention routing)
 4. Run `npx quarry inertia:dev` for development
 
 See `references/inertia.md` for props, shared data, type safety, and Vite setup.

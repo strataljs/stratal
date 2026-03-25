@@ -60,16 +60,33 @@ Use `ctx.inertia()` in controller methods to render Inertia pages:
 export class NotesController {
   constructor(@inject(NotesService) private service: NotesService) {}
 
-  @InertiaRoute()
+  @InertiaGet('/')
   async index(ctx: RouterContext): Promise<Response> {
     const notes = await this.service.list()
     return ctx.inertia('notes/Index', { notes })
   }
 
-  @InertiaRoute({ params: z.object({ id: z.string().uuid() }) })
+  @InertiaGet('/:id', { params: z.object({ id: z.string().uuid() }) })
   async show(ctx: RouterContext): Promise<Response> {
     const note = await this.service.findById(ctx.param('id'))
     return ctx.inertia('notes/Show', { note })
+  }
+
+  @InertiaPost('/', { body: createNoteSchema })
+  async create(ctx: RouterContext): Promise<Response> {
+    await this.service.create(ctx.body())
+    return ctx.redirect('/notes')
+  }
+
+  @InertiaDelete('/:id', { params: z.object({ id: z.string() }) })
+  async destroy(ctx: RouterContext): Promise<Response> {
+    await this.service.delete(ctx.param('id'))
+    return ctx.redirect('/notes')
+  }
+
+  @Get('/export')  // Regular non-Inertia route in the same controller
+  export(ctx: RouterContext) {
+    return ctx.redirect('https://example.com/export')
   }
 }
 ```
@@ -79,19 +96,49 @@ export class NotesController {
 - Subsequent Inertia requests (`X-Inertia` header): returns JSON page object
 - `options`: `{ encryptHistory?, clearHistory? }`
 
-## @InertiaRoute Decorator
+## Inertia Decorators
 
-Replaces `@Route()` for Inertia pages. Hides routes from OpenAPI docs by default.
+Two routing patterns (never mix in one controller):
+
+### Explicit Decorators
+
+Specify HTTP method and path explicitly. Can be mixed with regular non-Inertia decorators (`@Get`, `@Post`, etc.) in the same controller.
 
 ```typescript
-@InertiaRoute()                              // No config needed for simple pages
-@InertiaRoute({ hideFromDocs: false })       // Show in OpenAPI docs
-@InertiaRoute({ query: paginationSchema })   // With query validation
-@InertiaRoute({ params: z.object({ id: z.string() }) })  // With params
+import { InertiaGet, InertiaPost, InertiaPut, InertiaPatch, InertiaDelete } from '@stratal/inertia'
+
+@InertiaGet('/path', config?)
+@InertiaPost('/path', config?)
+@InertiaPut('/path', config?)
+@InertiaPatch('/path', config?)
+@InertiaDelete('/path', config?)
 ```
 
-Accepts: `query`, `params`, `body`, `tags`, `summary`, `description`, `security`, `hideFromDocs`.
-Does NOT accept: `response`, `statusCode` (managed by Inertia).
+### Convention-Based (`@InertiaRoute`)
+
+Works like core's `@Route()` — method names map to HTTP methods automatically: `index` -> GET, `show` -> GET /:id, `create` -> POST, `update` -> PUT /:id, `patch` -> PATCH /:id, `destroy` -> DELETE /:id.
+
+```typescript
+import { InertiaRoute } from '@stratal/inertia'
+
+@Controller('/notes')
+export class NotesController {
+  @InertiaRoute()
+  async index(ctx: RouterContext) { return ctx.inertia('notes/Index', { notes }) }
+
+  @InertiaRoute({ params: z.object({ id: z.string() }) })
+  async show(ctx: RouterContext) { return ctx.inertia('notes/Show', { note }) }
+
+  @InertiaRoute({ body: createNoteSchema })
+  async create(ctx: RouterContext) { ... }
+}
+```
+
+### Decorator Config
+
+All Inertia decorators accept: `query`, `params`, `body`, `tags`, `summary`, `description`, `security`, `hideFromDocs`.
+They do NOT accept: `response`, `statusCode` (managed by Inertia).
+All hide from OpenAPI docs by default (`hideFromDocs: true`).
 
 ## Prop Types
 
