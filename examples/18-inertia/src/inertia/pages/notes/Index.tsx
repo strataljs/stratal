@@ -36,6 +36,7 @@ export default function Index({ notes, stats, page }: { notes: Note[]; stats?: S
   }
 
   function deleteNote(id: string) {
+    if (!confirm('Are you sure you want to delete this note?')) return
     router.delete(`/notes/${id}`)
   }
 

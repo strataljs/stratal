@@ -106,6 +106,18 @@ function createHandler(HandlerClass: typeof ExceptionHandler = DefaultExceptionH
 describe('ExceptionHandler', () => {
   const cliCtx = createCliExceptionContext('test-cmd')
 
+  function createMockHonoCtx(options: { accept?: string } = {}) {
+    return {
+      req: {
+        method: 'GET',
+        header: (name: string) => {
+          if (name === 'accept') return options.accept
+          return undefined
+        },
+      },
+    } as never
+  }
+
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -426,8 +438,7 @@ describe('ExceptionHandler', () => {
   describe('self-rendering', () => {
     it('should use error.render() when it returns a Response', async () => {
       const handler = createHandler()
-      const mockHonoCtx = { req: { method: 'GET' } } as never
-      const httpCtx = createHttpExceptionContext(mockHonoCtx)
+      const httpCtx = createHttpExceptionContext(createMockHonoCtx())
 
       const response = await handler.handle(new SelfRenderingError(), httpCtx)
 
@@ -474,8 +485,7 @@ describe('ExceptionHandler', () => {
       }
 
       const handler = createHandler(CustomHandler)
-      const mockHonoCtx = { req: { method: 'GET' } } as never
-      const httpCtx = createHttpExceptionContext(mockHonoCtx)
+      const httpCtx = createHttpExceptionContext(createMockHonoCtx())
 
       const response = await handler.handle(new SelfRenderingError(), httpCtx)
       expect(await response.text()).toBe('custom render')
@@ -560,18 +570,6 @@ describe('ExceptionHandler', () => {
   // ── Content Negotiation ────────────────────────────────────────
 
   describe('content negotiation', () => {
-    function createMockHonoCtx(options: { accept?: string } = {}) {
-      return {
-        req: {
-          method: 'GET',
-          header: (name: string) => {
-            if (name === 'accept') return options.accept
-            return undefined
-          },
-        },
-      } as never
-    }
-
     it('should return JSON for requests without Accept: text/html', async () => {
       const handler = createHandler()
       const httpCtx = createHttpExceptionContext(createMockHonoCtx({ accept: 'application/json' }))

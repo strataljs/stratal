@@ -8,7 +8,7 @@ export class InertiaDevCommand extends Command {
   static description = 'Start Inertia.js Vite development server'
 
   async handle(): Promise<number | undefined> {
-    const port = this.number('port') || 5173
+    const port = this.number('port')
     const host = this.boolean('host')
     const cwd = process.cwd()
 

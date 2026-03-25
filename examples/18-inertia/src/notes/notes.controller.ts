@@ -16,8 +16,7 @@ export class NotesController {
   // Demonstrates: merge props (paginated list), optional props (stats)
   @InertiaGet('/', { query: z.object({ page: z.coerce.number().int().min(1).optional().default(1) }) })
   async index(ctx: RouterContext) {
-    // casting to unknown is needed because ctx.query return type is string
-    const page = ctx.query('page') as unknown as number
+    const page = Number(ctx.query('page') ?? 1)
 
     return ctx.inertia('notes/Index', {
       notes: ctx.merge(() => this.notes.findAll(page)),

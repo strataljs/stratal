@@ -124,20 +124,23 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
       try {
         await next()
       } finally {
-        //@ts-expect-error  Type 'void' is not assignable to type 'Promise<any>'
-        c.executionCtx.waitUntil(requestContainer.dispose())
+        c.executionCtx.waitUntil(Promise.resolve(requestContainer.dispose()))
       }
     })
   }
 
   private setupGlobalMiddleware(): void {
     this.nativeUse('*', createLoggerMiddleware(this._logger) as MiddlewareHandler<RouterEnv>)
-    this.onError((err, c) => {
-      const requestContainer = c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER)
-      const handler = requestContainer.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
-      const ctx = createHttpExceptionContext(c)
-      return handler.handle(err, ctx)
-    })
+    this.onError((err, c) => this.handleException(c, err))
+  }
+
+  private handleException(c: Context<RouterEnv>, err: unknown) {
+    // Fallback to global container if request scope setup failed before storing REQUEST_CONTAINER
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime guard: REQUEST_CONTAINER may be unset if request scope middleware throws
+    const requestContainer = c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER) ?? this._container
+    const handler = requestContainer.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
+    const ctx = createHttpExceptionContext(c)
+    return handler.handle(err, ctx)
   }
 
   private applyMiddlewareClasses(path: string, classes: Constructor<Middleware>[]): this {

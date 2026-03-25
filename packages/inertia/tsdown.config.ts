@@ -18,9 +18,12 @@ export default defineConfig({
   },
   hooks: {
     'build:done': () => {
+      const typeRef = '/// <reference path="../global.d.ts" />'
       for (const dtsPath of ['dist/index.d.mts', 'dist/vite.d.mts']) {
         const content = readFileSync(dtsPath, 'utf8')
-        writeFileSync(dtsPath, `/// <reference path="../global.d.ts" />\n${content}`)
+        if (!content.startsWith(typeRef)) {
+          writeFileSync(dtsPath, `${typeRef}\n${content}`)
+        }
       }
     },
   },

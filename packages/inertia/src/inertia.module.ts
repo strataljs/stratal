@@ -1,3 +1,4 @@
+import { Scope } from 'stratal/di'
 import type { MiddlewareConfigurable, MiddlewareConsumer } from 'stratal/middleware'
 import type { AsyncModuleOptions, DynamicModule, OnInitialize } from 'stratal/module'
 import { Module } from 'stratal/module'
@@ -19,7 +20,7 @@ import { TemplateService } from './services/template.service'
     { provide: INERTIA_TOKENS.InertiaService, useClass: InertiaService },
     { provide: INERTIA_TOKENS.TemplateService, useClass: TemplateService },
     { provide: INERTIA_TOKENS.ManifestService, useClass: ManifestService },
-    { provide: INERTIA_TOKENS.SsrRenderer, useClass: SsrRendererService },
+    { provide: INERTIA_TOKENS.SsrRenderer, useClass: SsrRendererService, scope: Scope.Singleton },
     InertiaInstallCommand,
     InertiaTypesCommand,
     InertiaDevCommand,

@@ -502,6 +502,7 @@ export class RouteRegistrationService {
    */
   private joinPaths(basePath: string, routePath: string): string {
     if (routePath === '/') return basePath
+    if (routePath && !routePath.startsWith('/')) routePath = '/' + routePath
     return basePath + routePath
   }
 

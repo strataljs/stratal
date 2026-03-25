@@ -12,3 +12,7 @@ Add `ExceptionHandler` with customizable error reporting, rendering, and throttl
 - Replace `GlobalErrorHandler` with the new `ExceptionHandler` pipeline
 - Add `stratal` as a CLI bin alias for `quarry`
 - Streamline OpenAPI service and routing metadata handling
+
+### Breaking Changes
+
+- `GlobalErrorHandler` has been removed. Migrate to `ExceptionHandler` by extending the base class and implementing the `render()` hook for custom error responses.

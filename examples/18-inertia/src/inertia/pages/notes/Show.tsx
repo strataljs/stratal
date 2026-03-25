@@ -20,6 +20,7 @@ interface Comment {
 
 export default function Show({ note, comments }: { note: Note; comments?: Comment[] }) {
   function deleteNote() {
+    if (!confirm('Are you sure you want to delete this note?')) return
     router.delete(`/notes/${note.id}`)
   }
 
@@ -63,7 +64,7 @@ export default function Show({ note, comments }: { note: Note; comments?: Commen
             </Card>
           }>
             <div className="space-y-3">
-              {comments?.map((comment) => (
+              {comments && comments.length > 0 ? comments.map((comment) => (
                 <Card key={comment.id}>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium">{comment.author}</CardTitle>
@@ -72,7 +73,9 @@ export default function Show({ note, comments }: { note: Note; comments?: Commen
                     <p className="text-sm text-muted-foreground">{comment.body}</p>
                   </CardContent>
                 </Card>
-              ))}
+              )) : (
+                <p className="text-sm text-muted-foreground">No comments yet.</p>
+              )}
             </div>
           </Deferred>
         </div>

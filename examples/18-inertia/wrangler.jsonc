@@ -6,6 +6,7 @@
   "vars": {
     "ENVIRONMENT": "development"
   },
+  // Replace "placeholder" with actual KV namespace IDs from `wrangler kv namespace create`
   "kv_namespaces": [
     { "binding": "CACHE", "id": "placeholder" },
     { "binding": "NOTES", "id": "placeholder" }

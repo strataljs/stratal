@@ -44,7 +44,7 @@ export async function extractPageTypes(pagesDir: string, tsConfigPath?: string):
 
   for (const sourceFile of project.getSourceFiles()) {
     const filePath = sourceFile.getFilePath()
-    const relPath = relative(pagesDir, filePath)
+    const relPath = relative(pagesDir, filePath).replace(/\\/g, '/')
 
     if (relPath.includes('__tests__') || relPath.includes('.spec.') || relPath.includes('.test.')) continue
 
@@ -53,7 +53,6 @@ export async function extractPageTypes(pagesDir: string, tsConfigPath?: string):
 
     const componentName = relPath
       .replace(/\.(tsx|ts)$/, '')
-      .replace(/\\/g, '/')
 
     const propsType = extractDefaultExportPropsType(sourceFile, SyntaxKind, ts)
     if (propsType !== null) {
@@ -140,47 +139,50 @@ function typeToString(type: Type, tsObj: TsObj): string {
   return text
 }
 
-function expandTypeToInline(type: Type, tsObj: TsObj, visited = new Set<Type>()): string {
-  if (visited.has(type)) return 'Record<string, unknown>'
-  visited.add(type)
+function expandTypeToInline(type: Type, tsObj: TsObj, visiting = new Set<Type>()): string {
+  if (visiting.has(type)) return 'Record<string, unknown>'
+  visiting.add(type)
+  try {
+    if (type.isObject() && !type.isArray()) {
+      const properties = type.getProperties()
+      if (properties.length === 0) return 'Record<string, never>'
 
-  if (type.isObject() && !type.isArray()) {
-    const properties = type.getProperties()
-    if (properties.length === 0) return 'Record<string, never>'
+      const members = properties.map((prop) => {
+        const decl = prop.getDeclarations()[0] ?? prop.getValueDeclaration()
+        const isOptional = prop.isOptional()
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- defensive: ambient/synthetic symbols may lack declarations at runtime
+        if (!decl) return `${prop.getName()}${isOptional ? '?' : ''}: unknown`
+        const propType = prop.getTypeAtLocation(decl)
+        const propTypeStr = expandTypeToInline(propType, tsObj, visiting)
+        return `${prop.getName()}${isOptional ? '?' : ''}: ${propTypeStr}`
+      })
 
-    const members = properties.map((prop) => {
-      const decl = prop.getDeclarations()[0] ?? prop.getValueDeclaration()
-      const isOptional = prop.isOptional()
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- defensive: ambient/synthetic symbols may lack declarations at runtime
-      if (!decl) return `${prop.getName()}${isOptional ? '?' : ''}: unknown`
-      const propType = prop.getTypeAtLocation(decl)
-      const propTypeStr = expandTypeToInline(propType, tsObj, visited)
-      return `${prop.getName()}${isOptional ? '?' : ''}: ${propTypeStr}`
-    })
-
-    return `{ ${members.join('; ')} }`
-  }
-
-  if (type.isArray()) {
-    const elementType = type.getArrayElementType()
-    if (elementType) {
-      return `Array<${expandTypeToInline(elementType, tsObj, visited)}>`
+      return `{ ${members.join('; ')} }`
     }
-  }
 
-  if (type.isUnion()) {
-    return type.getUnionTypes().map((t) => expandTypeToInline(t, tsObj, visited)).join(' | ')
-  }
+    if (type.isArray()) {
+      const elementType = type.getArrayElementType()
+      if (elementType) {
+        return `Array<${expandTypeToInline(elementType, tsObj, visiting)}>`
+      }
+    }
 
-  if (type.isIntersection()) {
-    return type.getIntersectionTypes().map((t) => expandTypeToInline(t, tsObj, visited)).join(' & ')
-  }
+    if (type.isUnion()) {
+      return type.getUnionTypes().map((t) => expandTypeToInline(t, tsObj, visiting)).join(' | ')
+    }
 
-  const text = type.getText(undefined, tsObj.TypeFormatFlags.NoTruncation)
-  if (text.includes('import(')) {
-    return 'Record<string, unknown>'
+    if (type.isIntersection()) {
+      return type.getIntersectionTypes().map((t) => expandTypeToInline(t, tsObj, visiting)).join(' & ')
+    }
+
+    const text = type.getText(undefined, tsObj.TypeFormatFlags.NoTruncation)
+    if (text.includes('import(')) {
+      return 'Record<string, unknown>'
+    }
+    return text
+  } finally {
+    visiting.delete(type)
   }
-  return text
 }
 
 export async function extractSharedDataType(moduleFilePath: string, tsConfigPath?: string): Promise<SharedDataTypeInfo | null> {
