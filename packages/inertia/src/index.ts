@@ -5,7 +5,7 @@ export { InertiaModule } from './inertia.module'
 export { INERTIA_TOKENS } from './inertia.tokens'
 
 // Options
-export type { InertiaModuleOptions, InertiaSsrOptions } from './inertia.options'
+export type { InertiaI18nOptions, InertiaModuleOptions, InertiaSsrOptions } from './inertia.options'
 
 // Types
 export type {

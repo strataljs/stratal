@@ -86,6 +86,10 @@
       "types": "./dist/i18n/messages/en/index.d.mts",
       "import": "./dist/i18n/messages/en/index.mjs"
     },
+    "./i18n/utils": {
+      "types": "./dist/i18n/utils/index.d.mts",
+      "import": "./dist/i18n/utils/index.mjs"
+    },
     "./logger": {
       "types": "./dist/logger/index.d.mts",
       "import": "./dist/logger/index.mjs"

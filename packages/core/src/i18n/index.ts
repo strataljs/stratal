@@ -2,12 +2,13 @@
  * I18n Module Public API
  */
 
-export { messages, getMessages, getLocales, type Messages } from './messages'
-export { I18nModule } from './i18n.module'
-export { I18N_TOKENS } from './i18n.tokens'
-export { MessageRegistry } from './services/message-registry'
-export { setupI18nCompiler } from './setup'
-export * from './i18n.types'
-export * from './i18n.options'
 export * from './errors'
+export { I18nModule } from './i18n.module'
+export * from './i18n.options'
+export { I18N_TOKENS } from './i18n.tokens'
+export * from './i18n.types'
+export { getLocales, getMessages, messages, type Messages } from './messages'
 export * from './middleware'
+export { MessageLoaderService } from './services/message-loader.service'
+export { MessageRegistry } from './services/message-registry'
+

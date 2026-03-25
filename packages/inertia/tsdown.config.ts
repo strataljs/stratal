@@ -7,6 +7,7 @@ export default defineConfig({
   entry: [
     'src/index.ts',
     'src/vite.ts',
+    'src/react.ts',
   ],
   tsconfig: './tsconfig.build.json',
   exports: {
@@ -19,7 +20,7 @@ export default defineConfig({
   hooks: {
     'build:done': () => {
       const typeRef = '/// <reference path="../global.d.ts" />'
-      for (const dtsPath of ['dist/index.d.mts', 'dist/vite.d.mts']) {
+      for (const dtsPath of ['dist/index.d.mts', 'dist/vite.d.mts', 'dist/react.d.mts']) {
         const content = readFileSync(dtsPath, 'utf8')
         if (!content.startsWith(typeRef)) {
           writeFileSync(dtsPath, `${typeRef}\n${content}`)

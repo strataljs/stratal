@@ -29,7 +29,6 @@
  * ```
  */
 
-import { backendErrorMap, z } from './validation'
 import { Scope } from '../di'
 import type { MiddlewareConfigurable, MiddlewareConsumer } from '../middleware/types'
 import { Module } from '../module'
@@ -41,7 +40,8 @@ import { LocaleExtractionMiddleware } from './middleware/locale-extraction.middl
 import { I18nService } from './services/i18n.service'
 import { MessageLoaderService } from './services/message-loader.service'
 import { MessageRegistry } from './services/message-registry'
-import { setupI18nCompiler } from './setup'
+import { setupI18nCompiler } from './utils/setup'
+import { backendErrorMap, z } from './validation'
 
 // Setup i18n JIT compiler once at module load time
 setupI18nCompiler()

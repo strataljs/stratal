@@ -44,7 +44,7 @@ export async function createInertiaViteConfig(options: InertiaViteConfigOptions)
     }
   }
 
-  const optimizeDepsExclude = ['@cloudflare/vite-plugin', 'wrangler', 'blake3-wasm']
+  const optimizeDepsExclude = ['@cloudflare/vite-plugin', 'wrangler', 'blake3-wasm', '@stratal/inertia']
 
   const baseConfig: UserConfig = {
     plugins: [

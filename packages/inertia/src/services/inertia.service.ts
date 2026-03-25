@@ -1,5 +1,6 @@
 import type { Page } from '@inertiajs/core'
 import { Transient, inject } from 'stratal/di'
+import { I18N_TOKENS, MessageLoaderService } from 'stratal/i18n'
 import type { RouterContext } from 'stratal/router'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { INERTIA_TOKENS } from '../inertia.tokens'
@@ -18,7 +19,6 @@ import {
 } from '../types'
 import type { SsrRendererService } from './ssr-renderer.service'
 import type { TemplateService } from './template.service'
-
 @Transient()
 export class InertiaService {
   private sharedData: Record<string, unknown> = {}
@@ -112,18 +112,32 @@ export class InertiaService {
     })
   }
 
+  /**
+   * Resolve shared data from module options and i18n configuration.
+   *
+   * Processes static values and resolver functions from `sharedData` config.
+   * When `i18n` option is set, auto-injects `locale` and `translations` props
+   * using the core {@link MessageLoaderService} resolved from the request container.
+   */
   private async resolveSharedData(ctx: RouterContext): Promise<Record<string, unknown>> {
     const shared: Record<string, unknown> = {}
     const configShared = this.options.sharedData
 
-    if (!configShared) return shared
-
-    for (const [key, value] of Object.entries(configShared)) {
-      if (typeof value === 'function') {
-        shared[key] = await (value as SharedDataResolver)(ctx)
-      } else {
-        shared[key] = value
+    if (configShared) {
+      for (const [key, value] of Object.entries(configShared)) {
+        if (typeof value === 'function') {
+          shared[key] = await (value as SharedDataResolver)(ctx)
+        } else {
+          shared[key] = value
+        }
       }
+    }
+
+    if (this.options.i18n) {
+      const loader = ctx.getContainer().resolve<MessageLoaderService>(I18N_TOKENS.MessageLoader)
+      const locale = ctx.getLocale()
+      shared.locale = locale
+      shared.translations = loader.getFilteredMessages(locale, { only: this.options.i18n.only })
     }
 
     return shared
