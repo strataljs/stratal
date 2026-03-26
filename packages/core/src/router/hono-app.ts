@@ -23,7 +23,7 @@ import { createLoggerMiddleware } from './middleware'
 import type { Middleware } from './middleware.interface'
 import { RouterContext } from './router-context'
 import { RouteRegistrationService } from './services/route-registration.service'
-import type { RouterEnv, VersioningOptions } from './types'
+import type { LocalePathConfig, RouterEnv, VersioningOptions } from './types'
 
 const isMiddlewareClass = (arg: unknown): arg is Constructor<Middleware> =>
   // eslint-disable-next-line @typescript-eslint/no-unsafe-return
@@ -46,7 +46,7 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
   private readonly _container: Container
   private readonly _logger: LoggerService
   private readonly _pathDetectionEnabled: boolean
-  private readonly _localePathPrefixes: string[] | null
+  private readonly _localePathConfig: LocalePathConfig | null
 
   /**
    * Reference to the original Hono `use` implementation.
@@ -76,7 +76,20 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
     const detectionEnabled = detection ? detection.enabled !== false : true
     const strategy = (detection && 'strategy' in detection && detection.strategy) ?? 'cookie'
     this._pathDetectionEnabled = detectionEnabled && strategy === 'path'
-    this._localePathPrefixes = this._pathDetectionEnabled ? (i18nOptions?.locales ?? ['en']) : null
+
+    if (this._pathDetectionEnabled) {
+      const allLocales = i18nOptions?.locales ?? ['en']
+      const defaultLocale = i18nOptions?.defaultLocale ?? 'en'
+      const prefixDefaultLocale = (detection && 'prefixDefaultLocale' in detection && detection.prefixDefaultLocale !== undefined)
+        ? detection.prefixDefaultLocale
+        : false
+
+      this._localePathConfig = prefixDefaultLocale === true
+        ? { allLocales, prefixedLocales: allLocales, defaultLocale: null }
+        : { allLocales, prefixedLocales: allLocales.filter(l => l !== defaultLocale), defaultLocale }
+    } else {
+      this._localePathConfig = null
+    }
 
     // Capture Hono's original `use` (set by super() as an instance property)
     this.nativeUse = this.use
@@ -101,6 +114,14 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
     if (detectionEnabled) {
       this.setupLanguageDetection(i18nOptions)
     }
+    // Redirect requests to the prefixed default locale (e.g., /en/users → /users)
+    // when prefixDefaultLocale is 'redirect'
+    if (
+      this._localePathConfig?.defaultLocale &&
+      detection && 'prefixDefaultLocale' in detection && detection.prefixDefaultLocale === 'redirect'
+    ) {
+      this.setupDefaultLocaleRedirect(this._localePathConfig.defaultLocale)
+    }
     this.setupGlobalMiddleware()
   }
 
@@ -124,7 +145,7 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
     openAPIService.setupEndpoints(this, this._container)
 
     // Controller routes
-    const routeRegistrationService = new RouteRegistrationService(this._logger, versioningOptions ?? null, this._localePathPrefixes)
+    const routeRegistrationService = new RouteRegistrationService(this._logger, versioningOptions ?? null, this._localePathConfig)
     await routeRegistrationService.configure(this, controllers)
 
     // 404 handler (must be last)
@@ -158,6 +179,24 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
       const language = (c as unknown as { get(key: 'language'): string | undefined }).get('language')
       if (language) {
         c.set(ROUTER_CONTEXT_KEYS.LOCALE, language)
+      }
+      await next()
+    })
+  }
+
+  /**
+   * Redirect requests that include the default locale prefix to the unprefixed path.
+   * For example, `/en/users` → 301 redirect to `/users`.
+   *
+   * Only active when `prefixDefaultLocale` is `'redirect'`.
+   */
+  private setupDefaultLocaleRedirect(defaultLocale: string): void {
+    const prefix = `/${defaultLocale}`
+    this.nativeUse('*', async (c: Context<RouterEnv>, next: () => Promise<void>) => {
+      const path = new URL(c.req.url).pathname
+      if (path === prefix || path.startsWith(`${prefix}/`)) {
+        const stripped = path.slice(prefix.length) || '/'
+        return c.redirect(stripped, 301)
       }
       await next()
     })

@@ -4,12 +4,12 @@ import type { LoggerService } from '../../logger/services/logger.service'
 import { MiddlewareConfigurationService } from '../../middleware/middleware-configuration.service'
 import { VERSION_NEUTRAL } from '../constants'
 import { RouteRegistrationService } from '../services/route-registration.service'
-import type { ControllerOptions, VersioningOptions } from '../types'
+import type { ControllerOptions, LocalePathConfig, VersioningOptions } from '../types'
 
 const mockLogger = createMock<LoggerService>()
 
 interface RouteRegistrationServicePrivate {
-  resolveVersionedPaths(basePath: string, controllerOpts?: ControllerOptions): { path: string; hideFromDocs: boolean }[]
+  resolveVersionedPaths(basePath: string, controllerOpts?: ControllerOptions): { path: string; hideFromDocs: boolean; hasLocaleParam: boolean }[]
 }
 
 interface MiddlewareConfigServicePrivate {
@@ -17,12 +17,12 @@ interface MiddlewareConfigServicePrivate {
 }
 
 /** Extract just paths from the resolved result */
-const paths = (result: { path: string; hideFromDocs: boolean }[]) => result.map(r => r.path)
+const paths = (result: { path: string; hideFromDocs: boolean; hasLocaleParam: boolean }[]) => result.map(r => r.path)
 
 describe('Versioning', () => {
   describe('RouteRegistrationService.resolveVersionedPaths()', () => {
-    const createService = (versioning: VersioningOptions | null = null, localePathPrefixes: string[] | null = null) => {
-      const service = new RouteRegistrationService(mockLogger as unknown as LoggerService, versioning, localePathPrefixes)
+    const createService = (versioning: VersioningOptions | null = null, localePathConfig: LocalePathConfig | null = null) => {
+      const service = new RouteRegistrationService(mockLogger as unknown as LoggerService, versioning, localePathConfig)
       return service as unknown as RouteRegistrationServicePrivate
     }
 
@@ -109,25 +109,78 @@ describe('Versioning', () => {
       })
     })
 
-    describe('locale path prefixes', () => {
-      it('should replace paths with locale-prefixed paths when localePathPrefixes is set', () => {
-        const service = createService(null, ['en', 'fr'])
-        const result = service.resolveVersionedPaths('/users')
-        expect(paths(result)).toEqual(['/{locale}/users'])
+    describe('locale path config', () => {
+      describe('all locales prefixed (prefixDefaultLocale: true)', () => {
+        const allPrefixed: LocalePathConfig = { allLocales: ['en', 'fr'], prefixedLocales: ['en', 'fr'], defaultLocale: null }
+
+        it('should prefix all paths with /{locale}', () => {
+          const service = createService(null, allPrefixed)
+          expect(paths(service.resolveVersionedPaths('/users'))).toEqual(['/{locale}/users'])
+        })
+
+        it('should mark all paths as having locale param', () => {
+          const service = createService(null, allPrefixed)
+          const result = service.resolveVersionedPaths('/users')
+          expect(result).toEqual([
+            { path: '/{locale}/users', hideFromDocs: false, hasLocaleParam: true },
+          ])
+        })
+
+        it('should combine with versioning', () => {
+          const service = createService({ defaultVersion: '1' }, allPrefixed)
+          expect(paths(service.resolveVersionedPaths('/users'))).toEqual(['/{locale}/v1/users'])
+        })
       })
 
-      it('should not hide locale-prefixed paths from docs', () => {
-        const service = createService(null, ['en', 'fr'])
-        const result = service.resolveVersionedPaths('/users')
-        expect(result).toEqual([
-          { path: '/{locale}/users', hideFromDocs: false },
-        ])
+      describe('default locale unprefixed (prefixDefaultLocale: false)', () => {
+        const unprefixed: LocalePathConfig = { allLocales: ['en', 'fr'], prefixedLocales: ['fr'], defaultLocale: 'en' }
+
+        it('should return both unprefixed and prefixed paths', () => {
+          const service = createService(null, unprefixed)
+          expect(paths(service.resolveVersionedPaths('/users'))).toEqual(['/users', '/{locale}/users'])
+        })
+
+        it('should set hasLocaleParam correctly for each path', () => {
+          const service = createService(null, unprefixed)
+          const result = service.resolveVersionedPaths('/users')
+          expect(result).toEqual([
+            { path: '/users', hideFromDocs: false, hasLocaleParam: false },
+            { path: '/{locale}/users', hideFromDocs: false, hasLocaleParam: true },
+          ])
+        })
+
+        it('should combine with versioning', () => {
+          const service = createService({ defaultVersion: '1' }, unprefixed)
+          expect(paths(service.resolveVersionedPaths('/users'))).toEqual(['/v1/users', '/{locale}/v1/users'])
+        })
+
+        it('should combine with multi-version', () => {
+          const service = createService({}, unprefixed)
+          const result = service.resolveVersionedPaths('/users', { version: ['1', '2'] })
+          expect(paths(result)).toEqual(['/v1/users', '/{locale}/v1/users', '/v2/users', '/{locale}/v2/users'])
+        })
       })
 
-      it('should combine with versioning', () => {
-        const service = createService({ defaultVersion: '1' }, ['en', 'fr'])
-        const result = service.resolveVersionedPaths('/users')
-        expect(paths(result)).toEqual(['/{locale}/v1/users'])
+      describe('single locale (only default)', () => {
+        const singleLocale: LocalePathConfig = { allLocales: ['en'], prefixedLocales: [], defaultLocale: 'en' }
+
+        it('should return only the unprefixed path (no /{locale} route)', () => {
+          const service = createService(null, singleLocale)
+          const result = service.resolveVersionedPaths('/users')
+          expect(result).toEqual([
+            { path: '/users', hideFromDocs: false, hasLocaleParam: false },
+          ])
+        })
+      })
+
+      describe('no locale config', () => {
+        it('should return paths without locale prefix or hasLocaleParam', () => {
+          const service = createService(null, null)
+          const result = service.resolveVersionedPaths('/users')
+          expect(result).toEqual([
+            { path: '/users', hideFromDocs: false, hasLocaleParam: false },
+          ])
+        })
       })
     })
   })

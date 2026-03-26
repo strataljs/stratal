@@ -50,7 +50,21 @@ export type LanguageDetectionOptions =
   | (BaseDetection & { strategy?: 'cookie'; cookieOptions?: DetectorOptions['cookieOptions'] })
   | (BaseDetection & { strategy: 'header' })
   | (BaseDetection & { strategy: 'querystring' })
-  | (BaseDetection & { strategy: 'path' })
+  | (BaseDetection & {
+    strategy: 'path'
+    /**
+     * Controls whether the default locale gets a URL path prefix.
+     *
+     * - `false` (default) — The default locale has no prefix (`/users`), other locales
+     *   are prefixed (`/fr/users`). Requests to the prefixed default locale (`/en/users`) return 404.
+     * - `'redirect'` — Same as `false`, but requests to the prefixed default locale
+     *   (`/en/users`) are 301-redirected to the unprefixed path (`/users`).
+     * - `true` — All locales are prefixed (`/en/users`, `/fr/users`).
+     *
+     * @default false
+     */
+    prefixDefaultLocale?: false | true | 'redirect'
+  })
   | { enabled: false }
 
 /**
@@ -103,6 +117,8 @@ export interface ResolvedI18nOptions {
   detection: {
     enabled: boolean
     strategy: DetectionStrategy
+    /** Resolved value of the path detection `prefixDefaultLocale` option. Only meaningful when `strategy` is `'path'`. */
+    prefixDefaultLocale: false | true | 'redirect'
   }
 }
 
@@ -112,13 +128,17 @@ export interface ResolvedI18nOptions {
 export function resolveI18nOptions(options?: I18nModuleOptions): ResolvedI18nOptions {
   const detection = options?.detection
   const enabled = detection ? (detection.enabled !== false) : true
-  const strategy: DetectionStrategy = (detection && 'strategy' in detection && detection.strategy) ?? 'cookie'
+  const strategy: DetectionStrategy = (detection && 'strategy' in detection) ? detection.strategy ?? 'cookie' : 'cookie'
+  const prefixDefaultLocale: false | true | 'redirect' =
+    (detection && 'prefixDefaultLocale' in detection && detection.prefixDefaultLocale !== undefined)
+      ? detection.prefixDefaultLocale
+      : false
 
   return {
     defaultLocale: options?.defaultLocale ?? 'en',
     fallbackLocale: options?.fallbackLocale ?? 'en',
     locales: options?.locales ?? ['en'],
-    detection: { enabled, strategy },
+    detection: { enabled, strategy, prefixDefaultLocale },
   }
 }
 

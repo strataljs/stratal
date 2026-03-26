@@ -31,6 +31,7 @@ import { commonErrorSchemas } from '../schemas/common.schemas'
 import type {
   ControllerOptions,
   HttpMethod,
+  LocalePathConfig,
   OpenAPIRouteConfig,
   RouteBodyObject,
   RouteConfig,
@@ -63,15 +64,15 @@ export class RouteRegistrationService {
   private controllerClasses = new Map<string, Constructor<IController>>()
   private upgradeWebSocketFn: UpgradeWebSocket | null = null
 
-  /** Raw locale codes for path-based detection (e.g., ['en', 'fr']) */
-  private readonly localePathPrefixes: string[] | null
+  /** Locale path configuration for path-based i18n detection, or `null` when path detection is disabled */
+  private readonly localePathConfig: LocalePathConfig | null
 
   constructor(
     private logger: LoggerService,
     private versioningOptions: VersioningOptions | null = null,
-    localePathPrefixes: string[] | null = null,
+    localePathConfig: LocalePathConfig | null = null,
   ) {
-    this.localePathPrefixes = localePathPrefixes
+    this.localePathConfig = localePathConfig
   }
 
   /**
@@ -154,6 +155,7 @@ export class RouteRegistrationService {
       return
     }
 
+
     // Standard HTTP routes — validate decorated methods
     const decoratedMethods = getRouteDecoratedMethods(ControllerClass)
 
@@ -174,8 +176,8 @@ export class RouteRegistrationService {
       )
     }
 
-    for (const { path: fullPath, hideFromDocs: forceHide } of resolvedPaths) {
-      this.registerRoutes(app, ControllerClass, fullPath, decoratedMethods, controllerOpts, forceHide)
+    for (const { path: fullPath, hideFromDocs: forceHide, hasLocaleParam } of resolvedPaths) {
+      this.registerRoutes(app, ControllerClass, fullPath, decoratedMethods, controllerOpts, forceHide, hasLocaleParam)
     }
   }
 
@@ -256,11 +258,17 @@ export class RouteRegistrationService {
   /**
    * Resolve versioned paths for a controller based on versioning configuration.
    *
-   * @param basePath - The base path from @Controller decorator
+   * When locale path detection is enabled:
+   * - If all locales are prefixed (`defaultLocale` is `null`): every path gets a `/{locale}` prefix.
+   * - If a default locale is unprefixed (`defaultLocale` is set): each base path produces two entries —
+   *   one unprefixed (for the default locale, `hasLocaleParam: false`) and one `/{locale}`-prefixed
+   *   (for the remaining locales, `hasLocaleParam: true`).
+   *
+   * @param basePath - The base path from the `@Controller` decorator
    * @param controllerOpts - Controller options (may contain version)
-   * @returns Array of resolved paths (with version prefix if applicable)
+   * @returns Array of resolved paths with locale and versioning applied
    */
-  private resolveVersionedPaths(basePath: string, controllerOpts?: ControllerOptions): { path: string; hideFromDocs: boolean }[] {
+  private resolveVersionedPaths(basePath: string, controllerOpts?: ControllerOptions): { path: string; hideFromDocs: boolean; hasLocaleParam: boolean }[] {
     let paths: string[]
 
     // Versioning disabled — always return base path
@@ -292,11 +300,25 @@ export class RouteRegistrationService {
       }
     }
 
-    if (this.localePathPrefixes) {
-      return paths.map(p => ({ path: `/{locale}${p}`, hideFromDocs: false }))
+    if (this.localePathConfig) {
+      // All locales prefixed (prefixDefaultLocale: true)
+      if (this.localePathConfig.defaultLocale === null) {
+        return paths.map(p => ({ path: `/{locale}${p}`, hideFromDocs: false, hasLocaleParam: true }))
+      }
+
+      // Default locale unprefixed, other locales prefixed (if any)
+      return paths.flatMap(p => {
+        const result = [{ path: p, hideFromDocs: false, hasLocaleParam: false }]
+        // Only add /{locale} route when there are non-default locales to match
+        // (z.enum requires at least one value)
+        if (this.localePathConfig!.prefixedLocales.length > 0) {
+          result.push({ path: `/{locale}${p}`, hideFromDocs: false, hasLocaleParam: true })
+        }
+        return result
+      })
     }
 
-    return paths.map(p => ({ path: p, hideFromDocs: false }))
+    return paths.map(p => ({ path: p, hideFromDocs: false, hasLocaleParam: false }))
   }
 
   /**
@@ -356,6 +378,7 @@ export class RouteRegistrationService {
     decoratedMethods: string[],
     controllerOpts: ControllerOptions | undefined,
     forceHideFromDocs = false,
+    hasLocaleParam = false,
   ): void {
     const className = ControllerClass.name
     const prototype = ControllerClass.prototype as IController
@@ -430,6 +453,7 @@ export class RouteRegistrationService {
         hideFromDocs,
         meta.type === 'convention' ? methodName : undefined,
         statusCodeOverride,
+        hasLocaleParam,
       )
 
       this.logger.info(`Registering route`, {
@@ -575,7 +599,8 @@ export class RouteRegistrationService {
     guards: Guard[],
     hideFromDocs: boolean,
     methodName?: string,
-    statusCodeOverride?: number
+    statusCodeOverride?: number,
+    hasLocaleParam = false,
   ): OpenAPIRouteConfig {
     try {
       const route: Partial<OpenAPIRouteConfig> & { hide?: boolean } = {
@@ -628,10 +653,10 @@ export class RouteRegistrationService {
         }
       }
 
-      // Auto-inject locale path parameter when path-based i18n is enabled
-      if (this.localePathPrefixes) {
+      // Auto-inject locale path parameter for locale-prefixed routes
+      if (hasLocaleParam && this.localePathConfig) {
         const localeParam = z.object({
-          locale: z.enum(this.localePathPrefixes as [string, ...string[]]).openapi({
+          locale: z.enum(this.localePathConfig.prefixedLocales as [string, ...string[]]).openapi({
             param: {
               name: 'locale',
               in: 'path',

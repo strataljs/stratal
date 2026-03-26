@@ -224,3 +224,26 @@ export interface VersioningOptions {
   defaultVersion?: string | string[]
 }
 
+/**
+ * Locale path configuration for route registration.
+ * Controls how locale prefixes are applied to route paths.
+ *
+ * Built from {@link I18nModuleOptions} when path-based locale detection is enabled.
+ */
+export interface LocalePathConfig {
+  /** All supported locale codes (e.g., `['en', 'fr']`) */
+  allLocales: string[]
+
+  /**
+   * Locales that require a `/{locale}` path prefix.
+   * Excludes `defaultLocale` when `prefixDefaultLocale` is not `true`.
+   */
+  prefixedLocales: string[]
+
+  /**
+   * The default locale used as the unprefixed root, derived from
+   * {@link I18nModuleOptions.defaultLocale}.
+   * `null` when all locales are prefixed (`prefixDefaultLocale: true`).
+   */
+  defaultLocale: string | null
+}
