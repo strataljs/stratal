@@ -1,4 +1,5 @@
 import { expect } from 'vitest'
+import { getValueAtPath, hasValueAtPath } from './path-utils'
 
 /**
  * TestResponse
@@ -175,7 +176,7 @@ export class TestResponse {
    */
   async assertJsonPath(path: string, expected: unknown): Promise<this> {
     const json = await this.json()
-    const actual = this.getValueAtPath(json, path)
+    const actual = getValueAtPath(json, path)
 
     expect(
       actual,
@@ -208,7 +209,7 @@ export class TestResponse {
    */
   async assertJsonPathExists(path: string): Promise<this> {
     const json = await this.json()
-    const exists = this.hasValueAtPath(json, path)
+    const exists = hasValueAtPath(json, path)
 
     expect(
       exists,
@@ -225,7 +226,7 @@ export class TestResponse {
    */
   async assertJsonPathMissing(path: string): Promise<this> {
     const json = await this.json()
-    const exists = this.hasValueAtPath(json, path)
+    const exists = hasValueAtPath(json, path)
 
     expect(
       exists,
@@ -246,7 +247,7 @@ export class TestResponse {
     matcher: (value: unknown) => boolean
   ): Promise<this> {
     const json = await this.json()
-    const value = this.getValueAtPath(json, path)
+    const value = getValueAtPath(json, path)
 
     expect(
       matcher(value),
@@ -264,7 +265,7 @@ export class TestResponse {
    */
   async assertJsonPathContains(path: string, substring: string): Promise<this> {
     const json = await this.json()
-    const value = this.getValueAtPath(json, path)
+    const value = getValueAtPath(json, path)
 
     expect(
       typeof value === 'string',
@@ -287,7 +288,7 @@ export class TestResponse {
    */
   async assertJsonPathIncludes(path: string, item: unknown): Promise<this> {
     const json = await this.json()
-    const value = this.getValueAtPath(json, path)
+    const value = getValueAtPath(json, path)
 
     expect(
       Array.isArray(value),
@@ -310,7 +311,7 @@ export class TestResponse {
    */
   async assertJsonPathCount(path: string, count: number): Promise<this> {
     const json = await this.json()
-    const value = this.getValueAtPath(json, path)
+    const value = getValueAtPath(json, path)
 
     expect(
       Array.isArray(value),
@@ -334,7 +335,7 @@ export class TestResponse {
     const json = await this.json()
 
     for (const [path, expected] of Object.entries(expectations)) {
-      const actual = this.getValueAtPath(json, path)
+      const actual = getValueAtPath(json, path)
       expect(
         actual,
         `Expected JSON path "${path}" to be ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`
@@ -383,52 +384,4 @@ export class TestResponse {
     return this
   }
 
-  // ============================================================
-  // Private Helpers
-  // ============================================================
-
-  /**
-   * Get value at dot-notation path.
-   */
-  private getValueAtPath(obj: unknown, path: string): unknown {
-    const parts = path.split('.')
-    let current: unknown = obj
-
-    for (const part of parts) {
-      if (current === null || current === undefined) {
-        return undefined
-      }
-      current = (current as Record<string, unknown>)[part]
-    }
-
-    return current
-  }
-
-  /**
-   * Check if a path exists in the object (even if value is null/undefined).
-   */
-  private hasValueAtPath(obj: unknown, path: string): boolean {
-    const parts = path.split('.')
-    let current: unknown = obj
-
-    for (const part of parts) {
-      if (current === null || current === undefined) {
-        return false
-      }
-
-      if (typeof current !== 'object') {
-        return false
-      }
-
-      const record = current as Record<string, unknown>
-
-      if (!(part in record)) {
-        return false
-      }
-
-      current = record[part]
-    }
-
-    return true
-  }
 }

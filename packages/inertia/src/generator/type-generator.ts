@@ -501,7 +501,7 @@ export function generateInertiaTypes(input: GenerateTypesInput): string {
   if (configMembers.length > 0) {
     lines.push('')
     lines.push("declare module '@inertiajs/core' {")
-    lines.push('  interface InertiaConfig {')
+    lines.push('  export interface InertiaConfig {')
     for (const member of configMembers) {
       lines.push(member)
     }

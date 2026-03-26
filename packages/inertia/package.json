@@ -44,6 +44,10 @@
       "types": "./dist/react.d.mts",
       "import": "./dist/react.mjs"
     },
+    "./testing": {
+      "types": "./dist/testing.d.mts",
+      "import": "./dist/testing.mjs"
+    },
     "./vite": {
       "types": "./dist/vite.d.mts",
       "import": "./dist/vite.mjs"
@@ -72,7 +76,9 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "reflect-metadata": "^0.2.2",
-    "stratal": "^0.0.17"
+    "stratal": "^0.0.17",
+    "@stratal/testing": ">=0.0.1",
+    "vitest": "^4.1.0"
   },
   "peerDependenciesMeta": {
     "@inertiajs/core": {
@@ -91,6 +97,12 @@
       "optional": true
     },
     "react-dom": {
+      "optional": true
+    },
+    "@stratal/testing": {
+      "optional": true
+    },
+    "vitest": {
       "optional": true
     }
   },

@@ -8,6 +8,7 @@ export default defineConfig({
     'src/index.ts',
     'src/vite.ts',
     'src/react.ts',
+    'src/testing.ts',
   ],
   tsconfig: './tsconfig.build.json',
   exports: {

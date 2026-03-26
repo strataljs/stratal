@@ -5,6 +5,7 @@ export { TestingModule } from './core/testing-module'
 export { TestingModuleBuilder, type TestingModuleConfig } from './core/testing-module-builder'
 
 // HTTP Testing
+export { getValueAtPath, hasValueAtPath } from './core/http/path-utils'
 export { createMockFetch, MockFetch } from './core/http/mock-fetch'
 export type { MockErrorOptions, MockJsonOptions } from './core/http/fetch-mock.types'
 export { TestHttpClient } from './core/http/test-http-client'

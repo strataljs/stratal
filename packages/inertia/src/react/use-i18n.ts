@@ -10,13 +10,15 @@
 
 import type { PageProps } from '@inertiajs/core'
 import { usePage } from '@inertiajs/react'
-import { createCoreContext, translate } from '@intlify/core-base'
+import { compile, createCoreContext, registerMessageCompiler, translate } from '@intlify/core-base'
 import { useMemo } from 'react'
 import type { MessageKeys, MessageParams } from 'stratal/i18n'
-import { setupI18nCompiler } from 'stratal/i18n/utils'
 
-// Register JIT message compiler (CSP-safe, AST mode — same as server's setupI18nCompiler)
-setupI18nCompiler()
+// Register JIT message compiler from the SAME @intlify/core-base instance that provides
+// createCoreContext/translate. Importing setupI18nCompiler from stratal/i18n/utils can
+// resolve a different @intlify/core-base copy (duplicate modules in node_modules),
+// causing the compiler registration to be invisible to this module's createCoreContext.
+registerMessageCompiler(compile)
 
 interface I18nPageProps extends PageProps {
   locale: string
