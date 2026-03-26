@@ -41,7 +41,7 @@
 import { Module } from '../module'
 import type { AsyncModuleOptions, DynamicModule } from '../module/types'
 import type { QueueName } from '../queue'
-import { QUEUE_TOKENS, QueueRegistry } from '../queue'
+import { QUEUE_TOKENS, type QueueRegistry } from '../queue'
 import { EmailConsumer } from './consumers/email.consumer'
 import { EMAIL_TOKENS } from './email.tokens'
 import { EmailProviderFactory, EmailService } from './services'

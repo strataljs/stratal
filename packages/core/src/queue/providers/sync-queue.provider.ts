@@ -1,7 +1,7 @@
 import { inject } from 'tsyringe'
 import { Transient } from '../../di/decorators'
 import { DI_TOKENS } from '../../di/tokens'
-import { ConsumerRegistry } from '../consumer-registry'
+import { type ConsumerRegistry } from '../consumer-registry'
 import type { QueueMessage } from '../queue-consumer'
 import type { IQueueProvider } from './queue-provider.interface'
 

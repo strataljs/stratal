@@ -1,6 +1,6 @@
 import type { Page } from '@inertiajs/core'
 import { Transient, inject } from 'stratal/di'
-import { I18N_TOKENS, MessageLoaderService } from 'stratal/i18n'
+import { I18N_TOKENS, type MessageLoaderService } from 'stratal/i18n'
 import type { RouterContext } from 'stratal/router'
 import type { InertiaMergeOptions, InertiaOnceOptions } from '../augment/router-context'
 import type { InertiaModuleOptions } from '../inertia.options'

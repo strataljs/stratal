@@ -4,15 +4,10 @@
     ".dev.vars*": "dotenv",
     "*.zmodel": "zmodel-v3"
   },
-  "editor.defaultFormatter": "dbaeumer.vscode-eslint",
-  "eslint.format.enable": true,
-  "eslint.enable": true,
-  "eslint.useFlatConfig": true,
-  "eslint.workingDirectories": [
-    {
-      "mode": "auto"
-    }
-  ],
+  "editor.defaultFormatter": "oxc.oxc-vscode",
+  "oxc.enable.oxfmt": true,
+  "oxc.enable": true,
+  "eslint.enable": false,
   "editor.quickSuggestions": {
     "strings": "on"
   },

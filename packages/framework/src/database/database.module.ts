@@ -1,13 +1,12 @@
-import type { AnyPlugin } from '@zenstackhq/orm'
+import type { AnyPlugin, ClientOptions } from '@zenstackhq/orm'
 import type { SchemaDef } from '@zenstackhq/schema'
-import type { Dialect } from 'kysely'
 import { DI_TOKENS, Scope, delay } from 'stratal/di'
 import type { IEventRegistry } from 'stratal/events'
 import {
-  InjectionToken,
   Module,
   type AsyncModuleOptions,
   type DynamicModule,
+  type InjectionToken,
   type ModuleContext,
   type OnInitialize,
   type OnShutdown,
@@ -29,7 +28,7 @@ export interface DatabaseConnectionConfig<
 > {
   name: Name
   schema: Schema
-  dialect: () => Dialect
+  dialect: () => ClientOptions<SchemaDef>['dialect']
   plugins?: AnyPlugin[]
 }
 

@@ -1,7 +1,7 @@
 import { inject } from 'tsyringe'
 import { Transient, DI_TOKENS } from 'stratal/di'
 import type { Middleware, RouterContext } from 'stratal/router'
-import { AuthContext } from '../../context/auth-context'
+import { type AuthContext } from '../../context/auth-context'
 import { AUTH_SERVICE } from '../auth.tokens'
 import type { AuthService } from '../services/auth.service'
 

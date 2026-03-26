@@ -1,6 +1,6 @@
 import type { InertiaAppSSRResponse, Page } from '@inertiajs/core'
 import { Transient, inject } from 'stratal/di'
-import { LOGGER_TOKENS, LoggerService } from 'stratal/logger'
+import { LOGGER_TOKENS, type LoggerService } from 'stratal/logger'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { INERTIA_TOKENS } from '../inertia.tokens'
 

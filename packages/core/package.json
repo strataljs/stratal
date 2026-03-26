@@ -155,21 +155,21 @@
     "test:watch": "vitest",
     "test:integration": "vitest run --project workerd",
     "test:coverage": "vitest run --coverage",
-    "lint": "npx eslint .",
-    "lint:fix": "npx eslint --fix ."
+    "lint": "npx oxlint .",
+    "lint:fix": "npx oxlint --fix ."
   },
   "dependencies": {
     "@hono/swagger-ui": "^0.6.1",
     "@hono/zod-openapi": "^1.2.3",
     "@intlify/core-base": "^11.3.0",
     "@intlify/message-compiler": "^11.3.0",
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@modelcontextprotocol/sdk": "^1.28.0",
     "@swc-node/register": "^1.11.1",
-    "@swc/core": "^1.15.18",
-    "@swc/helpers": "^0.5.19",
+    "@swc/core": "^1.15.21",
+    "@swc/helpers": "^0.5.20",
     "@xmldom/xmldom": "^0.8.11",
     "clipanion": "^4.0.0-rc.4",
-    "hono": "^4.12.8",
+    "hono": "^4.12.9",
     "tsyringe": "^4.10.0",
     "zod": "^4.3.6"
   },
@@ -211,10 +211,10 @@
     }
   },
   "devDependencies": {
-    "@aws-sdk/client-s3": "3.1014.0",
-    "@aws-sdk/lib-storage": "^3.1014.0",
-    "@aws-sdk/s3-request-presigner": "3.1014.0",
-    "@cloudflare/vitest-pool-workers": "^0.13.3",
+    "@aws-sdk/client-s3": "3.1017.0",
+    "@aws-sdk/lib-storage": "^3.1017.0",
+    "@aws-sdk/s3-request-presigner": "3.1017.0",
+    "@cloudflare/vitest-pool-workers": "^0.13.4",
     "@cloudflare/workers-types": "4.20260317.1",
     "@react-email/components": "^1.0.10",
     "@stratal/testing": "workspace:*",
@@ -222,17 +222,17 @@
     "@types/nodemailer": "^7.0.11",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@vitest/coverage-v8": "^4.1.0",
-    "@vitest/runner": "~4.1.0",
-    "@vitest/snapshot": "~4.1.0",
+    "@vitest/coverage-v8": "^4.1.2",
+    "@vitest/runner": "~4.1.2",
+    "@vitest/snapshot": "~4.1.2",
     "jsonc-parser": "^3.3.1",
-    "nodemailer": "^8.0.3",
+    "nodemailer": "^8.0.4",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "reflect-metadata": "^0.2.2",
     "resend": "^6.9.4",
-    "tsdown": "^0.21.4",
-    "typescript": "^5.9.3",
-    "vitest": "~4.1.0"
+    "tsdown": "^0.21.5",
+    "typescript": "^6.0.2",
+    "vitest": "~4.1.2"
   }
 }

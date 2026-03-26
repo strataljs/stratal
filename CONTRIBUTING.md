@@ -58,7 +58,7 @@ yarn workspace stratal build
 
 ### Pre-commit Hooks
 
-The repo uses [husky](https://typicode.github.io/husky/) + [lint-staged](https://github.com/lint-staged/lint-staged). On every commit, `eslint --fix` runs automatically on staged `.ts` and `.mts` files.
+The repo uses [husky](https://typicode.github.io/husky/) + [lint-staged](https://github.com/lint-staged/lint-staged). On every commit, `oxlint --fix` runs automatically on staged `.ts` and `.mts` files.
 
 ## Making Changes
 

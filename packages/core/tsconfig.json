@@ -5,16 +5,21 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "outDir": "./dist",
-    "downlevelIteration": true,
     "module": "esnext",
     "moduleResolution": "bundler",
     "strict": true,
     "skipLibCheck": true,
     "jsx": "react-jsx",
     "paths": {
-      "stratal": ["./src/index.ts"],
-      "stratal/di": ["./src/di/index.ts"],
-      "stratal/quarry": ["./src/quarry/index.ts"]
+      "stratal": [
+        "./src/index.ts"
+      ],
+      "stratal/di": [
+        "./src/di/index.ts"
+      ],
+      "stratal/quarry": [
+        "./src/quarry/index.ts"
+      ]
     },
     "lib": [
       "ES2024",

@@ -8,7 +8,7 @@ import {
 import type { StreamingBlobPayloadInputTypes } from '../providers/storage-provider.interface'
 import { STORAGE_TOKENS } from '../storage.tokens'
 import type { StorageConfig } from '../types'
-import { StorageManagerService } from './storage-manager.service'
+import { type StorageManagerService } from './storage-manager.service'
 
 /**
  * Storage Service

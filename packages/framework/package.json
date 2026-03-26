@@ -63,15 +63,15 @@
     "test:coverage": "vitest run --coverage",
     "test:db": "docker compose -f test/docker-compose.yml up -d",
     "typecheck": "yarn tsc --noEmit",
-    "lint": "npx eslint .",
-    "lint:fix": "npx eslint --fix ."
+    "lint": "npx oxlint .",
+    "lint:fix": "npx oxlint --fix ."
   },
   "dependencies": {
-    "@better-auth/core": "^1.5.5",
-    "@faker-js/faker": "^10.3.0",
-    "@zenstackhq/cli": "^3.4.6",
-    "@zenstackhq/orm": "^3.4.6",
-    "better-auth": "^1.5.5",
+    "@better-auth/core": "^1.5.6",
+    "@faker-js/faker": "^10.4.0",
+    "@zenstackhq/cli": "^3.5.1",
+    "@zenstackhq/orm": "^3.5.1",
+    "better-auth": "^1.5.6",
     "casbin": "^5.49.0",
     "postgres-array": "^3.0.4"
   },
@@ -81,22 +81,22 @@
     "stratal": "^0.0.17"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.13.3",
+    "@cloudflare/vitest-pool-workers": "^0.13.4",
     "@cloudflare/workers-types": "4.20260317.1",
     "@stratal/testing": "workspace:^",
     "@types/node": "^25.5.0",
     "@types/pg": "^8.20.0",
-    "@vitest/coverage-istanbul": "~4.1.0",
-    "@vitest/runner": "~4.1.0",
-    "@vitest/snapshot": "~4.1.0",
-    "@zenstackhq/better-auth": "^3.4.6",
+    "@vitest/coverage-istanbul": "~4.1.2",
+    "@vitest/runner": "~4.1.2",
+    "@vitest/snapshot": "~4.1.2",
+    "@zenstackhq/better-auth": "^3.5.1",
     "dotenv-cli": "^11.0.0",
     "pg": "^8.20.0",
     "reflect-metadata": "^0.2.2",
     "stratal": "workspace:*",
-    "tsdown": "^0.21.4",
-    "typescript": "^5.9.3",
-    "vitest": "~4.1.0",
-    "wrangler": "^4.76.0"
+    "tsdown": "^0.21.5",
+    "typescript": "^6.0.2",
+    "vitest": "~4.1.2",
+    "wrangler": "^4.77.0"
   }
 }
