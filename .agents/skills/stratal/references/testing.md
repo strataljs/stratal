@@ -366,3 +366,80 @@ const sse = await module.sse('/streaming/events')
   .withLocale('fr')
   .connect()
 ```
+
+## Inertia Testing
+
+Inertia assertions augment `TestResponse` with methods for verifying Inertia page responses. Import from `@stratal/inertia/testing` in your test setup to activate them.
+
+### Setup
+
+Add the side-effect import to your test setup file:
+
+```typescript
+// vitest.setup.ts
+import 'reflect-metadata'
+import '@stratal/inertia/testing'  // Augments TestResponse with Inertia assertions
+```
+
+### Assertions
+
+All Inertia assertions are chainable (return `Promise<this>`). They require the response to be an Inertia JSON page response (`X-Inertia: true` header, 200 status).
+
+```typescript
+const response = await module.http
+  .get('/notes')
+  .withHeader('X-Inertia', 'true')
+  .withHeader('X-Inertia-Version', '1')
+  .send()
+
+// Assert response is Inertia (checks X-Inertia header + 200 status)
+await response.assertInertia()
+
+// Assert with callback for custom assertions on the page object
+await response.assertInertia((page) => {
+  expect(page.component).toBe('notes/Index')
+  expect(page.props.notes).toHaveLength(3)
+})
+
+// Assert component name
+await response.assertInertiaComponent('notes/Index')
+
+// Assert prop value at dot-path
+await response.assertInertiaProp('notes.0.title', 'My Note')
+
+// Assert prop existence
+await response.assertInertiaPropExists('notes')
+await response.assertInertiaPropMissing('secret')
+
+// Assert page URL and version
+await response.assertInertiaUrl('/notes')
+await response.assertInertiaVersion('1')
+
+// Assert flash data
+await response.assertInertiaFlash('success', 'Note created')
+
+// Assert deferred props (prop name + group name)
+await response.assertInertiaDeferredProp('stats', 'default')
+
+// Assert merge props
+await response.assertInertiaMergeProp('notifications')
+
+// Assert shared props
+await response.assertInertiaSharedProp('appName')
+```
+
+### Assertion Reference
+
+| Method | Description |
+|--------|-------------|
+| `assertInertia(callback?)` | Assert response is Inertia. Optional callback receives the page object. |
+| `assertInertiaComponent(component)` | Assert `page.component` matches exactly. |
+| `assertInertiaProp(path, expected)` | Assert prop at dot-path deep-equals expected value. |
+| `assertInertiaPropExists(path)` | Assert prop at dot-path exists. |
+| `assertInertiaPropMissing(path)` | Assert prop at dot-path does not exist. |
+| `assertInertiaUrl(url)` | Assert `page.url` matches exactly. |
+| `assertInertiaVersion(version)` | Assert `page.version` matches (string or null). |
+| `assertInertiaFlash(key, value)` | Assert `page.flash[key]` deep-equals value. |
+| `assertInertiaDeferredProp(prop, group)` | Assert prop is in `page.deferredProps[group]`. |
+| `assertInertiaMergeProp(prop)` | Assert prop is in `page.mergeProps`. |
+| `assertInertiaSharedProp(prop)` | Assert prop is in `page.sharedProps`. |

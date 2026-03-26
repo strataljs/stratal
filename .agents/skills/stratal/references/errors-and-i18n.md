@@ -223,6 +223,7 @@ interface I18nModuleOptions {
   detection?: {
     enabled?: boolean       // default: true
     strategy?: 'cookie' | 'header' | 'querystring' | 'path'  // default: 'cookie'
+    prefixDefaultLocale?: false | true | 'redirect'           // path strategy only, default: false
   } | { enabled: false }
 }
 ```
@@ -334,6 +335,43 @@ I18nModule.forRoot({
 ### Path-Based Detection
 
 When `strategy: 'path'` is used, all routes are registered with a `/{locale}` path prefix (e.g., `/{locale}/api/users`). The `locale` parameter is auto-injected into each route's params schema and validated against the configured `locales` array. Routes appear in OpenAPI docs with the locale as a documented path parameter.
+
+#### `prefixDefaultLocale` Option
+
+Controls whether the default locale gets a URL path prefix. Only applies when `strategy: 'path'`.
+
+| Value | Behavior |
+|-------|----------|
+| `false` (default) | Default locale has no prefix (`/users`). Other locales are prefixed (`/fr/users`). Requests to the prefixed default locale (`/en/users`) return 404. |
+| `'redirect'` | Same as `false`, but requests to the prefixed default locale (`/en/users`) are 301-redirected to the unprefixed path (`/users`). |
+| `true` | All locales are prefixed (`/en/users`, `/fr/users`). |
+
+```typescript
+// Default behavior: default locale unprefixed
+I18nModule.forRoot({
+  defaultLocale: 'en',
+  locales: ['en', 'fr'],
+  detection: { strategy: 'path' },
+  // prefixDefaultLocale defaults to false
+  // GET /users -> en, GET /fr/users -> fr, GET /en/users -> 404
+})
+
+// Redirect prefixed default locale
+I18nModule.forRoot({
+  defaultLocale: 'en',
+  locales: ['en', 'fr'],
+  detection: { strategy: 'path', prefixDefaultLocale: 'redirect' },
+  // GET /users -> en, GET /fr/users -> fr, GET /en/users -> 301 to /users
+})
+
+// All locales prefixed
+I18nModule.forRoot({
+  defaultLocale: 'en',
+  locales: ['en', 'fr'],
+  detection: { strategy: 'path', prefixDefaultLocale: true },
+  // GET /en/users -> en, GET /fr/users -> fr, GET /users -> 404
+})
+```
 
 ### Runtime Locale Access
 

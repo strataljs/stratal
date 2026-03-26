@@ -1,11 +1,11 @@
 ---
 name: stratal
-description: "Build Cloudflare Workers applications with the Stratal framework. Use when code imports from 'stratal' or '@stratal/*', when creating modules, controllers, services, routes, queue consumers, cron jobs, or CLI commands, or when user mentions Stratal, asks to 'create a module', 'add an endpoint', 'set up auth', 'configure database', 'add error handling', 'set up Inertia', or 'run quarry'. Covers DI, routing with OpenAPI, error handling, i18n, testing, auth, RBAC, Inertia.js SSR, and MCP server. Do NOT use for generic Hono apps, plain Cloudflare Workers, or NestJS."
+description: "Build Cloudflare Workers applications with the Stratal framework. Use when code imports from 'stratal', '@stratal/framework', '@stratal/testing', or '@stratal/inertia', when creating modules, controllers, services, routes, queue consumers, cron jobs, seeders, or CLI commands, or when user mentions Stratal, asks to 'create a module', 'add an endpoint', 'set up auth', 'configure database', 'add error handling', 'set up Inertia', 'write tests', or 'run quarry'. Covers DI, routing with OpenAPI, error handling, i18n, testing, auth, RBAC, Inertia.js SSR, WebSocket, and MCP server. Do NOT use for generic Hono apps, plain Cloudflare Workers, or NestJS."
 license: MIT
 compatibility: Designed for Claude Code. Requires Node.js 20+, yarn.
 metadata:
   author: strataljs
-  version: "2.0"
+  version: "3.0"
 ---
 
 # Stratal Framework
@@ -38,7 +38,7 @@ Breaking any of these causes runtime failures.
 
 9. **Cron schedules must match `wrangler.jsonc`** — `CronJob.schedule` string must exactly match a trigger in `[triggers]`.
 
-10. **I18nModule must be configured for translations** — `I18nModule.forRoot()` for locale config with `detection` option (`'cookie'` default, `'header'`, `'querystring'`, `'path'`). `I18nModule.registerMessages()` to add messages. `I18nService.t()` for translation. `withI18n()` for Zod validation messages.
+10. **I18nModule must be configured for translations** — `I18nModule.forRoot()` for locale config with `detection` option (`'cookie'` default, `'header'`, `'querystring'`, `'path'`). Path detection supports `prefixDefaultLocale` (`false` default, `'redirect'`, `true`). `I18nModule.registerMessages()` to add messages. `I18nService.t()` for translation. `withI18n()` for Zod validation messages.
 
 11. **Custom ExceptionHandler must extend `ExceptionHandler`** — Import from `stratal/errors`, implement `register()`, pass to `new Stratal({ exceptionHandler: AppExceptionHandler })`.
 
@@ -76,7 +76,6 @@ Constructor config:
 - `exceptionHandler?` — Custom `ExceptionHandler` subclass
 - `logging?` — `{ level?, formatter? }` (`'json'` | `'pretty'`)
 - `versioning?` — `{ prefix?, defaultVersion? }`
-- `i18n?` — `I18nModuleOptions` (passes detection config to Hono app)
 
 ## Module System
 
@@ -176,13 +175,13 @@ Run `wrangler types` to generate `Cloudflare.Env` from your `wrangler.jsonc` bin
 
 ### Sub-Path Imports
 
-Core: `stratal`, `stratal/cache`, `stratal/config`, `stratal/consumer`, `stratal/cron`, `stratal/di`, `stratal/email`, `stratal/errors`, `stratal/events`, `stratal/i18n`, `stratal/logger`, `stratal/module`, `stratal/openapi`, `stratal/quarry`, `stratal/queue`, `stratal/router`, `stratal/seeder`, `stratal/storage`, `stratal/validation`
+Core: `stratal`, `stratal/cache`, `stratal/config`, `stratal/cron`, `stratal/di`, `stratal/email`, `stratal/errors`, `stratal/events`, `stratal/guards`, `stratal/i18n`, `stratal/i18n/messages/en`, `stratal/i18n/utils`, `stratal/logger`, `stratal/middleware`, `stratal/module`, `stratal/openapi`, `stratal/quarry`, `stratal/queue`, `stratal/router`, `stratal/seeder`, `stratal/storage`, `stratal/storage/providers`, `stratal/validation`, `stratal/websocket`, `stratal/workers`
 
 Framework: `@stratal/framework/auth`, `@stratal/framework/context`, `@stratal/framework/database`, `@stratal/framework/factory`, `@stratal/framework/guards`, `@stratal/framework/rbac`
 
-Testing: `@stratal/testing`, `@stratal/testing/mocks`, `@stratal/testing/vitest-plugin`
+Testing: `@stratal/testing`, `@stratal/testing/mocks`, `@stratal/testing/mocks/nodemailer`, `@stratal/testing/mocks/zenstack-language`, `@stratal/testing/storage`, `@stratal/testing/vitest-plugin`
 
-Inertia: `@stratal/inertia`, `@stratal/inertia/vite`, `@stratal/inertia/react`
+Inertia: `@stratal/inertia`, `@stratal/inertia/react`, `@stratal/inertia/testing`, `@stratal/inertia/vite`
 
 ## Workflows
 

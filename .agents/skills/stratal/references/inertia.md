@@ -417,3 +417,49 @@ export default createViteConfig({
 - `@stratal/inertia` — Main module, service, decorators, flash stores, types
 - `@stratal/inertia/vite` — Vite configuration and plugins
 - `@stratal/inertia/react` — React hooks (`useI18n`)
+- `@stratal/inertia/testing` — Test response assertions for Inertia pages
+
+## Testing
+
+Import `@stratal/inertia/testing` in your test setup to augment `TestResponse` with Inertia-specific assertions.
+
+### Setup
+
+```typescript
+// vitest.setup.ts
+import 'reflect-metadata'
+import '@stratal/inertia/testing'
+```
+
+### Making Inertia Test Requests
+
+Send requests with the `X-Inertia` header to get JSON page responses (instead of full HTML):
+
+```typescript
+const response = await module.http
+  .get('/notes')
+  .withHeader('X-Inertia', 'true')
+  .withHeader('X-Inertia-Version', '1')
+  .send()
+
+await response.assertInertia()
+await response.assertInertiaComponent('notes/Index')
+await response.assertInertiaProp('notes.0.title', 'My Note')
+```
+
+### Available Assertions
+
+| Method | Description |
+|--------|-------------|
+| `assertInertia(callback?)` | Assert Inertia response. Optional callback receives page object. |
+| `assertInertiaComponent(component)` | Assert component name. |
+| `assertInertiaProp(path, expected)` | Assert prop at dot-path. |
+| `assertInertiaPropExists(path)` / `assertInertiaPropMissing(path)` | Assert prop presence. |
+| `assertInertiaUrl(url)` | Assert page URL. |
+| `assertInertiaVersion(version)` | Assert asset version. |
+| `assertInertiaFlash(key, value)` | Assert flash data. |
+| `assertInertiaDeferredProp(prop, group)` | Assert deferred prop in group. |
+| `assertInertiaMergeProp(prop)` | Assert merge prop. |
+| `assertInertiaSharedProp(prop)` | Assert shared prop. |
+
+See `references/testing.md` for full examples of each assertion method.
