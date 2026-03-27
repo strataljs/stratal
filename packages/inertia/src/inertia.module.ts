@@ -1,5 +1,6 @@
 import { Scope } from 'stratal/di'
 import { ApplicationError, type ApplicationErrorConstructor, type ExceptionHandler, type HttpExceptionContext } from 'stratal/errors'
+import { I18N_TOKENS, type II18nService } from 'stratal/i18n'
 import type { MiddlewareConfigurable, MiddlewareConsumer } from 'stratal/middleware'
 import type { AsyncModuleOptions, DynamicModule, OnException, OnInitialize } from 'stratal/module'
 import { Module } from 'stratal/module'
@@ -75,7 +76,10 @@ export class InertiaModule implements MiddlewareConfigurable, OnInitialize, OnEx
     handler.renderable(ApplicationError as unknown as ApplicationErrorConstructor, (error, context) => {
       if (context.type !== 'http' || !this.isInertiaRequest(context)) return undefined
 
-      context.ctx.flash('errors', { _form: error.message } as const)
+      const i18n = context.ctx.getContainer().resolve<II18nService>(I18N_TOKENS.I18nService)
+      const message = i18n.t(error.message as Parameters<II18nService['t']>[0], error.metadata as Record<string, string | number>)
+
+      context.ctx.flash('errors', { _form: message } as const)
       return this.redirectBack(context)
     })
   }
