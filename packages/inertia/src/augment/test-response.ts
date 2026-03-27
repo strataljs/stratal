@@ -26,6 +26,10 @@ declare module '@stratal/testing' {
     assertInertiaMergeProp(prop: string): Promise<this>
     /** Assert a prop is listed as a shared prop. */
     assertInertiaSharedProp(prop: string): Promise<this>
+    /** Assert the response is a successful precognition response (204 with precognition headers). */
+    assertSuccessfulPrecognition(): this
+    /** Assert the response is a precognition validation error (422 with precognition headers). Optionally assert specific errors. */
+    assertPrecognitionValidationErrors(errors?: Record<string, string>): Promise<this>
   }
 }
 
@@ -154,6 +158,30 @@ export function augmentTestResponse(): void {
       page.sharedProps,
       `Expected Inertia sharedProps to contain "${prop}"`,
     ).toContain(prop)
+
+    return this
+  }
+
+  proto.assertSuccessfulPrecognition = function (this: TestResponse) {
+    this.assertNoContent()
+    this.assertHeader('Precognition', 'true')
+    this.assertHeader('Precognition-Success', 'true')
+
+    return this
+  }
+
+  proto.assertPrecognitionValidationErrors = async function (this: TestResponse, errors?: Record<string, string>) {
+    this.assertUnprocessable()
+    this.assertHeader('Precognition', 'true')
+
+    if (errors) {
+      const body = await this.json<{ errors: Record<string, string> }>()
+
+      expect(
+        body.errors,
+        `Expected precognition errors to match ${JSON.stringify(errors)}, got ${JSON.stringify(body.errors)}`,
+      ).toStrictEqual(errors)
+    }
 
     return this
   }
