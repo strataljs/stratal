@@ -17,6 +17,12 @@ type RouteParameter = ZodObjectWithEffect | undefined
 export interface RouterVariables {
   [ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER]: Container
   [ROUTER_CONTEXT_KEYS.LOCALE]?: string
+  /**
+   * When set by middleware, the defaultHook returns this response after
+   * successful validation — skipping the controller handler entirely.
+   * Used by packages like `@stratal/inertia` for precognition support.
+   */
+  validationSuccessResponse?: Response
 }
 
 /**

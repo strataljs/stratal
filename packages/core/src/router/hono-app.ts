@@ -61,10 +61,12 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
     i18nOptions?: I18nModuleOptions,
   ) {
     super({
-      defaultHook: (result) => {
+      defaultHook: (result, c) => {
         if (!result.success) {
           throw new SchemaValidationError(result.error)
         }
+        const override = c.get('validationSuccessResponse')
+        if (override) return override
       },
     })
 

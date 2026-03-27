@@ -44,6 +44,7 @@ export { InertiaDelete, InertiaGet, InertiaPatch, InertiaPost, InertiaPut, Inert
 export type { InertiaRouteConfig } from './decorators/inertia.decorators'
 
 // Middleware
+export { HandlePrecognitiveRequests } from './middleware/handle-precognitive-requests.middleware'
 export { InertiaMiddleware } from './middleware/inertia.middleware'
 
 // Commands
