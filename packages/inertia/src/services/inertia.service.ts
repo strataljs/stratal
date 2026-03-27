@@ -97,11 +97,15 @@ export class InertiaService {
     const result = await this.processProps(allProps, ctx, component, isInertia)
 
     // Read flash data from context (set by middleware)
-    const flash = (ctx.c.get('inertiaFlash') as Record<string, unknown> | undefined) ?? {}
+    const rawFlash = (ctx.c.get('inertiaFlash') as Record<string, unknown> | undefined) ?? {}
+    const { errors: flashErrors, ...flash } = rawFlash
+    const errors = (flashErrors && typeof flashErrors === 'object' && !Array.isArray(flashErrors))
+      ? flashErrors as Page['props']['errors']
+      : {} as Page['props']['errors']
 
     const page: Page = {
       component,
-      props: { ...result.resolvedProps, errors: {} },
+      props: { ...result.resolvedProps, errors },
       url,
       version: this.options.version ?? null,
       flash,
