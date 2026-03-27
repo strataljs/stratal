@@ -72,12 +72,12 @@
     "@inertiajs/react": "^3.0.0-beta.5",
     "@inertiajs/vite": "^3.0.0-beta.5",
     "@intlify/core-base": ">=11.0.0",
+    "@stratal/testing": ">=0.0.1",
     "hono": "^4.12.8",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "reflect-metadata": "^0.2.2",
     "stratal": "^0.0.17",
-    "@stratal/testing": ">=0.0.1",
     "vitest": "^4.1.0"
   },
   "peerDependenciesMeta": {
@@ -93,13 +93,13 @@
     "@intlify/core-base": {
       "optional": true
     },
+    "@stratal/testing": {
+      "optional": true
+    },
     "react": {
       "optional": true
     },
     "react-dom": {
-      "optional": true
-    },
-    "@stratal/testing": {
       "optional": true
     },
     "vitest": {
