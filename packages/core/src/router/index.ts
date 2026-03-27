@@ -39,5 +39,5 @@ export * from './schemas'
 
 // Errors
 export {
-  ControllerRegistrationError, HonoAppAlreadyConfiguredError, OpenAPIRouteRegistrationError, OpenAPIValidationError, RouteNotFoundError, SchemaValidationError
+  ControllerRegistrationError, HonoAppAlreadyConfiguredError, OpenAPIRouteRegistrationError, OpenAPIValidationError, ResponseValidationError, RouteNotFoundError, SchemaValidationError
 } from './errors'

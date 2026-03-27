@@ -120,6 +120,8 @@ export const ERROR_CODES = {
     SCHEMA_VALIDATION: 1003,
     /** Request validation failed (OpenAPI, etc.) */
     REQUEST_VALIDATION: 1004,
+    /** Response validation failed (response body doesn't match declared schema) */
+    RESPONSE_VALIDATION: 1005,
   },
 
   /**

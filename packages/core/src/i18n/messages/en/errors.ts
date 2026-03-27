@@ -71,6 +71,7 @@ export const errors = {
 
   // Schema validation errors
   schemaValidation: 'Schema validation failed',
+  responseValidation: 'Response validation failed',
 
   // OpenAPI errors
   openapiValidation: 'OpenAPI validation failed: {details}',

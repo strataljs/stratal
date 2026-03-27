@@ -3,11 +3,11 @@ import type { UpgradeWebSocket, WSContext, WSEvents } from 'hono/ws'
 import { type Container, getMethodInjections } from '../../di'
 import {
   type Guard,
+  GuardExecutionService,
   getControllerGuards,
   getMethodGuards,
-  GuardExecutionService,
 } from '../../guards'
-import type { OpenAPIHono } from '../../i18n/validation'
+import type { OpenAPIHono, ZodType } from '../../i18n/validation'
 import { createRoute, z } from '../../i18n/validation'
 import { type LoggerService } from '../../logger'
 import type { Constructor } from '../../types'
@@ -25,6 +25,7 @@ import {
   ControllerMethodNotFoundError,
   ControllerRegistrationError,
   OpenAPIRouteRegistrationError,
+  ResponseValidationError,
 } from '../errors'
 import { RouterContext } from '../router-context'
 import { commonErrorSchemas } from '../schemas/common.schemas'
@@ -36,6 +37,7 @@ import type {
   RouteBodyObject,
   RouteConfig,
   RouteMetadata,
+  RouteResponseObject,
   RouterEnv,
   SecuritySchemeRecord,
   VersioningOptions,
@@ -424,7 +426,11 @@ export class RouteRegistrationService {
         })
       }
 
-      const handler = this.createControllerHandler(ControllerClass, methodName)
+      const responseSchema = httpMethod !== 'all'
+        ? this.extractResponseSchema(routeConfig)
+        : null
+
+      const handler = this.createControllerHandler(ControllerClass, methodName, responseSchema)
 
       // @All routes can't use OpenAPI — register directly with guards
       if (httpMethod === 'all') {
@@ -777,7 +783,8 @@ export class RouteRegistrationService {
    */
   private createControllerHandler(
     ControllerClass: new (...args: unknown[]) => IController,
-    methodName: string
+    methodName: string,
+    responseSchema: ZodType | null = null,
   ): (c: Context<RouterEnv>) => Promise<Response> {
     const handler = async (c: Context<RouterEnv>) => {
       const ctx = new RouterContext(c)
@@ -787,7 +794,13 @@ export class RouteRegistrationService {
       const method = controller[methodName as keyof IController]
       if (typeof method === 'function') {
         const injectedArgs = this.resolveMethodInjections(ControllerClass.prototype as object, methodName, requestContainer)
-        return await (method as (...args: unknown[]) => Promise<Response>).apply(controller, [ctx, ...injectedArgs])
+        const response = await (method as (...args: unknown[]) => Promise<Response>).apply(controller, [ctx, ...injectedArgs])
+
+        if (responseSchema) {
+          return this.validateResponse(response, responseSchema)
+        }
+
+        return response
       }
 
       throw new ControllerMethodNotFoundError(methodName, ControllerClass.name)
@@ -795,5 +808,65 @@ export class RouteRegistrationService {
 
     this.nameHandler(handler, ControllerClass.name, methodName)
     return handler
+  }
+
+  /**
+   * Extract the Zod schema from a RouteResponse definition.
+   * Returns null for non-JSON content types or when no response is defined.
+   */
+  private extractResponseSchema(routeConfig: RouteConfig): ZodType | null {
+    const responseDef = routeConfig.response
+    if (!responseDef) return null
+
+    if (this.isRouteResponseObject(responseDef)) {
+      const contentType = responseDef.contentType ?? DEFAULT_CONTENT_TYPE
+      if (!contentType.includes('application/json')) return null
+      return responseDef.schema
+    }
+
+    return responseDef
+  }
+
+  /**
+   * Check if a response definition is a RouteResponseObject (has schema key) vs bare ZodType
+   */
+  private isRouteResponseObject(response: RouteConfig['response']): response is RouteResponseObject {
+    return typeof response === 'object' && 'schema' in response
+  }
+
+  /**
+   * Validate a Response body against its declared Zod schema.
+   *
+   * Skips validation for:
+   * - Non-JSON content types
+   * - Empty bodies (204 No Content, 304 Not Modified)
+   *
+   * Clones the response to read the body without consuming the original stream.
+   */
+  private async validateResponse(response: Response, schema: ZodType): Promise<Response> {
+    const contentType = response.headers.get('content-type')
+    if (!contentType || !contentType.includes('application/json')) {
+      return response
+    }
+
+    if (response.status === 204 || response.status === 304) {
+      return response
+    }
+
+    const cloned = response.clone()
+
+    let body: unknown
+    try {
+      body = await cloned.json()
+    } catch {
+      return response
+    }
+
+    const result = schema.safeParse(body)
+    if (!result.success) {
+      throw new ResponseValidationError(result.error)
+    }
+
+    return response
   }
 }
