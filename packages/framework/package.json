@@ -81,7 +81,7 @@
     "stratal": "^0.0.17"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.13.4",
+    "@cloudflare/vitest-pool-workers": "^0.13.5",
     "@cloudflare/workers-types": "4.20260317.1",
     "@stratal/testing": "workspace:^",
     "@types/node": "^25.5.0",
@@ -94,9 +94,9 @@
     "pg": "^8.20.0",
     "reflect-metadata": "^0.2.2",
     "stratal": "workspace:*",
-    "tsdown": "^0.21.5",
+    "tsdown": "^0.21.6",
     "typescript": "^6.0.2",
     "vitest": "~4.1.2",
-    "wrangler": "^4.77.0"
+    "wrangler": "^4.78.0"
   }
 }

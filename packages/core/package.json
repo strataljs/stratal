@@ -211,10 +211,10 @@
     }
   },
   "devDependencies": {
-    "@aws-sdk/client-s3": "3.1017.0",
-    "@aws-sdk/lib-storage": "^3.1017.0",
-    "@aws-sdk/s3-request-presigner": "3.1017.0",
-    "@cloudflare/vitest-pool-workers": "^0.13.4",
+    "@aws-sdk/client-s3": "3.1019.0",
+    "@aws-sdk/lib-storage": "^3.1019.0",
+    "@aws-sdk/s3-request-presigner": "3.1019.0",
+    "@cloudflare/vitest-pool-workers": "^0.13.5",
     "@cloudflare/workers-types": "4.20260317.1",
     "@react-email/components": "^1.0.10",
     "@stratal/testing": "workspace:*",
@@ -231,7 +231,7 @@
     "react-dom": "^19.2.4",
     "reflect-metadata": "^0.2.2",
     "resend": "^6.9.4",
-    "tsdown": "^0.21.5",
+    "tsdown": "^0.21.6",
     "typescript": "^6.0.2",
     "vitest": "~4.1.2"
   }

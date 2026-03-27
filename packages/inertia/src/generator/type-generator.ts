@@ -168,7 +168,7 @@ function unwrapWrapperType(type: Type, tsObj: TsObj): string {
     }
   }
 
-  return typeToString(type, tsObj)
+  return widenLiteralType(type, tsObj)
 }
 
 function unwrapPromise(type: Type, tsObj: TsObj): string {

@@ -63,8 +63,8 @@
     "jiti": "^2.6.1",
     "lint-staged": "^16.4.0",
     "oxlint": "^1.57.0",
-    "oxlint-tsgolint": "^0.17.4",
-    "tsdown": "^0.21.5",
+    "oxlint-tsgolint": "^0.18.0",
+    "tsdown": "^0.21.6",
     "typedoc": "^0.28.18",
     "typescript": "^6.0.2"
   }
