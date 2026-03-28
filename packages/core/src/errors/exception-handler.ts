@@ -295,10 +295,22 @@ export abstract class ExceptionHandler {
       return error
     }
 
-    return new InternalError({
-      originalError: error instanceof Error ? error.message : String(error),
+    const originalMessage = error instanceof Error ? error.message : String(error)
+    const internalError = new InternalError({
+      originalError: originalMessage,
       stack: error instanceof Error ? error.stack : undefined,
     })
+
+    // In development, preserve the original error message and stack
+    // so the dev error overlay shows what actually went wrong
+    if (this.environment === 'development') {
+      internalError.message = originalMessage
+      if (error instanceof Error && error.stack) {
+        internalError.stack = error.stack
+      }
+    }
+
+    return internalError
   }
 
   /**
