@@ -3,10 +3,13 @@ import { MiddlewareConfigurationService } from '../middleware-configuration.serv
 import { createMock } from '@stratal/testing/mocks'
 import type { LoggerService } from '../../logger/services/logger.service'
 
+import type { RouteInfo } from '../types'
+
 interface MiddlewareConfigurationServicePrivate {
   matchesPath(requestPath: string, pattern: string): boolean
   matchesRoute(requestPath: string, requestMethod: string, route: { path: string; method?: string }): boolean
   isExcluded(requestPath: string, requestMethod: string, excludes: { path: string; method?: string }[]): boolean
+  resolveRoutePatterns(targets: unknown[], controllers: unknown[]): RouteInfo[]
 }
 
 describe('MiddlewareConfigurationService', () => {
@@ -17,6 +20,40 @@ describe('MiddlewareConfigurationService', () => {
   const matchesPath = (requestPath: string, pattern: string): boolean => {
     return (service as unknown as MiddlewareConfigurationServicePrivate).matchesPath(requestPath, pattern)
   }
+
+  describe('resolveRoutePatterns()', () => {
+    const resolveRoutePatterns = (targets: unknown[], controllers: unknown[] = []): RouteInfo[] => {
+      return (service as unknown as MiddlewareConfigurationServicePrivate).resolveRoutePatterns(targets, controllers)
+    }
+
+    it('should resolve string path to RouteInfo', () => {
+      const result = resolveRoutePatterns(['/api/users'])
+      expect(result).toEqual([{ path: '/api/users' }])
+    })
+
+    it('should resolve multiple string paths', () => {
+      const result = resolveRoutePatterns(['/api/users', '/api/posts'])
+      expect(result).toEqual([{ path: '/api/users' }, { path: '/api/posts' }])
+    })
+
+    it('should resolve global wildcard string', () => {
+      const result = resolveRoutePatterns(['*'])
+      expect(result).toEqual([{ path: '*' }])
+    })
+
+    it('should resolve RouteInfo objects as-is', () => {
+      const result = resolveRoutePatterns([{ path: '/api', method: 'get' }])
+      expect(result).toEqual([{ path: '/api', method: 'get' }])
+    })
+
+    it('should resolve mixed string paths and RouteInfo objects', () => {
+      const result = resolveRoutePatterns(['/api/health', { path: '/api/users', method: 'post' }])
+      expect(result).toEqual([
+        { path: '/api/health' },
+        { path: '/api/users', method: 'post' },
+      ])
+    })
+  })
 
   describe('matchesPath()', () => {
     it('should return true for exact match', () => {

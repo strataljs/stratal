@@ -66,7 +66,10 @@ class MiddlewareBuilderImpl implements IMiddlewareBuilder {
    * // Apply to specific controllers
    * consumer.apply(CorsMiddleware).forRoutes(ApiController, WebhooksController)
    *
-   * // Apply to specific paths
+   * // Apply to specific string paths
+   * consumer.apply(RateLimitMiddleware).forRoutes('/api/v1/auth', '/api/v1/users')
+   *
+   * // Apply to specific paths with method filtering
    * consumer.apply(RateLimitMiddleware).forRoutes(
    *   { path: '/api/v1/auth', method: 'post' }
    * )
@@ -104,7 +107,12 @@ class MiddlewareBuilderImpl implements IMiddlewareBuilder {
  *       .apply(CorsMiddleware)
  *       .forRoutes(ApiController, WebhooksController)
  *
- *     // Rate limiting for auth endpoints
+ *     // Rate limiting for specific string paths
+ *     consumer
+ *       .apply(RateLimitMiddleware)
+ *       .forRoutes('/api/v1/auth', '/api/v1/users')
+ *
+ *     // Rate limiting with method filtering
  *     consumer
  *       .apply(RateLimitMiddleware)
  *       .forRoutes({ path: '/api/v1/auth/*', method: 'post' })

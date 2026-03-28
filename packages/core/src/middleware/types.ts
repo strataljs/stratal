@@ -31,9 +31,10 @@ export interface MiddlewareConfigEntry {
  * Valid targets for middleware routes
  * - Controller class: Apply to all routes in that controller
  * - RouteInfo: Apply to specific path/method combination
+ * - string path: Apply to a specific path (e.g., '/api/users', '/api/*')
  * - '*': Apply to all routes (global middleware)
  */
-export type MiddlewareRouteTarget = Constructor<IController> | RouteInfo | '*'
+export type MiddlewareRouteTarget = Constructor<IController> | RouteInfo | '*' | string & {}
 
 /**
  * Interface for modules that configure middleware
@@ -54,6 +55,10 @@ export type MiddlewareRouteTarget = Constructor<IController> | RouteInfo | '*'
  *     consumer
  *       .apply(CorsMiddleware)
  *       .forRoutes(ApiController, WebhooksController)
+ *
+ *     consumer
+ *       .apply(RateLimitMiddleware)
+ *       .forRoutes('/api/v1/auth', '/api/v1/users')
  *   }
  * }
  * ```

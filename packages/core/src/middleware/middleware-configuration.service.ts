@@ -1,6 +1,6 @@
 import type { Context } from 'hono'
-import type { OpenAPIHono } from '../i18n/validation'
 import type { Container } from '../di'
+import type { OpenAPIHono } from '../i18n/validation'
 import type { LoggerService } from '../logger'
 import type { IController } from '../router/controller'
 import { getControllerRoute } from '../router/decorators/controller.decorator'
@@ -8,7 +8,7 @@ import type { Middleware } from '../router/middleware.interface'
 import { RouterContext } from '../router/router-context'
 import type { HttpMethod, RouterEnv, VersioningOptions } from '../router/types'
 import type { Constructor } from '../types'
-import type { MiddlewareConfigEntry, RouteInfo } from './types'
+import type { MiddlewareConfigEntry, MiddlewareRouteTarget, RouteInfo } from './types'
 
 /**
  * Service for applying middleware configurations to Hono app
@@ -72,15 +72,15 @@ export class MiddlewareConfigurationService {
    * Resolve route targets into concrete route patterns
    */
   private resolveRoutePatterns(
-    targets: (Constructor<IController> | RouteInfo | '*')[],
+    targets: MiddlewareRouteTarget[],
     _controllers: Constructor<IController>[]
   ): RouteInfo[] {
     const patterns: RouteInfo[] = []
 
     for (const target of targets) {
-      if (target === '*') {
-        // Global middleware - apply to all routes
-        patterns.push({ path: '*' })
+      if (typeof target === 'string') {
+        // String path — '*' for global or a specific path pattern
+        patterns.push({ path: target })
       } else if (typeof target === 'function') {
         // Controller class - get its route from metadata
         const route = getControllerRoute(target)

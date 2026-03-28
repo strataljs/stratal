@@ -94,6 +94,33 @@ describe('MiddlewareConsumer', () => {
       expect(entries[0].routes).toEqual([Controller1, Controller2])
     })
 
+    it('should store string path targets', () => {
+      consumer
+        .apply(AuthMiddleware as Constructor<Middleware>)
+        .forRoutes('/api/users', '/api/posts')
+
+      const entries = consumer.getEntries()
+      expect(entries).toHaveLength(1)
+      expect(entries[0].routes).toEqual(['/api/users', '/api/posts'])
+    })
+
+    it('should store mixed string paths, controllers, and route info targets', () => {
+      consumer
+        .apply(AuthMiddleware as Constructor<Middleware>)
+        .forRoutes(
+          '/api/health',
+          Controller1 as Constructor<IController>,
+          { path: '/api/v1', method: 'post' },
+        )
+
+      const entries = consumer.getEntries()
+      expect(entries[0].routes).toEqual([
+        '/api/health',
+        Controller1,
+        { path: '/api/v1', method: 'post' },
+      ])
+    })
+
     it('should store route info objects', () => {
       consumer
         .apply(AuthMiddleware as Constructor<Middleware>)
