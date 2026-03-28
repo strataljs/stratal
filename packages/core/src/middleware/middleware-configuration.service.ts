@@ -6,7 +6,7 @@ import { HTTP_METHODS } from '../router/constants'
 import type { IController } from '../router/controller'
 import { getControllerRoute } from '../router/decorators/controller.decorator'
 import { getRouteDecoratedMethods, getRouteMetadata } from '../router/decorators/route.decorator'
-import type { Middleware } from '../router/middleware.interface'
+import type { Middleware, Next } from '../router/middleware.interface'
 import { RouterContext } from '../router/router-context'
 import type { HttpMethod, RouterEnv, VersioningOptions } from '../router/types'
 import type { Constructor } from '../types'
@@ -175,45 +175,20 @@ export class MiddlewareConfigurationService {
     // Create the middleware handler
     const handler = this.createMiddlewareHandler(middlewares, excludes, container)
 
-    // Register with Hono
+    // Register with Hono — always as middleware (app.use), never as route handlers
+    // (app.get/post/etc.), so parametric paths like /:tenantId don't "claim" routes
+    // and prevent Hono's notFound handler from firing on unmatched requests.
     if (methods && methods.length > 0) {
-      // Method-specific registration
-      for (const method of methods) {
-        this.registerForMethod(app, method, path, handler)
-      }
+      const methodSet = new Set(methods.map(m => m.toUpperCase()))
+      app.use(path, async (c: Context, next: Next) => {
+        if (!methodSet.has(c.req.method)) {
+          await next()
+          return
+        }
+        return handler(c, next)
+      })
     } else {
-      // All methods
       app.use(path, handler)
-    }
-  }
-
-  /**
-   * Register handler for a specific HTTP method
-   */
-  private registerForMethod(
-    app: OpenAPIHono<RouterEnv>,
-    method: HttpMethod,
-    path: string,
-    handler: (c: Context<RouterEnv>, next: () => Promise<void>) => Promise<Response | void>
-  ): void {
-    switch (method) {
-      case 'get':
-        app.get(path, handler)
-        break
-      case 'post':
-        app.post(path, handler)
-        break
-      case 'put':
-        app.put(path, handler)
-        break
-      case 'delete':
-        app.delete(path, handler)
-        break
-      case 'patch':
-        app.patch(path, handler)
-        break
-      default:
-        app.use(path, handler)
     }
   }
 
