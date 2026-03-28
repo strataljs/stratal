@@ -10,6 +10,7 @@ import {
 import type { OpenAPIHono, ZodType } from '../../i18n/validation'
 import { createRoute, z } from '../../i18n/validation'
 import { type LoggerService } from '../../logger'
+import type { Middleware } from '../middleware.interface'
 import type { Constructor } from '../../types'
 import { getWsOnCloseMethod, getWsOnErrorMethod, getWsOnMessageMethod, isGateway } from '../../websocket/decorators'
 import { GatewayContext } from '../../websocket/gateway-context'
@@ -27,7 +28,11 @@ import {
   OpenAPIRouteRegistrationError,
   ResponseValidationError,
 } from '../errors'
+import { createDomainMiddleware } from '../middleware/domain.middleware'
+import { RouteRegistry } from '../route-registry'
 import { RouterContext } from '../router-context'
+import type { ResolvedRouterConfig } from '../router-resolver'
+import type { RouterResolver } from '../router-resolver'
 import { commonErrorSchemas } from '../schemas/common.schemas'
 import type {
   ControllerOptions,
@@ -42,6 +47,7 @@ import type {
   SecuritySchemeRecord,
   VersioningOptions,
 } from '../types'
+import { generateConventionRouteName } from '../utils/route-name'
 
 const invokeHandler = (instance: Record<string, (...args: unknown[]) => unknown>, method: string, ...args: unknown[]): Promise<unknown> => {
   try {
@@ -71,6 +77,8 @@ export class RouteRegistrationService {
 
   constructor(
     private logger: LoggerService,
+    private registry: RouteRegistry,
+    private routerResolver: RouterResolver | null = null,
     private versioningOptions: VersioningOptions | null = null,
     localePathConfig: LocalePathConfig | null = null,
   ) {
@@ -120,13 +128,13 @@ export class RouteRegistrationService {
 
   /**
    * Unified entry point for registering a controller or gateway.
-   * Resolves route, versioning, and guards, then delegates to the appropriate handler.
+   * Resolves Router config, versioning, locale paths, and guards, then delegates.
    */
   private registerEntry(app: OpenAPIHono<RouterEnv>, ControllerClass: Constructor<IController>): void {
     const isWsGateway = isGateway(ControllerClass)
-    const route = getControllerRoute(ControllerClass)
+    const controllerRoute = getControllerRoute(ControllerClass)
 
-    if (!route) {
+    if (!controllerRoute) {
       throw new ControllerRegistrationError(
         ControllerClass.name,
         isWsGateway
@@ -137,12 +145,45 @@ export class RouteRegistrationService {
 
     const controllerOpts = getControllerOptions(ControllerClass)
     const controllerGuards = getControllerGuards(ControllerClass)?.guards ?? []
-    const resolvedPaths = this.resolveVersionedPaths(route, controllerOpts)
+
+    // Resolve Router config for this controller (prefix, domain, name, middleware, version, hideFromDocs)
+    const routerConfig = this.routerResolver?.resolveForController(ControllerClass as Constructor) ?? { middleware: [] }
+
+    // Apply Router prefix to controller base path
+    const basePath = routerConfig.prefix
+      ? this.joinPaths(routerConfig.prefix, controllerRoute)
+      : controllerRoute
+
+    // Version resolution: controller version > Router version > app-level versioning
+    const effectiveVersion = controllerOpts?.version ?? routerConfig.version
+    const effectiveControllerOpts: ControllerOptions | undefined = effectiveVersion !== controllerOpts?.version
+      ? { ...controllerOpts, version: effectiveVersion }
+      : controllerOpts
+
+    const resolvedPaths = this.resolveVersionedPaths(basePath, effectiveControllerOpts)
+
+    // Apply Router scoped middleware as Hono middleware for this controller's paths
+    if (routerConfig.middleware.length > 0) {
+      const primaryPath = resolvedPaths[0]?.path
+      if (primaryPath) {
+        this.applyScopedMiddleware(app, primaryPath, routerConfig.middleware)
+      }
+    }
+
+    // Apply domain middleware if controller or router has a domain pattern
+    const effectiveDomain = controllerOpts?.domain ?? routerConfig.domain
+    if (effectiveDomain) {
+      const domainHandler = createDomainMiddleware(effectiveDomain)
+      for (const { path: fullPath } of resolvedPaths) {
+        app.use(fullPath, domainHandler)
+        app.use(`${fullPath}/*`, domainHandler)
+      }
+    }
 
     // WebSocket gateway — register as GET with upgradeWebSocket
     if (isWsGateway) {
       for (const { path: fullPath } of resolvedPaths) {
-        this.registerGatewayForPath(app, ControllerClass, fullPath, controllerGuards)
+        this.registerGatewayForPath(app, ControllerClass, fullPath, controllerGuards, routerConfig)
       }
       return
     }
@@ -159,7 +200,6 @@ export class RouteRegistrationService {
       }
       return
     }
-
 
     // Standard HTTP routes — validate decorated methods
     const decoratedMethods = getRouteDecoratedMethods(ControllerClass)
@@ -181,9 +221,42 @@ export class RouteRegistrationService {
       )
     }
 
+    // Collect locale paths for registry (locale-prefixed variants)
+    const localePaths = resolvedPaths.filter(p => p.hasLocaleParam).map(p => p.path)
+
     for (const { path: fullPath, hideFromDocs: forceHide, hasLocaleParam } of resolvedPaths) {
-      this.registerRoutes(app, ControllerClass, fullPath, decoratedMethods, controllerOpts, forceHide, hasLocaleParam)
+      this.registerRoutes(
+        app, ControllerClass, fullPath, decoratedMethods, controllerOpts,
+        forceHide, hasLocaleParam, routerConfig, basePath,
+        hasLocaleParam ? undefined : localePaths,
+      )
     }
+  }
+
+  /**
+   * Apply Router-scoped middleware as Hono middleware for a specific path.
+   * Middleware classes are resolved from the request-scoped container per request.
+   */
+  private applyScopedMiddleware(
+    app: OpenAPIHono<RouterEnv>,
+    basePath: string,
+    middlewareClasses: Constructor<Middleware>[]
+  ): void {
+    const handler = async (c: Context<RouterEnv>, next: () => Promise<void>) => {
+      const requestContainer = c.get('requestContainer')
+      const ctx = new RouterContext(c)
+
+      let current = next
+      for (let i = middlewareClasses.length - 1; i >= 0; i--) {
+        const prevNext = current
+        const middleware = requestContainer.resolve<Middleware>(middlewareClasses[i])
+        current = async () => { await middleware.handle(ctx, prevNext) }
+      }
+
+      await current()
+    }
+
+    app.use(`${basePath}/*`, handler as MiddlewareHandler<RouterEnv>)
   }
 
   /**
@@ -193,8 +266,20 @@ export class RouteRegistrationService {
     app: OpenAPIHono<RouterEnv>,
     GatewayClass: Constructor<IController>,
     fullPath: string,
-    guards: Guard[]
+    guards: Guard[],
+    routerConfig?: ResolvedRouterConfig
   ): void {
+    // Register gateway in RouteRegistry
+    const domain = getControllerOptions(GatewayClass)?.domain ?? routerConfig?.domain
+    this.registry.register(RouteRegistry.createRoute({
+      method: 'ws',
+      path: fullPath,
+      domain,
+      controller: GatewayClass.name,
+      action: 'ws',
+      hidden: routerConfig?.hideFromDocs ?? false,
+      middleware: routerConfig?.middleware.map(m => m.name) ?? [],
+    }))
     // Cache WS metadata once at registration time (not per-connection)
     const onMsgMethod = getWsOnMessageMethod(GatewayClass)
     const onCloseMethod = getWsOnCloseMethod(GatewayClass)
@@ -384,11 +469,21 @@ export class RouteRegistrationService {
     controllerOpts: ControllerOptions | undefined,
     forceHideFromDocs = false,
     hasLocaleParam = false,
+    routerConfig?: ResolvedRouterConfig,
+    originalBasePath?: string,
+    localePaths?: string[],
   ): void {
     const className = ControllerClass.name
     const prototype = ControllerClass.prototype as IController
+    const routerHidden = routerConfig?.hideFromDocs
     const controllerHidden = forceHideFromDocs || (controllerOpts?.hideFromDocs ?? false)
     const controllerGuards = getControllerGuards(ControllerClass)?.guards ?? []
+
+    // Resolve effective domain: controller > router
+    const effectiveDomain = controllerOpts?.domain ?? routerConfig?.domain
+
+    // Resolve effective name prefix: controller name overrides router name entirely
+    const effectiveNamePrefix = controllerOpts?.name ?? routerConfig?.name
 
     // Pre-resolve all methods and sort by path specificity (static before dynamic)
     // This ensures /notes/create registers before /notes/:id regardless of declaration order
@@ -413,7 +508,37 @@ export class RouteRegistrationService {
 
     for (const { methodName, meta, resolved } of resolvedMethods) {
       const { httpMethod, fullPath, routeConfig, statusCodeOverride } = resolved
-      const hideFromDocs = routeConfig.hideFromDocs ?? controllerHidden
+      const hideFromDocs = routeConfig.hideFromDocs ?? (routerHidden ?? controllerHidden)
+
+      // Compute route name: explicit name > auto-generated (convention only)
+      // Only register named routes for primary paths (not locale variants)
+      let routeName: string | undefined
+      if (!hasLocaleParam) {
+        if (routeConfig.name) {
+          // Explicit name on decorator — apply prefix
+          routeName = effectiveNamePrefix ? `${effectiveNamePrefix}${routeConfig.name}` : routeConfig.name
+        } else if (meta.type === 'convention') {
+          // Auto-generate for convention routes
+          const autoName = generateConventionRouteName(originalBasePath ?? basePath, methodName)
+          routeName = effectiveNamePrefix ? `${effectiveNamePrefix}${autoName}` : autoName
+        }
+        // Explicit decorators (@Get/@Post) without name stay unnamed
+      }
+
+      // Register in RouteRegistry (all routes, primary paths only for naming)
+      if (!hasLocaleParam) {
+        this.registry.register(RouteRegistry.createRoute({
+          name: routeName,
+          method: httpMethod,
+          path: fullPath,
+          localePaths: localePaths?.length ? localePaths : undefined,
+          domain: effectiveDomain,
+          controller: className,
+          action: methodName,
+          hidden: hideFromDocs,
+          middleware: routerConfig?.middleware.map(m => m.name) ?? [],
+        }))
+      }
 
       // Collect guards (controller + method)
       const methodGuards = getMethodGuards(prototype, methodName)?.guards ?? []

@@ -27,6 +27,22 @@ export {
 // Router tokens
 export { ROUTER_TOKENS } from './router.tokens'
 
+// Route Registry (source of truth for all routes)
+export { RouteRegistry, type RegisteredRoute } from './route-registry'
+
+// Route Map (augmentable interface for type-safe URL generation)
+export type { StratalRouteMap, RouteName, RouteParams } from './route-map'
+
+// Route URL generation
+export { route } from './route-url'
+
+// Router (replaces MiddlewareConfigurable — route + middleware configuration)
+export { Router, type RouteConfigurable, type RouterGroupConfig } from './router'
+
+// Path & name utilities
+export { toOpenAPIPath, getPathSpecificityScore, sortRoutesBySpecificity } from './utils/path'
+export { extractParamNames, extractDomainParamNames, generateConventionRouteName } from './utils/route-name'
+
 // Decorators
 export {
   Controller, getControllerOptions, getControllerRoute, getControllerVersion
@@ -37,7 +53,16 @@ export { getRouteDecoratedMethods, getRouteMetadata, Route } from './decorators/
 // Schemas
 export * from './schemas'
 
+// Domain middleware
+export { createDomainMiddleware, parseDomainPattern } from './middleware/domain.middleware'
+
+// Signed URLs
+export { signUrl, verifySignedUrl, type SignedUrlOptions } from './signed-url'
+export { VerifySignatureMiddleware } from './middleware/verify-signature.middleware'
+
 // Errors
 export {
   ControllerRegistrationError, HonoAppAlreadyConfiguredError, OpenAPIRouteRegistrationError, OpenAPIValidationError, ResponseValidationError, RouteNotFoundError, SchemaValidationError
 } from './errors'
+export { DomainMismatchError } from './errors/domain-mismatch.error'
+export { InvalidSignatureError } from './errors/invalid-signature.error'

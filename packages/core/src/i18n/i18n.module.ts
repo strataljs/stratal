@@ -30,7 +30,8 @@
  */
 
 import { Scope } from '../di'
-import type { MiddlewareConfigurable, MiddlewareConsumer } from '../middleware/types'
+import type { RouteConfigurable } from '../router/router'
+import type { Router } from '../router/router'
 import { Module } from '../module'
 import type { DynamicModule } from '../module/types'
 import type { I18nModuleOptions } from './i18n.options'
@@ -58,7 +59,7 @@ z.config({ customError: backendErrorMap })
     { provide: I18N_TOKENS.I18nService, useClass: I18nService },
   ],
 })
-export class I18nModule implements MiddlewareConfigurable {
+export class I18nModule implements RouteConfigurable {
   /**
    * Configure I18n locale settings
    *
@@ -107,9 +108,7 @@ export class I18nModule implements MiddlewareConfigurable {
     }
   }
 
-  configure(consumer: MiddlewareConsumer): void {
-    consumer
-      .apply(I18nContextMiddleware)
-      .forRoutes('*')
+  configureRoutes(router: Router): void {
+    router.use(I18nContextMiddleware)
   }
 }

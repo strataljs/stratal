@@ -166,7 +166,7 @@ describe('WebSocket Support', () => {
         if (key === 'requestContainer') return { resolve: vi.fn() }
         if (key === 'locale') return 'en'
         return undefined
-      }),
+      }) as Context<RouterEnv>['get'],
       req: {
         header: vi.fn().mockReturnValue('Bearer token'),
         param: vi.fn((key?: string) => {

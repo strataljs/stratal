@@ -6,6 +6,10 @@ import type { StreamingApi } from 'hono/utils/stream'
 import type { Container } from '../di/container'
 import { RequestContainerNotInitializedError } from '../errors'
 import { ROUTER_CONTEXT_KEYS } from './constants'
+import type { RouteName, RouteParams } from './route-map'
+import type { RouteRegistry } from './route-registry'
+import { ROUTER_TOKENS } from './router.tokens'
+import { signUrl, verifySignedUrl, type SignedUrlOptions } from './signed-url'
 import type { RouterEnv } from './types'
 
 export type ContextQueryResult<R extends Record<string, unknown> | undefined, K extends string | undefined> = K extends string ? string : R extends undefined ? Record<string, unknown> : R
@@ -154,6 +158,71 @@ export class RouterContext<T extends RouterEnv = RouterEnv> {
    */
   html(html: string, status?: ContentfulStatusCode): Response {
     return this.c.html(html, status)
+  }
+
+  /**
+   * Generate a URL from a named route.
+   *
+   * Keys matching `:param` placeholders fill the path.
+   * Domain params are consumed from the same object.
+   * Extra keys become query string parameters.
+   *
+   * @param name - Named route identifier
+   * @param params - Route params + domain params + extra query params
+   *
+   * @example
+   * ```typescript
+   * ctx.route('users.show', { id: '1' })           // '/v1/users/1'
+   * ctx.route('users.show', { id: '1', q: 'test' }) // '/v1/users/1?q=test'
+   * ```
+   */
+  route<N extends RouteName>(name: N, params?: RouteParams<N>): string {
+    const registry = this.getContainer().resolve<RouteRegistry>(ROUTER_TOKENS.RouteRegistry)
+    return registry.url(name, params)
+  }
+
+  /**
+   * Get a domain parameter value from the current request.
+   * Domain params are set by the domain matching middleware.
+   *
+   * @param key - Domain parameter name (e.g., 'tenant' from '{tenant}.myapp.com')
+   *
+   * @example
+   * ```typescript
+   * const tenant = ctx.domain('tenant')
+   * ```
+   */
+  domain(key: string): string {
+    return this.c.get(`domain:${key}`) as string
+  }
+
+  /**
+   * Generate a signed URL from a named route.
+   *
+   * @param name - Named route identifier
+   * @param params - Route params (same as route())
+   * @param options - Signing options (e.g., expiresIn)
+   * @returns Signed URL string with signature query param
+   */
+  async signedUrl<N extends RouteName>(name: N, params?: RouteParams<N>, options?: SignedUrlOptions): Promise<string> {
+    const registry = this.getContainer().resolve<RouteRegistry>(ROUTER_TOKENS.RouteRegistry)
+    const url = registry.url(name, params)
+    const secret = (this.c.env as unknown as Record<string, string>).APP_SECRET
+    if (!secret) {
+      throw new Error('APP_SECRET environment variable is required for signed URLs')
+    }
+    return signUrl(url, secret, options)
+  }
+
+  /**
+   * Check if the current request has a valid signature.
+   *
+   * @returns true if the URL signature is valid and not expired
+   */
+  async hasValidSignature(): Promise<boolean> {
+    const secret = (this.c.env as unknown as Record<string, string>).APP_SECRET
+    if (!secret) return false
+    return verifySignedUrl(this.c.req.url, secret)
   }
 
   /**

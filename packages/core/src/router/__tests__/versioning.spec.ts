@@ -1,8 +1,8 @@
 import { createMock } from '@stratal/testing/mocks'
 import { describe, expect, it } from 'vitest'
 import type { LoggerService } from '../../logger/services/logger.service'
-import { MiddlewareConfigurationService } from '../../middleware/middleware-configuration.service'
 import { VERSION_NEUTRAL } from '../constants'
+import { RouteRegistry } from '../route-registry'
 import { RouteRegistrationService } from '../services/route-registration.service'
 import type { ControllerOptions, LocalePathConfig, VersioningOptions } from '../types'
 
@@ -12,17 +12,13 @@ interface RouteRegistrationServicePrivate {
   resolveVersionedPaths(basePath: string, controllerOpts?: ControllerOptions): { path: string; hideFromDocs: boolean; hasLocaleParam: boolean }[]
 }
 
-interface MiddlewareConfigServicePrivate {
-  resolveVersionedRouteInfo(routeInfo: { path: string; method?: string; version?: string | string[] }): { path: string; method?: string }[]
-}
-
 /** Extract just paths from the resolved result */
 const paths = (result: { path: string; hideFromDocs: boolean; hasLocaleParam: boolean }[]) => result.map(r => r.path)
 
 describe('Versioning', () => {
   describe('RouteRegistrationService.resolveVersionedPaths()', () => {
     const createService = (versioning: VersioningOptions | null = null, localePathConfig: LocalePathConfig | null = null) => {
-      const service = new RouteRegistrationService(mockLogger as unknown as LoggerService, versioning, localePathConfig)
+      const service = new RouteRegistrationService(mockLogger as unknown as LoggerService, new RouteRegistry(), null, versioning, localePathConfig)
       return service as unknown as RouteRegistrationServicePrivate
     }
 
@@ -185,60 +181,4 @@ describe('Versioning', () => {
     })
   })
 
-  describe('MiddlewareConfigurationService.resolveVersionedRouteInfo()', () => {
-    const createService = (versioning: VersioningOptions | null = null) => {
-      const service = new MiddlewareConfigurationService(mockLogger as unknown as LoggerService, versioning)
-      return service as unknown as MiddlewareConfigServicePrivate
-    }
-
-    it('should return RouteInfo as-is when versioning disabled', () => {
-      const service = createService(null)
-      const result = service.resolveVersionedRouteInfo({ path: '/users', version: '1' })
-      expect(result).toEqual([{ path: '/users', version: '1' }])
-    })
-
-    it('should return RouteInfo as-is when no version specified', () => {
-      const service = createService({})
-      const result = service.resolveVersionedRouteInfo({ path: '/users' })
-      expect(result).toEqual([{ path: '/users' }])
-    })
-
-    it('should resolve version to versioned paths', () => {
-      const service = createService({})
-      const result = service.resolveVersionedRouteInfo({ path: '/users', version: '1' })
-      expect(result).toEqual([
-        { path: '/v1/users', method: undefined },
-        { path: '/v1/users/*', method: undefined },
-      ])
-    })
-
-    it('should resolve multiple versions', () => {
-      const service = createService({})
-      const result = service.resolveVersionedRouteInfo({ path: '/users', version: ['1', '2'] })
-      expect(result).toEqual([
-        { path: '/v1/users', method: undefined },
-        { path: '/v1/users/*', method: undefined },
-        { path: '/v2/users', method: undefined },
-        { path: '/v2/users/*', method: undefined },
-      ])
-    })
-
-    it('should preserve HTTP method in resolved routes', () => {
-      const service = createService({})
-      const result = service.resolveVersionedRouteInfo({ path: '/users', version: '1', method: 'get' })
-      expect(result).toEqual([
-        { path: '/v1/users', method: 'get' },
-        { path: '/v1/users/*', method: 'get' },
-      ])
-    })
-
-    it('should use custom prefix', () => {
-      const service = createService({ prefix: 'api/v' })
-      const result = service.resolveVersionedRouteInfo({ path: '/users', version: '1' })
-      expect(result).toEqual([
-        { path: '/api/v1/users', method: undefined },
-        { path: '/api/v1/users/*', method: undefined },
-      ])
-    })
-  })
 })

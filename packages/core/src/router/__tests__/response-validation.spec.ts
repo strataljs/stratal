@@ -5,6 +5,7 @@ import type { ZodType } from '../../i18n/validation'
 import type { LoggerService } from '../../logger/services/logger.service'
 import { ERROR_CODES } from '../../errors/error-codes'
 import { ResponseValidationError } from '../errors/response-validation.error'
+import { RouteRegistry } from '../route-registry'
 import { RouteRegistrationService } from '../services/route-registration.service'
 import type { RouteConfig } from '../types'
 
@@ -16,7 +17,7 @@ interface RouteRegistrationServicePrivate {
 }
 
 const createService = () => {
-  const service = new RouteRegistrationService(mockLogger as unknown as LoggerService, null)
+  const service = new RouteRegistrationService(mockLogger as unknown as LoggerService, new RouteRegistry())
   return service as unknown as RouteRegistrationServicePrivate
 }
 

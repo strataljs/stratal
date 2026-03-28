@@ -1,32 +1,10 @@
 /**
- * Middleware Consumer Module
+ * Middleware Module
  *
- * Provides NestJS-like middleware configuration with fluent API.
- *
- * @example
- * ```typescript
- * import { MiddlewareConfigurable, MiddlewareConsumer } from 'stratal/middleware'
- *
- * @Module({ providers: [...] })
- * export class AppModule implements MiddlewareConfigurable {
- *   configure(consumer: MiddlewareConsumer): void {
- *     consumer
- *       .apply(LoggingMiddleware)
- *       .exclude('/health')
- *       .forRoutes('*')
- *   }
- * }
- * ```
+ * Route information types for versioning and path resolution.
+ * Middleware registration is handled via `RouteConfigurable` and `Router` in `stratal/router`.
  */
 
 export type {
-  MiddlewareConfigEntry,
-  MiddlewareRouteTarget,
-  MiddlewareConfigurable,
-  MiddlewareConsumer,
-  MiddlewareBuilder,
   RouteInfo,
 } from './types'
-
-export { MiddlewareConsumerImpl, createMiddlewareConsumer } from './middleware-consumer'
-export { MiddlewareConfigurationService } from './middleware-configuration.service'

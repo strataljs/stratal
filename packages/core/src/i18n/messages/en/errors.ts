@@ -69,6 +69,12 @@ export const errors = {
   localeNotSupported: "Locale '{locale}' is not supported. Supported locales: {supportedLocales}",
   translationMissing: "Translation missing for key '{key}' in locale '{locale}'",
 
+  // Domain routing errors
+  domainMismatch: 'The requested domain does not match any configured route',
+
+  // Signature errors
+  invalidSignature: 'The URL signature is invalid or has expired',
+
   // Schema validation errors
   schemaValidation: 'Schema validation failed',
   responseValidation: 'Response validation failed',

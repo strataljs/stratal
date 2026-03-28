@@ -144,18 +144,18 @@ describe('ModuleRegistry', () => {
       )
     })
 
-    it('should call configure() for MiddlewareConfigurable modules', async () => {
-      const configure = vi.fn()
+    it('should call configureRoutes() for RouteConfigurable modules', async () => {
+      const configureRoutes = vi.fn()
 
       @Module({ providers: [] })
       class TestModule {
-        configure = configure
+        configureRoutes = configureRoutes
       }
 
       registry.register(TestModule)
       await registry.initialize()
 
-      expect(configure).toHaveBeenCalledWith(expect.any(Object))
+      expect(configureRoutes).toHaveBeenCalledWith(expect.any(Object))
     })
   })
 

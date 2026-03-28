@@ -6,6 +6,7 @@ import type { LoggerService } from '../../logger'
 import type { Constructor } from '../../types'
 import type { IController } from '../controller'
 import { Controller } from '../decorators/controller.decorator'
+import { RouteRegistry } from '../route-registry'
 import { Route } from '../decorators/route.decorator'
 import type { RouterContext } from '../router-context'
 import { RouteRegistrationService } from '../services/route-registration.service'
@@ -84,19 +85,19 @@ class SimpleController {
 
 describe('RouteRegistration - Configure', () => {
   bench('register controller with 5 OpenAPI routes', async () => {
-    const service = new RouteRegistrationService(noopLogger)
+    const service = new RouteRegistrationService(noopLogger, new RouteRegistry())
     const app = new OpenAPIHono<RouterEnv>()
     await service.configure(app, [ItemsController as unknown as Constructor<IController>])
   })
 
   bench('register single-route controller', async () => {
-    const service = new RouteRegistrationService(noopLogger)
+    const service = new RouteRegistrationService(noopLogger, new RouteRegistry())
     const app = new OpenAPIHono<RouterEnv>()
     await service.configure(app, [SimpleController as unknown as Constructor<IController>])
   })
 
   bench('register multiple controllers', async () => {
-    const service = new RouteRegistrationService(noopLogger)
+    const service = new RouteRegistrationService(noopLogger, new RouteRegistry())
     const app = new OpenAPIHono<RouterEnv>()
     await service.configure(app, [
       ItemsController as unknown as Constructor<IController>,

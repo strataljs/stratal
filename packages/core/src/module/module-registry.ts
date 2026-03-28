@@ -13,11 +13,7 @@ import type { Container } from '../di/container'
 import { Scope } from '../di/types'
 import { isListener } from '../events'
 import type { LoggerService } from '../logger'
-import {
-  createMiddlewareConsumer,
-  type MiddlewareConfigEntry,
-  type MiddlewareConfigurable,
-} from '../middleware'
+import { Router, type RouteConfigurable } from '../router/router'
 import { isCommand } from '../quarry/is-command'
 import { isSeeder } from '../seeder/is-seeder'
 import type { Constructor } from '../types'
@@ -65,7 +61,7 @@ export class ModuleRegistry {
   private allListeners: Constructor[] = []
   private allCommands: Constructor[] = []
   private allSeeders: Constructor[] = []
-  private allMiddlewareConfigs: MiddlewareConfigEntry[] = []
+  private allRouterConfigs: { router: Router; controllers: Constructor[] }[] = []
 
   constructor(
     private readonly container: Container,
@@ -159,14 +155,15 @@ export class ModuleRegistry {
       const instance = new registered.moduleClass()
       registered.instance = instance
 
-      // Call configure() for middleware configuration if implemented
-      if (this.hasMiddlewareConfigurable(instance)) {
-        this.logger.debug(`Configuring middleware for: ${registered.moduleClass.name}`)
-        const consumer = createMiddlewareConsumer()
-        instance.configure(consumer)
-        const entries = consumer.getEntries()
-        this.allMiddlewareConfigs.push(...entries)
-        this.logger.debug(`Collected ${entries.length} middleware config(s) from ${registered.moduleClass.name}`)
+      // Call configureRoutes() for route + middleware configuration if implemented
+      if (this.hasRouteConfigurable(instance)) {
+        this.logger.debug(`Configuring routes for: ${registered.moduleClass.name}`)
+        const router = new Router()
+        instance.configureRoutes(router)
+        // Collect controllers belonging to this module for Router scoping
+        const moduleControllers = registered.options.controllers ?? []
+        this.allRouterConfigs.push({ router, controllers: moduleControllers })
+        this.logger.debug(`Collected route config from ${registered.moduleClass.name} (${moduleControllers.length} controllers)`)
       }
 
       // Call onInitialize if implemented
@@ -223,10 +220,10 @@ export class ModuleRegistry {
   }
 
   /**
-   * Get all middleware configurations from all modules
+   * Get all Router configurations from modules implementing RouteConfigurable
    */
-  getAllMiddlewareConfigs(): MiddlewareConfigEntry[] {
-    return this.allMiddlewareConfigs
+  getAllRouterConfigs(): { router: Router; controllers: Constructor[] }[] {
+    return this.allRouterConfigs
   }
 
   /**
@@ -272,14 +269,14 @@ export class ModuleRegistry {
   }
 
   /**
-   * Type guard for MiddlewareConfigurable
+   * Type guard for RouteConfigurable
    */
-  private hasMiddlewareConfigurable(instance: unknown): instance is MiddlewareConfigurable {
+  private hasRouteConfigurable(instance: unknown): instance is RouteConfigurable {
     return (
       typeof instance === 'object' &&
       instance !== null &&
-      'configure' in instance &&
-      typeof (instance as MiddlewareConfigurable).configure === 'function'
+      'configureRoutes' in instance &&
+      typeof (instance as RouteConfigurable).configureRoutes === 'function'
     )
   }
 

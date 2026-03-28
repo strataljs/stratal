@@ -1,27 +1,43 @@
 import { inject } from 'tsyringe'
-import type { Application } from '../../application'
-import { DI_TOKENS } from '../../di/tokens'
+import type { RouteRegistry, RegisteredRoute } from '../../router/route-registry'
+import { ROUTER_TOKENS } from '../../router/router.tokens'
 import { Command } from '../command'
 
+/**
+ * List all registered routes from RouteRegistry.
+ *
+ * By default, hidden routes (hideFromDocs) are excluded.
+ * Use `--hidden` to include them.
+ *
+ * @example
+ * ```bash
+ * quarry route:list
+ * quarry route:list --method=GET
+ * quarry route:list --path=/users
+ * quarry route:list --name=users
+ * quarry route:list --hidden
+ * ```
+ */
 export class RouteListCommand extends Command {
-  static command = 'route:list {--method= : Filter by HTTP method} {--path= : Filter by path substring}'
+  static command = 'route:list {--method= : Filter by HTTP method} {--path= : Filter by path substring} {--name= : Filter by route name} {--hidden : Include hidden routes}'
   static description = 'List all registered routes'
 
-  constructor(@inject(DI_TOKENS.Application) private app: Application) {
+  constructor(@inject(ROUTER_TOKENS.RouteRegistry) private registry: RouteRegistry) {
     super()
   }
 
   handle(): number | undefined {
     const methodFilter = this.string('method').toUpperCase()
     const pathFilter = this.string('path')
+    const nameFilter = this.string('name')
+    const showHidden = this.boolean('hidden')
 
-    // Deduplicate by method+path — last handler wins (middleware/guards come before the actual handler)
-    const deduped = new Map<string, { method: string; path: string; name: string }>()
-    for (const r of this.app.hono.routes) {
-      deduped.set(`${r.method}:${r.path}`, { method: r.method, path: r.path, name: r.handler.name })
+    let routes = this.registry.all()
+
+    // Filter hidden routes (default: exclude)
+    if (!showHidden) {
+      routes = routes.filter(r => !r.hidden)
     }
-
-    let routes = [...deduped.values()].filter(r => r.name)
 
     if (methodFilter) {
       routes = routes.filter(r => r.method.toUpperCase() === methodFilter)
@@ -31,20 +47,30 @@ export class RouteListCommand extends Command {
       routes = routes.filter(r => r.path.includes(pathFilter))
     }
 
+    if (nameFilter) {
+      routes = routes.filter(r => r.name?.includes(nameFilter))
+    }
+
     if (routes.length === 0) {
       this.info('No routes found')
       return 0
     }
 
     this.table(
-      ['Method', 'Path', 'Action', 'Type'],
-      routes.map(r => {
-        const isWs = r.name.startsWith('ws:')
-        const action = r.name.replace(/^(http|ws):/, '')
-        return [r.method.toUpperCase(), r.path, action || r.name, isWs ? 'WS' : 'HTTP']
-      }),
+      ['Method', 'Path', 'Name', 'Handler', 'Domain'],
+      routes.map(r => this.formatRow(r)),
     )
 
     return undefined
+  }
+
+  private formatRow(route: RegisteredRoute): string[] {
+    return [
+      route.method.toUpperCase(),
+      route.path,
+      route.name ?? '-',
+      `${route.controller}.${route.action}`,
+      route.domain ?? '-',
+    ]
   }
 }

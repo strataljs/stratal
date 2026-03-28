@@ -1,10 +1,9 @@
 import { Scope } from 'stratal/di'
 import { ApplicationError, type ApplicationErrorConstructor, type ExceptionHandler, type HttpExceptionContext } from 'stratal/errors'
 import { I18N_TOKENS, type II18nService } from 'stratal/i18n'
-import type { MiddlewareConfigurable, MiddlewareConsumer } from 'stratal/middleware'
 import type { AsyncModuleOptions, DynamicModule, OnException, OnInitialize } from 'stratal/module'
 import { Module } from 'stratal/module'
-import { SchemaValidationError } from 'stratal/router'
+import { SchemaValidationError, type RouteConfigurable, type Router } from 'stratal/router'
 import { augmentRouterContext } from './augment/router-context'
 import { InertiaBuildCommand } from './commands/inertia-build.command'
 import { InertiaDevCommand } from './commands/inertia-dev.command'
@@ -30,7 +29,7 @@ import { TemplateService } from './services/template.service'
     InertiaBuildCommand,
   ],
 })
-export class InertiaModule implements MiddlewareConfigurable, OnInitialize, OnException {
+export class InertiaModule implements RouteConfigurable, OnInitialize, OnException {
   static forRoot(options: InertiaModuleOptions): DynamicModule {
     return {
       module: InertiaModule,
@@ -53,8 +52,8 @@ export class InertiaModule implements MiddlewareConfigurable, OnInitialize, OnEx
     }
   }
 
-  configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(InertiaMiddleware).forRoutes('*')
+  configureRoutes(router: Router): void {
+    router.use(InertiaMiddleware)
   }
 
   onException(handler: ExceptionHandler): void {

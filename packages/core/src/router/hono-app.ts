@@ -8,10 +8,6 @@ import type { I18nModuleOptions } from '../i18n/i18n.options'
 import { buildDetectorOptions } from '../i18n/i18n.options'
 import { OpenAPIHono } from '../i18n/validation'
 import type { LoggerService } from '../logger'
-import {
-  MiddlewareConfigurationService,
-  type MiddlewareConfigEntry,
-} from '../middleware'
 import { OPENAPI_TOKENS, type OpenAPIService } from '../openapi'
 import type { Constructor } from '../types'
 import { ROUTER_CONTEXT_KEYS } from './constants'
@@ -21,7 +17,10 @@ import { HonoAppAlreadyConfiguredError } from './errors/hono-app-already-configu
 import { SchemaValidationError } from './errors/schema-validation.error'
 import { createLoggerMiddleware } from './middleware'
 import type { Middleware } from './middleware.interface'
+import { type RouteRegistry } from './route-registry'
 import { RouterContext } from './router-context'
+import type { RouterResolver } from './router-resolver'
+import { ROUTER_TOKENS } from './router.tokens'
 import { RouteRegistrationService } from './services/route-registration.service'
 import type { LocalePathConfig, RouterEnv, VersioningOptions } from './types'
 
@@ -128,27 +127,35 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
   }
 
   /**
-   * Configure module middleware, OpenAPI endpoints, controller routes, and 404 handler.
+   * Configure global middleware, OpenAPI endpoints, controller routes, and 404 handler.
    * Called once by Application.initialize().
    */
   async configure(
-    middlewareConfigs: MiddlewareConfigEntry[],
     controllers: Constructor<IController>[],
+    routeRegistry: RouteRegistry,
+    routerResolver: RouterResolver | null,
+    globalMiddleware: Constructor<Middleware>[],
     versioningOptions?: VersioningOptions | null,
   ): Promise<void> {
     if (this.configured) throw new HonoAppAlreadyConfiguredError()
 
-    // Module middleware
-    const middlewareConfigService = new MiddlewareConfigurationService(this._logger, versioningOptions ?? null)
-    middlewareConfigService.applyMiddlewares(this, middlewareConfigs, controllers, this._container)
+    // Global middleware from Router.use() (applies to ALL routes)
+    if (globalMiddleware.length > 0) {
+      this.applyMiddlewareClasses('*', globalMiddleware)
+    }
 
     // OpenAPI endpoints
     const openAPIService = this._container.resolve<OpenAPIService>(OPENAPI_TOKENS.OpenAPIService)
     openAPIService.setupEndpoints(this, this._container)
 
     // Controller routes
-    const routeRegistrationService = new RouteRegistrationService(this._logger, versioningOptions ?? null, this._localePathConfig)
+    const routeRegistrationService = new RouteRegistrationService(
+      this._logger, routeRegistry, routerResolver, versioningOptions ?? null, this._localePathConfig
+    )
     await routeRegistrationService.configure(this, controllers)
+
+    // Store registry in container for route() helper and route:list command
+    this._container.registerValue(ROUTER_TOKENS.RouteRegistry, routeRegistry)
 
     // 404 handler (must be last)
     this.notFound((c) => { throw new RouteNotFoundError(c.req.path, c.req.method) })

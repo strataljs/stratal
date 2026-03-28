@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { LoggerService } from '../../logger/services/logger.service'
 import { Controller, getControllerRoute } from '../decorators/controller.decorator'
 import { Get } from '../decorators/http-method.decorator'
+import { RouteRegistry } from '../route-registry'
 import { RouteRegistrationService } from '../services/route-registration.service'
 
 // --- Test controllers ---
@@ -45,7 +46,7 @@ interface RouteRegistrationServicePrivate {
 
 describe('Route specificity sorting', () => {
   const mockLogger = createMock<LoggerService>()
-  const service = new RouteRegistrationService(mockLogger as unknown as LoggerService, null)
+  const service = new RouteRegistrationService(mockLogger as unknown as LoggerService, new RouteRegistry())
 
   const getScore = (path: string): number => {
     return (service as unknown as RouteRegistrationServicePrivate).getPathSpecificityScore(path)

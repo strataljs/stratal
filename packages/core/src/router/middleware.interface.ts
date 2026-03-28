@@ -7,7 +7,7 @@ export type Next = HonoNext;
  * Middleware interface for request processing
  *
  * Middlewares use the `@Transient()` decorator and are registered via
- * the `configure(consumer)` method in modules implementing `MiddlewareConfigurable`.
+ * `configureRoutes(router)` in modules implementing `RouteConfigurable`.
  *
  * @example
  * ```typescript
@@ -21,10 +21,10 @@ export type Next = HonoNext;
  * }
  *
  * // Register in module:
- * @Module({ providers: [...] })
- * export class AppModule implements MiddlewareConfigurable {
- *   configure(consumer: MiddlewareConsumer): void {
- *     consumer.apply(LoggingMiddleware).forRoutes('*')
+ * @Module({ providers: [LoggingMiddleware] })
+ * export class AppModule implements RouteConfigurable {
+ *   configureRoutes(router: Router): void {
+ *     router.middleware(LoggingMiddleware)
  *   }
  * }
  * ```

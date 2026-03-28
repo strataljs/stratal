@@ -23,6 +23,8 @@ export interface RouterVariables {
    * Used by packages like `@stratal/inertia` for precognition support.
    */
   validationSuccessResponse?: Response
+  /** Domain parameters set by the domain matching middleware (e.g., `domain:tenant`) */
+  [key: `domain:${string}`]: string
 }
 
 /**
@@ -149,6 +151,16 @@ export interface RouteConfig {
    * For @Route() decorator, status code is auto-derived from method name
    */
   statusCode?: number
+
+  /**
+   * Explicit route name for URL generation.
+   * Used with the `route()` helper and type generation.
+   * For convention-based @Route(), names are auto-generated if not provided.
+   * For explicit @Get/@Post/etc., names must be provided manually.
+   *
+   * @example 'users.show', 'health.check'
+   */
+  name?: string
 }
 
 /**
@@ -209,6 +221,24 @@ export interface ControllerOptions {
    * Can be a single version string, array of versions, or VERSION_NEUTRAL symbol.
    */
   version?: string | string[] | typeof VERSION_NEUTRAL
+
+  /**
+   * Route name prefix for this controller.
+   * Prepended to all route names in this controller.
+   * Overrides the Router-level name prefix entirely.
+   *
+   * @example 'admin.' — routes become 'admin.users.index', 'admin.users.show'
+   */
+  name?: string
+
+  /**
+   * Domain pattern for this controller.
+   * Overrides the Router-level domain.
+   * Use `{param}` for dynamic subdomain segments.
+   *
+   * @example '{tenant}.myapp.com', 'admin.myapp.com'
+   */
+  domain?: string
 }
 
 /**

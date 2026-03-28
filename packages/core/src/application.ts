@@ -28,6 +28,7 @@ import { McpServeCommand } from './quarry/commands/mcp-serve.command'
 import { McpToolsCommand } from './quarry/commands/mcp-tools.command'
 import { QueueListCommand } from './quarry/commands/queue-list.command'
 import { RouteListCommand } from './quarry/commands/route-list.command'
+import { RouteTypesCommand } from './quarry/commands/route-types.command'
 import { ScheduleListCommand } from './quarry/commands/schedule-list.command'
 import { QuarryRegistry } from './quarry/quarry-registry'
 import type { CommandInput, CommandResult } from './quarry/types'
@@ -37,6 +38,8 @@ import { type QueueManager } from './queue/queue-manager'
 import { QueueModule } from './queue/queue.module'
 import { type IController, type RouterContext } from './router'
 import { HonoApp } from './router/hono-app'
+import { RouteRegistry } from './router/route-registry'
+import { RouterResolver } from './router/router-resolver'
 import type { VersioningOptions } from './router/types'
 import { DbSeedCommand, DbSeedListCommand, SEEDER_TOKENS, SeederRegistry, type Seeder } from './seeder'
 import type { Constructor } from './types'
@@ -197,9 +200,17 @@ export class Application {
       ? this._container.resolve<I18nModuleOptions>(I18N_TOKENS.Options)
       : undefined
     this.honoApp = new HonoApp(this._container, logger, i18nOptions)
-    const middlewareConfigs = this.moduleRegistry.getAllMiddlewareConfigs()
     const controllers = this.moduleRegistry.getAllControllers() as Constructor<IController>[]
-    await this.honoApp.configure(middlewareConfigs, controllers, this.appConfig.versioning)
+
+    // Build Router pipeline from modules implementing RouteConfigurable
+    const routerConfigs = this.moduleRegistry.getAllRouterConfigs()
+    const routerResolver = routerConfigs.length > 0 ? new RouterResolver(routerConfigs) : null
+    const routeRegistry = new RouteRegistry()
+    const globalMiddleware = routerResolver?.getGlobalMiddleware() ?? []
+
+    await this.honoApp.configure(
+      controllers, routeRegistry, routerResolver, globalMiddleware, this.appConfig.versioning,
+    )
 
     // Phase 6: Configure queues, cron, events, commands, seeders
     this.registerQueueConsumers()
@@ -301,7 +312,7 @@ export class Application {
     const builtinCommands: Constructor<Command>[] = [
       HelpCommand,
       DbSeedCommand, DbSeedListCommand,
-      RouteListCommand, EventListCommand,
+      RouteListCommand, RouteTypesCommand, EventListCommand,
       ScheduleListCommand, QueueListCommand,
       McpServeCommand, McpToolsCommand, ApiCommand,
     ]

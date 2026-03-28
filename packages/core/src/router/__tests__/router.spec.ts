@@ -1,0 +1,170 @@
+import { describe, expect, it } from 'vitest'
+import { Router } from '../router'
+import type { Middleware } from '../middleware.interface'
+import type { Constructor } from '../../types'
+
+// Stub middleware classes
+class AuthMiddleware { handle() { /**/ } }
+class CorsMiddleware { handle() { /**/ } }
+class AdminMiddleware { handle() { /**/ } }
+class AuditMiddleware { handle() { /**/ } }
+
+// Stub controllers
+class UsersController {}
+class PostsController {}
+class AdminController {}
+class HealthController {}
+
+describe('Router', () => {
+  describe('fluent API', () => {
+    it('should set prefix', () => {
+      const router = new Router()
+      const result = router.prefix('/:companyId')
+      expect(result).toBe(router)
+      expect(router.getDefaultEntry().prefix).toBe('/:companyId')
+    })
+
+    it('should set domain', () => {
+      const router = new Router()
+      router.domain('{tenant}.myapp.com')
+      expect(router.getDefaultEntry().domain).toBe('{tenant}.myapp.com')
+    })
+
+    it('should set name prefix', () => {
+      const router = new Router()
+      router.name('api.')
+      expect(router.getDefaultEntry().name).toBe('api.')
+    })
+
+    it('should accumulate middleware', () => {
+      const router = new Router()
+      router.middleware(AuthMiddleware as unknown as Constructor<Middleware>)
+      router.middleware(CorsMiddleware as unknown as Constructor<Middleware>)
+      expect(router.getDefaultEntry().middleware).toHaveLength(2)
+    })
+
+    it('should set version', () => {
+      const router = new Router()
+      router.version('1')
+      expect(router.getDefaultEntry().version).toBe('1')
+    })
+
+    it('should set version array', () => {
+      const router = new Router()
+      router.version(['1', '2'])
+      expect(router.getDefaultEntry().version).toEqual(['1', '2'])
+    })
+
+    it('should set hideFromDocs', () => {
+      const router = new Router()
+      router.hideFromDocs()
+      expect(router.getDefaultEntry().hideFromDocs).toBe(true)
+    })
+
+    it('should set hideFromDocs to false explicitly', () => {
+      const router = new Router()
+      router.hideFromDocs(false)
+      expect(router.getDefaultEntry().hideFromDocs).toBe(false)
+    })
+
+    it('should chain all methods', () => {
+      const router = new Router()
+      const result = router
+        .prefix('/:companyId')
+        .domain('{tenant}.myapp.com')
+        .name('tenant.')
+        .middleware(AuthMiddleware as unknown as Constructor<Middleware>)
+        .version('1')
+        .hideFromDocs()
+
+      expect(result).toBe(router)
+      const entry = router.getDefaultEntry()
+      expect(entry.prefix).toBe('/:companyId')
+      expect(entry.domain).toBe('{tenant}.myapp.com')
+      expect(entry.name).toBe('tenant.')
+      expect(entry.middleware).toHaveLength(1)
+      expect(entry.version).toBe('1')
+      expect(entry.hideFromDocs).toBe(true)
+    })
+  })
+
+  describe('use() — global middleware', () => {
+    it('should register global middleware on root router', () => {
+      const router = new Router()
+      router.use(AuthMiddleware as unknown as Constructor<Middleware>)
+      expect(router.getGlobalMiddleware()).toHaveLength(1)
+    })
+
+    it('should accumulate global middleware', () => {
+      const router = new Router()
+      router.use(AuthMiddleware as unknown as Constructor<Middleware>)
+      router.use(CorsMiddleware as unknown as Constructor<Middleware>)
+      expect(router.getGlobalMiddleware()).toHaveLength(2)
+    })
+
+    it('should throw when called inside group()', () => {
+      const router = new Router()
+      expect(() => {
+        router.group([UsersController as Constructor], (child) => {
+          child.use(AuthMiddleware as unknown as Constructor<Middleware>)
+        })
+      }).toThrow('router.use() can only be called on the root Router')
+    })
+  })
+
+  describe('group() — sub-groups', () => {
+    it('should create a sub-group with controllers', () => {
+      const router = new Router()
+      router.group([AdminController as Constructor], (admin) => {
+        admin.middleware(AdminMiddleware as unknown as Constructor<Middleware>)
+      })
+
+      const groups = router.getGroups()
+      expect(groups).toHaveLength(1)
+      expect(groups[0].controllers).toEqual([AdminController])
+      expect(groups[0].middleware).toHaveLength(1)
+    })
+
+    it('should allow configuration in callback', () => {
+      const router = new Router()
+      router.group([AdminController as Constructor], (admin) => {
+        admin
+          .prefix('/:companyId')
+          .domain('admin.myapp.com')
+          .name('admin.')
+          .middleware(AdminMiddleware as unknown as Constructor<Middleware>, AuditMiddleware as unknown as Constructor<Middleware>)
+          .hideFromDocs()
+      })
+
+      const group = router.getGroups()[0]
+      expect(group.prefix).toBe('/:companyId')
+      expect(group.domain).toBe('admin.myapp.com')
+      expect(group.name).toBe('admin.')
+      expect(group.middleware).toHaveLength(2)
+      expect(group.hideFromDocs).toBe(true)
+    })
+
+    it('should support multiple sub-groups', () => {
+      const router = new Router()
+      router.group([HealthController as Constructor], () => { /**/ })
+      router.group([UsersController as Constructor, PostsController as Constructor], (auth) => {
+        auth.middleware(AuthMiddleware as unknown as Constructor<Middleware>)
+      })
+
+      expect(router.getGroups()).toHaveLength(2)
+      expect(router.getGroups()[0].controllers).toEqual([HealthController])
+      expect(router.getGroups()[1].controllers).toEqual([UsersController, PostsController])
+    })
+
+    it('should not affect the parent default entry', () => {
+      const router = new Router()
+      router.name('parent.')
+      router.group([AdminController as Constructor], (admin) => {
+        admin.name('admin.')
+      })
+
+      expect(router.getDefaultEntry().name).toBe('parent.')
+      expect(router.getGroups()[0].name).toBe('admin.')
+    })
+  })
+})

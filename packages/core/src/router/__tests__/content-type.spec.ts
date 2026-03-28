@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { z, type RouteConfig as OpenAPIRouteConfig } from '../../i18n/validation'
 import type { LoggerService } from '../../logger/services/logger.service'
 import { DEFAULT_CONTENT_TYPE } from '../constants'
+import { RouteRegistry } from '../route-registry'
 import { RouteRegistrationService } from '../services/route-registration.service'
 import type { RouteConfig } from '../types'
 
@@ -21,7 +22,7 @@ interface RouteRegistrationServicePrivate {
 }
 
 const createService = () => {
-  const service = new RouteRegistrationService(mockLogger as unknown as LoggerService, null)
+  const service = new RouteRegistrationService(mockLogger as unknown as LoggerService, new RouteRegistry())
   return service as unknown as RouteRegistrationServicePrivate
 }
 
