@@ -3,9 +3,11 @@ import { injectable } from 'tsyringe'
 import { bench, describe } from 'vitest'
 import { z } from '../../i18n/validation'
 import type { LoggerService } from '../../logger'
+import type { ModuleRegistry } from '../../module/module-registry'
 import type { Constructor } from '../../types'
 import type { IController } from '../controller'
 import { Controller } from '../decorators/controller.decorator'
+import type { HonoApp } from '../hono-app'
 import { RouteRegistry } from '../route-registry'
 import { Route } from '../decorators/route.decorator'
 import type { RouterContext } from '../router-context'
@@ -96,40 +98,53 @@ class SimpleController {
   }
 }
 
+const createMockModuleRegistry = (controllers: Constructor<IController>[]): ModuleRegistry => ({
+  getAllControllers: () => controllers,
+} as unknown as ModuleRegistry)
+
 describe('RouteRegistration - Configure', () => {
   bench('register controller with 5 OpenAPI routes', async () => {
+    const app = new OpenAPIHono<RouterEnv>() as unknown as HonoApp
+    const controllers = [ItemsController as unknown as Constructor<IController>]
     const service = new RouteRegistrationService(
       noopLogger,
       new RouteRegistry(mockVersioningService, mockLocalePathService),
       null,
       mockLocalePathService,
+      app,
+      createMockModuleRegistry(controllers),
     )
-    const app = new OpenAPIHono<RouterEnv>()
-    await service.configure(app, [ItemsController as unknown as Constructor<IController>])
+    await service.configure()
   })
 
   bench('register single-route controller', async () => {
+    const app = new OpenAPIHono<RouterEnv>() as unknown as HonoApp
+    const controllers = [SimpleController as unknown as Constructor<IController>]
     const service = new RouteRegistrationService(
       noopLogger,
       new RouteRegistry(mockVersioningService, mockLocalePathService),
       null,
       mockLocalePathService,
+      app,
+      createMockModuleRegistry(controllers),
     )
-    const app = new OpenAPIHono<RouterEnv>()
-    await service.configure(app, [SimpleController as unknown as Constructor<IController>])
+    await service.configure()
   })
 
   bench('register multiple controllers', async () => {
+    const app = new OpenAPIHono<RouterEnv>() as unknown as HonoApp
+    const controllers = [
+      ItemsController as unknown as Constructor<IController>,
+      SimpleController as unknown as Constructor<IController>,
+    ]
     const service = new RouteRegistrationService(
       noopLogger,
       new RouteRegistry(mockVersioningService, mockLocalePathService),
       null,
       mockLocalePathService,
+      app,
+      createMockModuleRegistry(controllers),
     )
-    const app = new OpenAPIHono<RouterEnv>()
-    await service.configure(app, [
-      ItemsController as unknown as Constructor<IController>,
-      SimpleController as unknown as Constructor<IController>,
-    ])
+    await service.configure()
   })
 })

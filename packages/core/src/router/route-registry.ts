@@ -22,7 +22,7 @@ export interface RegisteredRoute {
   method: HttpMethod | 'ws'
   /** Primary path in Hono-style :param format */
   path: string
-  /** Locale-prefixed path variants (e.g., '/{locale}/users/:id') */
+  /** Locale-prefixed path variants (e.g., '/:locale/users/:id') */
   localePaths?: string[]
   /** Parameter names extracted from path */
   paramNames: string[]
@@ -177,13 +177,16 @@ export class RouteRegistry {
     const consumedKeys = new Set<string>()
     let url = route.path
 
-    // Fill path :param placeholders
+    // Fill path :param placeholders (handles optional regex constraints like :locale{en|de|fr})
     for (const paramName of route.paramNames) {
       const value = allParams[paramName]
       if (value === undefined) {
         throw new MissingRouteParamError(paramName, name, route.path)
       }
-      url = url.replace(`:${paramName}`, encodeURIComponent(value))
+      url = url.replace(
+        new RegExp(`:${paramName}(\\{[^}]*\\})?`),
+        encodeURIComponent(value),
+      )
       consumedKeys.add(paramName)
     }
 

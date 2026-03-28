@@ -1,17 +1,19 @@
-import { inject } from 'tsyringe'
 import type { Context, MiddlewareHandler } from 'hono'
 import type { UpgradeWebSocket, WSContext, WSEvents } from 'hono/ws'
+import { inject } from 'tsyringe'
 import { type Container, getMethodInjections } from '../../di'
 import { Transient } from '../../di/decorators'
+import { DI_TOKENS } from '../../di/tokens'
 import {
   type Guard,
   GuardExecutionService,
   getControllerGuards,
   getMethodGuards,
 } from '../../guards'
-import type { OpenAPIHono, ZodType } from '../../i18n/validation'
+import type { ZodType } from '../../i18n/validation'
 import { createRoute, z } from '../../i18n/validation'
 import { LOGGER_TOKENS, type LoggerService } from '../../logger'
+import type { ModuleRegistry } from '../../module/module-registry'
 import type { Constructor } from '../../types'
 import { getWsOnCloseMethod, getWsOnErrorMethod, getWsOnMessageMethod, isGateway } from '../../websocket/decorators'
 import { GatewayContext } from '../../websocket/gateway-context'
@@ -29,6 +31,7 @@ import {
   OpenAPIRouteRegistrationError,
   ResponseValidationError,
 } from '../errors'
+import type { HonoApp } from '../hono-app'
 import { createDomainMiddleware } from '../middleware/domain.middleware'
 import { createMiddlewareChain } from '../middleware/middleware-chain'
 import { type RouteRegistry } from '../route-registry'
@@ -36,7 +39,6 @@ import { RouterContext } from '../router-context'
 import type { RouterResolver } from '../router-resolver'
 import { ROUTER_TOKENS } from '../router.tokens'
 import { commonErrorSchemas } from '../schemas/common.schemas'
-import type { LocalePathService } from './locale-path.service'
 import type {
   ControllerOptions,
   HttpMethod,
@@ -48,7 +50,9 @@ import type {
   RouterEnv,
   SecuritySchemeRecord,
 } from '../types'
+import { toOpenAPIPath, toRoutingOpenAPIPath } from '../utils/path'
 import { generateConventionRouteName } from '../utils/route-name'
+import type { LocalePathService } from './locale-path.service'
 
 const invokeHandler = (instance: Record<string, (...args: unknown[]) => unknown>, method: string, ...args: unknown[]): Promise<unknown> => {
   try {
@@ -83,21 +87,26 @@ export class RouteRegistrationService {
     @inject(ROUTER_TOKENS.RouteRegistry) private registry: RouteRegistry,
     @inject(ROUTER_TOKENS.RouterResolver) private routerResolver: RouterResolver | null,
     @inject(ROUTER_TOKENS.LocalePathService) private localePathService: LocalePathService,
-  ) {}
+    @inject(ROUTER_TOKENS.HonoApp) private app: HonoApp,
+    @inject(DI_TOKENS.ModuleRegistry) private moduleRegistry: ModuleRegistry,
+  ) { }
 
   /**
-   * Configure router with controllers
-   *
-   * @param app - OpenAPIHono application instance
-   * @param controllers - Array of controller classes from modules
+   * Configure router with controllers and global middleware.
+   * Resolves controllers from ModuleRegistry and global middleware from RouterResolver.
    */
-  async configure(
-    app: OpenAPIHono<RouterEnv>,
-    controllers: Constructor<IController>[]
-  ): Promise<void> {
+  async configure(): Promise<void> {
+    const controllers = this.moduleRegistry.getAllControllers() as Constructor<IController>[]
+    const globalMiddleware = this.routerResolver?.getGlobalMiddleware() ?? []
+
     this.logger.info('Registering controllers', {
       controllerCount: controllers.length,
     })
+
+    // Global middleware from Router.use() (applies to ALL routes)
+    if (globalMiddleware.length > 0) {
+      this.app.use('*', createMiddlewareChain(globalMiddleware))
+    }
 
     // Eagerly load upgradeWebSocket once if any gateway exists
     if (controllers.some(isGateway)) {
@@ -108,7 +117,7 @@ export class RouteRegistrationService {
     // Pass 1: Collect routes into registry + store Hono registration actions
     const actions = new Map<string, () => void>()
     for (const ControllerClass of controllers) {
-      this.collectRoutes(app, ControllerClass, actions)
+      this.collectRoutes(ControllerClass, actions)
     }
 
     // Pass 2: Register in Hono in specificity order from registry
@@ -126,7 +135,6 @@ export class RouteRegistrationService {
    * Versioning and locale expansion are handled by RouteRegistry.register().
    */
   private collectRoutes(
-    app: OpenAPIHono<RouterEnv>,
     ControllerClass: Constructor<IController>,
     actions: Map<string, () => void>,
   ): void {
@@ -177,15 +185,15 @@ export class RouteRegistrationService {
         actions.set(key, () => {
           // Apply scoped middleware
           if (routerConfig.middleware.length > 0) {
-            app.use(`${route.path}/*`, createMiddlewareChain(routerConfig.middleware))
+            this.app.use(`${route.path}/*`, createMiddlewareChain(routerConfig.middleware))
           }
           // Apply domain middleware
           if (effectiveDomain) {
             const domainHandler = createDomainMiddleware(effectiveDomain)
-            app.use(route.path, domainHandler)
-            app.use(`${route.path}/*`, domainHandler)
+            this.app.use(route.path, domainHandler)
+            this.app.use(`${route.path}/*`, domainHandler)
           }
-          this.registerGatewayForPath(app, ControllerClass, route.path, controllerGuards)
+          this.registerGatewayForPath(ControllerClass, route.path, controllerGuards)
         })
       }
       return
@@ -213,9 +221,9 @@ export class RouteRegistrationService {
         const key = `${route.controller}.${route.action}:${route.path}`
         actions.set(key, () => {
           if (routerConfig.middleware.length > 0) {
-            app.use(`${route.path}/*`, createMiddlewareChain(routerConfig.middleware))
+            this.app.use(`${route.path}/*`, createMiddlewareChain(routerConfig.middleware))
           }
-          this.registerWildcardRoute(app, ControllerClass, route.path)
+          this.registerWildcardRoute(ControllerClass, route.path)
         })
       }
       return
@@ -300,15 +308,15 @@ export class RouteRegistrationService {
           if (!scopedMiddlewareApplied && routerConfig.middleware.length > 0) {
             // Use the first primary path for middleware scope
             const primaryRoute = expandedRoutes.find(r => !r.isLocaleVariant) ?? expandedRoutes[0]
-            app.use(`${primaryRoute.path}/*`, createMiddlewareChain(routerConfig.middleware))
+            this.app.use(`${primaryRoute.path}/*`, createMiddlewareChain(routerConfig.middleware))
             scopedMiddlewareApplied = true
           }
 
           // Apply domain middleware
           if (effectiveDomain) {
             const domainHandler = createDomainMiddleware(effectiveDomain)
-            app.use(route.path, domainHandler)
-            app.use(`${route.path}/*`, domainHandler)
+            this.app.use(route.path, domainHandler)
+            this.app.use(`${route.path}/*`, domainHandler)
           }
 
           if (allGuards.length > 0) {
@@ -330,9 +338,9 @@ export class RouteRegistrationService {
             })
 
             if (allGuards.length > 0) {
-              app.all(route.path, this.createGuardMiddleware(allGuards), handler)
+              this.app.all(route.path, this.createGuardMiddleware(allGuards), handler)
             } else {
-              app.all(route.path, handler)
+              this.app.all(route.path, handler)
             }
             return
           }
@@ -345,7 +353,6 @@ export class RouteRegistrationService {
             routeConfig,
             metadata,
             allGuards,
-            route.hidden,
             meta.type === 'convention' ? methodName : undefined,
             statusCodeOverride,
             route.isLocaleVariant ?? false,
@@ -360,7 +367,17 @@ export class RouteRegistrationService {
             hidden: route.hidden,
           })
 
-          app.openapi(openApiRoute, handler)
+          // Register Hono route (hidden from OpenAPI spec — clean paths registered separately)
+          this.app.openapi(openApiRoute, handler)
+
+          // Register clean path in OpenAPI spec (strips regex constraints from params)
+          if (!route.hidden) {
+            const { hide: _, ...specRoute } = openApiRoute
+            this.app.openAPIRegistry.registerPath({
+              ...specRoute,
+              path: toOpenAPIPath(route.path),
+            })
+          }
         })
       }
     }
@@ -371,7 +388,6 @@ export class RouteRegistrationService {
    * Register a single WebSocket gateway route
    */
   private registerGatewayForPath(
-    app: OpenAPIHono<RouterEnv>,
     GatewayClass: Constructor<IController>,
     fullPath: string,
     guards: Guard[],
@@ -439,7 +455,7 @@ export class RouteRegistrationService {
 
     // Type assertion needed because Hono's overloaded .get() signatures
     // don't accept a spread of MiddlewareHandler[] alongside upgradeWebSocket's output type
-    app.get(fullPath, ...(handlers as [MiddlewareHandler<RouterEnv>]))
+    this.app.get(fullPath, ...(handlers as [MiddlewareHandler<RouterEnv>]))
   }
 
 
@@ -471,7 +487,6 @@ export class RouteRegistrationService {
    * Register wildcard route for non-RESTful controllers
    */
   private registerWildcardRoute(
-    app: OpenAPIHono<RouterEnv>,
     ControllerClass: Constructor<IController>,
     route: string
   ): void {
@@ -483,9 +498,9 @@ export class RouteRegistrationService {
 
     const handler = this.createControllerHandler(ControllerClass, 'handle')
     // Match base route exactly
-    app.all(route, handler)
+    this.app.all(route, handler)
     // Match all sub-paths using named regex wildcard
-    app.all(`${route}/:path{.+}`, handler)
+    this.app.all(`${route}/:path{.+}`, handler)
   }
 
 
@@ -599,7 +614,6 @@ export class RouteRegistrationService {
     routeConfig: RouteConfig,
     metadata: { tags: string[]; security: Record<string, string[]>[] },
     guards: Guard[],
-    hideFromDocs: boolean,
     methodName?: string,
     statusCodeOverride?: number,
     hasLocaleParam = false,
@@ -607,14 +621,11 @@ export class RouteRegistrationService {
     try {
       const route: Partial<OpenAPIRouteConfig> & { hide?: boolean } = {
         method,
-        path,
+        path: toRoutingOpenAPIPath(path),
         request: {},
         responses: {},
-      }
-
-      // Hide from OpenAPI docs while keeping validation active
-      if (hideFromDocs) {
-        route.hide = true
+        // Always hide from OpenAPI registry — clean paths are registered separately via registerPath()
+        hide: true,
       }
 
       // Add guard execution middleware using Hono's built-in middleware property

@@ -1,15 +1,18 @@
 import { createMock } from '@stratal/testing/mocks'
+import { OpenAPIHono } from '@hono/zod-openapi'
 import { describe, expect, it } from 'vitest'
 import { z } from '../../i18n/validation'
 import type { ZodType } from '../../i18n/validation'
 import type { LoggerService } from '../../logger/services/logger.service'
+import type { ModuleRegistry } from '../../module/module-registry'
 import { ERROR_CODES } from '../../errors/error-codes'
 import { ResponseValidationError } from '../errors/response-validation.error'
+import type { HonoApp } from '../hono-app'
 import { RouteRegistry } from '../route-registry'
 import { RouteRegistrationService } from '../services/route-registration.service'
 import type { VersioningService } from '../services/versioning.service'
 import type { LocalePathService } from '../services/locale-path.service'
-import type { RouteConfig } from '../types'
+import type { RouteConfig, RouterEnv } from '../types'
 
 const mockLogger = createMock<LoggerService>()
 
@@ -24,6 +27,9 @@ const mockLocalePathService = {
   resolve: (path: string) => [{ path, isLocaleVariant: false }],
 } as unknown as LocalePathService
 
+const mockApp = new OpenAPIHono<RouterEnv>() as unknown as HonoApp
+const mockModuleRegistry = { getAllControllers: () => [] } as unknown as ModuleRegistry
+
 interface RouteRegistrationServicePrivate {
   extractResponseSchema(routeConfig: RouteConfig): ZodType | null
   validateResponse(response: Response, schema: ZodType): Promise<Response>
@@ -35,6 +41,8 @@ const createService = () => {
     new RouteRegistry(mockVersioningService, mockLocalePathService),
     null,
     mockLocalePathService,
+    mockApp,
+    mockModuleRegistry,
   )
   return service as unknown as RouteRegistrationServicePrivate
 }

@@ -31,4 +31,10 @@ export const ROUTER_TOKENS = {
    * Internal resolver that computes effective Router config per controller
    */
   RouterResolver: Symbol.for('stratal:router:router-resolver'),
+
+  /**
+   * Token for HonoApp (singleton)
+   * The Hono application instance with Stratal-specific setup
+   */
+  HonoApp: Symbol.for('stratal:router:hono-app'),
 } as const

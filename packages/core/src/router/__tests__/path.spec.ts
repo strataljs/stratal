@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getPathSpecificityScore, sortRoutesBySpecificity, toOpenAPIPath } from '../utils/path'
+import { getPathSpecificityScore, sortRoutesBySpecificity, toOpenAPIPath, toRoutingOpenAPIPath } from '../utils/path'
 
 describe('Path Utilities', () => {
   describe('toOpenAPIPath', () => {
@@ -24,8 +24,34 @@ describe('Path Utilities', () => {
       expect(toOpenAPIPath('/users/:user_id')).toBe('/users/{user_id}')
     })
 
-    it('should not convert regex wildcards', () => {
-      expect(toOpenAPIPath('/api/:path{.+}')).toBe('/api/{path}{.+}')
+    it('should strip regex constraints from params', () => {
+      expect(toOpenAPIPath('/api/:path{.+}')).toBe('/api/{path}')
+    })
+
+    it('should strip locale regex constraints', () => {
+      expect(toOpenAPIPath('/:locale{en|de|fr}/users')).toBe('/{locale}/users')
+    })
+  })
+
+  describe('toRoutingOpenAPIPath', () => {
+    it('should convert :param to {param}', () => {
+      expect(toRoutingOpenAPIPath('/users/:id')).toBe('/users/{id}')
+    })
+
+    it('should preserve regex constraints', () => {
+      expect(toRoutingOpenAPIPath('/:locale{sw}/users/:id')).toBe('/{locale}{sw}/users/{id}')
+    })
+
+    it('should preserve multi-value constraints', () => {
+      expect(toRoutingOpenAPIPath('/:locale{en|de|fr}/users')).toBe('/{locale}{en|de|fr}/users')
+    })
+
+    it('should handle mixed constrained and unconstrained params', () => {
+      expect(toRoutingOpenAPIPath('/:locale{sw}/:tenantId/users')).toBe('/{locale}{sw}/{tenantId}/users')
+    })
+
+    it('should handle paths without constraints same as toOpenAPIPath', () => {
+      expect(toRoutingOpenAPIPath('/users/:id/posts')).toBe('/users/{id}/posts')
     })
   })
 
@@ -35,26 +61,29 @@ describe('Path Utilities', () => {
       expect(getPathSpecificityScore('/api/v1/health')).toBe(0)
     })
 
+    it('should score root path as 0', () => {
+      expect(getPathSpecificityScore('/')).toBe(0)
+    })
+
     it('should score :param segments as 10 each', () => {
       expect(getPathSpecificityScore('/users/:id')).toBe(10)
       expect(getPathSpecificityScore('/:companyId/users/:id')).toBe(20)
-    })
-
-    it('should score OpenAPI {param} segments as 10 each', () => {
-      expect(getPathSpecificityScore('/{locale}/users')).toBe(1000)
     })
 
     it('should score wildcards as 100', () => {
       expect(getPathSpecificityScore('/api/:path{.+}')).toBe(100)
     })
 
-    it('should add 1000 for locale-prefixed paths', () => {
-      expect(getPathSpecificityScore('/{locale}/users')).toBe(1000)
-      expect(getPathSpecificityScore('/{locale}/users/:id')).toBe(1010)
+    it('should score constrained params as 5', () => {
+      expect(getPathSpecificityScore('/:locale{en|de|fr}/users')).toBe(5)
+      expect(getPathSpecificityScore('/:locale{en|de|fr}/users/:id')).toBe(15)
     })
 
-    it('should not add locale penalty for non-first-segment {param}', () => {
-      expect(getPathSpecificityScore('/users/{locale}')).toBe(10)
+    it('should score constrained params lower than unconstrained params', () => {
+      // Constrained locale route should register before unconstrained tenantId route
+      expect(getPathSpecificityScore('/:locale{sw}')).toBeLessThan(
+        getPathSpecificityScore('/:tenantId'),
+      )
     })
   })
 
@@ -81,12 +110,12 @@ describe('Path Utilities', () => {
 
     it('should sort primary paths before locale variants', () => {
       const routes = [
-        { path: '/{locale}/users/:id' },
+        { path: '/:locale{en|fr}/users/:id' },
         { path: '/users/:id' },
       ]
       const sorted = sortRoutesBySpecificity(routes)
       expect(sorted[0].path).toBe('/users/:id')
-      expect(sorted[1].path).toBe('/{locale}/users/:id')
+      expect(sorted[1].path).toBe('/:locale{en|fr}/users/:id')
     })
 
     it('should use segment count as tie-breaker (more segments first)', () => {
@@ -101,17 +130,17 @@ describe('Path Utilities', () => {
 
     it('should handle complex mixed routes', () => {
       const routes = [
-        { path: '/{locale}/:companyId/settings' },
+        { path: '/:locale{en|fr}/:companyId/settings' },
         { path: '/:companyId/settings' },
         { path: '/health' },
-        { path: '/{locale}/health' },
+        { path: '/:locale{en|fr}/health' },
       ]
       const sorted = sortRoutesBySpecificity(routes)
       expect(sorted.map(r => r.path)).toEqual([
         '/health',
+        '/:locale{en|fr}/health',
         '/:companyId/settings',
-        '/{locale}/health',
-        '/{locale}/:companyId/settings',
+        '/:locale{en|fr}/:companyId/settings',
       ])
     })
 

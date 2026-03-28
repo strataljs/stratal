@@ -7,39 +7,56 @@
 
 /**
  * Convert Hono-style `:param` path segments to OpenAPI-style `{param}`.
+ * Strips regex constraints (e.g., `:locale{sw}` → `{locale}`).
  *
  * @example
  * toOpenAPIPath('/users/:id')                    // '/users/{id}'
  * toOpenAPIPath('/:companyId/users/:userId')     // '/{companyId}/users/{userId}'
  * toOpenAPIPath('/users/:id/posts')              // '/users/{id}/posts'
+ * toOpenAPIPath('/:locale{en|fr}/users')         // '/{locale}/users'
  */
 export function toOpenAPIPath(path: string): string {
-  return path.replace(/:([a-zA-Z_][a-zA-Z0-9_]*)/g, '{$1}')
+  return path.replace(/:([a-zA-Z_][a-zA-Z0-9_]*)(\{[^}]*\})?/g, '{$1}')
+}
+
+/**
+ * Convert Hono-style `:param` path segments to OpenAPI-style `{param}`,
+ * preserving regex constraints.
+ *
+ * Used for Hono route registration via `app.openapi()`. The non-greedy
+ * regex in `@hono/zod-openapi` (`\/{(.+?)}/g`) converts `{param}` back
+ * to `:param` while leaving the constraint suffix intact.
+ *
+ * @example
+ * toRoutingOpenAPIPath('/:locale{sw}/users/:id')  // '/{locale}{sw}/users/{id}'
+ * toRoutingOpenAPIPath('/users/:id')               // '/users/{id}'
+ */
+export function toRoutingOpenAPIPath(path: string): string {
+  return path.replace(
+    /:([a-zA-Z_][a-zA-Z0-9_]*)(\{[^}]*\})?/g,
+    (_, name: string, constraint?: string) => constraint ? `{${name}}${constraint}` : `{${name}}`,
+  )
 }
 
 /**
  * Compute a specificity score for route ordering.
  * Lower score = higher priority (registered first in Hono).
  *
- * Scoring: static segment = 0, `:param` = 10, wildcard `{.+}` / `{.*}` = 100.
- * Locale prefix `/{locale}` adds 1000 so primary paths always come first.
+ * Scoring: static = 0, `:param{constraint}` = 5, `:param` = 10, wildcard `{.+}` / `{.*}` = 100.
+ * Constrained params (e.g., `:locale{en|fr}`) are more specific than unconstrained
+ * params and register first, ensuring they match before catch-all dynamic segments.
  */
 export function getPathSpecificityScore(path: string): number {
   const segments = path.split('/').filter(Boolean)
   let score = 0
 
-  // Locale-prefixed paths always register after their primary counterpart
-  if (segments[0] === '{locale}') {
-    score += 1000
-  }
-
-  for (let i = 0; i < segments.length; i++) {
-    const segment = segments[i]
-    // First-segment {locale} is the locale prefix — already scored above
-    if (i === 0 && segment === '{locale}') continue
+  for (const segment of segments) {
     if (segment.includes('{.+}') || segment.includes('{.*}')) {
       score += 100
-    } else if (segment.startsWith(':') || (segment.startsWith('{') && segment.endsWith('}'))) {
+    } else if (segment.startsWith(':') && segment.includes('{')) {
+      // Constrained param (e.g., :locale{en|fr}) — more specific than unconstrained
+      score += 5
+    } else if (segment.startsWith(':')) {
       score += 10
     }
     // static segments add 0

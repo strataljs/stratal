@@ -1,25 +1,22 @@
 import type { Context, MiddlewareHandler } from 'hono'
-import { languageDetector } from 'hono/language'
+import { inject } from 'tsyringe'
 import type { Container } from '../di/container'
-import { DI_TOKENS } from '../di/tokens'
+import { runWithContainer } from '../di/container-storage'
+import { Transient } from '../di/decorators'
+import { CONTAINER_TOKEN, DI_TOKENS } from '../di/tokens'
 import { createHttpExceptionContext } from '../errors/exception-context'
 import type { ExceptionHandler } from '../errors/exception-handler'
-import type { I18nModuleOptions } from '../i18n/i18n.options'
-import { buildDetectorOptions } from '../i18n/i18n.options'
 import { OpenAPIHono } from '../i18n/validation'
-import type { LoggerService } from '../logger'
+import { LOGGER_TOKENS, type LoggerService } from '../logger'
 import { OPENAPI_TOKENS, type OpenAPIService } from '../openapi'
 import type { Constructor } from '../types'
 import { ROUTER_CONTEXT_KEYS } from './constants'
-import type { IController } from './controller'
 import { RouteNotFoundError } from './errors'
 import { HonoAppAlreadyConfiguredError } from './errors/hono-app-already-configured.error'
 import { SchemaValidationError } from './errors/schema-validation.error'
 import { createLoggerMiddleware, createMiddlewareChain } from './middleware'
 import type { Middleware } from './middleware.interface'
 import { RouterContext } from './router-context'
-import { ROUTER_TOKENS } from './router.tokens'
-import type { LocalePathService } from './services/locale-path.service'
 import { RouteRegistrationService } from './services/route-registration.service'
 import type { RouterEnv } from './types'
 
@@ -32,12 +29,12 @@ const isMiddlewareClass = (arg: unknown): arg is Constructor<Middleware> =>
  * HonoApp — extends OpenAPIHono with Stratal-specific setup
  *
  * - Request scope middleware (child container per request)
- * - Language detection via Hono's languageDetector middleware
  * - Global middleware (CORS, logging, error handling)
  * - defaultHook for validation errors
  * - `use()` overload for Stratal middleware classes
- * - `configure()` for module middleware, OpenAPI, routes, and 404
+ * - `configure()` for OpenAPI, routes, and 404
  */
+@Transient()
 export class HonoApp extends OpenAPIHono<RouterEnv> {
   private configured = false
   private readonly _container: Container
@@ -51,9 +48,8 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
   private nativeUse!: typeof this.use
 
   constructor(
-    container: Container,
-    logger: LoggerService,
-    i18nOptions?: I18nModuleOptions,
+    @inject(CONTAINER_TOKEN) container: Container,
+    @inject(LOGGER_TOKENS.LoggerService) logger: LoggerService,
   ) {
     super({
       defaultHook: (result, c) => {
@@ -67,13 +63,6 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
 
     this._container = container
     this._logger = logger
-
-    // Resolve LocalePathService from container (registered as singleton in Application)
-    const localePathService = container.resolve<LocalePathService>(ROUTER_TOKENS.LocalePathService)
-
-    // Determine detection state from i18n options
-    const detection = i18nOptions?.detection
-    const detectionEnabled = detection ? detection.enabled !== false : true
 
     // Capture Hono's original `use` (set by super() as an instance property)
     this.nativeUse = this.use
@@ -95,40 +84,32 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
 
     // Internal setup — uses nativeUse to bypass the override
     this.setupRequestScope()
-    if (detectionEnabled) {
-      this.setupLanguageDetection(i18nOptions)
-    }
-    // Redirect requests to the prefixed default locale (e.g., /en/users → /users)
-    // when prefixDefaultLocale is 'redirect'
-    const localeConfig = localePathService.localePathConfig
-    if (localeConfig?.defaultLocale && localePathService.prefixDefaultLocale === 'redirect') {
-      this.setupDefaultLocaleRedirect(localeConfig.defaultLocale)
-    }
-    this.setupGlobalMiddleware()
+    this.applyGlobalMiddleware()
   }
 
   /**
-   * Configure global middleware, OpenAPI endpoints, controller routes, and 404 handler.
+   * Apply global middleware (logger + error handler).
+   * Called by Application after locale middleware is applied by LocalePathService.
+   */
+  private applyGlobalMiddleware(): void {
+    this.nativeUse('*', createLoggerMiddleware(this._logger) as MiddlewareHandler<RouterEnv>)
+    this.onError((err, c) => this.handleException(c, err))
+  }
+
+  /**
+   * Configure OpenAPI endpoints, controller routes, and 404 handler.
    * Called once by Application.initialize().
    */
-  async configure(
-    controllers: Constructor<IController>[],
-    globalMiddleware: Constructor<Middleware>[],
-  ): Promise<void> {
+  async configure(): Promise<void> {
     if (this.configured) throw new HonoAppAlreadyConfiguredError()
-
-    // Global middleware from Router.use() (applies to ALL routes)
-    if (globalMiddleware.length > 0) {
-      this.nativeUse('*', createMiddlewareChain(globalMiddleware))
-    }
 
     // OpenAPI endpoints
     const openAPIService = this._container.resolve<OpenAPIService>(OPENAPI_TOKENS.OpenAPIService)
     openAPIService.setupEndpoints(this, this._container)
 
-    // Controller routes — resolve RouteRegistrationService from container
+    // Controller routes + global middleware
     const routeRegistrationService = this._container.resolve<RouteRegistrationService>(RouteRegistrationService)
-    await routeRegistrationService.configure(this, controllers)
+    await routeRegistrationService.configure()
 
     // 404 handler (must be last)
     this.notFound((c) => { throw new RouteNotFoundError(c.req.path, c.req.method) })
@@ -142,51 +123,8 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
       const requestContainer = this._container.createRequestScope(routerContext)
       c.set(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER, requestContainer)
 
-      await next()
+      await runWithContainer(requestContainer, next)
     })
-  }
-
-  /**
-   * Apply Hono's languageDetector middleware and bridge the detected language
-   * to Stratal's LOCALE context variable.
-   */
-  private setupLanguageDetection(i18nOptions?: I18nModuleOptions): void {
-    const detectorOptions = buildDetectorOptions(i18nOptions)
-
-    // Apply Hono's languageDetector
-    this.nativeUse('*', languageDetector(detectorOptions) as MiddlewareHandler<RouterEnv>)
-
-    // Bridge: sync Hono's 'language' variable to Stratal's LOCALE context key
-    this.nativeUse('*', async (c: Context<RouterEnv>, next: () => Promise<void>) => {
-      const language = (c as unknown as { get(key: 'language'): string | undefined }).get('language')
-      if (language) {
-        c.set(ROUTER_CONTEXT_KEYS.LOCALE, language)
-      }
-      await next()
-    })
-  }
-
-  /**
-   * Redirect requests that include the default locale prefix to the unprefixed path.
-   * For example, `/en/users` → 301 redirect to `/users`.
-   *
-   * Only active when `prefixDefaultLocale` is `'redirect'`.
-   */
-  private setupDefaultLocaleRedirect(defaultLocale: string): void {
-    const prefix = `/${defaultLocale}`
-    this.nativeUse('*', async (c: Context<RouterEnv>, next: () => Promise<void>) => {
-      const path = new URL(c.req.url).pathname
-      if (path === prefix || path.startsWith(`${prefix}/`)) {
-        const stripped = path.slice(prefix.length) || '/'
-        return c.redirect(stripped, 301)
-      }
-      await next()
-    })
-  }
-
-  private setupGlobalMiddleware(): void {
-    this.nativeUse('*', createLoggerMiddleware(this._logger) as MiddlewareHandler<RouterEnv>)
-    this.onError((err, c) => this.handleException(c, err))
   }
 
   private handleException(c: Context<RouterEnv>, err: unknown) {

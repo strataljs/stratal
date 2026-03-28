@@ -38,6 +38,7 @@ export class SessionVerificationMiddleware implements Middleware {
       await next()
     } catch (error: unknown) {
       this.logger.debug('Session validation failed (e.g., invalidated in DB)', { error });
+      await next()
     }
   }
 }

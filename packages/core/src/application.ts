@@ -15,8 +15,6 @@ import type { EventHandler } from './events'
 import { EventRegistry, getListenerHandlers } from './events'
 import type { StratalExecutionContext } from './execution-context'
 import { I18nModule } from './i18n/i18n.module'
-import type { I18nModuleOptions } from './i18n/i18n.options'
-import { I18N_TOKENS } from './i18n/i18n.tokens'
 import { ConsoleTransport, JsonFormatter, LOGGER_TOKENS, LoggerService, LogLevel, PrettyFormatter } from './logger'
 import { ModuleRegistry } from './module/module-registry'
 import type { DynamicModule, ModuleClass } from './module/types'
@@ -37,7 +35,7 @@ import { type ConsumerRegistry } from './queue/consumer-registry'
 import type { IQueueConsumer, QueueMessage } from './queue/queue-consumer'
 import { type QueueManager } from './queue/queue-manager'
 import { QueueModule } from './queue/queue.module'
-import { type IController, type RouterContext } from './router'
+import { type RouterContext } from './router'
 import { HonoApp } from './router/hono-app'
 import { RouteRegistry } from './router/route-registry'
 import { RouterResolver } from './router/router-resolver'
@@ -208,18 +206,13 @@ export class Application {
     // (After Phase 3 so I18N_TOKENS.Options is available for LocalePathService)
     this.registerRoutingServices()
 
-    // Phase 5: Create & configure HonoApp
-    const logger = this._container.resolve<LoggerService>(LOGGER_TOKENS.LoggerService)
-    const i18nOptions = this._container.isRegistered(I18N_TOKENS.Options)
-      ? this._container.resolve<I18nModuleOptions>(I18N_TOKENS.Options)
-      : undefined
-    this.honoApp = new HonoApp(this._container, logger, i18nOptions)
-    const controllers = this.moduleRegistry.getAllControllers() as Constructor<IController>[]
+    // Phase 5: Resolve & configure HonoApp
+    this.honoApp = this._container.resolve<HonoApp>(ROUTER_TOKENS.HonoApp)
 
-    const routerResolver = this._container.resolve<RouterResolver | null>(ROUTER_TOKENS.RouterResolver)
-    const globalMiddleware = routerResolver?.getGlobalMiddleware() ?? []
+    // Resolve LocalePathService to trigger locale middleware application on HonoApp
+    this._container.resolve<LocalePathService>(ROUTER_TOKENS.LocalePathService)
 
-    await this.honoApp.configure(controllers, globalMiddleware)
+    await this.honoApp.configure()
 
     // Phase 6: Configure queues, cron, events, commands, seeders
     this.registerQueueConsumers()
@@ -239,7 +232,10 @@ export class Application {
     // VersioningService — resolves version prefixes from appConfig.versioning
     this._container.register(ROUTER_TOKENS.VersioningService, VersioningService, Scope.Singleton)
 
-    // LocalePathService — computes LocalePathConfig from I18nModuleOptions
+    // HonoApp — the Hono application instance (must be before LocalePathService)
+    this._container.register(ROUTER_TOKENS.HonoApp, HonoApp, Scope.Singleton)
+
+    // LocalePathService — computes LocalePathConfig and applies locale middleware to HonoApp
     this._container.register(ROUTER_TOKENS.LocalePathService, LocalePathService, Scope.Singleton)
 
     // RouteRegistry — single source of truth, expands routes via services above
