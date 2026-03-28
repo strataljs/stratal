@@ -1,6 +1,5 @@
 import { Transient } from 'stratal/di'
-import { Middleware } from 'stratal/middleware'
-import { RouterContext } from 'stratal/router'
+import { Middleware, RouterContext } from 'stratal/router'
 
 @Transient()
 export class RequestLoggerMiddleware implements Middleware {

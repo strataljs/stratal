@@ -91,15 +91,18 @@ export class RouteRegistrationService {
       controllerCount: controllers.length,
     })
 
-    // Sort controllers: specific routes first, wildcard handlers last
-    // This ensures more specific routes are matched before catch-all wildcards
-    // (e.g., /api/v1/auth/magic-link matches before /api/v1/auth/:path{.+})
+    // Sort controllers by specificity: static paths first, dynamic paths last
+    // 1. handle()-based controllers (catch-all wildcards) always last
+    // 2. Static base paths (e.g. /auth, /api/v1/schools) before dynamic (e.g. /:tenantId)
     const sortedControllers = [...controllers].sort((a, b) => {
       const aHasHandle = 'handle' in a.prototype
       const bHasHandle = 'handle' in b.prototype
-      if (aHasHandle && !bHasHandle) return 1  // a goes after b
-      if (!aHasHandle && bHasHandle) return -1 // a goes before b
-      return 0 // maintain relative order
+      if (aHasHandle && !bHasHandle) return 1
+      if (!aHasHandle && bHasHandle) return -1
+
+      const aScore = this.getPathSpecificityScore(getControllerRoute(a) ?? '')
+      const bScore = this.getPathSpecificityScore(getControllerRoute(b) ?? '')
+      return aScore - bScore
     })
 
     // Eagerly load upgradeWebSocket once if any gateway exists

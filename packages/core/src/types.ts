@@ -13,4 +13,4 @@
  * ```
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- any is used to allow for any number of arguments
-export type Constructor<T extends object = object> = new (...args: any[]) => T
+export type Constructor<T = object> = new (...args: any[]) => T

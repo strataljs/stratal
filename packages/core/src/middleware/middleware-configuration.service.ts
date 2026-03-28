@@ -2,8 +2,10 @@ import type { Context } from 'hono'
 import type { Container } from '../di'
 import type { OpenAPIHono } from '../i18n/validation'
 import type { LoggerService } from '../logger'
+import { HTTP_METHODS } from '../router/constants'
 import type { IController } from '../router/controller'
 import { getControllerRoute } from '../router/decorators/controller.decorator'
+import { getRouteDecoratedMethods, getRouteMetadata } from '../router/decorators/route.decorator'
 import type { Middleware } from '../router/middleware.interface'
 import { RouterContext } from '../router/router-context'
 import type { HttpMethod, RouterEnv, VersioningOptions } from '../router/types'
@@ -82,15 +84,39 @@ export class MiddlewareConfigurationService {
         // String path — '*' for global or a specific path pattern
         patterns.push({ path: target })
       } else if (typeof target === 'function') {
-        // Controller class - get its route from metadata
-        const route = getControllerRoute(target)
-        if (route) {
-          // Add wildcard for all paths under this controller
-          patterns.push({ path: `${route}/*` })
-          // Also match the exact path
-          patterns.push({ path: route })
-        } else {
+        // Controller class — resolve exact method paths, not wildcard
+        const basePath = getControllerRoute(target)
+        if (!basePath) {
           this.logger.warn('Controller has no route metadata', { controller: target.name })
+          continue
+        }
+
+        const decoratedMethods = getRouteDecoratedMethods(target as new (...args: unknown[]) => object)
+
+        // handle()-based controllers have no decorated methods — use wildcard
+        if (decoratedMethods.length === 0) {
+          patterns.push({ path: `${basePath}/*` })
+          patterns.push({ path: basePath })
+          continue
+        }
+
+        // Resolve each method's exact path + HTTP method
+        for (const methodName of decoratedMethods) {
+          const meta = getRouteMetadata(target.prototype as object, methodName)
+          if (!meta) continue
+
+          if (meta.type === 'explicit') {
+            const methodPath = meta.path === '/' ? '' : meta.path
+            const fullPath = this.joinPaths(basePath, methodPath)
+            patterns.push({ path: fullPath, method: meta.method })
+          } else {
+            // Convention-based — derive from method name
+            const mapping = HTTP_METHODS[methodName as keyof typeof HTTP_METHODS]
+            if (mapping) {
+              const fullPath = this.joinPaths(basePath, mapping.path)
+              patterns.push({ path: fullPath, method: mapping.method as HttpMethod })
+            }
+          }
         }
       } else {
         // RouteInfo object - resolve version if present
@@ -168,7 +194,7 @@ export class MiddlewareConfigurationService {
     app: OpenAPIHono<RouterEnv>,
     method: HttpMethod,
     path: string,
-    handler: (c: Context<RouterEnv>, next: () => Promise<void>) => Promise<void>
+    handler: (c: Context<RouterEnv>, next: () => Promise<void>) => Promise<Response | void>
   ): void {
     switch (method) {
       case 'get':
@@ -198,7 +224,7 @@ export class MiddlewareConfigurationService {
     middlewares: Constructor<Middleware>[],
     excludes: RouteInfo[],
     container: Container
-  ): (c: Context<RouterEnv>, next: () => Promise<void>) => Promise<void> {
+  ): (c: Context<RouterEnv>, next: () => Promise<void>) => Promise<Response | void> {
     return async (c, next) => {
       const requestPath = c.req.path
       const requestMethod = c.req.method.toLowerCase() as HttpMethod
@@ -212,8 +238,9 @@ export class MiddlewareConfigurationService {
       // Create RouterContext for middleware
       const ctx = new RouterContext(c)
 
-      // Execute middleware chain
-      await this.executeMiddlewareChain(middlewares, ctx, container, next)
+      // Execute middleware chain — if a middleware returns a Response (e.g. redirect),
+      // return it to Hono to short-circuit the request (idiomatic Hono pattern)
+      return this.executeMiddlewareChain(middlewares, ctx, container, next)
     }
   }
 
@@ -285,13 +312,20 @@ export class MiddlewareConfigurationService {
 
   /**
    * Execute middleware chain in order
+   *
+   * If any middleware returns a Response (e.g. a redirect), the chain stops
+   * and that Response is returned to the caller for Hono to use directly.
    */
   private async executeMiddlewareChain(
     middlewares: Constructor<Middleware>[],
     ctx: RouterContext,
     container: Container,
     finalNext: () => Promise<void>
-  ): Promise<void> {
+    // oxlint-disable-next-line typescript/no-invalid-void-type
+  ): Promise<Response | void> {
+    // Capture early Response from any middleware in the chain
+    let earlyResponse: Response | undefined
+
     // Build middleware chain from end to start
     let chain = finalNext
 
@@ -300,14 +334,32 @@ export class MiddlewareConfigurationService {
       const currentNext = chain
 
       chain = async () => {
+        // Skip remaining chain if a previous middleware already returned a Response
+        if (earlyResponse) return
+
         // Resolve middleware from request-scoped container
         const requestContainer = ctx.getContainer()
         const middleware = requestContainer.resolve<Middleware>(MiddlewareClass)
-        await middleware.handle(ctx, currentNext)
+        const response = await middleware.handle(ctx, currentNext)
+        if (response instanceof Response) {
+          earlyResponse = response
+        }
       }
     }
 
     // Execute the chain
     await chain()
+
+    return earlyResponse
+  }
+
+  /**
+   * Join a base path and a route path, normalizing slashes
+   */
+  private joinPaths(basePath: string, routePath: string): string {
+    if (routePath === '/' || routePath === '') return basePath
+    if (basePath !== '/' && basePath.endsWith('/')) basePath = basePath.slice(0, -1)
+    if (routePath && !routePath.startsWith('/')) routePath = '/' + routePath
+    return basePath + routePath
   }
 }

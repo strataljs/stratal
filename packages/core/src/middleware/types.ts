@@ -1,4 +1,3 @@
-import type { IController } from '../router/controller'
 import type { Middleware } from '../router/middleware.interface'
 import type { HttpMethod } from '../router/types'
 import type { Constructor } from '../types'
@@ -34,7 +33,7 @@ export interface MiddlewareConfigEntry {
  * - string path: Apply to a specific path (e.g., '/api/users', '/api/*')
  * - '*': Apply to all routes (global middleware)
  */
-export type MiddlewareRouteTarget = Constructor<IController> | RouteInfo | '*' | string & {}
+export type MiddlewareRouteTarget = Constructor<unknown> | RouteInfo | '*' | string & {}
 
 /**
  * Interface for modules that configure middleware

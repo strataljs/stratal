@@ -1,6 +1,6 @@
+import { DI_TOKENS, Transient } from 'stratal/di'
+import type { Middleware, Next, RouterContext } from 'stratal/router'
 import { inject } from 'tsyringe'
-import { Transient, DI_TOKENS } from 'stratal/di'
-import type { Middleware, RouterContext } from 'stratal/router'
 import { type AuthContext } from '../../context/auth-context'
 import { AUTH_SERVICE } from '../auth.tokens'
 import type { AuthService } from '../services/auth.service'
@@ -20,9 +20,9 @@ export class SessionVerificationMiddleware implements Middleware {
   constructor(
     @inject(AUTH_SERVICE)
     private readonly authService: AuthService
-  ) {}
+  ) { }
 
-  async handle(ctx: RouterContext, next: () => Promise<void>): Promise<void> {
+  async handle(ctx: RouterContext, next: Next): Promise<void> {
     const session = await this.authService.auth.api.getSession({
       headers: ctx.c.req.raw.headers
     })

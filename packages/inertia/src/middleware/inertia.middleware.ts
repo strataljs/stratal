@@ -1,5 +1,5 @@
 import { Transient, inject } from 'stratal/di'
-import type { Middleware, RouterContext } from 'stratal/router'
+import type { Middleware, Next, RouterContext } from 'stratal/router'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { INERTIA_TOKENS } from '../inertia.tokens'
 
@@ -9,7 +9,7 @@ export class InertiaMiddleware implements Middleware {
     @inject(INERTIA_TOKENS.Options) private readonly options: InertiaModuleOptions,
   ) { }
 
-  async handle(ctx: RouterContext, next: () => Promise<void>): Promise<void> {
+  async handle(ctx: RouterContext, next: Next): Promise<void> {
     const isInertia = ctx.header('x-inertia') === 'true'
     const isPrefetch = ctx.header('purpose') === 'prefetch'
 

@@ -1,5 +1,5 @@
-import { Transient, DI_TOKENS } from 'stratal/di'
-import type { Middleware, RouterContext } from 'stratal/router'
+import { DI_TOKENS, Transient } from 'stratal/di'
+import type { Middleware, Next, RouterContext } from 'stratal/router'
 import { AuthContext } from '../../context/auth-context'
 
 /**
@@ -11,7 +11,7 @@ import { AuthContext } from '../../context/auth-context'
  */
 @Transient()
 export class AuthContextMiddleware implements Middleware {
-  async handle(ctx: RouterContext, next: () => Promise<void>): Promise<void> {
+  async handle(ctx: RouterContext, next: Next): Promise<void> {
     const requestContainer = ctx.getContainer()
 
     const authContext = new AuthContext()

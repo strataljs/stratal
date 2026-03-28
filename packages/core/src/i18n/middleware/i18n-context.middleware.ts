@@ -7,7 +7,7 @@
 
 import { inject } from 'tsyringe'
 import { Transient } from '../../di/decorators'
-import type { Middleware } from '../../router/middleware.interface'
+import type { Middleware, Next } from '../../router/middleware.interface'
 import type { RouterContext } from '../../router/router-context'
 import { I18N_TOKENS } from '../i18n.tokens'
 import type { I18nService } from '../services/i18n.service'
@@ -17,9 +17,9 @@ import { runWithErrorMapContext } from '../validation'
 export class I18nContextMiddleware implements Middleware {
   constructor(
     @inject(I18N_TOKENS.I18nService) private readonly i18n: I18nService
-  ) {}
+  ) { }
 
-  async handle(ctx: RouterContext, next: () => Promise<void>): Promise<void> {
+  async handle(ctx: RouterContext, next: Next) {
     const locale = ctx.getLocale()
 
     await runWithErrorMapContext(

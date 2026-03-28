@@ -228,7 +228,7 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
       for (let i = classes.length - 1; i >= 0; i--) {
         const prevNext = current
         const middleware = requestContainer.resolve<Middleware>(classes[i])
-        current = () => middleware.handle(ctx, prevNext)
+        current = () => middleware.handle(ctx, prevNext) as Promise<void>
       }
 
       await current()

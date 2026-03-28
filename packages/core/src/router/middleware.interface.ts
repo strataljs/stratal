@@ -1,4 +1,7 @@
-import type { RouterContext } from './router-context'
+import { type Next as HonoNext } from 'hono';
+import type { RouterContext } from './router-context';
+
+export type Next = HonoNext;
 
 /**
  * Middleware interface for request processing
@@ -34,5 +37,5 @@ export interface Middleware {
    * @param ctx - Router context with request/response helpers
    * @param next - Function to call the next middleware or route handler
    */
-  handle(ctx: RouterContext, next: () => Promise<void>): Promise<void>
+  handle(ctx: RouterContext, next: Next): Promise<Response | void>
 }
