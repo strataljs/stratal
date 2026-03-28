@@ -94,10 +94,6 @@
       "types": "./dist/logger/index.d.mts",
       "import": "./dist/logger/index.mjs"
     },
-    "./middleware": {
-      "types": "./dist/middleware/index.d.mts",
-      "import": "./dist/middleware/index.mjs"
-    },
     "./module": {
       "types": "./dist/module/index.d.mts",
       "import": "./dist/module/index.mjs"

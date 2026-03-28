@@ -1,10 +1,7 @@
-import { createMock } from '@stratal/testing/mocks'
 import { describe, expect, it } from 'vitest'
-import type { LoggerService } from '../../logger/services/logger.service'
 import { Controller, getControllerRoute } from '../decorators/controller.decorator'
 import { Get } from '../decorators/http-method.decorator'
-import { RouteRegistry } from '../route-registry'
-import { RouteRegistrationService } from '../services/route-registration.service'
+import { getPathSpecificityScore } from '../utils/path'
 
 // --- Test controllers ---
 
@@ -40,26 +37,15 @@ class WildcardAuthController {
   async handle() { /**/ }
 }
 
-interface RouteRegistrationServicePrivate {
-  getPathSpecificityScore(path: string): number
-}
-
 describe('Route specificity sorting', () => {
-  const mockLogger = createMock<LoggerService>()
-  const service = new RouteRegistrationService(mockLogger as unknown as LoggerService, new RouteRegistry())
-
-  const getScore = (path: string): number => {
-    return (service as unknown as RouteRegistrationServicePrivate).getPathSpecificityScore(path)
-  }
-
   it('should score static paths lower than dynamic paths', () => {
-    expect(getScore('/auth')).toBeLessThan(getScore('/:tenantId'))
-    expect(getScore('/api/v1/schools')).toBeLessThan(getScore('/:tenantId'))
-    expect(getScore('/health')).toBeLessThan(getScore('/:tenantId'))
+    expect(getPathSpecificityScore('/auth')).toBeLessThan(getPathSpecificityScore('/:tenantId'))
+    expect(getPathSpecificityScore('/api/v1/schools')).toBeLessThan(getPathSpecificityScore('/:tenantId'))
+    expect(getPathSpecificityScore('/health')).toBeLessThan(getPathSpecificityScore('/:tenantId'))
   })
 
   it('should score dynamic paths lower than wildcard paths', () => {
-    expect(getScore('/:tenantId')).toBeLessThan(getScore('/api/v1/auth/:path{.+}'))
+    expect(getPathSpecificityScore('/:tenantId')).toBeLessThan(getPathSpecificityScore('/api/v1/auth/:path{.+}'))
   })
 
   describe('configure() sorts controllers by specificity', () => {
@@ -78,8 +64,8 @@ describe('Route specificity sorting', () => {
         if (aHasHandle && !bHasHandle) return 1
         if (!aHasHandle && bHasHandle) return -1
 
-        const aScore = getScore(getControllerRoute(a) ?? '')
-        const bScore = getScore(getControllerRoute(b) ?? '')
+        const aScore = getPathSpecificityScore(getControllerRoute(a) ?? '')
+        const bScore = getPathSpecificityScore(getControllerRoute(b) ?? '')
         return aScore - bScore
       })
 
@@ -109,8 +95,8 @@ describe('Route specificity sorting', () => {
         if (aHasHandle && !bHasHandle) return 1
         if (!aHasHandle && bHasHandle) return -1
 
-        const aScore = getScore(getControllerRoute(a) ?? '')
-        const bScore = getScore(getControllerRoute(b) ?? '')
+        const aScore = getPathSpecificityScore(getControllerRoute(a) ?? '')
+        const bScore = getPathSpecificityScore(getControllerRoute(b) ?? '')
         return aScore - bScore
       })
 

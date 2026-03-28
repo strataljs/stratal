@@ -7,9 +7,22 @@ import { ERROR_CODES } from '../../errors/error-codes'
 import { ResponseValidationError } from '../errors/response-validation.error'
 import { RouteRegistry } from '../route-registry'
 import { RouteRegistrationService } from '../services/route-registration.service'
+import type { VersioningService } from '../services/versioning.service'
+import type { LocalePathService } from '../services/locale-path.service'
 import type { RouteConfig } from '../types'
 
 const mockLogger = createMock<LoggerService>()
+
+const mockVersioningService = {
+  enabled: false,
+  resolve: (path: string) => [path],
+} as unknown as VersioningService
+
+const mockLocalePathService = {
+  enabled: false,
+  localePathConfig: null,
+  resolve: (path: string) => [{ path, isLocaleVariant: false }],
+} as unknown as LocalePathService
 
 interface RouteRegistrationServicePrivate {
   extractResponseSchema(routeConfig: RouteConfig): ZodType | null
@@ -17,7 +30,12 @@ interface RouteRegistrationServicePrivate {
 }
 
 const createService = () => {
-  const service = new RouteRegistrationService(mockLogger as unknown as LoggerService, new RouteRegistry())
+  const service = new RouteRegistrationService(
+    mockLogger as unknown as LoggerService,
+    new RouteRegistry(mockVersioningService, mockLocalePathService),
+    null,
+    mockLocalePathService,
+  )
   return service as unknown as RouteRegistrationServicePrivate
 }
 

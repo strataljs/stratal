@@ -3,6 +3,7 @@ import { CacheModule } from './cache'
 import type { CronJob } from './cron/cron-job'
 import { CronManager } from './cron/cron-manager'
 import { Container } from './di/container'
+import { runWithContainer } from './di/container-storage'
 import { DI_TOKENS } from './di/tokens'
 import { Scope } from './di/types'
 import { type StratalEnv } from './env'
@@ -40,6 +41,10 @@ import { type IController, type RouterContext } from './router'
 import { HonoApp } from './router/hono-app'
 import { RouteRegistry } from './router/route-registry'
 import { RouterResolver } from './router/router-resolver'
+import { ROUTER_TOKENS } from './router/router.tokens'
+import { LocalePathService } from './router/services/locale-path.service'
+import { RouteRegistrationService } from './router/services/route-registration.service'
+import { VersioningService } from './router/services/versioning.service'
 import type { VersioningOptions } from './router/types'
 import { DbSeedCommand, DbSeedListCommand, SEEDER_TOKENS, SeederRegistry, type Seeder } from './seeder'
 import type { Constructor } from './types'
@@ -172,6 +177,11 @@ export class Application {
       return
     }
 
+    // Wrap in AsyncLocalStorage so getContainer() works for route() and other standalone functions
+    await runWithContainer(this._container, () => this.initializeInternal())
+  }
+
+  private async initializeInternal(): Promise<void> {
     // Phase 1: Register core infrastructure modules (internal)
     this.moduleRegistry.registerAll([
       I18nModule,
@@ -194,6 +204,10 @@ export class Application {
     this.cronManager = this._container.resolve<CronManager>(DI_TOKENS.Cron)
     this.quarry = this._container.resolve<QuarryRegistry>(DI_TOKENS.Quarry)
 
+    // Phase 4.5: Register routing services in container
+    // (After Phase 3 so I18N_TOKENS.Options is available for LocalePathService)
+    this.registerRoutingServices()
+
     // Phase 5: Create & configure HonoApp
     const logger = this._container.resolve<LoggerService>(LOGGER_TOKENS.LoggerService)
     const i18nOptions = this._container.isRegistered(I18N_TOKENS.Options)
@@ -202,15 +216,10 @@ export class Application {
     this.honoApp = new HonoApp(this._container, logger, i18nOptions)
     const controllers = this.moduleRegistry.getAllControllers() as Constructor<IController>[]
 
-    // Build Router pipeline from modules implementing RouteConfigurable
-    const routerConfigs = this.moduleRegistry.getAllRouterConfigs()
-    const routerResolver = routerConfigs.length > 0 ? new RouterResolver(routerConfigs) : null
-    const routeRegistry = new RouteRegistry()
+    const routerResolver = this._container.resolve<RouterResolver | null>(ROUTER_TOKENS.RouterResolver)
     const globalMiddleware = routerResolver?.getGlobalMiddleware() ?? []
 
-    await this.honoApp.configure(
-      controllers, routeRegistry, routerResolver, globalMiddleware, this.appConfig.versioning,
-    )
+    await this.honoApp.configure(controllers, globalMiddleware)
 
     // Phase 6: Configure queues, cron, events, commands, seeders
     this.registerQueueConsumers()
@@ -220,6 +229,29 @@ export class Application {
     this.registerCommands()
 
     this.initialized = true
+  }
+
+  /**
+   * Register routing services as singletons in the container.
+   * Called after module initialization so I18N_TOKENS.Options is available.
+   */
+  private registerRoutingServices(): void {
+    // VersioningService — resolves version prefixes from appConfig.versioning
+    this._container.register(ROUTER_TOKENS.VersioningService, VersioningService, Scope.Singleton)
+
+    // LocalePathService — computes LocalePathConfig from I18nModuleOptions
+    this._container.register(ROUTER_TOKENS.LocalePathService, LocalePathService, Scope.Singleton)
+
+    // RouteRegistry — single source of truth, expands routes via services above
+    this._container.register(ROUTER_TOKENS.RouteRegistry, RouteRegistry, Scope.Singleton)
+
+    // RouterResolver — merges Router configs from modules
+    const routerConfigs = this.moduleRegistry.getAllRouterConfigs()
+    const routerResolver = routerConfigs.length > 0 ? new RouterResolver(routerConfigs) : null
+    this._container.registerValue(ROUTER_TOKENS.RouterResolver, routerResolver)
+
+    // RouteRegistrationService — transient, resolved in HonoApp.configure()
+    this._container.register(RouteRegistrationService, RouteRegistrationService)
   }
 
   /**

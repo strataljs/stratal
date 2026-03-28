@@ -1,5 +1,6 @@
 import type { Middleware } from './middleware.interface'
 import type { Router, RouterEntry } from './router'
+import * as internal from './router.internals'
 import type { Constructor } from '../types'
 
 /**
@@ -44,19 +45,19 @@ export class RouterResolver {
       if (!moduleControllers.includes(controller)) continue
 
       // Check if controller is in a sub-group
-      for (const group of router.getGroups()) {
+      for (const group of router[internal.getGroups]()) {
         if (group.controllers?.includes(controller)) {
-          return this.mergeEntries(router.getDefaultEntry(), group)
+          return this.mergeEntries(router[internal.getDefaultEntry](), group)
         }
       }
 
       // Controller is in the default scope (not in any sub-group)
       // But only if it's not claimed by any sub-group in this module
       const groupedControllers = new Set(
-        router.getGroups().flatMap(g => g.controllers ?? [])
+        router[internal.getGroups]().flatMap(g => g.controllers ?? [])
       )
       if (!groupedControllers.has(controller)) {
-        return this.entryToConfig(router.getDefaultEntry())
+        return this.entryToConfig(router[internal.getDefaultEntry]())
       }
     }
 
@@ -70,7 +71,7 @@ export class RouterResolver {
   getGlobalMiddleware(): Constructor<Middleware>[] {
     const global: Constructor<Middleware>[] = []
     for (const { router } of this.routers) {
-      global.push(...router.getGlobalMiddleware())
+      global.push(...router[internal.getGlobalMiddleware]())
     }
     return global
   }

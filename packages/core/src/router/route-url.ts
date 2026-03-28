@@ -1,5 +1,7 @@
+import { getContainer } from '../di/container-storage'
 import type { RouteName, RouteParams } from './route-map'
 import type { RouteRegistry } from './route-registry'
+import { ROUTER_TOKENS } from './router.tokens'
 
 /**
  * Generate a URL from a named route.
@@ -8,10 +10,9 @@ import type { RouteRegistry } from './route-registry'
  * Domain params (`{tenant}`) are also consumed from `params`.
  * Extra keys become query string parameters.
  *
- * Use `ctx.route()` in controllers (auto-resolves RouteRegistry from DI).
- * Use this function outside controllers by injecting RouteRegistry via DI.
+ * Resolves RouteRegistry from the application container via AsyncLocalStorage.
+ * Available after `Application.initialize()` has been called.
  *
- * @param registry - RouteRegistry instance (inject via `ROUTER_TOKENS.RouteRegistry`)
  * @param name - Named route identifier
  * @param params - Route params + domain params + extra query params
  * @returns Generated URL string
@@ -21,22 +22,17 @@ import type { RouteRegistry } from './route-registry'
  * // In a controller (preferred):
  * ctx.route('users.show', { id: '1' })
  *
- * // Outside controllers (inject registry via DI):
- * import { ROUTER_TOKENS, route } from 'stratal/router'
+ * // Outside controllers (standalone function):
+ * import { route } from 'stratal/router'
  *
- * class MyService {
- *   constructor(@inject(ROUTER_TOKENS.RouteRegistry) private registry: RouteRegistry) {}
- *
- *   getUrl() {
- *     return route(this.registry, 'users.show', { id: '1' })
- *   }
- * }
+ * route('users.show', { id: '1' })
  * ```
  */
 export function route<N extends RouteName>(
-  registry: RouteRegistry,
   name: N,
   params?: RouteParams<N>,
 ): string {
+  const container = getContainer()
+  const registry = container.resolve<RouteRegistry>(ROUTER_TOKENS.RouteRegistry)
   return registry.url(name, params)
 }

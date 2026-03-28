@@ -1,6 +1,7 @@
 import type { Middleware, Next } from '../middleware.interface'
 import type { RouterContext } from '../router-context'
 import { InvalidSignatureError } from '../errors/invalid-signature.error'
+import { MissingEnvironmentVariableError } from '../errors/missing-environment-variable.error'
 import { verifySignedUrl } from '../signed-url'
 
 /**
@@ -30,7 +31,7 @@ export class VerifySignatureMiddleware implements Middleware {
     const secret = (env as unknown as Record<string, string>).APP_SECRET
 
     if (!secret) {
-      throw new Error('APP_SECRET environment variable is required for signed URL verification')
+      throw new MissingEnvironmentVariableError('APP_SECRET')
     }
 
     const isValid = await verifySignedUrl(url, secret)

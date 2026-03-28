@@ -135,6 +135,14 @@ export const ERROR_CODES = {
     CONTROLLER_METHOD_NOT_FOUND: 9006,
     /** OpenAPI route registration failed */
     OPENAPI_ROUTE_REGISTRATION: 9008,
+    /** Duplicate route name in RouteRegistry */
+    DUPLICATE_ROUTE_NAME: 9010,
+    /** Named route not found in RouteRegistry */
+    ROUTE_NAME_NOT_FOUND: 9011,
+    /** Required route parameter missing during URL generation */
+    MISSING_ROUTE_PARAM: 9012,
+    /** router.use() called inside group() callback */
+    USE_SCOPE_VIOLATION: 9013,
   },
 
   /**
@@ -195,6 +203,10 @@ export const ERROR_CODES = {
     SEEDER_NAME_COLLISION: 9208,
     /** Seeder not registered in the SeederRegistry */
     SEEDER_NOT_REGISTERED: 9209,
+    /** Application container not initialized (AsyncLocalStorage) */
+    CONTAINER_NOT_INITIALIZED: 9210,
+    /** Required environment variable not set */
+    MISSING_ENVIRONMENT_VARIABLE: 9211,
   },
 } as const
 

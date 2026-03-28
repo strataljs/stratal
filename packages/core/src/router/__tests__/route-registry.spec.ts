@@ -1,11 +1,25 @@
 import { describe, expect, it, beforeEach } from 'vitest'
-import { RouteRegistry, type RegisteredRoute } from '../route-registry'
+import { RouteRegistry, type RouteRegistrationInput } from '../route-registry'
+import { DuplicateRouteNameError } from '../errors/duplicate-route-name.error'
+import { RouteNameNotFoundError } from '../errors/route-name-not-found.error'
+import { MissingRouteParamError } from '../errors/missing-route-param.error'
+import type { VersioningService } from '../services/versioning.service'
+import type { LocalePathService } from '../services/locale-path.service'
 
-const createRoute = (overrides: Partial<RegisteredRoute> = {}): RegisteredRoute => ({
+const mockVersioningService = {
+  enabled: false,
+  resolve: (path: string) => [path],
+} as unknown as VersioningService
+
+const mockLocalePathService = {
+  enabled: false,
+  localePathConfig: null,
+  resolve: (path: string) => [{ path, isLocaleVariant: false }],
+} as unknown as LocalePathService
+
+const createInput = (overrides: Partial<RouteRegistrationInput> = {}): RouteRegistrationInput => ({
   method: 'get',
-  path: '/users',
-  paramNames: [],
-  domainParamNames: [],
+  basePath: '/users',
   controller: 'UsersController',
   action: 'index',
   hidden: false,
@@ -17,37 +31,57 @@ describe('RouteRegistry', () => {
   let registry: RouteRegistry
 
   beforeEach(() => {
-    registry = new RouteRegistry()
+    registry = new RouteRegistry(mockVersioningService, mockLocalePathService)
   })
 
   describe('register', () => {
     it('should register a named route', () => {
-      registry.register(createRoute({ name: 'users.index' }))
+      registry.register(createInput({ name: 'users.index' }))
       expect(registry.has('users.index')).toBe(true)
     })
 
     it('should register an unnamed route', () => {
-      registry.register(createRoute())
+      registry.register(createInput())
       expect(registry.all()).toHaveLength(1)
     })
 
-    it('should throw on duplicate named routes', () => {
-      registry.register(createRoute({ name: 'users.index' }))
+    it('should throw DuplicateRouteNameError on duplicate named routes', () => {
+      registry.register(createInput({ name: 'users.index' }))
       expect(() =>
-        registry.register(createRoute({ name: 'users.index', controller: 'OtherController', action: 'list' }))
-      ).toThrow("Duplicate route name 'users.index'")
+        registry.register(createInput({ name: 'users.index', controller: 'OtherController', action: 'list' }))
+      ).toThrow(DuplicateRouteNameError)
     })
 
     it('should allow multiple unnamed routes', () => {
-      registry.register(createRoute())
-      registry.register(createRoute({ path: '/posts', controller: 'PostsController' }))
+      registry.register(createInput())
+      registry.register(createInput({ basePath: '/posts', controller: 'PostsController' }))
       expect(registry.all()).toHaveLength(2)
+    })
+
+    it('should return expanded routes', () => {
+      const result = registry.register(createInput({ name: 'users.index' }))
+      expect(result).toHaveLength(1)
+      expect(result[0].path).toBe('/users')
+      expect(result[0].name).toBe('users.index')
+    })
+
+    it('should auto-extract paramNames from basePath', () => {
+      const result = registry.register(createInput({ basePath: '/users/:id' }))
+      expect(result[0].paramNames).toEqual(['id'])
+    })
+
+    it('should auto-extract domainParamNames from domain', () => {
+      const result = registry.register(createInput({
+        basePath: '/dashboard',
+        domain: '{tenant}.myapp.com',
+      }))
+      expect(result[0].domainParamNames).toEqual(['tenant'])
     })
   })
 
   describe('get', () => {
     it('should return a named route', () => {
-      registry.register(createRoute({ name: 'users.index' }))
+      registry.register(createInput({ name: 'users.index' }))
       expect(registry.get('users.index')).toMatchObject({ name: 'users.index' })
     })
 
@@ -58,7 +92,7 @@ describe('RouteRegistry', () => {
 
   describe('has', () => {
     it('should return true for existing named route', () => {
-      registry.register(createRoute({ name: 'users.index' }))
+      registry.register(createInput({ name: 'users.index' }))
       expect(registry.has('users.index')).toBe(true)
     })
 
@@ -69,15 +103,13 @@ describe('RouteRegistry', () => {
 
   describe('all', () => {
     it('should return all routes sorted by specificity', () => {
-      registry.register(createRoute({ path: '/users/:id', paramNames: ['id'] }))
-      registry.register(createRoute({ path: '/users/create' }))
-      registry.register(createRoute({ path: '/{locale}/users/:id', paramNames: ['id'] }))
+      registry.register(createInput({ basePath: '/users/:id' }))
+      registry.register(createInput({ basePath: '/users/create' }))
 
       const routes = registry.all()
       expect(routes.map(r => r.path)).toEqual([
         '/users/create',
         '/users/:id',
-        '/{locale}/users/:id',
       ])
     })
 
@@ -88,9 +120,9 @@ describe('RouteRegistry', () => {
 
   describe('named', () => {
     it('should return only named routes', () => {
-      registry.register(createRoute({ name: 'users.index' }))
-      registry.register(createRoute({ path: '/health' })) // unnamed
-      registry.register(createRoute({ name: 'users.show', path: '/users/:id', paramNames: ['id'] }))
+      registry.register(createInput({ name: 'users.index' }))
+      registry.register(createInput({ basePath: '/health' })) // unnamed
+      registry.register(createInput({ name: 'users.show', basePath: '/users/:id' }))
 
       const named = registry.named()
       expect(named).toHaveLength(2)
@@ -100,39 +132,36 @@ describe('RouteRegistry', () => {
 
   describe('url', () => {
     it('should generate URL for simple route', () => {
-      registry.register(createRoute({ name: 'users.index', path: '/users' }))
+      registry.register(createInput({ name: 'users.index', basePath: '/users' }))
       expect(registry.url('users.index')).toBe('/users')
     })
 
     it('should fill path params', () => {
-      registry.register(createRoute({
+      registry.register(createInput({
         name: 'users.show',
-        path: '/users/:id',
-        paramNames: ['id'],
+        basePath: '/users/:id',
       }))
       expect(registry.url('users.show', { id: '42' })).toBe('/users/42')
     })
 
     it('should fill multiple path params', () => {
-      registry.register(createRoute({
+      registry.register(createInput({
         name: 'notes.show',
-        path: '/users/:userId/notes/:noteId',
-        paramNames: ['userId', 'noteId'],
+        basePath: '/users/:userId/notes/:noteId',
       }))
       expect(registry.url('notes.show', { userId: '1', noteId: '99' })).toBe('/users/1/notes/99')
     })
 
     it('should append extra params as query string', () => {
-      registry.register(createRoute({
+      registry.register(createInput({
         name: 'users.show',
-        path: '/users/:id',
-        paramNames: ['id'],
+        basePath: '/users/:id',
       }))
       expect(registry.url('users.show', { id: '1', search: 'rocket' })).toBe('/users/1?search=rocket')
     })
 
     it('should handle query string with multiple extras', () => {
-      registry.register(createRoute({ name: 'users.index', path: '/users' }))
+      registry.register(createInput({ name: 'users.index', basePath: '/users' }))
       const url = registry.url('users.index', { page: '2', limit: '10' })
       expect(url).toContain('/users?')
       expect(url).toContain('page=2')
@@ -140,99 +169,50 @@ describe('RouteRegistry', () => {
     })
 
     it('should generate domain-prefixed URL', () => {
-      registry.register(createRoute({
+      registry.register(createInput({
         name: 'tenant.dashboard',
-        path: '/dashboard',
+        basePath: '/dashboard',
         domain: '{tenant}.myapp.com',
-        domainParamNames: ['tenant'],
       }))
       expect(registry.url('tenant.dashboard', { tenant: 'acme' })).toBe('https://acme.myapp.com/dashboard')
     })
 
     it('should consume domain params from the same params object', () => {
-      registry.register(createRoute({
+      registry.register(createInput({
         name: 'tenant.users.show',
-        path: '/users/:id',
-        paramNames: ['id'],
+        basePath: '/users/:id',
         domain: '{tenant}.myapp.com',
-        domainParamNames: ['tenant'],
       }))
       expect(registry.url('tenant.users.show', { tenant: 'acme', id: '5' })).toBe('https://acme.myapp.com/users/5')
     })
 
     it('should encode param values', () => {
-      registry.register(createRoute({
+      registry.register(createInput({
         name: 'users.show',
-        path: '/users/:id',
-        paramNames: ['id'],
+        basePath: '/users/:id',
       }))
       expect(registry.url('users.show', { id: 'hello world' })).toBe('/users/hello%20world')
     })
 
-    it('should throw for unknown route name', () => {
-      expect(() => registry.url('nonexistent')).toThrow("Route 'nonexistent' not found")
+    it('should throw RouteNameNotFoundError for unknown route name', () => {
+      expect(() => registry.url('nonexistent')).toThrow(RouteNameNotFoundError)
     })
 
-    it('should throw for missing required path param', () => {
-      registry.register(createRoute({
+    it('should throw MissingRouteParamError for missing required path param', () => {
+      registry.register(createInput({
         name: 'users.show',
-        path: '/users/:id',
-        paramNames: ['id'],
+        basePath: '/users/:id',
       }))
-      expect(() => registry.url('users.show')).toThrow("Missing required param 'id'")
+      expect(() => registry.url('users.show')).toThrow(MissingRouteParamError)
     })
 
-    it('should throw for missing required domain param', () => {
-      registry.register(createRoute({
+    it('should throw MissingRouteParamError for missing required domain param', () => {
+      registry.register(createInput({
         name: 'tenant.dashboard',
-        path: '/dashboard',
+        basePath: '/dashboard',
         domain: '{tenant}.myapp.com',
-        domainParamNames: ['tenant'],
       }))
-      expect(() => registry.url('tenant.dashboard')).toThrow("Missing required domain param 'tenant'")
-    })
-  })
-
-  describe('createRoute', () => {
-    it('should auto-extract param names from path', () => {
-      const route = RouteRegistry.createRoute({
-        name: 'users.show',
-        method: 'get',
-        path: '/users/:id',
-        controller: 'UsersController',
-        action: 'show',
-        hidden: false,
-        middleware: [],
-      })
-      expect(route.paramNames).toEqual(['id'])
-      expect(route.domainParamNames).toEqual([])
-    })
-
-    it('should auto-extract domain param names', () => {
-      const route = RouteRegistry.createRoute({
-        name: 'tenant.dashboard',
-        method: 'get',
-        path: '/dashboard',
-        domain: '{tenant}.myapp.com',
-        controller: 'DashboardController',
-        action: 'index',
-        hidden: false,
-        middleware: [],
-      })
-      expect(route.domainParamNames).toEqual(['tenant'])
-    })
-
-    it('should use provided param names if given', () => {
-      const route = RouteRegistry.createRoute({
-        method: 'get',
-        path: '/users/:id',
-        paramNames: ['customId'],
-        controller: 'UsersController',
-        action: 'show',
-        hidden: false,
-        middleware: [],
-      })
-      expect(route.paramNames).toEqual(['customId'])
+      expect(() => registry.url('tenant.dashboard')).toThrow(MissingRouteParamError)
     })
   })
 })

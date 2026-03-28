@@ -1,4 +1,6 @@
 import type { Middleware } from './middleware.interface'
+import { RouterUseScopeError } from './errors/router-use-scope.error'
+import * as internal from './router.internals'
 import type { Constructor } from '../types'
 
 /**
@@ -113,10 +115,7 @@ export class Router {
    */
   use(...middlewares: Constructor<Middleware>[]): this {
     if (this._isChild) {
-      throw new Error(
-        'router.use() can only be called on the root Router, not inside group() callbacks. ' +
-        'Use router.middleware() for scoped middleware.'
-      )
+      throw new RouterUseScopeError()
     }
     this._globalMiddleware.push(...middlewares)
     return this
@@ -127,7 +126,7 @@ export class Router {
    * Controllers in a sub-group are excluded from the parent (default) scope.
    * The callback receives a new Router (without `use()`) for fluent configuration.
    */
-  group(controllers: Constructor[], callback: (router: Router) => void): this {
+  group(controllers: Constructor[], callback: (router: Omit<Router, 'use'>) => void): this {
     const childRouter = new Router(true)
     callback(childRouter)
 
@@ -138,20 +137,17 @@ export class Router {
     return this
   }
 
-  // --- Internal accessors (used by RouterResolver) ---
+  // --- Internal accessors via symbol keys (invisible to consumers) ---
 
-  /** @internal */
-  getDefaultEntry(): RouterEntry {
+  [internal.getDefaultEntry](): RouterEntry {
     return this._defaultEntry
   }
 
-  /** @internal */
-  getGroups(): RouterEntry[] {
+  [internal.getGroups](): RouterEntry[] {
     return this._groups
   }
 
-  /** @internal */
-  getGlobalMiddleware(): Constructor<Middleware>[] {
+  [internal.getGlobalMiddleware](): Constructor<Middleware>[] {
     return this._globalMiddleware
   }
 }

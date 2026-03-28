@@ -19,3 +19,6 @@ export type {
 } from './conditional-binding-builder'
 
 export type { WhenOptions, ExtensionDecorator, ContainerLike } from './types'
+
+// Container storage (AsyncLocalStorage)
+export { containerStorage, getContainer, runWithContainer } from './container-storage'

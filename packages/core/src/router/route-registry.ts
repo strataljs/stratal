@@ -1,6 +1,15 @@
+import { inject } from 'tsyringe'
+import { Transient } from '../di/decorators'
+import { type VERSION_NEUTRAL } from './constants'
+import { DuplicateRouteNameError } from './errors/duplicate-route-name.error'
+import { MissingRouteParamError } from './errors/missing-route-param.error'
+import { RouteNameNotFoundError } from './errors/route-name-not-found.error'
+import { ROUTER_TOKENS } from './router.tokens'
+import type { LocalePathService } from './services/locale-path.service'
+import type { VersioningService } from './services/versioning.service'
 import type { HttpMethod } from './types'
-import { extractDomainParamNames, extractParamNames } from './utils/route-name'
 import { sortRoutesBySpecificity } from './utils/path'
+import { extractDomainParamNames, extractParamNames } from './utils/route-name'
 
 /**
  * A single registered route in the application.
@@ -29,34 +38,103 @@ export interface RegisteredRoute {
   hidden: boolean
   /** Middleware class names applied to this route */
   middleware: string[]
+  /** Whether this is a locale-prefixed variant */
+  isLocaleVariant?: boolean
+}
+
+/**
+ * Input for registering a route. The registry auto-extracts param names
+ * and expands versioned/locale paths via injected services.
+ */
+export type RouteRegistrationInput = Omit<RegisteredRoute, 'paramNames' | 'domainParamNames' | 'path' | 'localePaths' | 'isLocaleVariant'> & {
+  /** Base path before versioning/locale expansion */
+  basePath: string
+  /** Version from controller/router config (used by VersioningService). Accepts VERSION_NEUTRAL symbol. */
+  version?: string | string[] | typeof VERSION_NEUTRAL
+  /** Pre-computed param names (optional, auto-extracted if omitted) */
+  paramNames?: string[]
+  /** Pre-computed domain param names (optional, auto-extracted if omitted) */
+  domainParamNames?: string[]
 }
 
 /**
  * Central registry for all application routes.
  * Single source of truth — used by `route:list`, `route:types`, and URL generation.
  *
- * Routes are automatically sorted by specificity when retrieved via `all()`.
+ * Routes are automatically expanded via VersioningService and LocalePathService
+ * during registration, and sorted by specificity when retrieved via `all()`.
+ *
+ * Registered as a singleton in the container.
  */
+@Transient()
 export class RouteRegistry {
   private readonly routes: RegisteredRoute[] = []
   private readonly namedRoutes = new Map<string, RegisteredRoute>()
 
+  constructor(
+    @inject(ROUTER_TOKENS.VersioningService) private readonly versioningService: VersioningService,
+    @inject(ROUTER_TOKENS.LocalePathService) private readonly localePathService: LocalePathService,
+  ) {}
+
   /**
-   * Register a route. Named routes must have unique names.
-   * @throws Error if a named route with the same name already exists
+   * Register a route. Expands via VersioningService + LocalePathService.
+   * Named routes must have unique names.
+   *
+   * @returns Array of expanded RegisteredRoute entries (primary + locale variants)
+   * @throws DuplicateRouteNameError if a named route with the same name already exists
    */
-  register(route: RegisteredRoute): void {
-    if (route.name) {
-      if (this.namedRoutes.has(route.name)) {
-        throw new Error(
-          `Duplicate route name '${route.name}'. ` +
-          `Already registered by ${this.namedRoutes.get(route.name)!.controller}.${this.namedRoutes.get(route.name)!.action}, ` +
-          `cannot register ${route.controller}.${route.action}.`
-        )
+  register(input: RouteRegistrationInput): RegisteredRoute[] {
+    const domainParamNames = input.domainParamNames ?? (input.domain ? extractDomainParamNames(input.domain) : [])
+
+    // Expand via VersioningService
+    const versionedPaths = this.versioningService.resolve(input.basePath, input.version)
+
+    const expandedRoutes: RegisteredRoute[] = []
+
+    for (const versionedPath of versionedPaths) {
+      // Expand via LocalePathService
+      const resolvedPaths = this.localePathService.resolve(versionedPath)
+
+      // Collect locale variant paths (for the primary route's localePaths field)
+      const localeVariantPaths = resolvedPaths
+        .filter(p => p.isLocaleVariant)
+        .map(p => p.path)
+
+      for (const resolved of resolvedPaths) {
+        const route: RegisteredRoute = {
+          name: resolved.isLocaleVariant ? undefined : input.name,
+          method: input.method,
+          path: resolved.path,
+          localePaths: resolved.isLocaleVariant ? undefined : (localeVariantPaths.length > 0 ? localeVariantPaths : undefined),
+          paramNames: extractParamNames(resolved.path),
+          domain: input.domain,
+          domainParamNames,
+          controller: input.controller,
+          action: input.action,
+          hidden: input.hidden,
+          middleware: input.middleware,
+          isLocaleVariant: resolved.isLocaleVariant || undefined,
+        }
+
+        // Register name only for primary routes (not locale variants)
+        if (route.name) {
+          if (this.namedRoutes.has(route.name)) {
+            const existing = this.namedRoutes.get(route.name)!
+            throw new DuplicateRouteNameError(
+              route.name,
+              `${existing.controller}.${existing.action}`,
+              `${route.controller}.${route.action}`,
+            )
+          }
+          this.namedRoutes.set(route.name, route)
+        }
+
+        this.routes.push(route)
+        expandedRoutes.push(route)
       }
-      this.namedRoutes.set(route.name, route)
     }
-    this.routes.push(route)
+
+    return expandedRoutes
   }
 
   /** Get a named route by name */
@@ -86,12 +164,13 @@ export class RouteRegistry {
    * Domain params (e.g., `{tenant}`) are also consumed from `params`.
    * Extra keys become query string parameters.
    *
-   * @throws Error if route name not found or required params missing
+   * @throws RouteNameNotFoundError if route name not found
+   * @throws MissingRouteParamError if required params missing
    */
   url(name: string, params?: Record<string, string>): string {
     const route = this.namedRoutes.get(name)
     if (!route) {
-      throw new Error(`Route '${name}' not found in registry.`)
+      throw new RouteNameNotFoundError(name)
     }
 
     const allParams = { ...params }
@@ -102,9 +181,7 @@ export class RouteRegistry {
     for (const paramName of route.paramNames) {
       const value = allParams[paramName]
       if (value === undefined) {
-        throw new Error(
-          `Missing required param '${paramName}' for route '${name}' (path: ${route.path}).`
-        )
+        throw new MissingRouteParamError(paramName, name, route.path)
       }
       url = url.replace(`:${paramName}`, encodeURIComponent(value))
       consumedKeys.add(paramName)
@@ -117,9 +194,7 @@ export class RouteRegistry {
       for (const domainParam of route.domainParamNames) {
         const value = allParams[domainParam]
         if (value === undefined) {
-          throw new Error(
-            `Missing required domain param '${domainParam}' for route '${name}' (domain: ${route.domain}).`
-          )
+          throw new MissingRouteParamError(domainParam, name, route.domain)
         }
         domain = domain.replace(`{${domainParam}}`, encodeURIComponent(value))
         consumedKeys.add(domainParam)
@@ -141,22 +216,5 @@ export class RouteRegistry {
     }
 
     return url
-  }
-
-  /**
-   * Create a RegisteredRoute with auto-extracted param names.
-   * Convenience factory that extracts paramNames and domainParamNames automatically.
-   */
-  static createRoute(
-    route: Omit<RegisteredRoute, 'paramNames' | 'domainParamNames'> & {
-      paramNames?: string[]
-      domainParamNames?: string[]
-    }
-  ): RegisteredRoute {
-    return {
-      ...route,
-      paramNames: route.paramNames ?? extractParamNames(route.path),
-      domainParamNames: route.domainParamNames ?? (route.domain ? extractDomainParamNames(route.domain) : []),
-    }
   }
 }

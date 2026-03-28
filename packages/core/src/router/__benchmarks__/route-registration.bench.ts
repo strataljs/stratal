@@ -10,6 +10,8 @@ import { RouteRegistry } from '../route-registry'
 import { Route } from '../decorators/route.decorator'
 import type { RouterContext } from '../router-context'
 import { RouteRegistrationService } from '../services/route-registration.service'
+import type { VersioningService } from '../services/versioning.service'
+import type { LocalePathService } from '../services/locale-path.service'
 import type { RouterEnv } from '../types'
 
 // No-op logger to avoid measuring logging overhead
@@ -19,6 +21,17 @@ const noopLogger = {
   error: () => null,
   debug: () => null,
 } as unknown as LoggerService
+
+const mockVersioningService = {
+  enabled: false,
+  resolve: (path: string) => [path],
+} as unknown as VersioningService
+
+const mockLocalePathService = {
+  enabled: false,
+  localePathConfig: null,
+  resolve: (path: string) => [{ path, isLocaleVariant: false }],
+} as unknown as LocalePathService
 
 // Fixture: controller with multiple OpenAPI routes
 
@@ -85,19 +98,34 @@ class SimpleController {
 
 describe('RouteRegistration - Configure', () => {
   bench('register controller with 5 OpenAPI routes', async () => {
-    const service = new RouteRegistrationService(noopLogger, new RouteRegistry())
+    const service = new RouteRegistrationService(
+      noopLogger,
+      new RouteRegistry(mockVersioningService, mockLocalePathService),
+      null,
+      mockLocalePathService,
+    )
     const app = new OpenAPIHono<RouterEnv>()
     await service.configure(app, [ItemsController as unknown as Constructor<IController>])
   })
 
   bench('register single-route controller', async () => {
-    const service = new RouteRegistrationService(noopLogger, new RouteRegistry())
+    const service = new RouteRegistrationService(
+      noopLogger,
+      new RouteRegistry(mockVersioningService, mockLocalePathService),
+      null,
+      mockLocalePathService,
+    )
     const app = new OpenAPIHono<RouterEnv>()
     await service.configure(app, [SimpleController as unknown as Constructor<IController>])
   })
 
   bench('register multiple controllers', async () => {
-    const service = new RouteRegistrationService(noopLogger, new RouteRegistry())
+    const service = new RouteRegistrationService(
+      noopLogger,
+      new RouteRegistry(mockVersioningService, mockLocalePathService),
+      null,
+      mockLocalePathService,
+    )
     const app = new OpenAPIHono<RouterEnv>()
     await service.configure(app, [
       ItemsController as unknown as Constructor<IController>,

@@ -21,14 +21,17 @@ export { HonoApp } from './hono-app'
 
 // Router services
 export {
-  RouteRegistrationService
+  LocalePathService,
+  type ResolvedPath,
+  RouteRegistrationService,
+  VersioningService,
 } from './services'
 
 // Router tokens
 export { ROUTER_TOKENS } from './router.tokens'
 
 // Route Registry (source of truth for all routes)
-export { RouteRegistry, type RegisteredRoute } from './route-registry'
+export { RouteRegistry, type RegisteredRoute, type RouteRegistrationInput } from './route-registry'
 
 // Route Map (augmentable interface for type-safe URL generation)
 export type { StratalRouteMap, RouteName, RouteParams } from './route-map'
@@ -42,6 +45,9 @@ export { Router, type RouteConfigurable, type RouterGroupConfig } from './router
 // Path & name utilities
 export { toOpenAPIPath, getPathSpecificityScore, sortRoutesBySpecificity } from './utils/path'
 export { extractParamNames, extractDomainParamNames, generateConventionRouteName } from './utils/route-name'
+
+// Middleware utilities
+export { createMiddlewareChain } from './middleware/middleware-chain'
 
 // Decorators
 export {
@@ -62,7 +68,10 @@ export { VerifySignatureMiddleware } from './middleware/verify-signature.middlew
 
 // Errors
 export {
-  ControllerRegistrationError, HonoAppAlreadyConfiguredError, OpenAPIRouteRegistrationError, OpenAPIValidationError, ResponseValidationError, RouteNotFoundError, SchemaValidationError
+  ControllerRegistrationError, DuplicateRouteNameError, HonoAppAlreadyConfiguredError,
+  MissingEnvironmentVariableError, MissingRouteParamError, OpenAPIRouteRegistrationError,
+  OpenAPIValidationError, ResponseValidationError, RouteNameNotFoundError, RouteNotFoundError,
+  RouterUseScopeError, SchemaValidationError
 } from './errors'
 export { DomainMismatchError } from './errors/domain-mismatch.error'
 export { InvalidSignatureError } from './errors/invalid-signature.error'
