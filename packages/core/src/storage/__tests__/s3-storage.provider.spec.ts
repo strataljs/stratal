@@ -1,3 +1,4 @@
+import 'reflect-metadata'
 import { describe, expect, it, vi } from 'vitest'
 
 // Mock AWS SDK before importing S3StorageProvider
@@ -28,6 +29,7 @@ vi.mock('@aws-sdk/s3-request-presigner', () => ({
   getSignedUrl: vi.fn(),
 }))
 
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { S3StorageProvider } from '../providers/s3-storage.provider'
 import type { StorageEntry } from '../types'
 
@@ -43,6 +45,37 @@ describe('S3StorageProvider', () => {
     root: '',
     visibility: 'private',
   }
+
+  describe('getPresignedUrl', () => {
+    it('should use the same client when url is not set', async () => {
+      const mockGetSignedUrl = vi.mocked(getSignedUrl)
+      mockGetSignedUrl.mockResolvedValue('https://s3.example.com/test-bucket/file.pdf?X-Amz-Signature=abc123')
+
+      const provider = new S3StorageProvider(config)
+      const result = await provider.getPresignedUrl('file.pdf', 'GET', 3600)
+
+      expect(result.url).toBe('https://s3.example.com/test-bucket/file.pdf?X-Amz-Signature=abc123')
+      // Presigning client should be the same as the API client
+      expect((provider as any).presigningClient).toBe((provider as any).client)
+    })
+
+    it('should use a separate presigning client when url is set', async () => {
+      const mockGetSignedUrl = vi.mocked(getSignedUrl)
+      mockGetSignedUrl.mockResolvedValue('https://cdn.myapp.com/test-bucket/file.pdf?X-Amz-Signature=abc123')
+
+      const provider = new S3StorageProvider({ ...config, url: 'https://cdn.myapp.com' })
+      await provider.getPresignedUrl('file.pdf', 'GET', 3600)
+
+      // Presigning client should be different from the API client
+      expect((provider as any).presigningClient).not.toBe((provider as any).client)
+      // getSignedUrl should receive the presigning client, not the API client
+      expect(mockGetSignedUrl).toHaveBeenCalledWith(
+        (provider as any).presigningClient,
+        expect.anything(),
+        { expiresIn: 3600 }
+      )
+    })
+  })
 
   describe('listMultipartUploads', () => {
     it('should use Initiated date from S3 response, not current time', async () => {

@@ -42,20 +42,28 @@ import type { StreamingBlobPayloadInputTypes } from './storage-provider.interfac
  */
 export class S3StorageProvider implements IS3MultipartProvider {
   private readonly client: S3Client
+  private readonly presigningClient: S3Client
   private readonly bucket: string
   private readonly disk: string
 
   constructor(config: StorageEntry) {
-    // Configure S3Client for S3-compatible storage
-    this.client = new S3Client({
+    const clientConfig = {
       region: config.region || 'auto',
-      endpoint: config.endpoint,
       credentials: {
         accessKeyId: config.accessKeyId,
         secretAccessKey: config.secretAccessKey,
       },
       forcePathStyle: true,
-    })
+    }
+
+    // API client for storage operations (upload, download, delete)
+    this.client = new S3Client({ ...clientConfig, endpoint: config.endpoint })
+
+    // Presigning client uses `url` when set, so generated URLs are valid
+    // for the client-accessible host (the host is part of the AWS SigV4 signature)
+    this.presigningClient = config.url
+      ? new S3Client({ ...clientConfig, endpoint: config.url })
+      : this.client
 
     this.bucket = config.bucket
     this.disk = config.disk
@@ -156,7 +164,7 @@ export class S3StorageProvider implements IS3MultipartProvider {
         break
     }
 
-    const url = await getSignedUrl(this.client, command as GetObjectCommand, { expiresIn })
+    const url = await getSignedUrl(this.presigningClient, command as GetObjectCommand, { expiresIn })
 
     return {
       url,
