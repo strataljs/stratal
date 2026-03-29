@@ -3939,7 +3939,7 @@ __metadata:
   peerDependencies:
     pg: ^8.0.0
     reflect-metadata: ^0.2.2
-    stratal: ^0.0.17
+    stratal: ^0.0.18
   languageName: unknown
   linkType: soft
 
@@ -3975,12 +3975,12 @@ __metadata:
     "@inertiajs/react": ^3.0.0-beta.5
     "@inertiajs/vite": ^3.0.0-beta.5
     "@intlify/core-base": ">=11.0.0"
-    "@stratal/testing": ">=0.0.1"
+    "@stratal/testing": ">=0.0.18"
     hono: ^4.12.8
     react: ^19.0.0
     react-dom: ^19.0.0
     reflect-metadata: ^0.2.2
-    stratal: ^0.0.17
+    stratal: ^0.0.18
     vite: ^8.0.0
     vitest: ^4.1.0
   peerDependenciesMeta:
@@ -4024,10 +4024,10 @@ __metadata:
     typescript: "npm:^6.0.2"
     vitest: "npm:~4.1.2"
   peerDependencies:
-    "@stratal/framework": ^0.0.17
+    "@stratal/framework": ^0.0.18
     better-auth: ^1.4.9
     reflect-metadata: ^0.2.2
-    stratal: ^0.0.17
+    stratal: ^0.0.18
     vitest: ^4.1.0
   peerDependenciesMeta:
     "@stratal/framework":

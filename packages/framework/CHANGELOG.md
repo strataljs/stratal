@@ -1,5 +1,24 @@
 # @stratal/framework
 
+## 0.0.18
+
+### Patch Changes
+
+- c9176ea: Migrate auth middleware to router-scoped configuration and improve error resilience
+
+  ### Details
+
+  - Migrate `AuthModule` from `MiddlewareConfigurable` to `RouteConfigurable` interface
+  - Add graceful error handling in session verification to prevent invalidated sessions from blocking requests
+  - Expand Better Auth error mapping for token expiry, signup, and session creation failures
+  - Use duck-typing for Better Auth `APIError` detection to handle bundler environments
+
+- Updated dependencies [fcb71c4]
+- Updated dependencies [17f8675]
+- Updated dependencies [c9176ea]
+- Updated dependencies [c9176ea]
+  - stratal@0.0.18
+
 ## 0.0.17
 
 ### Patch Changes
