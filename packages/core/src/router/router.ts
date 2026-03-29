@@ -1,6 +1,6 @@
 import type { ZodObject } from '../i18n/validation'
 import type { Constructor } from '../types'
-import { RouterUseScopeError } from './errors/router-use-scope.error'
+import { RouterUseScopeError } from './errors'
 import type { Middleware } from './middleware.interface'
 import * as internal from './router.internals'
 

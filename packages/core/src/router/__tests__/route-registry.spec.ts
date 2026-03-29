@@ -1,8 +1,8 @@
-import { describe, expect, it, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { DuplicateRouteNameError } from '../errors'
 import { RouteRegistry, type RouteRegistrationInput } from '../route-registry'
-import { DuplicateRouteNameError } from '../errors/duplicate-route-name.error'
-import type { VersioningService } from '../services/versioning.service'
 import type { LocalePathService } from '../services/locale-path.service'
+import type { VersioningService } from '../services/versioning.service'
 
 const mockVersioningService = {
   enabled: false,

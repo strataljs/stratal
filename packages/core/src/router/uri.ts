@@ -1,7 +1,6 @@
 import { inject } from 'tsyringe'
 import { Transient } from '../di/decorators'
-import { MissingRouteParamError } from './errors/missing-route-param.error'
-import { RouteNameNotFoundError } from './errors/route-name-not-found.error'
+import { MissingRouteParamError, RouteNameNotFoundError } from './errors'
 import type { RouteName, RouteParams } from './route-map'
 import type { RegisteredRoute, RouteRegistry } from './route-registry'
 import type { RouterContext } from './router-context'

@@ -1,5 +1,5 @@
 import { getContainer } from '../di/container-storage'
-import { RouteNameNotFoundError } from './errors/route-name-not-found.error'
+import { RouteNameNotFoundError } from './errors'
 import type { RouteName, RouteParams } from './route-map'
 import type { RouteRegistry } from './route-registry'
 import { ROUTER_TOKENS } from './router.tokens'

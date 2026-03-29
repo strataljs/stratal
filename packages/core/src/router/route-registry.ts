@@ -1,7 +1,7 @@
 import { inject } from 'tsyringe'
 import { Transient } from '../di/decorators'
 import { type VERSION_NEUTRAL } from './constants'
-import { DuplicateRouteNameError } from './errors/duplicate-route-name.error'
+import { DuplicateRouteNameError } from './errors'
 import { ROUTER_TOKENS } from './router.tokens'
 import type { LocalePathService } from './services/locale-path.service'
 import type { VersioningService } from './services/versioning.service'

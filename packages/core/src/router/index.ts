@@ -21,10 +21,8 @@ export { HonoApp } from './hono-app'
 
 // Router services
 export {
-  LocalePathService,
-  type ResolvedPath,
-  RouteRegistrationService,
-  VersioningService,
+  LocalePathService, RouteRegistrationService,
+  VersioningService, type ResolvedPath
 } from './services'
 
 // Router tokens
@@ -34,18 +32,18 @@ export { ROUTER_TOKENS } from './router.tokens'
 export { RouteRegistry, type RegisteredRoute, type RouteRegistrationInput } from './route-registry'
 
 // Route Map (augmentable interface for type-safe URL generation)
-export type { StratalRouteMap, RouteName, RouteParams, SerializedRoute, SerializedRoutes } from './route-map'
+export type { RouteName, RouteParams, SerializedRoute, SerializedRoutes, StratalRouteMap } from './route-map'
 
 // Route URL generation
 export { route } from './route-url'
-export { Uri, buildRouteUrl, type UriOptions, type SignedUriOptions } from './uri'
+export { buildRouteUrl, Uri, type SignedUriOptions, type UriOptions } from './uri'
 
 // Router (replaces MiddlewareConfigurable — route + middleware configuration)
 export { Router, type RouteConfigurable, type RouterGroupConfig } from './router'
 
 // Path & name utilities
-export { toOpenAPIPath, getPathSpecificityScore, sortRoutesBySpecificity } from './utils/path'
-export { extractParamNames, extractDomainParamNames, generateConventionRouteName } from './utils/route-name'
+export { getPathSpecificityScore, sortRoutesBySpecificity, toOpenAPIPath } from './utils/path'
+export { extractDomainParamNames, extractParamNames, generateConventionRouteName } from './utils/route-name'
 
 // Middleware utilities
 export { createMiddlewareChain } from './middleware/middleware-chain'
@@ -64,15 +62,13 @@ export * from './schemas'
 export { createDomainMiddleware, parseDomainPattern } from './middleware/domain.middleware'
 
 // Signed URLs
-export { signUrl, verifySignedUrl, type SignedUrlOptions } from './signed-url'
 export { VerifySignatureMiddleware } from './middleware/verify-signature.middleware'
+export { signUrl, verifySignedUrl, type SignedUrlOptions } from './signed-url'
 
 // Errors
 export {
-  ControllerRegistrationError, DuplicateRouteNameError, HonoAppAlreadyConfiguredError,
-  MissingEnvironmentVariableError, MissingRouteParamError, OpenAPIRouteRegistrationError,
+  ControllerRegistrationError, DomainMismatchError, DuplicateRouteNameError, HonoAppAlreadyConfiguredError, InvalidSignatureError, MissingEnvironmentVariableError, MissingRouteParamError, OpenAPIRouteRegistrationError,
   OpenAPIValidationError, ResponseValidationError, RouteNameNotFoundError, RouteNotFoundError,
   RouterUseScopeError, SchemaValidationError
 } from './errors'
-export { DomainMismatchError } from './errors/domain-mismatch.error'
-export { InvalidSignatureError } from './errors/invalid-signature.error'
+

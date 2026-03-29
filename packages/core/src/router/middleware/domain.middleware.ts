@@ -1,6 +1,6 @@
-import type { Context, MiddlewareHandler } from 'hono'
-import { DomainMismatchError } from '../errors/domain-mismatch.error'
-import type { RouterEnv } from '../types'
+import type { Context, MiddlewareHandler } from 'hono';
+import { DomainMismatchError } from '../errors';
+import type { RouterEnv } from '../types';
 
 /**
  * Parse a domain pattern into a regex and extract parameter names.

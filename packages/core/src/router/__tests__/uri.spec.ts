@@ -1,9 +1,8 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest'
-import { Uri, buildRouteUrl } from '../uri'
-import { RouteNameNotFoundError } from '../errors/route-name-not-found.error'
-import { MissingRouteParamError } from '../errors/missing-route-param.error'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { MissingRouteParamError, RouteNameNotFoundError } from '../errors'
 import type { RegisteredRoute, RouteRegistry } from '../route-registry'
 import type { RouterContext } from '../router-context'
+import { Uri, buildRouteUrl } from '../uri'
 
 const createRoute = (overrides: Partial<RegisteredRoute> = {}): RegisteredRoute => ({
   method: 'get',
@@ -421,10 +420,12 @@ describe('Uri', () => {
     })
 
     it('should use locale default to build locale-prefixed URL via localePaths', () => {
-      setupUri({ 'posts.index': createRoute({
-        path: '/posts',
-        localePaths: ['/:locale{en|fr}/posts'],
-      }) })
+      setupUri({
+        'posts.index': createRoute({
+          path: '/posts',
+          localePaths: ['/:locale{en|fr}/posts'],
+        })
+      })
       uri.defaults({ locale: 'en' })
       expect(uri.route('posts.index')).toBe('/en/posts')
     })

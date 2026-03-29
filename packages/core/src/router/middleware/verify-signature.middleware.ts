@@ -1,7 +1,6 @@
+import { InvalidSignatureError, MissingEnvironmentVariableError } from '../errors'
 import type { Middleware, Next } from '../middleware.interface'
 import type { RouterContext } from '../router-context'
-import { InvalidSignatureError } from '../errors/invalid-signature.error'
-import { MissingEnvironmentVariableError } from '../errors/missing-environment-variable.error'
 import { verifySignedUrl } from '../signed-url'
 
 /**

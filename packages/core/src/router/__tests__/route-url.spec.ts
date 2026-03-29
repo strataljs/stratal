@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { route } from '../route-url'
-import { RouteNameNotFoundError } from '../errors/route-name-not-found.error'
-import { MissingRouteParamError } from '../errors/missing-route-param.error'
-import { containerStorage } from '../../di/container-storage'
-import { ROUTER_TOKENS } from '../router.tokens'
 import type { Container } from '../../di/container'
+import { containerStorage } from '../../di/container-storage'
+import { MissingRouteParamError, RouteNameNotFoundError } from '../errors'
 import type { RegisteredRoute } from '../route-registry'
+import { route } from '../route-url'
+import { ROUTER_TOKENS } from '../router.tokens'
 
 const createRoute = (overrides: Partial<RegisteredRoute> = {}): RegisteredRoute => ({
   method: 'get',
