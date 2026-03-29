@@ -54,6 +54,7 @@ InertiaModule.forRootAsync({
 - `sharedData?` — Static values or `(ctx: RouterContext) => any` resolver functions
 - `flash?` — `{ store: FlashStore }` — flash message storage (use `CookieFlashStore`)
 - `i18n?` — `{ only?: string[] }` — share backend translations with frontend
+- `routes?` — `boolean` — When `true`, serializes all named routes and injects them as a `routes` shared prop for client-side URL generation with `useRoute()`
 - `manifest?` — Vite manifest object for asset resolution
 - `entryClientPath?` — Client entry point (default: `src/inertia/app.tsx`)
 
@@ -342,6 +343,47 @@ i18n: { only: ['common.actions'] }           // Nested prefix
 i18n: {}                                      // All messages (omit only)
 ```
 
+## Client-Side URL Generation (useRoute)
+
+Share named routes with the frontend for Ziggy-like URL building in React components.
+
+### Setup
+
+Enable the `routes` option in `InertiaModule.forRoot()`:
+
+```typescript
+InertiaModule.forRoot({
+  rootView: 'app',
+  routes: true,  // Serialize named routes as shared prop
+})
+```
+
+### Frontend Usage
+
+Use the `useRoute()` hook from `@stratal/inertia/react`:
+
+```tsx
+import { useRoute } from '@stratal/inertia/react'
+
+export default function UserProfile({ user }) {
+  const { route, current } = useRoute()
+
+  return (
+    <nav>
+      <a href={route('users.index')}>All Users</a>
+      <a href={route('users.show', { id: user.id })}>
+        {user.name}
+      </a>
+      {current('users.show') && <span>Currently viewing</span>}
+    </nav>
+  )
+}
+```
+
+`route(name, params?)` mirrors the server-side `route()` function. Route names and params are type-safe when `StratalRouteMap` is augmented via `npx quarry route:types`.
+
+`current(name?)` checks the current page URL against a route name. Without arguments, returns the current route name (or `undefined`).
+
 ## SSR
 
 ### Configuration
@@ -416,8 +458,18 @@ export default createViteConfig({
 
 - `@stratal/inertia` — Main module, service, decorators, flash stores, types
 - `@stratal/inertia/vite` — Vite configuration and plugins
-- `@stratal/inertia/react` — React hooks (`useI18n`)
+- `@stratal/inertia/react` — React hooks (`useI18n`, `useRoute`)
 - `@stratal/inertia/testing` — Test response assertions for Inertia pages
+
+## Precognition
+
+Precognition allows frontends to validate forms server-side without submitting them. The `HandlePrecognitiveRequests` middleware is automatically registered by `InertiaModule`.
+
+When a request includes the `Precognition: true` header:
+- If validation passes, a `204 No Content` response is returned with `Precognition: true` and `Precognition-Success: true` headers
+- If validation fails, a `422 Unprocessable Entity` response is returned with `Precognition: true` header and validation errors
+
+No controller code changes needed — the middleware intercepts after schema validation.
 
 ## Testing
 
@@ -461,5 +513,7 @@ await response.assertInertiaProp('notes.0.title', 'My Note')
 | `assertInertiaDeferredProp(prop, group)` | Assert deferred prop in group. |
 | `assertInertiaMergeProp(prop)` | Assert merge prop. |
 | `assertInertiaSharedProp(prop)` | Assert shared prop. |
+| `assertSuccessfulPrecognition()` | Assert 204 response with Precognition headers. |
+| `assertPrecognitionValidationErrors(errors?)` | Assert 422 with Precognition headers. Optionally assert error body. |
 
 See `references/testing.md` for full examples of each assertion method.

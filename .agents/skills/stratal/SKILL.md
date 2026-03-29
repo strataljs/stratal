@@ -5,7 +5,7 @@ license: MIT
 compatibility: Designed for Claude Code. Requires Node.js 20+, yarn.
 metadata:
   author: strataljs
-  version: "3.0"
+  version: "3.1"
 ---
 
 # Stratal Framework
@@ -50,7 +50,7 @@ Run `npx quarry help` to see all commands. Always use these to inspect your app 
 |---------|-------------|
 | `npx quarry list` | Show all registered commands |
 | `npx quarry help <cmd>` | Show usage for a command |
-| `npx quarry route:list` | List all HTTP routes (method, path, name) |
+| `npx quarry route:list` | List all HTTP routes (supports `--method`, `--path`, `--name`, `--hidden` filters) |
 | `npx quarry route:types` | Generate TypeScript types for named routes |
 | `npx quarry event:list` | List all event listeners |
 | `npx quarry schedule:list` | List all cron schedules |
@@ -178,7 +178,7 @@ Run `wrangler types` to generate `Cloudflare.Env` from your `wrangler.jsonc` bin
 
 ### Sub-Path Imports
 
-Core: `stratal`, `stratal/cache`, `stratal/config`, `stratal/cron`, `stratal/di`, `stratal/email`, `stratal/errors`, `stratal/events`, `stratal/guards`, `stratal/i18n`, `stratal/i18n/messages/en`, `stratal/i18n/utils`, `stratal/logger`, `stratal/middleware`, `stratal/module`, `stratal/openapi`, `stratal/quarry`, `stratal/queue`, `stratal/router`, `stratal/seeder`, `stratal/storage`, `stratal/storage/providers`, `stratal/validation`, `stratal/websocket`, `stratal/workers`
+Core: `stratal`, `stratal/cache`, `stratal/config`, `stratal/cron`, `stratal/di`, `stratal/email`, `stratal/errors`, `stratal/events`, `stratal/guards`, `stratal/i18n`, `stratal/i18n/messages/en`, `stratal/i18n/utils`, `stratal/logger`, `stratal/module`, `stratal/openapi`, `stratal/quarry`, `stratal/queue`, `stratal/router`, `stratal/seeder`, `stratal/storage`, `stratal/storage/providers`, `stratal/validation`, `stratal/websocket`, `stratal/workers`
 
 Framework: `@stratal/framework/auth`, `@stratal/framework/context`, `@stratal/framework/database`, `@stratal/framework/factory`, `@stratal/framework/guards`, `@stratal/framework/rbac`
 

@@ -179,6 +179,15 @@ async getLatest(ctx: RouterContext) { ... }  // name: "notes.latest"
 
 Run `npx quarry route:list` to see all registered route names.
 
+### Filtering Routes
+
+```bash
+npx quarry route:list --method=GET       # Filter by HTTP method
+npx quarry route:list --path=/users      # Filter by path substring
+npx quarry route:list --name=users       # Filter by route name
+npx quarry route:list --hidden           # Include hidden routes (excluded by default)
+```
+
 ## URL Generation
 
 ### In Controllers (via RouterContext)
@@ -510,6 +519,22 @@ configureRoutes(router: Router): void {
   router.version('2')  // All controllers in this module get v2
 }
 ```
+
+## Response Validation
+
+When a route defines a `response` schema, the framework validates the actual response body against it. If the response doesn't match the declared schema, a `ResponseValidationError` is thrown.
+
+```typescript
+@Get('/:id', {
+  response: noteSchema,  // Response body will be validated against this
+})
+async show(ctx: RouterContext) {
+  const note = await this.service.findById(ctx.param('id'))
+  return ctx.json(note)  // Throws ResponseValidationError if note doesn't match noteSchema
+}
+```
+
+This catches server-side contract violations where a controller returns data that doesn't match its declared schema. Import `ResponseValidationError` from `stratal/router` if you need to handle it in a custom exception handler.
 
 ## OpenAPI
 

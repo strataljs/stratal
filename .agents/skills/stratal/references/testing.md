@@ -443,3 +443,5 @@ await response.assertInertiaSharedProp('appName')
 | `assertInertiaDeferredProp(prop, group)` | Assert prop is in `page.deferredProps[group]`. |
 | `assertInertiaMergeProp(prop)` | Assert prop is in `page.mergeProps`. |
 | `assertInertiaSharedProp(prop)` | Assert prop is in `page.sharedProps`. |
+| `assertSuccessfulPrecognition()` | Assert 204 response with `Precognition` and `Precognition-Success` headers. |
+| `assertPrecognitionValidationErrors(errors?)` | Assert 422 with `Precognition` header. Optionally assert error body. |
