@@ -266,6 +266,14 @@ export class RouteRegistrationService {
       if (!resolved) continue
 
       const { httpMethod, fullPath, routeConfig, statusCodeOverride } = resolved
+
+      // Auto-inject prefix params from Router.prefix() into route params
+      if (routerConfig.params) {
+        routeConfig.params = routeConfig.params
+          ? (routerConfig.params as z.ZodObject<z.ZodRawShape>).extend((routeConfig.params as z.ZodObject<z.ZodRawShape>).shape)
+          : routerConfig.params
+      }
+
       const hideFromDocs = routeConfig.hideFromDocs ?? (routerHidden ?? controllerHidden)
 
       // Compute route name

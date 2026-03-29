@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { Router } from '../router'
-import { RouterUseScopeError } from '../errors/router-use-scope.error'
-import * as internal from '../router.internals'
-import type { Middleware } from '../middleware.interface'
+import { z } from '../../i18n/validation'
 import type { Constructor } from '../../types'
+import { RouterUseScopeError } from '../errors/router-use-scope.error'
+import type { Middleware } from '../middleware.interface'
+import { Router } from '../router'
+import * as internal from '../router.internals'
 
 // Stub middleware classes
 class AuthMiddleware { handle() { /**/ } }
@@ -24,6 +25,16 @@ describe('Router', () => {
       const result = router.prefix('/:companyId')
       expect(result).toBe(router)
       expect(router[internal.getDefaultEntry]().prefix).toBe('/:companyId')
+    })
+
+    it('should set prefix with params schema', () => {
+      const router = new Router()
+      const paramsSchema = z.object({ companyId: z.string() })
+      router.prefix('/:companyId', paramsSchema)
+
+      const entry = router[internal.getDefaultEntry]()
+      expect(entry.prefix).toBe('/:companyId')
+      expect(entry.params).toBe(paramsSchema)
     })
 
     it('should set domain', () => {

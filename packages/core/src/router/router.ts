@@ -1,7 +1,8 @@
-import type { Middleware } from './middleware.interface'
-import { RouterUseScopeError } from './errors/router-use-scope.error'
-import * as internal from './router.internals'
+import type { ZodObject } from '../i18n/validation'
 import type { Constructor } from '../types'
+import { RouterUseScopeError } from './errors/router-use-scope.error'
+import type { Middleware } from './middleware.interface'
+import * as internal from './router.internals'
 
 /**
  * Configuration for a sub-group created via `router.group()`.
@@ -13,6 +14,8 @@ export interface RouterGroupConfig {
   middleware?: Constructor<Middleware>[]
   version?: string | string[]
   hideFromDocs?: boolean
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ZodObject generics require any for flexible shape parameter
+  params?: ZodObject<any>
 }
 
 /**
@@ -26,6 +29,8 @@ export interface RouterEntry {
   middleware: Constructor<Middleware>[]
   version?: string | string[]
   hideFromDocs?: boolean
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ZodObject generics require any for flexible shape parameter
+  params?: ZodObject<any>
   /** Controllers in this entry. undefined = all controllers not in any sub-group */
   controllers?: Constructor[]
 }
@@ -74,8 +79,10 @@ export class Router {
   }
 
   /** Dynamic path prefix. For shared segments like `/:companyId` */
-  prefix(path: string): this {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ZodObject generics require any for flexible shape parameter
+  prefix(path: string, params?: ZodObject<any>): this {
     this._defaultEntry.prefix = path
+    this._defaultEntry.params = params
     return this
   }
 

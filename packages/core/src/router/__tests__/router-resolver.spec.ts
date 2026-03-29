@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { z } from '../../i18n/validation'
+import type { Constructor } from '../../types'
+import type { Middleware } from '../middleware.interface'
 import { Router } from '../router'
 import { RouterResolver } from '../router-resolver'
-import type { Middleware } from '../middleware.interface'
-import type { Constructor } from '../../types'
 
 // Stubs
 class AuthMiddleware { handle() { /**/ } }
@@ -137,6 +138,78 @@ describe('RouterResolver', () => {
 
       const config = resolver.resolveForController(AdminController as Constructor)
       expect(config.version).toBe('1')
+    })
+
+    it('should resolve prefix params for controllers in default scope', () => {
+      const paramsSchema = z.object({ companyId: z.string() })
+      const router = new Router()
+      router.prefix('/:companyId', paramsSchema)
+
+      const resolver = new RouterResolver([
+        { router, controllers: [UsersController as Constructor] },
+      ])
+
+      const config = resolver.resolveForController(UsersController as Constructor)
+      expect(config.params).toBe(paramsSchema)
+    })
+
+    it('should merge parent and child prefix params', () => {
+      const parentParams = z.object({ companyId: z.string() })
+      const childParams = z.object({ teamId: z.string() })
+
+      const router = new Router()
+      router.prefix('/:companyId', parentParams)
+
+      router.group([AdminController as Constructor], (admin) => {
+        admin.prefix('/:teamId', childParams)
+      })
+
+      const resolver = new RouterResolver([
+        { router, controllers: [AdminController as Constructor] },
+      ])
+
+      const config = resolver.resolveForController(AdminController as Constructor)
+      expect(config.params).toBeDefined()
+      // Merged schema should contain both keys
+      const shape = config.params!.shape
+      expect(shape).toHaveProperty('companyId')
+      expect(shape).toHaveProperty('teamId')
+    })
+
+    it('should use only parent params when child has none', () => {
+      const parentParams = z.object({ companyId: z.string() })
+
+      const router = new Router()
+      router.prefix('/:companyId', parentParams)
+
+      router.group([AdminController as Constructor], (admin) => {
+        admin.prefix('/:teamId')
+      })
+
+      const resolver = new RouterResolver([
+        { router, controllers: [AdminController as Constructor] },
+      ])
+
+      const config = resolver.resolveForController(AdminController as Constructor)
+      expect(config.params).toBe(parentParams)
+    })
+
+    it('should use only child params when parent has none', () => {
+      const childParams = z.object({ teamId: z.string() })
+
+      const router = new Router()
+      router.prefix('/:companyId')
+
+      router.group([AdminController as Constructor], (admin) => {
+        admin.prefix('/:teamId', childParams)
+      })
+
+      const resolver = new RouterResolver([
+        { router, controllers: [AdminController as Constructor] },
+      ])
+
+      const config = resolver.resolveForController(AdminController as Constructor)
+      expect(config.params).toBe(childParams)
     })
   })
 

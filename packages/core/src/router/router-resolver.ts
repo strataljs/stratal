@@ -1,7 +1,8 @@
+import type { ZodObject } from '../i18n/validation'
+import type { Constructor } from '../types'
 import type { Middleware } from './middleware.interface'
 import type { Router, RouterEntry } from './router'
 import * as internal from './router.internals'
-import type { Constructor } from '../types'
 
 /**
  * Resolved configuration for a single controller.
@@ -14,6 +15,8 @@ export interface ResolvedRouterConfig {
   middleware: Constructor<Middleware>[]
   version?: string | string[]
   hideFromDocs?: boolean
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ZodObject generics require any for flexible shape parameter
+  params?: ZodObject<any>
 }
 
 /**
@@ -93,6 +96,8 @@ export class RouterResolver {
       version: child.version ?? parent.version,
       // Override: child hideFromDocs wins
       hideFromDocs: child.hideFromDocs ?? parent.hideFromDocs,
+      // Extend: parent params extended with child params
+      params: this.mergeParams(parent.params, child.params),
     }
   }
 
@@ -104,7 +109,17 @@ export class RouterResolver {
       middleware: [...entry.middleware],
       version: entry.version,
       hideFromDocs: entry.hideFromDocs,
+      params: entry.params,
     }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ZodObject generics require any for flexible shape parameter
+  private mergeParams(parent?: ZodObject<any>, child?: ZodObject<any>): ZodObject<any> | undefined {
+    if (!parent && !child) return undefined
+    if (!parent) return child
+    if (!child) return parent
+    // oxlint-disable-next-line typescript/no-explicit-any
+    return parent.extend(child.shape) as ZodObject<any>
   }
 
   private concatPrefixes(parent?: string, child?: string): string | undefined {
