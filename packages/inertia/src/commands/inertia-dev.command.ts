@@ -21,7 +21,6 @@ export class InertiaDevCommand extends Command {
 
     const configPath = writeTempViteConfig({
       cwd,
-      entryPath,
       server: { port, host },
     })
 

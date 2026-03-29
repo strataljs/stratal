@@ -19,15 +19,11 @@ export class InertiaBuildCommand extends Command {
       return 1
     }
 
-    const configPath = writeTempViteConfig({
-      cwd,
-      entryPath,
-      outDir,
-    })
+    const configPath = writeTempViteConfig({ cwd, outDir })
 
     this.info('Building Inertia.js frontend for production...')
 
-    const clientCode = await this.spawnVite(cwd, configPath, ['build', '--outDir', outDir])
+    const clientCode = await this.spawnVite(cwd, configPath, ['build'])
     if (clientCode !== 0) {
       this.fail('Client build failed.')
       return clientCode
@@ -36,7 +32,7 @@ export class InertiaBuildCommand extends Command {
 
     if (shouldBuildSsr) {
       this.info('Building SSR bundle...')
-      const ssrCode = await this.spawnVite(cwd, configPath, ['build', '--outDir', outDir, '--ssr'])
+      const ssrCode = await this.spawnVite(cwd, configPath, ['build', '--ssr'])
       if (ssrCode !== 0) {
         this.fail('SSR build failed.')
         return ssrCode
@@ -45,6 +41,7 @@ export class InertiaBuildCommand extends Command {
     }
 
     this.success(`Output in ${outDir}/`)
+    this.info('Deploy with: npx wrangler deploy')
     return 0
   }
 

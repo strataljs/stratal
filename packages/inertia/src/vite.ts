@@ -14,6 +14,7 @@ export function stratalInertia(options?: StratalInertiaPluginOptions): Plugin[] 
 
   const optimizeDepsExclude = ['@cloudflare/vite-plugin', 'wrangler', 'blake3-wasm', '@stratal/inertia']
   const optimizeDepsInclude = ['buffer', 'buffer/', 'base64-js', 'ieee754']
+  const devOnlyExternals = ['ts-morph']
 
   return [
     stratalInertiaDevCss({ entries }),
@@ -27,6 +28,15 @@ export function stratalInertia(options?: StratalInertiaPluginOptions): Plugin[] 
           ...env.optimizeDeps,
           exclude: [...existing, ...optimizeDepsExclude],
           include: [...existingInclude, ...optimizeDepsInclude],
+        }
+
+        const existingExternal = (env.build?.rolldownOptions?.external as string[]) ?? []
+        env.build = {
+          ...env.build,
+          rolldownOptions: {
+            ...env.build?.rolldownOptions,
+            external: [...existingExternal, ...devOnlyExternals],
+          },
         }
       },
     },

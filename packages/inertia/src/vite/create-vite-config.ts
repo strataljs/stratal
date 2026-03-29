@@ -3,7 +3,6 @@ import { dirname, join } from 'node:path'
 
 export interface TempViteConfigOptions {
   cwd: string
-  entryPath: string
   server?: { port?: number; host?: boolean }
   outDir?: string
 }
@@ -32,7 +31,7 @@ let inertiaPlugin = null
 try {
   const mod = await import('@inertiajs/vite')
   const inertia = mod.default ?? mod
-  inertiaPlugin = inertia({ pages: { path: './src/inertia/pages', extension: '.tsx' } })
+  inertiaPlugin = inertia()
 } catch {}
 
 const baseConfig = {
@@ -44,9 +43,6 @@ const baseConfig = {
   publicDir: '${join(options.cwd, 'src', 'inertia', 'public').replace(/\\/g, '/')}',
   build: {
     ${outDirConfig}
-    rolldownOptions: {
-      input: '${options.entryPath}',
-    },
   },
   ${serverConfig}
 }
