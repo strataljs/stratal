@@ -53,13 +53,11 @@ declare module 'stratal/router' {
 }
 
 export function augmentRouterContext(resolveService: (ctx: RouterContext) => InertiaService): void {
-  const proto = RouterContext.prototype
-
   // Override redirect to auto-convert 302 → 303 for non-GET/HEAD requests
   // so the browser follows with GET instead of preserving the original method
   // eslint-disable-next-line @typescript-eslint/unbound-method -- intentionally saving reference, called with .call(this)
-  const originalRedirect = proto.redirect
-  proto.redirect = function (this: RouterContext, url: string, status?: RedirectStatusCode) {
+  const originalRedirect = RouterContext.prototype.redirect
+  RouterContext.macro('redirect', function (this: RouterContext, url: string, status?: RedirectStatusCode) {
     if (!status || status === 302) {
       const method = this.c.req.method
       if (method !== 'GET' && method !== 'HEAD') {
@@ -67,47 +65,47 @@ export function augmentRouterContext(resolveService: (ctx: RouterContext) => Ine
       }
     }
     return originalRedirect.call(this, url, status)
-  }
+  })
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  proto.inertia = function (this: RouterContext, component: string, props?: any, options?: InertiaRenderOptions) {
+  RouterContext.macro('inertia', function (this: RouterContext, component: string, props?: any, options?: InertiaRenderOptions) {
     const service = resolveService(this)
     return service.render(this, component, props as Record<string, unknown>, options)
-  }
+  })
 
-  proto.defer = function <T>(this: RouterContext, callback: () => T, group?: string) {
+  RouterContext.macro('defer', function <T>(this: RouterContext, callback: () => T, group?: string) {
     const service = resolveService(this)
     return service.defer(callback, group)
-  }
+  })
 
-  proto.optional = function <T>(this: RouterContext, callback: () => T) {
+  RouterContext.macro('optional', function <T>(this: RouterContext, callback: () => T) {
     const service = resolveService(this)
     return service.optional(callback)
-  }
+  })
 
-  proto.merge = function <T>(this: RouterContext, callback: () => T, options?: InertiaMergeOptions) {
+  RouterContext.macro('merge', function <T>(this: RouterContext, callback: () => T, options?: InertiaMergeOptions) {
     const service = resolveService(this)
     return service.merge(callback, options)
-  }
+  })
 
-  proto.once = function <T>(this: RouterContext, callback: () => T, options?: InertiaOnceOptions) {
+  RouterContext.macro('once', function <T>(this: RouterContext, callback: () => T, options?: InertiaOnceOptions) {
     const service = resolveService(this)
     return service.once(callback, options)
-  }
+  })
 
-  proto.always = function <T>(this: RouterContext, callback: () => T) {
+  RouterContext.macro('always', function <T>(this: RouterContext, callback: () => T) {
     const service = resolveService(this)
     return service.always(callback)
-  }
+  })
 
-  proto.flash = function (this: RouterContext, key: string, value: unknown) {
+  RouterContext.macro('flash', function (this: RouterContext, key: string, value: unknown) {
     const flashOut = this.c.get('inertiaFlashOut') as Record<string, unknown> | undefined
     if (flashOut) {
       flashOut[key] = value
     }
-  }
+  })
 
-  proto.withoutSsr = function (this: RouterContext) {
+  RouterContext.macro('withoutSsr', function (this: RouterContext) {
     this.c.set('withoutSsr', true)
-  }
+  })
 }

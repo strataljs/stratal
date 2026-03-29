@@ -5,6 +5,7 @@ import type { ContentfulStatusCode, RedirectStatusCode } from 'hono/utils/http-s
 import type { StreamingApi } from 'hono/utils/stream'
 import type { Container } from '../di/container'
 import { RequestContainerNotInitializedError } from '../errors'
+import { Macroable } from '../macroable'
 import { ROUTER_CONTEXT_KEYS } from './constants'
 import type { RouteName, RouteParams } from './route-map'
 import { ROUTER_TOKENS } from './router.tokens'
@@ -42,14 +43,16 @@ export type ContextQueryResult<R extends Record<string, unknown> | undefined, K 
  * }
  * ```
  */
-export class RouterContext<T extends RouterEnv = RouterEnv> {
+export class RouterContext<T extends RouterEnv = RouterEnv> extends Macroable {
   /**
    * Native Hono context
    * Access for advanced use cases not covered by helper methods
    */
   constructor(
     public readonly c: Context<T>
-  ) { }
+  ) {
+    super()
+  }
 
   /**
    * Get request-scoped DI container

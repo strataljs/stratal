@@ -34,9 +34,7 @@ declare module '@stratal/testing' {
 }
 
 export function augmentTestResponse(): void {
-  const proto = TestResponse.prototype
-
-  proto.assertInertia = async function (this: TestResponse, callback?: (page: Page) => void) {
+  TestResponse.macro('assertInertia', async function (this: TestResponse, callback?: (page: Page) => void) {
     this.assertHeader('x-inertia', 'true')
     this.assertOk()
 
@@ -46,9 +44,9 @@ export function augmentTestResponse(): void {
     }
 
     return this
-  }
+  })
 
-  proto.assertInertiaComponent = async function (this: TestResponse, component: string) {
+  TestResponse.macro('assertInertiaComponent', async function (this: TestResponse, component: string) {
     const page = await this.json<Page>()
 
     expect(
@@ -57,9 +55,9 @@ export function augmentTestResponse(): void {
     ).toBe(component)
 
     return this
-  }
+  })
 
-  proto.assertInertiaProp = async function (this: TestResponse, path: string, expected: unknown) {
+  TestResponse.macro('assertInertiaProp', async function (this: TestResponse, path: string, expected: unknown) {
     const page = await this.json<Page>()
     const actual = getValueAtPath(page.props, path)
 
@@ -69,9 +67,9 @@ export function augmentTestResponse(): void {
     ).toStrictEqual(expected)
 
     return this
-  }
+  })
 
-  proto.assertInertiaPropExists = async function (this: TestResponse, path: string) {
+  TestResponse.macro('assertInertiaPropExists', async function (this: TestResponse, path: string) {
     const page = await this.json<Page>()
     const exists = hasValueAtPath(page.props, path)
 
@@ -81,9 +79,9 @@ export function augmentTestResponse(): void {
     ).toBe(true)
 
     return this
-  }
+  })
 
-  proto.assertInertiaPropMissing = async function (this: TestResponse, path: string) {
+  TestResponse.macro('assertInertiaPropMissing', async function (this: TestResponse, path: string) {
     const page = await this.json<Page>()
     const exists = hasValueAtPath(page.props, path)
 
@@ -93,9 +91,9 @@ export function augmentTestResponse(): void {
     ).toBe(false)
 
     return this
-  }
+  })
 
-  proto.assertInertiaUrl = async function (this: TestResponse, url: string) {
+  TestResponse.macro('assertInertiaUrl', async function (this: TestResponse, url: string) {
     const page = await this.json<Page>()
 
     expect(
@@ -104,9 +102,9 @@ export function augmentTestResponse(): void {
     ).toBe(url)
 
     return this
-  }
+  })
 
-  proto.assertInertiaVersion = async function (this: TestResponse, version: string | null) {
+  TestResponse.macro('assertInertiaVersion', async function (this: TestResponse, version: string | null) {
     const page = await this.json<Page>()
 
     expect(
@@ -115,9 +113,9 @@ export function augmentTestResponse(): void {
     ).toBe(version)
 
     return this
-  }
+  })
 
-  proto.assertInertiaFlash = async function (this: TestResponse, key: string, value: unknown) {
+  TestResponse.macro('assertInertiaFlash', async function (this: TestResponse, key: string, value: unknown) {
     const page = await this.json<Page>()
     const actual = page.flash?.[key]
 
@@ -127,9 +125,9 @@ export function augmentTestResponse(): void {
     ).toStrictEqual(value)
 
     return this
-  }
+  })
 
-  proto.assertInertiaDeferredProp = async function (this: TestResponse, prop: string, group: string) {
+  TestResponse.macro('assertInertiaDeferredProp', async function (this: TestResponse, prop: string, group: string) {
     const page = await this.json<Page>()
 
     expect(
@@ -138,9 +136,9 @@ export function augmentTestResponse(): void {
     ).toContain(prop)
 
     return this
-  }
+  })
 
-  proto.assertInertiaMergeProp = async function (this: TestResponse, prop: string) {
+  TestResponse.macro('assertInertiaMergeProp', async function (this: TestResponse, prop: string) {
     const page = await this.json<Page>()
 
     expect(
@@ -149,9 +147,9 @@ export function augmentTestResponse(): void {
     ).toContain(prop)
 
     return this
-  }
+  })
 
-  proto.assertInertiaSharedProp = async function (this: TestResponse, prop: string) {
+  TestResponse.macro('assertInertiaSharedProp', async function (this: TestResponse, prop: string) {
     const page = await this.json<Page>()
 
     expect(
@@ -160,17 +158,17 @@ export function augmentTestResponse(): void {
     ).toContain(prop)
 
     return this
-  }
+  })
 
-  proto.assertSuccessfulPrecognition = function (this: TestResponse) {
+  TestResponse.macro('assertSuccessfulPrecognition', function (this: TestResponse) {
     this.assertNoContent()
     this.assertHeader('Precognition', 'true')
     this.assertHeader('Precognition-Success', 'true')
 
     return this
-  }
+  })
 
-  proto.assertPrecognitionValidationErrors = async function (this: TestResponse, errors?: Record<string, string>) {
+  TestResponse.macro('assertPrecognitionValidationErrors', async function (this: TestResponse, errors?: Record<string, string>) {
     this.assertUnprocessable()
     this.assertHeader('Precognition', 'true')
 
@@ -184,5 +182,5 @@ export function augmentTestResponse(): void {
     }
 
     return this
-  }
+  })
 }

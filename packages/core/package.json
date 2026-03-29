@@ -94,6 +94,10 @@
       "types": "./dist/logger/index.d.mts",
       "import": "./dist/logger/index.mjs"
     },
+    "./macroable": {
+      "types": "./dist/macroable/index.d.mts",
+      "import": "./dist/macroable/index.mjs"
+    },
     "./module": {
       "types": "./dist/module/index.d.mts",
       "import": "./dist/module/index.mjs"
