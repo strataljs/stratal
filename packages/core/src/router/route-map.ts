@@ -42,3 +42,21 @@ export type RouteParams<N extends RouteName> =
         : P
       : Record<string, string> | undefined
     : Record<string, string> | undefined
+
+/**
+ * Minimal route data for client-side URL generation.
+ * Contains only the fields needed by URL building logic — no server metadata.
+ */
+export interface SerializedRoute {
+  path: string
+  paramNames: string[]
+  domain?: string
+  domainParamNames: string[]
+  localePaths?: string[]
+}
+
+/**
+ * A record of named routes keyed by route name, used for client-side URL building.
+ * Serialized from `RouteRegistry.named()` on the server, consumed by `useRoute()` on the client.
+ */
+export type SerializedRoutes = Record<string, SerializedRoute>

@@ -77,6 +77,22 @@ export interface InertiaModuleOptions {
    */
   i18n?: InertiaI18nOptions
   /**
+   * When `true`, serializes all named routes and injects them as a `routes`
+   * shared prop on every Inertia page response.
+   *
+   * Use with `useRoute()` from `@stratal/inertia/react` on the frontend for
+   * Ziggy-like client-side URL generation.
+   *
+   * @example
+   * ```typescript
+   * InertiaModule.forRoot({
+   *   rootView,
+   *   routes: true,
+   * })
+   * ```
+   */
+  routes?: boolean
+  /**
    * Vite manifest for production builds. When omitted, dev mode is assumed
    * and Vite client + entry scripts are injected with same-origin paths.
    */

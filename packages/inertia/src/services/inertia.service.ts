@@ -1,7 +1,7 @@
 import type { Page } from '@inertiajs/core'
 import { Transient, inject } from 'stratal/di'
 import { I18N_TOKENS, type MessageLoaderService } from 'stratal/i18n'
-import type { RouterContext } from 'stratal/router'
+import { ROUTER_TOKENS, type RegisteredRoute, type RouteRegistry, type RouterContext, type SerializedRoutes } from 'stratal/router'
 import type { InertiaMergeOptions, InertiaOnceOptions } from '../augment/router-context'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { INERTIA_TOKENS } from '../inertia.tokens'
@@ -177,6 +177,11 @@ export class InertiaService {
       shared.translations = loader.getFilteredMessages(locale, { only: this.options.i18n.only })
     }
 
+    if (this.options.routes) {
+      const registry = ctx.getContainer().resolve<RouteRegistry>(ROUTER_TOKENS.RouteRegistry)
+      shared.routes = this.serializeRoutes(registry.named())
+    }
+
     return { shared, sharedKeys: Object.keys(shared) }
   }
 
@@ -328,6 +333,22 @@ export class InertiaService {
 
   private isAlwaysProp(value: unknown): value is InertiaAlwaysProp {
     return typeof value === 'object' && value !== null && INERTIA_PROP_ALWAYS in value
+  }
+
+  private serializeRoutes(routes: RegisteredRoute[]): SerializedRoutes {
+    const serialized: SerializedRoutes = {}
+    for (const route of routes) {
+      if (route.name) {
+        serialized[route.name] = {
+          path: route.path,
+          paramNames: route.paramNames,
+          domainParamNames: route.domainParamNames,
+          ...(route.domain ? { domain: route.domain } : {}),
+          ...(route.localePaths?.length ? { localePaths: route.localePaths } : {}),
+        }
+      }
+    }
+    return serialized
   }
 
   private isSsrDisabled(pathname: string): boolean {

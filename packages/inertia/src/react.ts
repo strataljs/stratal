@@ -8,3 +8,4 @@
  */
 
 export { useI18n } from './react/use-i18n'
+export { useRoute } from './react/use-route'
