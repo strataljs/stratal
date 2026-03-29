@@ -72,6 +72,8 @@ reviews:
   tools:
     oxc:
       enabled: true
+    eslint:
+      enabled: false
     biome:
       enabled: false
 

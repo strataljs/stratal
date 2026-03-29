@@ -636,6 +636,27 @@ describe('ExceptionHandler', () => {
       expect(html).toContain('500')
     })
 
+    it('should return HTML error page in development environment for plain Error', async () => {
+      const childContainer = tsyringeRootContainer.createChildContainer()
+      const container = new Container({ container: childContainer })
+      container.registerValue(LOGGER_TOKENS.LoggerService, mockLogger)
+      container.registerValue(DI_TOKENS.CloudflareEnv, { ENVIRONMENT: 'development' })
+      container.registerValue(DI_TOKENS.ExecutionContext, mockExecutionContext)
+      container.registerValue(I18N_TOKENS.I18nService, mockI18n)
+      injectable()(DefaultExceptionHandler as never)
+      container.register(DI_TOKENS.ExceptionHandler, DefaultExceptionHandler as never)
+      const handler = container.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
+      handler.register()
+
+      const error = new Error('boom')
+      const httpCtx = createHttpExceptionContext(createMockHonoCtx({ accept: 'text/html' }))
+      const response = await handler.handle(error, httpCtx)
+      expect(response.status).toBe(500)
+      expect(response.headers.get('content-type')).toContain('text/html')
+      const html = await response.text()
+      expect(html).toContain('boom')
+    })
+
     it('should return JSON for non-HTTP contexts regardless of error type', async () => {
       const handler = createHandler()
       const response = await handler.handle(new TestError(), cliCtx)

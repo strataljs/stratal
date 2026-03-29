@@ -83,7 +83,6 @@ function discoverEnvFiles(): string[] {
   const files = readdirSync(cwd)
   return files
     .filter(file => (/^\.dev\.vars($|\.)/.test(file) || /^\.env($|\.)/.test(file)) && !file.endsWith('.example') && !file.endsWith('.sample'))
-    .map(file => join(cwd, file))
     .sort((a, b) => {
       // Load .env files before .dev.vars so .dev.vars takes precedence
       const aIsDevVars = a.startsWith('.dev.vars')
@@ -95,6 +94,7 @@ function discoverEnvFiles(): string[] {
       if (aIsLocal !== bIsLocal) return aIsLocal ? 1 : -1
       return a.localeCompare(b)
     })
+    .map(file => join(cwd, file))
 }
 
 async function main(): Promise<void> {
