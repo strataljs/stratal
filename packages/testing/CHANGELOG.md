@@ -1,5 +1,25 @@
 # @stratal/testing
 
+## 0.0.18
+
+### Patch Changes
+
+- c9176ea: Add locale support to test HTTP client, SSE, and WebSocket requests
+
+  ### Details
+
+  - Add `withLocale()` method to `TestHttpClient`, `TestHttpRequest`, `TestSseRequest`, and `TestWsRequest`
+  - Automatically resolves locale detection strategy from the module's I18n configuration
+  - Export `getValueAtPath` and `hasValueAtPath` path utility functions
+
+- Updated dependencies [fcb71c4]
+- Updated dependencies [c9176ea]
+- Updated dependencies [17f8675]
+- Updated dependencies [c9176ea]
+- Updated dependencies [c9176ea]
+  - stratal@0.0.18
+  - @stratal/framework@0.0.18
+
 ## 0.0.17
 
 ### Patch Changes

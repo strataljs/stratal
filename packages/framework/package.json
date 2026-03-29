@@ -1,6 +1,6 @@
 {
   "name": "@stratal/framework",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "type": "module",
   "license": "MIT",
   "author": "Temitayo Fadojutimi",
@@ -78,7 +78,7 @@
   "peerDependencies": {
     "pg": "^8.0.0",
     "reflect-metadata": "^0.2.2",
-    "stratal": "^0.0.17"
+    "stratal": "^0.0.18"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.13.5",

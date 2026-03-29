@@ -1,5 +1,51 @@
 # stratal
 
+## 0.0.18
+
+### Patch Changes
+
+- fcb71c4: Add stub exports for Cloudflare Workers APIs in the virtual ESM loader used by Quarry CLI
+- 17f8675: Add `ExceptionHandler` with customizable error reporting, rendering, and throttling support
+
+  ### Details
+
+  - Introduce `ExceptionHandler` base class with `report()`, `render()`, `shouldReport()`, and `throttle()` hooks
+  - Add `HttpException` class for structured HTTP error responses with fluent API
+  - Add `ExceptionContext` for collecting contextual metadata during error handling
+  - Replace `GlobalErrorHandler` with the new `ExceptionHandler` pipeline
+  - Add `stratal` as a CLI bin alias for `quarry`
+  - Streamline OpenAPI service and routing metadata handling
+
+  ### Breaking Changes
+
+  - `GlobalErrorHandler` has been removed. Migrate to `ExceptionHandler` by extending the base class and implementing the `render()` hook for custom error responses.
+
+- c9176ea: Enhance i18n locale detection with configurable strategies and message loader service
+
+  ### Details
+
+  - Support multiple locale detection strategies: cookie, header, querystring, and path-based
+  - Add `MessageLoaderService` for dynamic message loading and registration
+  - Add `stratal/i18n/utils` subpath export for i18n setup utilities
+
+- c9176ea: Add Laravel-style routing with named routes, URI generation, signed URLs, domain routing, and response validation
+
+  ### Details
+
+  - Add `Uri` service for generating URLs from named routes with parameter binding
+  - Add signed URL support with HMAC-based signature generation and verification
+  - Add domain-based routing with `@Route({ domain })` and domain middleware
+  - Add response validation to verify route handler responses match OpenAPI schemas
+  - Add `RouteRegistry` for route name lookups and `RouteMap` for serialized route definitions
+  - Add `RouterResolver` for programmatic route resolution and middleware chain composition
+  - Add `LocalePathService` for locale-aware URL path handling
+  - Add `route:types` Quarry command for generating typed route helpers
+  - Replace module-level middleware system with router-scoped middleware via `RouteConfigurable`
+
+  ### Breaking Changes
+
+  - The `stratal/middleware` subpath export has been removed. Middleware is now configured through the router using `RouteConfigurable` instead of `MiddlewareConfigurable`. Implement `configureRoutes(router: Router)` on your module and use `router.use(...)` to apply middleware.
+
 ## 0.0.17
 
 ### Patch Changes
