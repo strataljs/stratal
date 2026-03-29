@@ -42,8 +42,7 @@
     "build": "yarn workspaces foreach -At --no-private run build",
     "test": "yarn workspaces foreach -At --no-private run test",
     "docs": "typedoc",
-    "docs:watch": "typedoc --watch",
-    "examples:install": "bash -c 'for dir in examples/*/; do (cd \"$dir\" && npm install); done'"
+    "docs:watch": "typedoc --watch"
   },
   "lint-staged": {
     "*.{ts,mts}": [

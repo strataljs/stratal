@@ -49,14 +49,14 @@ Available templates:
 
 | Template | Description | Example |
 |---|---|---|
-| `hello-world` | A minimal Stratal app with a single GET endpoint | [Source](https://github.com/strataljs/stratal/tree/main/examples/01-hello-world) |
-| `crud-api` | RESTful notes API with full CRUD operations and DI | [Source](https://github.com/strataljs/stratal/tree/main/examples/02-crud-api) |
-| `testing` | Vitest + @stratal/testing with Cloudflare worker pool | [Source](https://github.com/strataljs/stratal/tree/main/examples/03-testing) |
-| `guards` | Route protection with @UseGuards and CanActivate | [Source](https://github.com/strataljs/stratal/tree/main/examples/04-guards) |
-| `middleware` | Middleware configuration with apply/exclude/forRoutes | [Source](https://github.com/strataljs/stratal/tree/main/examples/05-middleware) |
-| `queues` | Queue producer/consumer pattern with Cloudflare Queues | [Source](https://github.com/strataljs/stratal/tree/main/examples/06-queues) |
-| `scheduled-tasks` | Cron job scheduling with the CronJob interface | [Source](https://github.com/strataljs/stratal/tree/main/examples/07-scheduled-tasks) |
-| `openapi` | OpenAPI docs with Swagger UI and Zod schema integration | [Source](https://github.com/strataljs/stratal/tree/main/examples/08-openapi) |
+| `hello-world` | A minimal Stratal app with a single GET endpoint | [Source](https://github.com/strataljs/examples/tree/main/01-hello-world) |
+| `crud-api` | RESTful notes API with full CRUD operations and DI | [Source](https://github.com/strataljs/examples/tree/main/02-crud-api) |
+| `testing` | Vitest + @stratal/testing with Cloudflare worker pool | [Source](https://github.com/strataljs/examples/tree/main/03-testing) |
+| `guards` | Route protection with @UseGuards and CanActivate | [Source](https://github.com/strataljs/examples/tree/main/04-guards) |
+| `middleware` | Middleware configuration with apply/exclude/forRoutes | [Source](https://github.com/strataljs/examples/tree/main/05-middleware) |
+| `queues` | Queue producer/consumer pattern with Cloudflare Queues | [Source](https://github.com/strataljs/examples/tree/main/06-queues) |
+| `scheduled-tasks` | Cron job scheduling with the CronJob interface | [Source](https://github.com/strataljs/examples/tree/main/07-scheduled-tasks) |
+| `openapi` | OpenAPI docs with Swagger UI and Zod schema integration | [Source](https://github.com/strataljs/examples/tree/main/08-openapi) |
 
 For benchmarks, see the [main README](https://github.com/strataljs/stratal#benchmarks).
 

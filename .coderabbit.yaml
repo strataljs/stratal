@@ -55,7 +55,6 @@ reviews:
     - "!**/node_modules/**"
     - "!**/dist/**"
     - "!**/coverage/**"
-    - "!examples/**"
     - "!.vscode/**"
     - "!.agents/**"
     - "!.changeset/**"

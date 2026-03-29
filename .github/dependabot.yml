@@ -12,7 +12,6 @@ updates:
     directories:
       - "/"
       - "/packages/*"
-      - "/examples/*"
     schedule:
       interval: monthly
     open-pull-requests-limit: 20
