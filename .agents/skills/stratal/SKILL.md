@@ -51,6 +51,7 @@ Run `npx quarry help` to see all commands. Always use these to inspect your app 
 | `npx quarry list` | Show all registered commands |
 | `npx quarry help <cmd>` | Show usage for a command |
 | `npx quarry route:list` | List all HTTP routes (method, path, name) |
+| `npx quarry route:types` | Generate TypeScript types for named routes |
 | `npx quarry event:list` | List all event listeners |
 | `npx quarry schedule:list` | List all cron schedules |
 | `npx quarry queue:list` | List all queue consumers |
@@ -137,7 +138,9 @@ export class NotesController {
 }
 ```
 
-For full routing reference (RouteConfig, RouterContext API, OpenAPI), see `references/routing.md`.
+Routes can be named for URL generation. Convention routes auto-name (e.g., `notes.index`, `notes.show`). Use `name` in `@Controller()` for prefix, `name` in `@Route()`/`@Get()` for explicit names. Generate URLs with `ctx.route('notes.show', { id: '1' })` in controllers or `route('notes.show', { id: '1' })` from `stratal/router` outside controllers. Run `npx quarry route:types` for type-safe route names.
+
+For full routing reference (RouteConfig, RouterContext, named routes, URL generation, signed URLs, domain routing, Router fluent API, OpenAPI), see `references/routing.md`.
 
 ## File Conventions
 
@@ -193,7 +196,8 @@ Inertia: `@stratal/inertia`, `@stratal/inertia/react`, `@stratal/inertia/testing
 4. Create controller `notes.controller.ts` with `@Controller('/api/v1/notes')`
 5. Create module `notes.module.ts` with `@Module({ providers: [NotesService], controllers: [NotesController] })`
 6. Add `NotesModule` to root module's `imports`
-7. Run `npx quarry route:list` to verify routes are registered
+7. (Optional) Implement `RouteConfigurable` in module for middleware, route prefixes, or grouping
+8. Run `npx quarry route:list` to verify routes are registered
 
 ### Add CRUD Endpoints
 
@@ -251,6 +255,14 @@ See `references/quarry-cli.md` for all MCP flags and options.
 
 **User says "Set up i18n with Accept-Language header"** -> Read `references/errors-and-i18n.md`. Configure `I18nModule.forRoot({ detection: { strategy: 'header' } })`. Register messages with `I18nModule.registerMessages()`.
 
+**User says "Generate URLs for routes"** -> Read `references/routing.md`. Use `ctx.route('name', params)` in controllers. Use standalone `route()` from `stratal/router` outside controllers. Run `npx quarry route:types` for type safety.
+
+**User says "Add domain-based routing"** -> Read `references/routing.md`. Set `domain: '{tenant}.myapp.com'` on `@Controller()` or use `router.domain()` in `configureRoutes()`. Access with `ctx.domain('tenant')`.
+
+**User says "Set up signed URLs"** -> Read `references/routing.md`. Add `APP_SECRET` to `wrangler.jsonc` vars. Use `ctx.signedUrl('route.name', params, { expiresIn: 3600 })`. Verify with `ctx.hasValidSignature()`.
+
+**User says "Configure middleware for routes"** -> Read `references/middleware-and-guards.md`. Implement `RouteConfigurable` in module, use `router.middleware()` for scoped or `router.use()` for global middleware.
+
 **User says "I have an existing Hono app"** -> Read `references/incremental-adoption.md`. Mount Stratal as sub-app via `stratal.hono`.
 
 ## Reference Loading Guide
@@ -261,7 +273,7 @@ Load these when the task needs deeper knowledge:
 |-----------|-------------|
 | `references/quarry-cli.md` | CLI commands, MCP server setup, custom command creation, debugging |
 | `references/modules-and-di.md` | Provider types, scopes, container API, dynamic modules |
-| `references/routing.md` | RouteConfig details, RouterContext API, OpenAPI, versioning |
+| `references/routing.md` | RouteConfig, RouterContext API, named routes, URL generation, signed URLs, domain routing, Router fluent API, OpenAPI, versioning |
 | `references/errors-and-i18n.md` | ExceptionHandler, ApplicationError, error codes, i18n, withI18n() |
 | `references/inertia.md` | Inertia.js setup, rendering, props, SSR, type safety, Vite |
 | `references/database.md` | DatabaseModule, ZenStack, connections, plugins, transactions |
@@ -269,7 +281,7 @@ Load these when the task needs deeper knowledge:
 | `references/events.md` | Event listeners, @On/@Listener, database events, wildcards |
 | `references/queues-and-cron.md` | Queue consumers, senders, cron jobs, wrangler config |
 | `references/seeders.md` | Database seeders, calling other seeders |
-| `references/middleware-and-guards.md` | Middleware pipeline, guards, @UseGuards |
+| `references/middleware-and-guards.md` | RouteConfigurable, middleware registration with Router, guards, @UseGuards |
 | `references/testing.md` | TestingModule, TestHttpClient, mocks, factories |
 | `references/infrastructure.md` | Cache (KV), Logger, Email (Resend/SMTP), Storage (R2/S3), OpenAPI |
 | `references/config.md` | ConfigService, registerAs(), namespaces |
@@ -297,3 +309,11 @@ Load these when the task needs deeper knowledge:
 **Locale not detected** -> Check `detection` strategy in `I18nModule.forRoot()`. Default is `'cookie'` (reads `locale` cookie). Use `'header'` for `Accept-Language`, `'querystring'` for `?locale=`, `'path'` for URL prefix.
 
 **Routes not showing in `route:list`** -> Controller not in module's `controllers` array, or module not imported in root module.
+
+**"Route name not found"** -> Route not named. Add `name` to `@Route()` or `@Controller()`, or use convention routing which auto-generates names. Run `npx quarry route:list` to see named routes.
+
+**"Duplicate route name"** -> Two routes share the same name. Check `@Controller({ name })` prefixes and `@Route({ name })` values.
+
+**"APP_SECRET environment variable is required"** -> Add `APP_SECRET` to `wrangler.jsonc` `[vars]` for signed URL features.
+
+**"Domain mismatch" / 404 on domain routes** -> Request host doesn't match controller's domain pattern. Check `@Controller({ domain })` or `router.domain()` config.

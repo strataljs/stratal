@@ -43,6 +43,8 @@ export default new Stratal({ module: AppModule })
 
 ```typescript
 import { Module } from 'stratal/module'
+import type { RouteConfigurable } from 'stratal/router'
+import { Router } from 'stratal/router'
 import { I18nModule } from 'stratal/i18n'
 import { NotesModule } from './domain/notes/notes.module'
 
@@ -56,8 +58,16 @@ import { NotesModule } from './domain/notes/notes.module'
     NotesModule,
   ],
 })
-export class AppModule {}
+export class AppModule implements RouteConfigurable {
+  configureRoutes(router: Router): void {
+    // Optional: configure global middleware, route prefixes, domains, etc.
+    // router.use(CorsMiddleware)
+    // router.middleware(LoggingMiddleware)
+  }
+}
 ```
+
+`RouteConfigurable` is optional — only add it when you need middleware or route grouping. A plain `@Module({})` without it is valid.
 
 ### src/types/env.ts
 

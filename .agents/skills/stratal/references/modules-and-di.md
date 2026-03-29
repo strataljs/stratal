@@ -170,6 +170,22 @@ export class EmailModule {
 export class AppModule {}
 ```
 
+## Route Configuration
+
+Modules can implement `RouteConfigurable` from `stratal/router` to configure middleware, route prefixes, domains, and grouping for their controllers. See `references/routing.md` for the full Router fluent API and `references/middleware-and-guards.md` for middleware patterns.
+
+```typescript
+import type { RouteConfigurable } from 'stratal/router'
+import { Router } from 'stratal/router'
+
+@Module({ controllers: [UsersController] })
+export class UsersModule implements RouteConfigurable {
+  configureRoutes(router: Router): void {
+    router.prefix('/api').middleware(AuthMiddleware)
+  }
+}
+```
+
 ## Lifecycle Hooks
 
 ```typescript

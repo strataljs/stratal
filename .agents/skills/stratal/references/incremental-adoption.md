@@ -79,7 +79,7 @@ Stratal only creates request-scoped DI containers for requests that hit Stratal 
 For requests hitting Stratal routes, middleware executes in this order:
 1. Outer Hono middleware (registered on the parent `app`)
 2. Stratal container setup (request container creation)
-3. Stratal middleware (registered via `MiddlewareConfigurable`)
+3. Stratal middleware (registered via `RouteConfigurable`)
 4. Guards (`@UseGuards()`)
 5. Route handler
 

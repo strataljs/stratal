@@ -18,6 +18,7 @@ npx quarry ./custom/entry.ts <command>
 | `list` | Show all registered commands |
 | `help <command>` | Show usage for a specific command |
 | `route:list` | List all registered HTTP routes with methods and paths |
+| `route:types {--output=}` | Generate TypeScript types for named routes |
 | `event:list` | List all registered event listeners |
 | `schedule:list` | List all cron job schedules |
 | `queue:list` | List all queue consumers |
@@ -46,6 +47,10 @@ npx quarry queue:list
 
 # List all available seeders
 npx quarry db:seed:list
+
+# Generate type-safe route names
+npx quarry route:types
+npx quarry route:types --output=types/routes.d.ts
 
 # Preview what MCP tools your API exposes
 npx quarry mcp:tools

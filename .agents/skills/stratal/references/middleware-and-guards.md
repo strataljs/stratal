@@ -2,54 +2,88 @@
 
 ## Middleware
 
-### MiddlewareConfigurable Interface
+### Registering Middleware
 
-Modules implement `MiddlewareConfigurable` to configure middleware via a fluent API:
+Modules implement `RouteConfigurable` to register middleware via the Router:
 
 ```typescript
 import { Module } from 'stratal/module'
-import type { MiddlewareConfigurable, MiddlewareConsumer } from 'stratal/module'
+import type { RouteConfigurable } from 'stratal/router'
+import { Router } from 'stratal/router'
 
 @Module({ providers: [LoggingMiddleware] })
-export class AppModule implements MiddlewareConfigurable {
-  configure(consumer: MiddlewareConsumer): void {
-    consumer
-      .apply(LoggingMiddleware)
-      .exclude('/health')
-      .forRoutes('*')
+export class AppModule implements RouteConfigurable {
+  configureRoutes(router: Router): void {
+    // Scoped — applies to this module's controllers
+    router.middleware(LoggingMiddleware)
   }
 }
 ```
 
-### Middleware Consumer API
+### Common Middleware Patterns
 
 ```typescript
-consumer
-  .apply(MiddlewareClass)         // Middleware to apply
-  .apply(First, Second, Third)    // Multiple middleware (executed in order)
-  .exclude('/health', '/metrics') // Exclude paths
-  .forRoutes('*')                 // Apply to all routes
-  .forRoutes('/api/v1/users')     // Apply to specific path
-  .forRoutes({ path: '/api', method: 'GET' })  // Path + method
+configureRoutes(router: Router): void {
+  // Global middleware — ALL routes in the entire app
+  router.use(CorsMiddleware, SecurityHeadersMiddleware)
+
+  // Scoped middleware — only this module's controllers
+  router.middleware(LoggingMiddleware)
+
+  // Middleware for specific controllers only
+  router.group([AdminController], (r) => {
+    r.middleware(AdminAuthMiddleware)
+  })
+
+  // Combine with other Router options
+  router.group([TenantController, BillingController], (r) => {
+    r.prefix('/tenant')
+      .domain('{tenant}.myapp.com')
+      .middleware(TenantMiddleware)
+  })
+}
 ```
+
+For the full Router fluent API (`.prefix()`, `.domain()`, `.name()`, `.version()`, `.group()`), see `references/routing.md`.
 
 ### Middleware Interface
 
-Middleware classes must implement the `Middleware` interface from `stratal/router`:
+Middleware classes implement the `Middleware` interface from `stratal/router`:
 
 ```typescript
 import { Transient, inject } from 'stratal/di'
-import type { Middleware, RouterContext } from 'stratal/router'
+import type { Middleware, Next, RouterContext } from 'stratal/router'
 
 @Transient()
 export class LoggingMiddleware implements Middleware {
-  async handle(ctx: RouterContext, next: () => Promise<void>): Promise<void> {
+  async handle(ctx: RouterContext, next: Next): Promise<void> {
+    const start = Date.now()
     console.log(`${ctx.c.req.method} ${ctx.c.req.url}`)
     await next()
-    console.log(`Response: ${ctx.c.res.status}`)
+    console.log(`Response: ${ctx.c.res.status} (${Date.now() - start}ms)`)
   }
 }
 ```
+
+Middleware can inject services via the constructor:
+
+```typescript
+@Transient()
+export class RateLimitMiddleware implements Middleware {
+  constructor(
+    @inject(RATE_LIMIT_TOKEN) private limiter: RateLimitService,
+  ) {}
+
+  async handle(ctx: RouterContext, next: Next): Promise<Response | void> {
+    if (await this.limiter.isExceeded(ctx.c.req.url)) {
+      return ctx.json({ error: 'Too many requests' }, 429)
+    }
+    await next()
+  }
+}
+```
+
+Returning a `Response` from `handle()` short-circuits the chain — the route handler is not called.
 
 ## Guards
 
@@ -137,7 +171,7 @@ Options:
 
 ### Guard Execution Order
 
-1. Middleware runs first (via `configure()`)
+1. Middleware runs first (via `configureRoutes()`)
 2. Guards run next (via `@UseGuards()`)
 3. Route handler runs last (if all guards return `true`)
 
