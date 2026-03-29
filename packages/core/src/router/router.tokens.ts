@@ -37,4 +37,10 @@ export const ROUTER_TOKENS = {
    * The Hono application instance with Stratal-specific setup
    */
   HonoApp: Symbol.for('stratal:router:hono-app'),
+
+  /**
+   * Token for Uri (request-scoped)
+   * URL generation service — route URLs, signed URLs, current/previous URL access
+   */
+  Uri: Symbol.for('stratal:router:uri'),
 } as const

@@ -1,7 +1,9 @@
 import { getContainer } from '../di/container-storage'
+import { RouteNameNotFoundError } from './errors/route-name-not-found.error'
 import type { RouteName, RouteParams } from './route-map'
 import type { RouteRegistry } from './route-registry'
 import { ROUTER_TOKENS } from './router.tokens'
+import { buildRouteUrl } from './uri'
 
 /**
  * Generate a URL from a named route.
@@ -34,5 +36,9 @@ export function route<N extends RouteName>(
 ): string {
   const container = getContainer()
   const registry = container.resolve<RouteRegistry>(ROUTER_TOKENS.RouteRegistry)
-  return registry.url(name, params)
+  const registeredRoute = registry.get(name)
+  if (!registeredRoute) {
+    throw new RouteNameNotFoundError(name)
+  }
+  return buildRouteUrl(registeredRoute, name, params)
 }

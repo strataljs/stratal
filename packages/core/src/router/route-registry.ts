@@ -2,8 +2,6 @@ import { inject } from 'tsyringe'
 import { Transient } from '../di/decorators'
 import { type VERSION_NEUTRAL } from './constants'
 import { DuplicateRouteNameError } from './errors/duplicate-route-name.error'
-import { MissingRouteParamError } from './errors/missing-route-param.error'
-import { RouteNameNotFoundError } from './errors/route-name-not-found.error'
 import { ROUTER_TOKENS } from './router.tokens'
 import type { LocalePathService } from './services/locale-path.service'
 import type { VersioningService } from './services/versioning.service'
@@ -74,7 +72,7 @@ export class RouteRegistry {
   constructor(
     @inject(ROUTER_TOKENS.VersioningService) private readonly versioningService: VersioningService,
     @inject(ROUTER_TOKENS.LocalePathService) private readonly localePathService: LocalePathService,
-  ) {}
+  ) { }
 
   /**
    * Register a route. Expands via VersioningService + LocalePathService.
@@ -155,69 +153,5 @@ export class RouteRegistry {
   /** Get only named routes */
   named(): RegisteredRoute[] {
     return [...this.namedRoutes.values()]
-  }
-
-  /**
-   * Generate a URL from a named route.
-   *
-   * Keys in `params` matching `:param` placeholders fill the path.
-   * Domain params (e.g., `{tenant}`) are also consumed from `params`.
-   * Extra keys become query string parameters.
-   *
-   * @throws RouteNameNotFoundError if route name not found
-   * @throws MissingRouteParamError if required params missing
-   */
-  url(name: string, params?: Record<string, string>): string {
-    const route = this.namedRoutes.get(name)
-    if (!route) {
-      throw new RouteNameNotFoundError(name)
-    }
-
-    const allParams = { ...params }
-    const consumedKeys = new Set<string>()
-    let url = route.path
-
-    // Fill path :param placeholders (handles optional regex constraints like :locale{en|de|fr})
-    for (const paramName of route.paramNames) {
-      const value = allParams[paramName]
-      if (value === undefined) {
-        throw new MissingRouteParamError(paramName, name, route.path)
-      }
-      url = url.replace(
-        new RegExp(`:${paramName}(\\{[^}]*\\})?`),
-        encodeURIComponent(value),
-      )
-      consumedKeys.add(paramName)
-    }
-
-    // Build domain if present
-    let domain: string | undefined
-    if (route.domain) {
-      domain = route.domain
-      for (const domainParam of route.domainParamNames) {
-        const value = allParams[domainParam]
-        if (value === undefined) {
-          throw new MissingRouteParamError(domainParam, name, route.domain)
-        }
-        domain = domain.replace(`{${domainParam}}`, encodeURIComponent(value))
-        consumedKeys.add(domainParam)
-      }
-    }
-
-    // Remaining params (not consumed by path or domain) become query string
-    const queryEntries = Object.entries(allParams).filter(([key]) => !consumedKeys.has(key))
-    if (queryEntries.length > 0) {
-      const queryString = queryEntries
-        .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
-        .join('&')
-      url = `${url}?${queryString}`
-    }
-
-    // Prepend domain if present
-    if (domain) {
-      url = `https://${domain}${url}`
-    }
-
-    return url
   }
 }

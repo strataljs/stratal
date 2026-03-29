@@ -40,6 +40,7 @@ import { HonoApp } from './router/hono-app'
 import { RouteRegistry } from './router/route-registry'
 import { RouterResolver } from './router/router-resolver'
 import { ROUTER_TOKENS } from './router/router.tokens'
+import { Uri } from './router/uri'
 import { LocalePathService } from './router/services/locale-path.service'
 import { RouteRegistrationService } from './router/services/route-registration.service'
 import { VersioningService } from './router/services/versioning.service'
@@ -240,6 +241,9 @@ export class Application {
 
     // RouteRegistry — single source of truth, expands routes via services above
     this._container.register(ROUTER_TOKENS.RouteRegistry, RouteRegistry, Scope.Singleton)
+
+    // Uri — URL generation service (request-scoped for access to RouterContext)
+    this._container.register(ROUTER_TOKENS.Uri, Uri, Scope.Request)
 
     // RouterResolver — merges Router configs from modules
     const routerConfigs = this.moduleRegistry.getAllRouterConfigs()

@@ -7,10 +7,9 @@ import type { Container } from '../di/container'
 import { RequestContainerNotInitializedError } from '../errors'
 import { ROUTER_CONTEXT_KEYS } from './constants'
 import type { RouteName, RouteParams } from './route-map'
-import type { RouteRegistry } from './route-registry'
 import { ROUTER_TOKENS } from './router.tokens'
-import { signUrl, verifySignedUrl, type SignedUrlOptions } from './signed-url'
 import type { RouterEnv } from './types'
+import type { SignedUriOptions, Uri, UriOptions } from './uri'
 
 export type ContextQueryResult<R extends Record<string, unknown> | undefined, K extends string | undefined> = K extends string ? string : R extends undefined ? Record<string, unknown> : R
 
@@ -169,6 +168,7 @@ export class RouterContext<T extends RouterEnv = RouterEnv> {
    *
    * @param name - Named route identifier
    * @param params - Route params + domain params + extra query params
+   * @param options - URL generation options (e.g., `{ absolute: true }`)
    *
    * @example
    * ```typescript
@@ -176,9 +176,8 @@ export class RouterContext<T extends RouterEnv = RouterEnv> {
    * ctx.route('users.show', { id: '1', q: 'test' }) // '/v1/users/1?q=test'
    * ```
    */
-  route<N extends RouteName>(name: N, params?: RouteParams<N>): string {
-    const registry = this.getContainer().resolve<RouteRegistry>(ROUTER_TOKENS.RouteRegistry)
-    return registry.url(name, params)
+  route<N extends RouteName>(name: N, params?: RouteParams<N>, options?: UriOptions): string {
+    return this.resolveUri().route(name, params, options)
   }
 
   /**
@@ -201,17 +200,11 @@ export class RouterContext<T extends RouterEnv = RouterEnv> {
    *
    * @param name - Named route identifier
    * @param params - Route params (same as route())
-   * @param options - Signing options (e.g., expiresIn)
+   * @param options - Signing options (e.g., expiresIn) and URL options
    * @returns Signed URL string with signature query param
    */
-  async signedUrl<N extends RouteName>(name: N, params?: RouteParams<N>, options?: SignedUrlOptions): Promise<string> {
-    const registry = this.getContainer().resolve<RouteRegistry>(ROUTER_TOKENS.RouteRegistry)
-    const url = registry.url(name, params)
-    const secret = (this.c.env as unknown as Record<string, string>).APP_SECRET
-    if (!secret) {
-      throw new Error('APP_SECRET environment variable is required for signed URLs')
-    }
-    return signUrl(url, secret, options)
+  async signedUrl<N extends RouteName>(name: N, params?: RouteParams<N>, options?: SignedUriOptions): Promise<string> {
+    return this.resolveUri().signedRoute(name, params, options)
   }
 
   /**
@@ -220,9 +213,7 @@ export class RouterContext<T extends RouterEnv = RouterEnv> {
    * @returns true if the URL signature is valid and not expired
    */
   async hasValidSignature(): Promise<boolean> {
-    const secret = (this.c.env as unknown as Record<string, string>).APP_SECRET
-    if (!secret) return false
-    return verifySignedUrl(this.c.req.url, secret)
+    return this.resolveUri().hasValidSignature()
   }
 
   /**
@@ -269,5 +260,9 @@ export class RouterContext<T extends RouterEnv = RouterEnv> {
   streamSSE(callback: (stream: SSEStreamingApi) => Promise<void>, onError?: (err: Error, stream: SSEStreamingApi) => Promise<void>): Response {
     this.c.header('Content-Encoding', 'Identity')
     return honoStreamSSE(this.c, callback, onError)
+  }
+
+  private resolveUri(): Uri {
+    return this.getContainer().resolve<Uri>(ROUTER_TOKENS.Uri)
   }
 }

@@ -38,6 +38,7 @@ export type { StratalRouteMap, RouteName, RouteParams } from './route-map'
 
 // Route URL generation
 export { route } from './route-url'
+export { Uri, buildRouteUrl, type UriOptions, type SignedUriOptions } from './uri'
 
 // Router (replaces MiddlewareConfigurable — route + middleware configuration)
 export { Router, type RouteConfigurable, type RouterGroupConfig } from './router'
