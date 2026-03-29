@@ -63,11 +63,10 @@
     "lint:fix": "npx oxlint --fix ."
   },
   "dependencies": {
-    "@cloudflare/vite-plugin": "^1.30.2",
-    "ts-morph": "^27.0.2",
-    "vite": "^8.0.3"
+    "ts-morph": "^27.0.2"
   },
   "peerDependencies": {
+    "@cloudflare/vite-plugin": ">=1.0.0",
     "@inertiajs/core": "^3.0.0-beta.5",
     "@inertiajs/react": "^3.0.0-beta.5",
     "@inertiajs/vite": "^3.0.0-beta.5",
@@ -78,9 +77,13 @@
     "react-dom": "^19.0.0",
     "reflect-metadata": "^0.2.2",
     "stratal": "^0.0.17",
+    "vite": "^8.0.0",
     "vitest": "^4.1.0"
   },
   "peerDependenciesMeta": {
+    "@cloudflare/vite-plugin": {
+      "optional": true
+    },
     "@inertiajs/core": {
       "optional": true
     },
@@ -107,6 +110,7 @@
     }
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.30.2",
     "@cloudflare/workers-types": "4.20260317.1",
     "@inertiajs/core": "^3.0.0",
     "@inertiajs/react": "^3.0.0",
@@ -125,6 +129,7 @@
     "stratal": "workspace:*",
     "tsdown": "^0.21.6",
     "typescript": "^6.0.2",
+    "vite": "^8.0.3",
     "vitest": "~4.1.2"
   }
 }

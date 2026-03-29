@@ -1,7 +1,8 @@
+import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { Command } from 'stratal/quarry'
-import { createInertiaViteConfig } from '../vite/create-vite-config'
+import { writeTempViteConfig } from '../vite/create-vite-config'
 
 export class InertiaDevCommand extends Command {
   static command = 'inertia:dev {--port=5173 : Dev server port} {--host : Expose to network}'
@@ -18,25 +19,32 @@ export class InertiaDevCommand extends Command {
       return 1
     }
 
+    const configPath = writeTempViteConfig({
+      cwd,
+      entryPath,
+      server: { port, host },
+    })
+
     this.info('Starting Vite dev server...')
 
-    try {
-      const { createServer } = await import('vite')
+    const args = ['vite', 'dev', '--config', configPath, '--port', String(port)]
+    if (host) args.push('--host')
 
-      const config = await createInertiaViteConfig({
+    return new Promise<number>((resolve) => {
+      const child = spawn('npx', args, {
         cwd,
-        entryPath,
-        server: { port, host },
+        stdio: 'inherit',
+        shell: true,
       })
 
-      const server = await createServer(config)
-      await server.listen()
-      server.printUrls()
-    } catch (err) {
-      this.fail(`Failed to start dev server: ${(err as Error).stack}`)
-      return 1
-    }
+      child.on('error', (err) => {
+        this.fail(`Failed to start dev server: ${err.message}`)
+        resolve(1)
+      })
 
-    return 0
+      child.on('close', (code) => {
+        resolve(code ?? 0)
+      })
+    })
   }
 }

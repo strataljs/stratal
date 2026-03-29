@@ -3970,6 +3970,7 @@ __metadata:
     vite: "npm:^8.0.3"
     vitest: "npm:~4.1.2"
   peerDependencies:
+    "@cloudflare/vite-plugin": ">=1.0.0"
     "@inertiajs/core": ^3.0.0-beta.5
     "@inertiajs/react": ^3.0.0-beta.5
     "@inertiajs/vite": ^3.0.0-beta.5
@@ -3980,8 +3981,11 @@ __metadata:
     react-dom: ^19.0.0
     reflect-metadata: ^0.2.2
     stratal: ^0.0.17
+    vite: ^8.0.0
     vitest: ^4.1.0
   peerDependenciesMeta:
+    "@cloudflare/vite-plugin":
+      optional: true
     "@inertiajs/core":
       optional: true
     "@inertiajs/react":

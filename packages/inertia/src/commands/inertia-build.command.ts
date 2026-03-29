@@ -1,7 +1,8 @@
+import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { Command } from 'stratal/quarry'
-import { createInertiaViteConfig } from '../vite/create-vite-config'
+import { writeTempViteConfig } from '../vite/create-vite-config'
 
 export class InertiaBuildCommand extends Command {
   static command = 'inertia:build {--outDir=dist : Output directory} {--ssr : Also build SSR bundle}'
@@ -18,38 +19,51 @@ export class InertiaBuildCommand extends Command {
       return 1
     }
 
+    const configPath = writeTempViteConfig({
+      cwd,
+      entryPath,
+      outDir,
+    })
+
     this.info('Building Inertia.js frontend for production...')
 
-    try {
-      const { build } = await import('vite')
+    const clientCode = await this.spawnVite(cwd, configPath, ['build', '--outDir', outDir])
+    if (clientCode !== 0) {
+      this.fail('Client build failed.')
+      return clientCode
+    }
+    this.success('Client build complete!')
 
-      const config = await createInertiaViteConfig({
-        cwd,
-        entryPath,
-        outDir,
-      })
-
-      await build(config)
-      this.success('Client build complete!')
-
-      if (shouldBuildSsr) {
-        this.info('Building SSR bundle...')
-        await build({
-          ...config,
-          build: {
-            ...config.build,
-            ssr: true,
-          },
-        })
-        this.success('SSR build complete!')
+    if (shouldBuildSsr) {
+      this.info('Building SSR bundle...')
+      const ssrCode = await this.spawnVite(cwd, configPath, ['build', '--outDir', outDir, '--ssr'])
+      if (ssrCode !== 0) {
+        this.fail('SSR build failed.')
+        return ssrCode
       }
-
-      this.success(`Output in ${outDir}/`)
-    } catch (err) {
-      this.fail(`Build failed: ${(err as Error).message}`)
-      return 1
+      this.success('SSR build complete!')
     }
 
+    this.success(`Output in ${outDir}/`)
     return 0
+  }
+
+  private spawnVite(cwd: string, configPath: string, args: string[]): Promise<number> {
+    return new Promise((resolve) => {
+      const child = spawn('npx', ['vite', '--config', configPath, ...args], {
+        cwd,
+        stdio: 'inherit',
+        shell: true,
+      })
+
+      child.on('error', (err) => {
+        this.fail(`Vite process error: ${err.message}`)
+        resolve(1)
+      })
+
+      child.on('close', (code) => {
+        resolve(code ?? 0)
+      })
+    })
   }
 }
