@@ -5,8 +5,14 @@ permissions:
 on:
   push:
     branches: [main]
+    paths:
+      - 'packages/**'
+      - 'yarn.lock'
   pull_request:
     branches: [main]
+    paths:
+      - 'packages/**'
+      - 'yarn.lock'
 
 jobs:
   build:
