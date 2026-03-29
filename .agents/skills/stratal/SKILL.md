@@ -2,10 +2,10 @@
 name: stratal
 description: "Build Cloudflare Workers applications with the Stratal framework. Use when code imports from 'stratal', '@stratal/framework', '@stratal/testing', or '@stratal/inertia', when creating modules, controllers, services, routes, queue consumers, cron jobs, seeders, or CLI commands, or when user mentions Stratal, asks to 'create a module', 'add an endpoint', 'set up auth', 'configure database', 'add error handling', 'set up Inertia', 'write tests', or 'run quarry'. Covers DI, routing with OpenAPI, error handling, i18n, testing, auth, RBAC, Inertia.js SSR, WebSocket, and MCP server. Do NOT use for generic Hono apps, plain Cloudflare Workers, or NestJS."
 license: MIT
-compatibility: Designed for Claude Code. Requires Node.js 20+, yarn.
+compatibility: Designed for AI Agents. Requires Node.js 22+, npm.
 metadata:
-  author: strataljs
-  version: "3.1"
+  author: Temitayo Fadojutimi
+  version: "1.0"
 ---
 
 # Stratal Framework
@@ -218,7 +218,7 @@ See `references/errors-and-i18n.md` for the full ExceptionHandler API.
 
 ### Set Up Inertia.js SSR
 
-1. Install: `yarn add @stratal/inertia`
+1. Install: `npm install @stratal/inertia`
 2. Configure `InertiaModule.forRoot({ rootView: 'app', ssr: { bundle: () => import('./ssr') } })` in root module
 3. Use `@InertiaGet('/')` / `@InertiaPost('/')` and `ctx.inertia('page/Name', props)` in controllers (or `@InertiaRoute()` for convention routing)
 4. For flash messages: add `flash: { store: new CookieFlashStore({ secret: env.FLASH_SECRET }) }` and use `ctx.flash(key, value)`

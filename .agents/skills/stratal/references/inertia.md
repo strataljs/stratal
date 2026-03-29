@@ -5,7 +5,7 @@
 ## Setup
 
 ```bash
-yarn add @stratal/inertia
+npm install @stratal/inertia
 ```
 
 ```typescript
