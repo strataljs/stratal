@@ -101,6 +101,55 @@ describe('buildRouteUrl', () => {
     })
     expect(() => buildRouteUrl(route, 'tenant.dashboard')).toThrow(MissingRouteParamError)
   })
+
+  it('should prepend locale segment when locale param and localePaths present', () => {
+    const route = createRoute({
+      path: '/users/:id',
+      paramNames: ['id'],
+      localePaths: ['/:locale{en|fr}/users/:id'],
+    })
+    expect(buildRouteUrl(route, 'users.show', { id: '1', locale: 'fr' })).toBe('/fr/users/1')
+  })
+
+  it('should use primary path when no locale param provided', () => {
+    const route = createRoute({
+      path: '/users',
+      localePaths: ['/:locale{en|fr}/users'],
+    })
+    expect(buildRouteUrl(route, 'users.index')).toBe('/users')
+  })
+
+  it('should handle locale with root path', () => {
+    const route = createRoute({
+      path: '/',
+      localePaths: ['/:locale{en|fr}'],
+    })
+    expect(buildRouteUrl(route, 'home', { locale: 'en' })).toBe('/en')
+  })
+
+  it('should consume locale from params, not append as query string', () => {
+    const route = createRoute({
+      path: '/users',
+      localePaths: ['/:locale{en|fr}/users'],
+    })
+    expect(buildRouteUrl(route, 'users.index', { locale: 'fr', page: '2' })).toBe('/fr/users?page=2')
+  })
+
+  it('should treat locale as query string when route has no localePaths', () => {
+    const route = createRoute({ path: '/users' })
+    expect(buildRouteUrl(route, 'users.index', { locale: 'fr' })).toBe('/users?locale=fr')
+  })
+
+  it('should prepend locale with domain route', () => {
+    const route = createRoute({
+      path: '/dashboard',
+      localePaths: ['/:locale{en|fr}/dashboard'],
+      domain: '{tenant}.myapp.com',
+      domainParamNames: ['tenant'],
+    })
+    expect(buildRouteUrl(route, 'tenant.dashboard', { tenant: 'acme', locale: 'fr' }))
+      .toBe('https://acme.myapp.com/fr/dashboard')
+  })
 })
 
 describe('Uri', () => {
@@ -369,6 +418,15 @@ describe('Uri', () => {
       uri.defaults({ locale: 'en' })
       uri.defaults({ id: '1' })
       expect(uri.route('posts.show')).toBe('/en/posts/1')
+    })
+
+    it('should use locale default to build locale-prefixed URL via localePaths', () => {
+      setupUri({ 'posts.index': createRoute({
+        path: '/posts',
+        localePaths: ['/:locale{en|fr}/posts'],
+      }) })
+      uri.defaults({ locale: 'en' })
+      expect(uri.route('posts.index')).toBe('/en/posts')
     })
   })
 })

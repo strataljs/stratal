@@ -42,6 +42,12 @@ export function buildRouteUrl(
   const consumedKeys = new Set<string>()
   let url = route.path
 
+  // When locale is provided and route has locale variants, prepend locale segment
+  if (allParams.locale && route.localePaths?.length) {
+    url = `/${allParams.locale}${url === '/' ? '' : url}`
+    consumedKeys.add('locale')
+  }
+
   // Fill path :param placeholders (handles optional regex constraints like :locale{en|de|fr})
   for (const paramName of route.paramNames) {
     const value = allParams[paramName]

@@ -97,4 +97,15 @@ describe('route() URL generation', () => {
       expect(() => route('users.show')).toThrow(MissingRouteParamError)
     })
   })
+
+  it('should prepend locale segment when locale param and localePaths present', () => {
+    runWithRegistry({
+      'users.index': createRoute({
+        path: '/users',
+        localePaths: ['/:locale{en|fr}/users'],
+      }),
+    }, () => {
+      expect(route('users.index', { locale: 'fr' })).toBe('/fr/users')
+    })
+  })
 })

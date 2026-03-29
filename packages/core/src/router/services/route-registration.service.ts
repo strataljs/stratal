@@ -675,7 +675,7 @@ export class RouteRegistrationService {
               name: 'locale',
               in: 'path',
             },
-          }),
+          }).optional(),
         })
 
         route.request = {
