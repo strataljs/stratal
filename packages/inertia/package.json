@@ -40,6 +40,14 @@
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
     },
+    "./react": {
+      "types": "./dist/react.d.mts",
+      "import": "./dist/react.mjs"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.mts",
+      "import": "./dist/testing.mjs"
+    },
     "./vite": {
       "types": "./dist/vite.d.mts",
       "import": "./dist/vite.mjs"
@@ -51,23 +59,31 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "npx eslint .",
-    "lint:fix": "npx eslint --fix ."
+    "lint": "npx oxlint .",
+    "lint:fix": "npx oxlint --fix ."
   },
   "dependencies": {
     "ts-morph": "^27.0.2"
   },
   "peerDependencies": {
+    "@cloudflare/vite-plugin": ">=1.0.0",
     "@inertiajs/core": "^3.0.0-beta.5",
     "@inertiajs/react": "^3.0.0-beta.5",
     "@inertiajs/vite": "^3.0.0-beta.5",
+    "@intlify/core-base": ">=11.0.0",
+    "@stratal/testing": ">=0.0.1",
     "hono": "^4.12.8",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "reflect-metadata": "^0.2.2",
-    "stratal": "^0.0.17"
+    "stratal": "^0.0.17",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.0"
   },
   "peerDependenciesMeta": {
+    "@cloudflare/vite-plugin": {
+      "optional": true
+    },
     "@inertiajs/core": {
       "optional": true
     },
@@ -77,31 +93,43 @@
     "@inertiajs/vite": {
       "optional": true
     },
+    "@intlify/core-base": {
+      "optional": true
+    },
+    "@stratal/testing": {
+      "optional": true
+    },
     "react": {
       "optional": true
     },
     "react-dom": {
       "optional": true
+    },
+    "vitest": {
+      "optional": true
     }
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.30.2",
     "@cloudflare/workers-types": "4.20260317.1",
-    "@inertiajs/core": "^3.0.0-beta.5",
-    "@inertiajs/vite": "^3.0.0-beta.5",
+    "@inertiajs/core": "^3.0.0",
+    "@inertiajs/react": "^3.0.0",
+    "@inertiajs/vite": "^3.0.0",
+    "@intlify/core-base": "^11.3.0",
     "@stratal/testing": "workspace:*",
     "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@vitest/runner": "~4.1.0",
-    "@vitest/snapshot": "~4.1.0",
-    "hono": "^4.12.8",
+    "@vitest/runner": "~4.1.2",
+    "@vitest/snapshot": "~4.1.2",
+    "hono": "^4.12.9",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "reflect-metadata": "^0.2.2",
     "stratal": "workspace:*",
-    "tsdown": "^0.21.4",
-    "typescript": "^5.9.3",
-    "vite": "^8.0.1",
-    "vitest": "~4.1.0"
+    "tsdown": "^0.21.6",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.3",
+    "vitest": "~4.1.2"
   }
 }

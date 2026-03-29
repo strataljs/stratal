@@ -24,13 +24,23 @@ export class Stratal<Env extends StratalEnv = StratalEnv> {
   private initPromise: Promise<Application>
 
   private static _application: Promise<Application> | null = null
+  private static _generation = 0
+  private static _previousInstance: Stratal | null = null
 
   constructor(config: ApplicationConfig) {
     this.fetch = this.fetch.bind(this)
     this.queue = this.queue.bind(this)
     this.scheduled = this.scheduled.bind(this)
 
-    this.initPromise = this.prepareApp(config)
+    // Invalidate any in-flight initialization from a previous instance (Vite HMR reload)
+    const generation = ++Stratal._generation
+
+    if (Stratal._previousInstance) {
+      void Stratal._previousInstance.shutdown()
+    }
+    Stratal._previousInstance = this
+
+    this.initPromise = this.prepareApp(config, generation)
     Stratal._application = this.initPromise
   }
 
@@ -79,10 +89,27 @@ export class Stratal<Env extends StratalEnv = StratalEnv> {
     return this.app
   }
 
-  private async prepareApp(config: ApplicationConfig): Promise<Application> {
+  private async prepareApp(config: ApplicationConfig, generation: number): Promise<Application> {
     const { env, waitUntil } = await import('cloudflare:workers')
+
+    // After async import, check if a newer instance has replaced us (Vite HMR reload)
+    if (generation !== Stratal._generation) {
+      return new Promise<Application>(() => {
+        //
+      }) // Never resolves — avoids cross-request promise warning
+    }
+
     const app = new Application({ ...config, env: env as Env, ctx: { waitUntil } })
     await app.initialize()
+
+    // Check again after initialization completes
+    if (generation !== Stratal._generation) {
+      await app.shutdown()
+      return new Promise<Application>(() => {
+        //
+      })
+    }
+
     return app
   }
 }

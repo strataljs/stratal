@@ -1,11 +1,11 @@
 ---
 name: stratal
-description: "Build Cloudflare Workers applications with the Stratal framework. Use when code imports from 'stratal' or '@stratal/*', when creating modules, controllers, services, routes, queue consumers, cron jobs, or CLI commands, or when user mentions Stratal, asks to 'create a module', 'add an endpoint', 'set up auth', 'configure database', 'add error handling', 'set up Inertia', or 'run quarry'. Covers DI, routing with OpenAPI, error handling, i18n, testing, auth, RBAC, Inertia.js SSR, and MCP server. Do NOT use for generic Hono apps, plain Cloudflare Workers, or NestJS."
+description: "Build Cloudflare Workers applications with the Stratal framework. Use when code imports from 'stratal', '@stratal/framework', '@stratal/testing', or '@stratal/inertia', when creating modules, controllers, services, routes, queue consumers, cron jobs, seeders, or CLI commands, or when user mentions Stratal, asks to 'create a module', 'add an endpoint', 'set up auth', 'configure database', 'add error handling', 'set up Inertia', 'write tests', or 'run quarry'. Covers DI, routing with OpenAPI, error handling, i18n, testing, auth, RBAC, Inertia.js SSR, WebSocket, and MCP server. Do NOT use for generic Hono apps, plain Cloudflare Workers, or NestJS."
 license: MIT
-compatibility: Designed for Claude Code. Requires Node.js 20+, yarn.
+compatibility: Designed for AI Agents. Requires Node.js 22+, npm.
 metadata:
-  author: strataljs
-  version: "2.0"
+  author: Temitayo Fadojutimi
+  version: "1.0"
 ---
 
 # Stratal Framework
@@ -38,7 +38,7 @@ Breaking any of these causes runtime failures.
 
 9. **Cron schedules must match `wrangler.jsonc`** — `CronJob.schedule` string must exactly match a trigger in `[triggers]`.
 
-10. **I18nModule must be configured for translations** — `I18nModule.forRoot()` for locale config. `I18nModule.registerMessages()` to add messages. `I18nService.t()` for translation. `withI18n()` for Zod validation messages.
+10. **I18nModule must be configured for translations** — `I18nModule.forRoot()` for locale config with `detection` option (`'cookie'` default, `'header'`, `'querystring'`, `'path'`). Path detection supports `prefixDefaultLocale` (`false` default, `'redirect'`, `true`). `I18nModule.registerMessages()` to add messages. `I18nService.t()` for translation. `withI18n()` for Zod validation messages.
 
 11. **Custom ExceptionHandler must extend `ExceptionHandler`** — Import from `stratal/errors`, implement `register()`, pass to `new Stratal({ exceptionHandler: AppExceptionHandler })`.
 
@@ -50,7 +50,8 @@ Run `npx quarry help` to see all commands. Always use these to inspect your app 
 |---------|-------------|
 | `npx quarry list` | Show all registered commands |
 | `npx quarry help <cmd>` | Show usage for a command |
-| `npx quarry route:list` | List all HTTP routes (method, path, name) |
+| `npx quarry route:list` | List all HTTP routes (supports `--method`, `--path`, `--name`, `--hidden` filters) |
+| `npx quarry route:types` | Generate TypeScript types for named routes |
 | `npx quarry event:list` | List all event listeners |
 | `npx quarry schedule:list` | List all cron schedules |
 | `npx quarry queue:list` | List all queue consumers |
@@ -137,7 +138,9 @@ export class NotesController {
 }
 ```
 
-For full routing reference (RouteConfig, RouterContext API, OpenAPI), see `references/routing.md`.
+Routes can be named for URL generation. Convention routes auto-name (e.g., `notes.index`, `notes.show`). Use `name` in `@Controller()` for prefix, `name` in `@Route()`/`@Get()` for explicit names. Generate URLs with `ctx.route('notes.show', { id: '1' })` in controllers or `route('notes.show', { id: '1' })` from `stratal/router` outside controllers. Run `npx quarry route:types` for type-safe route names.
+
+For full routing reference (RouteConfig, RouterContext, named routes, URL generation, signed URLs, domain routing, Router fluent API, OpenAPI), see `references/routing.md`.
 
 ## File Conventions
 
@@ -175,13 +178,13 @@ Run `wrangler types` to generate `Cloudflare.Env` from your `wrangler.jsonc` bin
 
 ### Sub-Path Imports
 
-Core: `stratal`, `stratal/cache`, `stratal/config`, `stratal/consumer`, `stratal/cron`, `stratal/di`, `stratal/email`, `stratal/errors`, `stratal/events`, `stratal/i18n`, `stratal/logger`, `stratal/module`, `stratal/openapi`, `stratal/quarry`, `stratal/queue`, `stratal/router`, `stratal/seeder`, `stratal/storage`, `stratal/validation`
+Core: `stratal`, `stratal/cache`, `stratal/config`, `stratal/cron`, `stratal/di`, `stratal/email`, `stratal/errors`, `stratal/events`, `stratal/guards`, `stratal/i18n`, `stratal/i18n/messages/en`, `stratal/i18n/utils`, `stratal/logger`, `stratal/module`, `stratal/openapi`, `stratal/quarry`, `stratal/queue`, `stratal/router`, `stratal/seeder`, `stratal/storage`, `stratal/storage/providers`, `stratal/validation`, `stratal/websocket`, `stratal/workers`
 
 Framework: `@stratal/framework/auth`, `@stratal/framework/context`, `@stratal/framework/database`, `@stratal/framework/factory`, `@stratal/framework/guards`, `@stratal/framework/rbac`
 
-Testing: `@stratal/testing`, `@stratal/testing/mocks`, `@stratal/testing/vitest-plugin`
+Testing: `@stratal/testing`, `@stratal/testing/mocks`, `@stratal/testing/mocks/nodemailer`, `@stratal/testing/mocks/zenstack-language`, `@stratal/testing/storage`, `@stratal/testing/vitest-plugin`
 
-Inertia: `@stratal/inertia`, `@stratal/inertia/vite`
+Inertia: `@stratal/inertia`, `@stratal/inertia/react`, `@stratal/inertia/testing`, `@stratal/inertia/vite`
 
 ## Workflows
 
@@ -193,7 +196,8 @@ Inertia: `@stratal/inertia`, `@stratal/inertia/vite`
 4. Create controller `notes.controller.ts` with `@Controller('/api/v1/notes')`
 5. Create module `notes.module.ts` with `@Module({ providers: [NotesService], controllers: [NotesController] })`
 6. Add `NotesModule` to root module's `imports`
-7. Run `npx quarry route:list` to verify routes are registered
+7. (Optional) Implement `RouteConfigurable` in module for middleware, route prefixes, or grouping
+8. Run `npx quarry route:list` to verify routes are registered
 
 ### Add CRUD Endpoints
 
@@ -214,12 +218,14 @@ See `references/errors-and-i18n.md` for the full ExceptionHandler API.
 
 ### Set Up Inertia.js SSR
 
-1. Install: `yarn add @stratal/inertia`
+1. Install: `npm install @stratal/inertia`
 2. Configure `InertiaModule.forRoot({ rootView: 'app', ssr: { bundle: () => import('./ssr') } })` in root module
 3. Use `@InertiaGet('/')` / `@InertiaPost('/')` and `ctx.inertia('page/Name', props)` in controllers (or `@InertiaRoute()` for convention routing)
-4. Run `npx quarry inertia:dev` for development
+4. For flash messages: add `flash: { store: new CookieFlashStore({ secret: env.FLASH_SECRET }) }` and use `ctx.flash(key, value)`
+5. For frontend i18n: add `i18n: { only: ['common', 'nav'] }` and use `useI18n()` from `@stratal/inertia/react`
+6. Run `npx quarry inertia:dev` for development
 
-See `references/inertia.md` for props, shared data, type safety, and Vite setup.
+See `references/inertia.md` for props, shared data, flash messages, i18n integration, type safety, and Vite setup.
 
 ### Expose API as MCP Server
 
@@ -247,6 +253,16 @@ See `references/quarry-cli.md` for all MCP flags and options.
 
 **User says "List all routes" / "Debug my app"** -> Run `npx quarry route:list`. Also try `event:list`, `schedule:list`, `queue:list` to inspect other registrations.
 
+**User says "Set up i18n with Accept-Language header"** -> Read `references/errors-and-i18n.md`. Configure `I18nModule.forRoot({ detection: { strategy: 'header' } })`. Register messages with `I18nModule.registerMessages()`.
+
+**User says "Generate URLs for routes"** -> Read `references/routing.md`. Use `ctx.route('name', params)` in controllers. Use standalone `route()` from `stratal/router` outside controllers. Run `npx quarry route:types` for type safety.
+
+**User says "Add domain-based routing"** -> Read `references/routing.md`. Set `domain: '{tenant}.myapp.com'` on `@Controller()` or use `router.domain()` in `configureRoutes()`. Access with `ctx.domain('tenant')`.
+
+**User says "Set up signed URLs"** -> Read `references/routing.md`. Add `APP_SECRET` to `wrangler.jsonc` vars. Use `ctx.signedUrl('route.name', params, { expiresIn: 3600 })`. Verify with `ctx.hasValidSignature()`.
+
+**User says "Configure middleware for routes"** -> Read `references/middleware-and-guards.md`. Implement `RouteConfigurable` in module, use `router.middleware()` for scoped or `router.use()` for global middleware.
+
 **User says "I have an existing Hono app"** -> Read `references/incremental-adoption.md`. Mount Stratal as sub-app via `stratal.hono`.
 
 ## Reference Loading Guide
@@ -257,7 +273,7 @@ Load these when the task needs deeper knowledge:
 |-----------|-------------|
 | `references/quarry-cli.md` | CLI commands, MCP server setup, custom command creation, debugging |
 | `references/modules-and-di.md` | Provider types, scopes, container API, dynamic modules |
-| `references/routing.md` | RouteConfig details, RouterContext API, OpenAPI, versioning |
+| `references/routing.md` | RouteConfig, RouterContext API, named routes, URL generation, signed URLs, domain routing, Router fluent API, OpenAPI, versioning |
 | `references/errors-and-i18n.md` | ExceptionHandler, ApplicationError, error codes, i18n, withI18n() |
 | `references/inertia.md` | Inertia.js setup, rendering, props, SSR, type safety, Vite |
 | `references/database.md` | DatabaseModule, ZenStack, connections, plugins, transactions |
@@ -265,7 +281,7 @@ Load these when the task needs deeper knowledge:
 | `references/events.md` | Event listeners, @On/@Listener, database events, wildcards |
 | `references/queues-and-cron.md` | Queue consumers, senders, cron jobs, wrangler config |
 | `references/seeders.md` | Database seeders, calling other seeders |
-| `references/middleware-and-guards.md` | Middleware pipeline, guards, @UseGuards |
+| `references/middleware-and-guards.md` | RouteConfigurable, middleware registration with Router, guards, @UseGuards |
 | `references/testing.md` | TestingModule, TestHttpClient, mocks, factories |
 | `references/infrastructure.md` | Cache (KV), Logger, Email (Resend/SMTP), Storage (R2/S3), OpenAPI |
 | `references/config.md` | ConfigService, registerAs(), namespaces |
@@ -290,4 +306,14 @@ Load these when the task needs deeper knowledge:
 
 **Inertia returns JSON instead of full HTML** -> Missing SSR bundle configuration. Check `ssr.bundle` in `InertiaModule.forRoot()` options.
 
+**Locale not detected** -> Check `detection` strategy in `I18nModule.forRoot()`. Default is `'cookie'` (reads `locale` cookie). Use `'header'` for `Accept-Language`, `'querystring'` for `?locale=`, `'path'` for URL prefix.
+
 **Routes not showing in `route:list`** -> Controller not in module's `controllers` array, or module not imported in root module.
+
+**"Route name not found"** -> Route not named. Add `name` to `@Route()` or `@Controller()`, or use convention routing which auto-generates names. Run `npx quarry route:list` to see named routes.
+
+**"Duplicate route name"** -> Two routes share the same name. Check `@Controller({ name })` prefixes and `@Route({ name })` values.
+
+**"APP_SECRET environment variable is required"** -> Add `APP_SECRET` to `wrangler.jsonc` `[vars]` for signed URL features.
+
+**"Domain mismatch" / 404 on domain routes** -> Request host doesn't match controller's domain pattern. Check `@Controller({ domain })` or `router.domain()` config.

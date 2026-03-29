@@ -19,7 +19,14 @@ const ROOT_HTML = `<!DOCTYPE html>
 
 const APP_TSX = `import { createInertiaApp } from '@inertiajs/react'
 
-createInertiaApp()`
+createInertiaApp({
+  resolve: async (name) => {
+    const pages = import.meta.glob('./pages/**/*.tsx')
+    const page = await pages[\`./pages/\${name}.tsx\`]?.()
+    if (!page) throw new Error(\`Page not found: \${name}\`)
+    return page
+  },
+})`
 
 const HOME_TSX = `export default function Home({ message }: { message: string }) {
   return (

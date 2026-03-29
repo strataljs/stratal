@@ -70,13 +70,11 @@ class ExplicitTestController {
 
 const validPage = {
   component: 'Home',
-  props: { foo: 'bar' },
+  props: { foo: 'bar', errors: {} },
   url: '/',
   version: '1',
-  mergeProps: [],
-  deferredProps: {},
-  encryptHistory: false,
-  clearHistory: false,
+  flash: {},
+  rememberedState: {},
 }
 
 describe('InertiaRoute decorator (convention)', () => {

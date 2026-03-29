@@ -1,10 +1,11 @@
+import type { InertiaAppSSRResponse, Page } from '@inertiajs/core'
 import { Transient, inject } from 'stratal/di'
+import { LOGGER_TOKENS, type LoggerService } from 'stratal/logger'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { INERTIA_TOKENS } from '../inertia.tokens'
-import type { InertiaPage, InertiaSsrResult } from '../types'
 
 interface LoadedSsrBundle {
-  render(page: InertiaPage): Promise<InertiaSsrResult>
+  render(page: Page): Promise<InertiaAppSSRResponse>
 }
 
 @Transient()
@@ -14,9 +15,10 @@ export class SsrRendererService {
 
   constructor(
     @inject(INERTIA_TOKENS.Options) private readonly options: InertiaModuleOptions,
+    @inject(LOGGER_TOKENS.LoggerService) private readonly logger: LoggerService
   ) { }
 
-  async render(page: InertiaPage): Promise<InertiaSsrResult> {
+  async render(page: Page): Promise<InertiaAppSSRResponse> {
     if (!this.options.ssr) {
       return { head: [], body: '' }
     }
@@ -49,7 +51,8 @@ export class SsrRendererService {
       const mod = await this.options.ssr.bundle()
       const resolved = ('default' in mod ? mod.default : mod) as LoadedSsrBundle
       this.bundle = resolved
-    } catch {
+    } catch (error: unknown) {
+      this.logger.warn('[stratal:inertia] Failed to load SSR bundle. Falling back to client-side rendering.', { error })
       this.loadPromise = null
     }
   }

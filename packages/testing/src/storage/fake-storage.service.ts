@@ -2,9 +2,9 @@ import { Transient, inject } from 'stratal/di'
 import {
   FileNotFoundError,
   STORAGE_TOKENS,
-  StorageManagerService,
+  type StorageManagerService,
   StorageService,
-  StreamingBlobPayloadInputTypes,
+  type StreamingBlobPayloadInputTypes,
   type DownloadResult,
   type PresignedUrlResult,
   type StorageConfig,

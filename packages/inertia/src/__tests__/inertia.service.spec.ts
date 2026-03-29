@@ -1,15 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Page } from '@inertiajs/core'
 import type { Context } from 'hono'
 import { RouterContext } from 'stratal/router'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { InertiaModuleOptions } from '../inertia.options'
-import type { InertiaPage } from '../types'
 import { InertiaService } from '../services/inertia.service'
 import type { SsrRendererService } from '../services/ssr-renderer.service'
 import type { TemplateService } from '../services/template.service'
 
-async function parsePageJson(response: Response): Promise<InertiaPage> {
-  const data: InertiaPage = await response.json()
-  return data
+async function parsePageJson(response: Response): Promise<Page> {
+  return response.json()
 }
 
 function createMockContext(overrides: {
@@ -26,6 +25,8 @@ function createMockContext(overrides: {
   const variables: Record<string, unknown> = {
     inertia: overrides.isInertia ?? false,
     withoutSsr: overrides.withoutSsr ?? false,
+    inertiaFlash: {},
+    inertiaFlashOut: {},
   }
 
   const c = {
@@ -78,8 +79,9 @@ describe('InertiaService', () => {
 
       const body = await parsePageJson(response)
       expect(body.component).toBe('Home')
-      expect(body.props).toEqual({ message: 'Hello' })
+      expect(body.props).toEqual({ message: 'Hello', errors: {} })
       expect(body.version).toBe('1.0')
+      expect(body.flash).toEqual({})
     })
 
     it('should return HTML for non-Inertia requests', async () => {
@@ -131,7 +133,7 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ message: 'Hello' })
+      expect(body.props).toEqual({ message: 'Hello', errors: {} })
       expect(body.props).not.toHaveProperty('extra')
     })
 
@@ -150,7 +152,7 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ user: { name: 'John', permissions: ['read'] } })
+      expect(body.props).toEqual({ user: { name: 'John', permissions: ['read'] }, errors: {} })
       expect(body.props).not.toHaveProperty('extra')
     })
 
@@ -169,7 +171,30 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ user: { settings: { theme: 'dark' } } })
+      expect(body.props).toEqual({ user: { settings: { theme: 'dark' } }, errors: {} })
+    })
+
+    it('should set version to null when not configured', async () => {
+      const noVersionService = new InertiaService(
+        { rootView: '<html>@inertia</html>' },
+        mockTemplate,
+        mockSsr,
+      )
+      const ctx = createMockContext({ isInertia: true })
+
+      const response = await noVersionService.render(ctx, 'Home', {})
+      const body = await parsePageJson(response)
+      expect(body.version).toBeNull()
+    })
+
+    it('should include flash data from context', async () => {
+      const ctx = createMockContext({ isInertia: true })
+      // Simulate flash data set by middleware via context variable
+      ctx.c.set('inertiaFlash', { success: 'Created!' })
+
+      const response = await service.render(ctx, 'Home', {})
+      const body = await parsePageJson(response)
+      expect(body.flash).toEqual({ success: 'Created!' })
     })
   })
 
@@ -190,7 +215,17 @@ describe('InertiaService', () => {
       const response = await service.render(ctx, 'Home', { message: 'Hello' })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ appName: 'MyApp', message: 'Hello' })
+      expect(body.props).toEqual({ appName: 'MyApp', message: 'Hello', errors: {} })
+    })
+
+    it('should track shared prop keys in sharedProps field', async () => {
+      const ctx = createMockContext({ isInertia: true })
+
+      service.share('appName', 'MyApp')
+      const response = await service.render(ctx, 'Home', { message: 'Hello' })
+
+      const body = await parsePageJson(response)
+      expect(body.sharedProps).toContain('appName')
     })
   })
 
@@ -204,7 +239,7 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ name: 'John' })
+      expect(body.props).toEqual({ name: 'John', errors: {} })
     })
   })
 
@@ -237,8 +272,8 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ comments: ['comment1'] })
-      expect(body.deferredProps).toEqual({})
+      expect(body.props).toEqual({ comments: ['comment1'], errors: {} })
+      expect(body).not.toHaveProperty('deferredProps')
     })
   })
 
@@ -252,7 +287,7 @@ describe('InertiaService', () => {
 
       const body = await parsePageJson(response)
       expect(body.mergeProps).toEqual(['items'])
-      expect(body.props).toEqual({ items: [1, 2, 3] })
+      expect(body.props).toEqual({ items: [1, 2, 3], errors: {} })
     })
 
     it('should exclude merge props from partial reloads when not requested', async () => {
@@ -270,8 +305,8 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ stats: { total: 5 } })
-      expect(body.mergeProps).toEqual([])
+      expect(body.props).toEqual({ stats: { total: 5 }, errors: {} })
+      expect(body).not.toHaveProperty('mergeProps')
     })
 
     it('should include merge props on partial reload when explicitly requested', async () => {
@@ -289,8 +324,83 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ items: [4, 5, 6] })
+      expect(body.props).toEqual({ items: [4, 5, 6], errors: {} })
       expect(body.mergeProps).toEqual(['items'])
+    })
+
+    it('should support prepend strategy', async () => {
+      const ctx = createMockContext({ isInertia: true })
+
+      const response = await service.render(ctx, 'Home', {
+        items: service.merge(() => [1, 2], { strategy: 'prepend' }),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.prependProps).toEqual(['items'])
+    })
+
+    it('should support deep merge strategy', async () => {
+      const ctx = createMockContext({ isInertia: true })
+
+      const response = await service.render(ctx, 'Home', {
+        data: service.merge(() => ({ nested: true }), { strategy: 'deep' }),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.deepMergeProps).toEqual(['data'])
+    })
+  })
+
+  describe('once()', () => {
+    it('should resolve once props on initial load and track in onceProps', async () => {
+      const ctx = createMockContext({ isInertia: true })
+
+      const response = await service.render(ctx, 'Home', {
+        categories: service.once(() => ['a', 'b']),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.props).toHaveProperty('categories', ['a', 'b'])
+      expect(body.onceProps).toEqual({ categories: { prop: 'categories' } })
+    })
+
+    it('should resolve once props on partial reload when requested', async () => {
+      const ctx = createMockContext({
+        isInertia: true,
+        headers: {
+          'x-inertia-partial-component': 'Home',
+          'x-inertia-partial-data': 'categories',
+        },
+      })
+
+      const response = await service.render(ctx, 'Home', {
+        categories: service.once(() => ['a', 'b']),
+        name: 'John',
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.props).toHaveProperty('categories', ['a', 'b'])
+    })
+  })
+
+  describe('always()', () => {
+    it('should always include always props even on partial reloads', async () => {
+      const ctx = createMockContext({
+        isInertia: true,
+        headers: {
+          'x-inertia-partial-component': 'Home',
+          'x-inertia-partial-data': 'name',
+        },
+      })
+
+      const response = await service.render(ctx, 'Home', {
+        name: 'John',
+        timestamp: service.always(() => 12345),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.props).toHaveProperty('timestamp', 12345)
+      expect(body.props).toHaveProperty('name', 'John')
     })
   })
 

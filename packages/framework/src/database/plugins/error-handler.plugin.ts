@@ -13,7 +13,7 @@ import { fromZenStackError } from '../errors'
  * })
  * ```
  */
-export class ErrorHandlerPlugin implements RuntimePlugin<SchemaDef, Record<string, unknown>, Record<string, unknown>> {
+export class ErrorHandlerPlugin implements RuntimePlugin<SchemaDef, Record<string, unknown>, Record<string, unknown>, {}> {
   readonly id = 'error-handler'
 
   onQuery = async ({ args, proceed }: {

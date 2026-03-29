@@ -1,18 +1,24 @@
+import type { Page } from '@inertiajs/core'
 import { Transient, inject } from 'stratal/di'
-import type { RouterContext } from 'stratal/router'
+import { I18N_TOKENS, type MessageLoaderService } from 'stratal/i18n'
+import { ROUTER_TOKENS, type RegisteredRoute, type RouteRegistry, type RouterContext, type SerializedRoutes } from 'stratal/router'
+import type { InertiaMergeOptions, InertiaOnceOptions } from '../augment/router-context'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { INERTIA_TOKENS } from '../inertia.tokens'
 import type {
+  InertiaAlwaysProp,
   InertiaDeferredProp,
   InertiaMergeProp,
+  InertiaOnceProp,
   InertiaOptionalProp,
-  InertiaPage,
   InertiaRenderOptions,
   SharedDataResolver,
 } from '../types'
 import {
+  INERTIA_PROP_ALWAYS,
   INERTIA_PROP_DEFERRED,
   INERTIA_PROP_MERGE,
+  INERTIA_PROP_ONCE,
   INERTIA_PROP_OPTIONAL,
 } from '../types'
 import type { SsrRendererService } from './ssr-renderer.service'
@@ -39,16 +45,34 @@ export class InertiaService {
     })
   }
 
-  optional(callback: () => unknown): InertiaOptionalProp {
+  optional<T>(callback: () => T): InertiaOptionalProp<T> {
     return { [INERTIA_PROP_OPTIONAL]: true, callback }
   }
 
-  defer(callback: () => unknown, group = 'default'): InertiaDeferredProp {
+  defer<T>(callback: () => T, group = 'default'): InertiaDeferredProp<T> {
     return { [INERTIA_PROP_DEFERRED]: true, callback, group }
   }
 
-  merge(callback: () => unknown): InertiaMergeProp {
-    return { [INERTIA_PROP_MERGE]: true, callback }
+  merge<T>(callback: () => T, options?: InertiaMergeOptions): InertiaMergeProp<T> {
+    return {
+      [INERTIA_PROP_MERGE]: true,
+      callback,
+      strategy: options?.strategy ?? 'append',
+      matchOn: options?.matchOn,
+    }
+  }
+
+  once<T>(callback: () => T, options?: InertiaOnceOptions): InertiaOnceProp<T> {
+    return {
+      [INERTIA_PROP_ONCE]: true,
+      callback,
+      expiresAt: options?.expiresAt ?? null,
+      key: options?.key,
+    }
+  }
+
+  always<T>(callback: () => T): InertiaAlwaysProp<T> {
+    return { [INERTIA_PROP_ALWAYS]: true, callback }
   }
 
   async render(
@@ -61,28 +85,42 @@ export class InertiaService {
     const isInertia = ctx.c.get('inertia')
 
     // Resolve shared data from module options
-    const resolvedShared = await this.resolveSharedData(ctx)
+    const { shared: resolvedShared, sharedKeys } = await this.resolveSharedData(ctx)
 
     // Merge shared data with route props
     const allProps = { ...resolvedShared, ...this.sharedData, ...props }
 
-    // Process props: handle optional, deferred, merge
-    const { resolvedProps, mergeProps, deferredProps } = await this.processProps(
-      allProps,
-      ctx,
-      component,
-      isInertia,
-    )
+    // Track all shared prop keys (module config + per-request .share())
+    const allSharedKeys = [...sharedKeys, ...Object.keys(this.sharedData)]
 
-    const page: InertiaPage = {
+    // Process props: handle optional, deferred, merge, once, always
+    const result = await this.processProps(allProps, ctx, component, isInertia)
+
+    // Read flash data from context (set by middleware)
+    const rawFlash = (ctx.c.get('inertiaFlash') as Record<string, unknown> | undefined) ?? {}
+    const { errors: flashErrors, ...flash } = rawFlash
+    const errors = (flashErrors && typeof flashErrors === 'object' && !Array.isArray(flashErrors))
+      ? flashErrors as Page['props']['errors']
+      : {} as Page['props']['errors']
+
+    const page: Page = {
       component,
-      props: resolvedProps,
+      props: { ...result.resolvedProps, errors },
       url,
-      version: this.options.version ?? '',
-      mergeProps,
-      deferredProps,
+      version: this.options.version ?? null,
+      flash,
+      rememberedState: {},
+      ...(result.mergeProps.length > 0 ? { mergeProps: result.mergeProps } : {}),
+      ...(result.prependProps.length > 0 ? { prependProps: result.prependProps } : {}),
+      ...(result.deepMergeProps.length > 0 ? { deepMergeProps: result.deepMergeProps } : {}),
+      ...(result.matchPropsOn.length > 0 ? { matchPropsOn: result.matchPropsOn } : {}),
+      ...(Object.keys(result.deferredProps).length > 0 ? { deferredProps: result.deferredProps } : {}),
+      ...(Object.keys(result.deferredProps).length > 0 && !this.isPartialReload(ctx, component) ? { initialDeferredProps: result.deferredProps } : {}),
+      ...(Object.keys(result.onceProps).length > 0 ? { onceProps: result.onceProps } : {}),
+      ...(allSharedKeys.length > 0 ? { sharedProps: allSharedKeys } : {}),
       ...(renderOptions.encryptHistory ? { encryptHistory: true } : {}),
       ...(renderOptions.clearHistory ? { clearHistory: true } : {}),
+      ...(renderOptions.preserveFragment ? { preserveFragment: true } : {}),
     }
 
     if (isInertia) {
@@ -111,21 +149,47 @@ export class InertiaService {
     })
   }
 
-  private async resolveSharedData(ctx: RouterContext): Promise<Record<string, unknown>> {
+  /**
+   * Resolve shared data from module options and i18n configuration.
+   *
+   * Processes static values and resolver functions from `sharedData` config.
+   * When `i18n` option is set, auto-injects `locale` and `translations` props
+   * using the core {@link MessageLoaderService} resolved from the request container.
+   */
+  private async resolveSharedData(ctx: RouterContext): Promise<{ shared: Record<string, unknown>; sharedKeys: string[] }> {
     const shared: Record<string, unknown> = {}
     const configShared = this.options.sharedData
 
-    if (!configShared) return shared
-
-    for (const [key, value] of Object.entries(configShared)) {
-      if (typeof value === 'function') {
-        shared[key] = await (value as SharedDataResolver)(ctx)
-      } else {
-        shared[key] = value
+    if (configShared) {
+      for (const [key, value] of Object.entries(configShared)) {
+        if (typeof value === 'function') {
+          shared[key] = await (value as SharedDataResolver)(ctx)
+        } else {
+          shared[key] = value
+        }
       }
     }
 
-    return shared
+    if (this.options.i18n) {
+      const loader = ctx.getContainer().resolve<MessageLoaderService>(I18N_TOKENS.MessageLoader)
+      const locale = ctx.getLocale()
+      shared.locale = locale
+      shared.translations = loader.getFilteredMessages(locale, { only: this.options.i18n.only })
+    }
+
+    if (this.options.routes) {
+      const registry = ctx.getContainer().resolve<RouteRegistry>(ROUTER_TOKENS.RouteRegistry)
+      shared.routes = this.serializeRoutes(registry.named())
+    }
+
+    return { shared, sharedKeys: Object.keys(shared) }
+  }
+
+  private isPartialReload(ctx: RouterContext, component: string): boolean {
+    const isInertia = ctx.c.get('inertia')
+    const partialComponent = ctx.header('x-inertia-partial-component')
+    const partialDataHeader = ctx.header('x-inertia-partial-data')
+    return !!(isInertia && partialComponent === component && partialDataHeader)
   }
 
   private async processProps(
@@ -136,19 +200,51 @@ export class InertiaService {
   ): Promise<{
     resolvedProps: Record<string, unknown>
     mergeProps: string[]
+    prependProps: string[]
+    deepMergeProps: string[]
+    matchPropsOn: string[]
     deferredProps: Record<string, string[]>
+    onceProps: Record<string, { prop: string; expiresAt?: number | null }>
   }> {
     const resolvedProps: Record<string, unknown> = {}
     const mergeProps: string[] = []
+    const prependProps: string[] = []
+    const deepMergeProps: string[] = []
+    const matchPropsOn: string[] = []
     const deferredProps: Record<string, string[]> = {}
+    const onceProps: Record<string, { prop: string; expiresAt?: number | null }> = {}
 
     const partialComponent = ctx.header('x-inertia-partial-component')
     const partialDataHeader = ctx.header('x-inertia-partial-data')
+    const partialExceptHeader = ctx.header('x-inertia-partial-except')
+    const resetHeader = ctx.header('x-inertia-reset')
     const isPartialReload = isInertia && partialComponent === component && partialDataHeader
 
     const requestedProps = partialDataHeader?.split(',').map((s) => s.trim()) ?? []
+    const exceptProps = partialExceptHeader?.split(',').map((s) => s.trim()) ?? []
+    const _resetProps = resetHeader?.split(',').map((s) => s.trim()) ?? []
 
     for (const [key, value] of Object.entries(allProps)) {
+      // Handle always props — always resolve regardless of partial reload
+      if (this.isAlwaysProp(value)) {
+        resolvedProps[key] = await value.callback()
+        continue
+      }
+
+      // Handle once props
+      if (this.isOnceProp(value)) {
+        if (isPartialReload && this.isRequested(key, requestedProps)) {
+          resolvedProps[key] = await value.callback()
+        } else if (!isPartialReload) {
+          resolvedProps[key] = await value.callback()
+          onceProps[key] = {
+            prop: value.key ?? key,
+            ...(value.expiresAt != null ? { expiresAt: value.expiresAt } : {}),
+          }
+        }
+        continue
+      }
+
       // Handle deferred props
       if (this.isDeferredProp(value)) {
         if (isPartialReload && this.isRequested(key, requestedProps)) {
@@ -160,19 +256,34 @@ export class InertiaService {
         continue
       }
 
-      // Handle merge props
+      // Handle merge props (append/prepend/deep)
       if (this.isMergeProp(value)) {
         if (isPartialReload && !this.isRequested(key, requestedProps)) {
           continue
         }
-        mergeProps.push(key)
+
+        switch (value.strategy) {
+          case 'prepend':
+            prependProps.push(key)
+            break
+          case 'deep':
+            deepMergeProps.push(key)
+            break
+          default:
+            mergeProps.push(key)
+            break
+        }
+
+        if (value.matchOn) {
+          matchPropsOn.push(`${key}:${value.matchOn}`)
+        }
+
         resolvedProps[key] = await value.callback()
         continue
       }
 
       // Handle optional props
       if (this.isOptionalProp(value)) {
-        // Only include on partial reloads when explicitly requested
         if (isPartialReload && this.isRequested(key, requestedProps)) {
           resolvedProps[key] = await value.callback()
         }
@@ -181,8 +292,7 @@ export class InertiaService {
 
       // Regular props
       if (isPartialReload) {
-        // On partial reload, only include requested props
-        if (this.isRequested(key, requestedProps)) {
+        if (this.isRequested(key, requestedProps) && !this.isExcepted(key, exceptProps)) {
           resolvedProps[key] = value
         }
       } else {
@@ -190,7 +300,7 @@ export class InertiaService {
       }
     }
 
-    return { resolvedProps, mergeProps, deferredProps }
+    return { resolvedProps, mergeProps, prependProps, deepMergeProps, matchPropsOn, deferredProps, onceProps }
   }
 
   /**
@@ -199,6 +309,10 @@ export class InertiaService {
    */
   private isRequested(key: string, requestedProps: string[]): boolean {
     return requestedProps.some((prop) => prop === key || prop.startsWith(`${key}.`))
+  }
+
+  private isExcepted(key: string, exceptProps: string[]): boolean {
+    return exceptProps.some((prop) => prop === key || prop.startsWith(`${key}.`))
   }
 
   private isOptionalProp(value: unknown): value is InertiaOptionalProp {
@@ -211,6 +325,30 @@ export class InertiaService {
 
   private isMergeProp(value: unknown): value is InertiaMergeProp {
     return typeof value === 'object' && value !== null && INERTIA_PROP_MERGE in value
+  }
+
+  private isOnceProp(value: unknown): value is InertiaOnceProp {
+    return typeof value === 'object' && value !== null && INERTIA_PROP_ONCE in value
+  }
+
+  private isAlwaysProp(value: unknown): value is InertiaAlwaysProp {
+    return typeof value === 'object' && value !== null && INERTIA_PROP_ALWAYS in value
+  }
+
+  private serializeRoutes(routes: RegisteredRoute[]): SerializedRoutes {
+    const serialized: SerializedRoutes = {}
+    for (const route of routes) {
+      if (route.name) {
+        serialized[route.name] = {
+          path: route.path,
+          paramNames: route.paramNames,
+          domainParamNames: route.domainParamNames,
+          ...(route.domain ? { domain: route.domain } : {}),
+          ...(route.localePaths?.length ? { localePaths: route.localePaths } : {}),
+        }
+      }
+    }
+    return serialized
   }
 
   private isSsrDisabled(pathname: string): boolean {

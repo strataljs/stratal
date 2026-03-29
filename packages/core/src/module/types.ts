@@ -188,8 +188,8 @@ export interface ModuleClass<T extends object = object> extends Constructor<T> {
 /**
  * Module options for `@Module` decorator
  *
- * Note: Middlewares are configured via the MiddlewareConfigurable interface's
- * configure() method, not via this options object. See middleware/types.ts.
+ * Note: Middlewares are configured via the RouteConfigurable interface's
+ * configureRoutes() method, not via this options object. See router/router.ts.
  */
 export interface ModuleOptions {
   imports?: (ModuleClass | DynamicModule)[]

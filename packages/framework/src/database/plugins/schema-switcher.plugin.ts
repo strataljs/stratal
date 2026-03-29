@@ -19,7 +19,7 @@ export interface SchemaSwitcherPluginOptions {
  * })
  * ```
  */
-export class SchemaSwitcherPlugin implements RuntimePlugin<SchemaDef, Record<string, unknown>, Record<string, unknown>> {
+export class SchemaSwitcherPlugin implements RuntimePlugin<SchemaDef, Record<string, unknown>, Record<string, unknown>, {}> {
   readonly id = 'schema-switcher'
 
   constructor(private options: SchemaSwitcherPluginOptions) { }

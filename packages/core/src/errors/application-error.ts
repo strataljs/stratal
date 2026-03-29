@@ -28,7 +28,7 @@ import type { ErrorCode } from './error-codes'
  * - `Error.message` contains the i18n key for useful stack traces and fallback display
  * - Metadata provides interpolation parameters (e.g., { userId: '123' })
  * - ExceptionHandler translates the message key using I18nService before sending response
- * - This ensures errors are localized based on the user's locale (from X-Locale header)
+ * - This ensures errors are localized based on the user's locale
  */
 export abstract class ApplicationError extends Error {
   /**

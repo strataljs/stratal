@@ -8,6 +8,7 @@ import { BenchController, BenchItemsController } from './bench.controller'
     I18nModule.forRoot({
       defaultLocale: 'en',
       locales: ['en', 'fr'],
+      detection: { strategy: 'header' },
     }),
     I18nModule.registerMessages({ fr: frenchMessages }),
   ],

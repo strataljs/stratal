@@ -117,4 +117,5 @@ describe('InertiaMiddleware', () => {
 
     expect(c.status).not.toHaveBeenCalledWith(303)
   })
+
 })

@@ -1,7 +1,7 @@
+import type { Page } from '@inertiajs/core'
 import { Transient, inject } from 'stratal/di'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { INERTIA_TOKENS } from '../inertia.tokens'
-import type { InertiaPage } from '../types'
 import type { ManifestService } from './manifest.service'
 
 @Transient()
@@ -11,7 +11,7 @@ export class TemplateService {
     @inject(INERTIA_TOKENS.ManifestService) private readonly manifest: ManifestService,
   ) { }
 
-  render(page: InertiaPage, ssrHead: string[], ssrBody: string): string {
+  render(page: Page, ssrHead: string[], ssrBody: string): string {
     // When SSR body is present, Inertia's buildSSRBody already returns the
     // <script data-page="app"> tag + <div id="app" data-server-rendered="true">.
     // Without SSR, we generate both elements ourselves for client-side hydration.
@@ -30,7 +30,7 @@ export class TemplateService {
     return html
   }
 
-  private buildClientOnlyBody(page: InertiaPage): string {
+  private buildClientOnlyBody(page: Page): string {
     const json = JSON.stringify(page).replace(/\//g, '\\/')
     return `<script data-page="app" type="application/json">${json}</script><div id="app"></div>`
   }

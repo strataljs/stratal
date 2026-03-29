@@ -1,7 +1,8 @@
+import { DI_TOKENS, Transient } from 'stratal/di'
+import { LOGGER_TOKENS, type LoggerService } from 'stratal/logger'
+import type { Middleware, Next, RouterContext } from 'stratal/router'
 import { inject } from 'tsyringe'
-import { Transient, DI_TOKENS } from 'stratal/di'
-import type { Middleware, RouterContext } from 'stratal/router'
-import { AuthContext } from '../../context/auth-context'
+import { type AuthContext } from '../../context/auth-context'
 import { AUTH_SERVICE } from '../auth.tokens'
 import type { AuthService } from '../services/auth.service'
 
@@ -19,19 +20,25 @@ import type { AuthService } from '../services/auth.service'
 export class SessionVerificationMiddleware implements Middleware {
   constructor(
     @inject(AUTH_SERVICE)
-    private readonly authService: AuthService
-  ) {}
+    private readonly authService: AuthService,
+    @inject(LOGGER_TOKENS.LoggerService) private logger: LoggerService
+  ) { }
 
-  async handle(ctx: RouterContext, next: () => Promise<void>): Promise<void> {
-    const session = await this.authService.auth.api.getSession({
-      headers: ctx.c.req.raw.headers
-    })
+  async handle(ctx: RouterContext, next: Next): Promise<void> {
+    try {
+      const session = await this.authService.auth.api.getSession({
+        headers: ctx.c.req.raw.headers
+      })
 
-    if (session) {
-      const authContext = ctx.getContainer().resolve<AuthContext>(DI_TOKENS.AuthContext)
-      authContext.setAuthContext({ userId: session.user.id })
+      if (session) {
+        const authContext = ctx.getContainer().resolve<AuthContext>(DI_TOKENS.AuthContext)
+        authContext.setAuthContext({ userId: session.user.id })
+      }
+
+      await next()
+    } catch (error: unknown) {
+      this.logger.debug('Session validation failed (e.g., invalidated in DB)', { error });
+      await next()
     }
-
-    await next()
   }
 }

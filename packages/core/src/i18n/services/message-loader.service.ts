@@ -11,6 +11,7 @@ import { createCoreContext } from '@intlify/core-base'
 import { inject } from 'tsyringe'
 import { Transient } from '../../di/decorators'
 import type { I18nModuleOptions } from '../i18n.options'
+import type { MessageKeyPrefix } from '../i18n.types'
 import { I18N_TOKENS } from '../i18n.tokens'
 import { getLocales, getMessages } from '../messages'
 import { deepMerge } from '../utils/deep-merge'
@@ -100,6 +101,48 @@ export class MessageLoaderService {
   /** Get default locale */
   getDefaultLocale(): string {
     return this.defaultLocale
+  }
+
+  /**
+   * Get flattened (dot-notation) messages for a locale, optionally filtered by namespace prefixes.
+   *
+   * Returns flat key-value pairs matching the format used by `@intlify/core-base`'s
+   * `createCoreContext`. Requires `registerMessageCompiler(compile)` to be called
+   * before `translate()` can resolve these flat keys.
+   *
+   * @param locale - Locale code (falls back to default locale if not found)
+   * @param options - Optional filter configuration
+   * @param options.only - Dot-notation prefixes to include (e.g., `['common', 'nav.sidebar']`)
+   * @returns Flattened messages as `{ 'key.path': 'translated value' }`
+   *
+   * @example
+   * ```typescript
+   * // All messages for the locale
+   * loader.getFilteredMessages('en')
+   *
+   * // Only 'common' and 'nav' namespaces
+   * loader.getFilteredMessages('en', { only: ['common', 'nav'] })
+   *
+   * // Deeply nested prefix
+   * loader.getFilteredMessages('en', { only: ['common.actions'] })
+   * ```
+   */
+  getFilteredMessages(
+    locale: string,
+    options?: { only?: MessageKeyPrefix[] }
+  ): Record<string, string> {
+    const messages = this.getMessages(locale)
+    const flattened = this.flattenMessages(messages)
+
+    if (!options?.only?.length) return flattened
+
+    const result: Record<string, string> = {}
+    for (const [key, value] of Object.entries(flattened)) {
+      if (options.only.some((prefix) => key === prefix || key.startsWith(`${prefix}.`))) {
+        result[key] = value
+      }
+    }
+    return result
   }
 
   /**

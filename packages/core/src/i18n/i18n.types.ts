@@ -20,10 +20,10 @@ import type * as systemEn from './messages/en'
  */
 export type DeepKeys<T, Prefix extends string = ''> = T extends object
   ? {
-      [K in keyof T & string]: T[K] extends object
-        ? DeepKeys<T[K], `${Prefix}${K}.`>
-        : `${Prefix}${K}`
-    }[keyof T & string]
+    [K in keyof T & string]: T[K] extends object
+    ? DeepKeys<T[K], `${Prefix}${K}.`>
+    : `${Prefix}${K}`
+  }[keyof T & string]
   : never
 
 /**
@@ -47,7 +47,7 @@ export type SystemMessageKeys = DeepKeys<typeof systemEn>
  * }
  * ```
  */
-export interface AppMessages {}
+export interface AppMessages { }
 
 /**
  * Auto-derive app keys from AppMessages
@@ -61,6 +61,39 @@ export type AppMessageKeys = DeepKeys<AppMessages>
  */
 // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- AppMessageKeys resolves to never when unaugmented, but becomes meaningful after module augmentation
 export type MessageKeys = SystemMessageKeys | AppMessageKeys
+
+/**
+ * Recursively extract all dot-notation prefixes from a string union
+ *
+ * Given `'common.actions.save'`, produces `'common' | 'common.actions' | 'common.actions.save'`.
+ * Used to type-check namespace filters so only valid prefixes are accepted at compile time.
+ *
+ * @example
+ * ```typescript
+ * type Keys = 'auth.login.title' | 'auth.login.subtitle' | 'nav.home'
+ * type Result = Prefixes<Keys>
+ * // 'auth' | 'auth.login' | 'auth.login.title' | 'auth.login.subtitle' | 'nav' | 'nav.home'
+ * ```
+ */
+export type Prefixes<T extends string> = T extends `${infer Head}.${infer Tail}`
+  ? Head | `${Head}.${Prefixes<Tail>}`
+  : T
+
+/**
+ * Valid dot-notation prefixes for message keys
+ *
+ * Used to filter which message namespaces are shared with the frontend.
+ * Accepts both full keys (`'common.hello'`) and namespace prefixes (`'common'`).
+ *
+ * @example
+ * ```typescript
+ * // In InertiaModule config — only 'common' and 'nav' namespaces are sent to the frontend
+ * InertiaModule.forRoot({
+ *   i18n: { only: ['common', 'nav'] },
+ * })
+ * ```
+ */
+export type MessageKeyPrefix = Prefixes<MessageKeys>
 
 /**
  * Type for translation parameters

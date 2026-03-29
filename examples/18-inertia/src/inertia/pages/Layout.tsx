@@ -1,14 +1,14 @@
 import { Link, usePage } from '@inertiajs/react'
+import { useI18n } from '@stratal/inertia/react'
 import type { ReactNode } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 
 export default function Layout({ children }: { children: ReactNode }) {
-  const { appName, flash, currentNote } = usePage<{
-    appName: string
-    flash: string | null
-    currentNote?: string
-  }>().props
+  const page = usePage()
+  const { appName, currentNote } = page.props as { appName: string; currentNote?: string }
+  const flash = page.flash as { success?: string; error?: string }
+  const { t } = useI18n()
 
   return (
     <div className="min-h-screen bg-background">
@@ -19,18 +19,24 @@ export default function Layout({ children }: { children: ReactNode }) {
           </Link>
           <nav className="flex items-center gap-1">
             <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/" />}>
-              Home
+              {t('common.nav.home')}
             </Button>
             <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/notes" />}>
-              Notes
+              {t('common.nav.notes')}
             </Button>
           </nav>
         </div>
       </header>
 
-      {flash && (
+      {flash.success && (
         <div className="mx-auto max-w-4xl px-6 pt-4">
-          <Badge variant="secondary">{flash}</Badge>
+          <Badge variant="secondary">{flash.success}</Badge>
+        </div>
+      )}
+
+      {flash.error && (
+        <div className="mx-auto max-w-4xl px-6 pt-4">
+          <Badge variant="destructive">{flash.error}</Badge>
         </div>
       )}
 

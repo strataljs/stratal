@@ -6,7 +6,7 @@ import type { IQueueProvider } from './providers'
 import type { IQueueSender } from './queue-sender.interface'
 import { QueueSender } from './queue-sender'
 import { QUEUE_TOKENS } from './queue.tokens'
-import { QueueProviderFactory } from './services'
+import { type QueueProviderFactory } from './services'
 
 /**
  * Queue Registry

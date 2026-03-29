@@ -6,6 +6,12 @@ export interface StorageEntry {
 	disk: string
 	provider: 's3' | 'gcs'
 	endpoint: string
+	/**
+	 * Base URL for generating presigned/temporary URLs (client-accessible).
+	 * When set, presigned URLs use this host instead of `endpoint`.
+	 * Useful when the S3 API endpoint differs from the client-facing URL.
+	 */
+	url?: string
 	bucket: string
 	region: string
 	accessKeyId: string

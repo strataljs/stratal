@@ -6,7 +6,10 @@ import type { StreamingApi } from 'hono/utils/stream'
 import type { Container } from '../di/container'
 import { RequestContainerNotInitializedError } from '../errors'
 import { ROUTER_CONTEXT_KEYS } from './constants'
+import type { RouteName, RouteParams } from './route-map'
+import { ROUTER_TOKENS } from './router.tokens'
 import type { RouterEnv } from './types'
+import type { SignedUriOptions, Uri, UriOptions } from './uri'
 
 export type ContextQueryResult<R extends Record<string, unknown> | undefined, K extends string | undefined> = K extends string ? string : R extends undefined ? Record<string, unknown> : R
 
@@ -64,7 +67,6 @@ export class RouterContext<T extends RouterEnv = RouterEnv> {
 
   /**
    * Set locale for the current request
-   * Locale is determined by X-Locale header or defaults to config
    *
    * @param locale - Locale code (e.g., 'en', 'fr')
    */
@@ -158,6 +160,63 @@ export class RouterContext<T extends RouterEnv = RouterEnv> {
   }
 
   /**
+   * Generate a URL from a named route.
+   *
+   * Keys matching `:param` placeholders fill the path.
+   * Domain params are consumed from the same object.
+   * Extra keys become query string parameters.
+   *
+   * @param name - Named route identifier
+   * @param params - Route params + domain params + extra query params
+   * @param options - URL generation options (e.g., `{ absolute: true }`)
+   *
+   * @example
+   * ```typescript
+   * ctx.route('users.show', { id: '1' })           // '/v1/users/1'
+   * ctx.route('users.show', { id: '1', q: 'test' }) // '/v1/users/1?q=test'
+   * ```
+   */
+  route<N extends RouteName>(name: N, params?: RouteParams<N>, options?: UriOptions): string {
+    return this.resolveUri().route(name, params, options)
+  }
+
+  /**
+   * Get a domain parameter value from the current request.
+   * Domain params are set by the domain matching middleware.
+   *
+   * @param key - Domain parameter name (e.g., 'tenant' from '{tenant}.myapp.com')
+   *
+   * @example
+   * ```typescript
+   * const tenant = ctx.domain('tenant')
+   * ```
+   */
+  domain(key: string): string {
+    return this.c.get(`domain:${key}`) as string
+  }
+
+  /**
+   * Generate a signed URL from a named route.
+   *
+   * @param name - Named route identifier
+   * @param params - Route params (same as route())
+   * @param options - Signing options (e.g., expiresIn) and URL options
+   * @returns Signed URL string with signature query param
+   */
+  async signedUrl<N extends RouteName>(name: N, params?: RouteParams<N>, options?: SignedUriOptions): Promise<string> {
+    return this.resolveUri().signedRoute(name, params, options)
+  }
+
+  /**
+   * Check if the current request has a valid signature.
+   *
+   * @returns true if the URL signature is valid and not expired
+   */
+  async hasValidSignature(): Promise<boolean> {
+    return this.resolveUri().hasValidSignature()
+  }
+
+  /**
    * Redirect to another URL
    *
    * @param url - Target URL
@@ -201,5 +260,9 @@ export class RouterContext<T extends RouterEnv = RouterEnv> {
   streamSSE(callback: (stream: SSEStreamingApi) => Promise<void>, onError?: (err: Error, stream: SSEStreamingApi) => Promise<void>): Response {
     this.c.header('Content-Encoding', 'Identity')
     return honoStreamSSE(this.c, callback, onError)
+  }
+
+  private resolveUri(): Uri {
+    return this.getContainer().resolve<Uri>(ROUTER_TOKENS.Uri)
   }
 }

@@ -38,11 +38,14 @@ export function mapBetterAuthError(error: APIError): ApplicationError {
 
   if (error.status === 'FOUND') {
     const headers = error.headers as Headers
-    const hasInvalidToken = headers.get('location')?.includes('INVALID_TOKEN')
+    const location = headers.get('location') ?? ''
 
-    if (hasInvalidToken) {
-      return new InvalidTokenError()
-    }
+    if (location.includes('INVALID_TOKEN')) return new InvalidTokenError()
+    if (location.includes('EXPIRED_TOKEN')) return new TokenExpiredError()
+    if (location.includes('ATTEMPTS_EXCEEDED')) return new InvalidTokenError()
+    if (location.includes('new_user_signup_disabled')) return new UserNotFoundError()
+    if (location.includes('failed_to_create_user')) return new FailedToCreateUserError()
+    if (location.includes('failed_to_create_session')) return new FailedToCreateSessionError()
   }
 
   if (!errorCode) {
@@ -107,8 +110,17 @@ export function mapBetterAuthError(error: APIError): ApplicationError {
 }
 
 /**
- * Type guard to check if an error is a Better Auth APIError
+ * Type guard to check if an error is a Better Auth APIError.
+ * Uses duck typing to handle bundler environments (e.g. Vite)
+ * where instanceof may fail across module boundaries.
  */
 export function isAPIError(error: unknown): error is APIError {
-  return error instanceof APIError
+  if (error instanceof APIError) return true
+
+  return (
+    error instanceof Error
+    && error.name === 'APIError'
+    && 'status' in error
+    && 'statusCode' in error
+  )
 }

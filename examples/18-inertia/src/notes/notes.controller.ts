@@ -13,7 +13,8 @@ export class NotesController {
     @inject(INERTIA_TOKENS.InertiaService) private readonly inertia: InertiaService,
   ) { }
 
-  // Demonstrates: merge props (paginated list), optional props (stats)
+  // Demonstrates: merge props (paginated list), optional props (stats),
+  // always props (timestamp), once props (categories)
   @InertiaGet('/', { query: z.object({ page: z.coerce.number().int().min(1).optional().default(1) }) })
   async index(ctx: RouterContext) {
     const page = Number(ctx.query('page') ?? 1)
@@ -21,11 +22,14 @@ export class NotesController {
     return ctx.inertia('notes/Index', {
       notes: ctx.merge(() => this.notes.findAll(page)),
       stats: ctx.optional(() => this.notes.getStats()),
+      categories: ctx.once(() => ['general', 'work', 'personal'] as const),
+      timestamp: ctx.always(() => Date.now()),
       page,
     })
   }
 
-  // Demonstrates: deferred props (comments), render options (encryptHistory), per-request share
+  // Demonstrates: deferred props (comments), render options (encryptHistory),
+  // per-request share, deep merge
   @InertiaGet('/:id', { params: z.object({ id: z.string() }) })
   async show(ctx: RouterContext) {
     const id = ctx.param('id')
@@ -40,6 +44,7 @@ export class NotesController {
     return ctx.inertia('notes/Show', {
       note,
       comments: ctx.defer(() => this.notes.getComments(id), 'comments'),
+      metadata: ctx.merge(() => ({ viewCount: 1, lastViewed: new Date().toISOString() }), { strategy: 'deep' }),
     }, { encryptHistory: true })
   }
 
@@ -62,15 +67,16 @@ export class NotesController {
     return ctx.inertia('notes/Edit', { note })
   }
 
-  // Demonstrates: form POST handling
+  // Demonstrates: flash on success
   @InertiaPost('/', { body: z.object({ title: z.string(), content: z.string() }) })
   async create(ctx: RouterContext) {
     const { title, content } = await ctx.body<{ title: string; content: string }>()
     const note = await this.notes.create({ title, content })
+    ctx.flash('success', 'Note created successfully')
     return ctx.redirect(`/notes/${note.id}`)
   }
 
-  // Demonstrates: form PUT handling
+  // Demonstrates: flash on update
   @InertiaPut('/:id', {
     params: z.object({ id: z.string() }),
     body: z.object({ title: z.string().optional(), content: z.string().optional() }),
@@ -84,14 +90,22 @@ export class NotesController {
       abort(404, 'Note not found')
     }
 
+    ctx.flash('success', 'Note updated')
     return ctx.redirect(`/notes/${id}`)
   }
 
-  // Demonstrates: form DELETE handling
+  // Demonstrates: flash on delete
   @InertiaDelete('/:id', { params: z.object({ id: z.string() }) })
   async destroy(ctx: RouterContext) {
     const id = ctx.param('id')
-    await this.notes.delete(id)
+    const deleted = await this.notes.delete(id)
+
+    if (!deleted) {
+      ctx.flash('error', 'Failed to delete note')
+      return ctx.redirect('/notes')
+    }
+
+    ctx.flash('success', 'Note deleted')
     return ctx.redirect('/notes')
   }
 

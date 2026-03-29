@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { watch } from 'node:fs/promises'
-import { relative } from 'node:path'
+import { join, relative } from 'node:path'
 import { Command } from 'stratal/quarry'
 import { findPagesDir, runTypeGeneration } from '../generator/type-generator'
 
@@ -22,7 +22,7 @@ export class InertiaTypesCommand extends Command {
 
     if (this.boolean('watch')) {
       this.info('Watching for changes...')
-      await this.watchForChanges(cwd, pagesDir)
+      await this.watchForChanges(cwd)
     }
 
     return 0
@@ -40,9 +40,11 @@ export class InertiaTypesCommand extends Command {
     }
   }
 
-  private async watchForChanges(cwd: string, pagesDir: string): Promise<void> {
+  private async watchForChanges(cwd: string): Promise<void> {
+    const srcDir = join(cwd, 'src')
+
     try {
-      const watcher = watch(pagesDir, { recursive: true })
+      const watcher = watch(srcDir, { recursive: true })
       for await (const event of watcher) {
         if (event.filename && /\.(tsx|ts)$/.test(event.filename)) {
           this.info(`Change detected: ${event.filename}`)

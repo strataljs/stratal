@@ -1,12 +1,32 @@
 import { createMock } from '@stratal/testing/mocks'
+import { OpenAPIHono } from '@hono/zod-openapi'
 import { describe, expect, it } from 'vitest'
 import { z, type RouteConfig as OpenAPIRouteConfig } from '../../i18n/validation'
 import type { LoggerService } from '../../logger/services/logger.service'
+import type { ModuleRegistry } from '../../module/module-registry'
 import { DEFAULT_CONTENT_TYPE } from '../constants'
+import type { HonoApp } from '../hono-app'
+import { RouteRegistry } from '../route-registry'
 import { RouteRegistrationService } from '../services/route-registration.service'
-import type { RouteConfig } from '../types'
+import type { VersioningService } from '../services/versioning.service'
+import type { LocalePathService } from '../services/locale-path.service'
+import type { RouteConfig, RouterEnv } from '../types'
 
 const mockLogger = createMock<LoggerService>()
+
+const mockVersioningService = {
+  enabled: false,
+  resolve: (path: string) => [path],
+} as unknown as VersioningService
+
+const mockLocalePathService = {
+  enabled: false,
+  localePathConfig: null,
+  resolve: (path: string) => [{ path, isLocaleVariant: false }],
+} as unknown as LocalePathService
+
+const mockApp = new OpenAPIHono<RouterEnv>() as unknown as HonoApp
+const mockModuleRegistry = { getAllControllers: () => [] } as unknown as ModuleRegistry
 
 interface RouteRegistrationServicePrivate {
   buildOpenAPIRoute(
@@ -16,12 +36,20 @@ interface RouteRegistrationServicePrivate {
     metadata: { tags: string[]; security: Record<string, string[]>[] },
     guards: [],
     methodName?: string,
-    statusCodeOverride?: number
+    statusCodeOverride?: number,
+    hasLocaleParam?: boolean,
   ): OpenAPIRouteConfig
 }
 
 const createService = () => {
-  const service = new RouteRegistrationService(mockLogger as unknown as LoggerService, null)
+  const service = new RouteRegistrationService(
+    mockLogger as unknown as LoggerService,
+    new RouteRegistry(mockVersioningService, mockLocalePathService),
+    null,
+    mockLocalePathService,
+    mockApp,
+    mockModuleRegistry,
+  )
   return service as unknown as RouteRegistrationServicePrivate
 }
 

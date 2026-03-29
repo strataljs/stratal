@@ -25,7 +25,7 @@ export interface EventEmitterPluginOptions {
  * })
  * ```
  */
-export class EventEmitterPlugin implements RuntimePlugin<SchemaDef, Record<string, unknown>, Record<string, unknown>> {
+export class EventEmitterPlugin implements RuntimePlugin<SchemaDef, Record<string, unknown>, Record<string, unknown>, {}> {
   readonly id = 'event-emitter'
 
   constructor(private options: EventEmitterPluginOptions) { }

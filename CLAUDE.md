@@ -194,7 +194,7 @@ The framework extends core's event system for database operations:
 - Inline type imports enforced (`consistent-type-imports` ESLint rule)
 - Leading-underscore allowed for unused variables
 - Heavy dependencies (AWS SDK, React, nodemailer, resend) are optional peerDependencies
-- Pre-commit hook: husky + lint-staged runs `eslint --fix` on staged `.ts/.mts` files
+- Pre-commit hook: husky + lint-staged runs `oxlint --fix` on staged `.ts/.mts` files
 
 ## CI/CD
 

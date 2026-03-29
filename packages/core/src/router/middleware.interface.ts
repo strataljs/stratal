@@ -1,10 +1,13 @@
-import type { RouterContext } from './router-context'
+import { type Next as HonoNext } from 'hono';
+import type { RouterContext } from './router-context';
+
+export type Next = HonoNext;
 
 /**
  * Middleware interface for request processing
  *
  * Middlewares use the `@Transient()` decorator and are registered via
- * the `configure(consumer)` method in modules implementing `MiddlewareConfigurable`.
+ * `configureRoutes(router)` in modules implementing `RouteConfigurable`.
  *
  * @example
  * ```typescript
@@ -18,10 +21,10 @@ import type { RouterContext } from './router-context'
  * }
  *
  * // Register in module:
- * @Module({ providers: [...] })
- * export class AppModule implements MiddlewareConfigurable {
- *   configure(consumer: MiddlewareConsumer): void {
- *     consumer.apply(LoggingMiddleware).forRoutes('*')
+ * @Module({ providers: [LoggingMiddleware] })
+ * export class AppModule implements RouteConfigurable {
+ *   configureRoutes(router: Router): void {
+ *     router.middleware(LoggingMiddleware)
  *   }
  * }
  * ```
@@ -34,5 +37,5 @@ export interface Middleware {
    * @param ctx - Router context with request/response helpers
    * @param next - Function to call the next middleware or route handler
    */
-  handle(ctx: RouterContext, next: () => Promise<void>): Promise<void>
+  handle(ctx: RouterContext, next: Next): Promise<Response | void>
 }

@@ -6,13 +6,7 @@ import { Link, useForm } from '@inertiajs/react'
 import type { FormEvent } from 'react'
 import Layout from '../Layout'
 
-interface Note {
-  id: string
-  title: string
-  content: string
-}
-
-export default function Edit({ note }: { note: Note }) {
+export default function Edit({ note }: NotesEditPageProps) {
   const form = useForm({ title: note.title, content: note.content })
 
   function submit(e: FormEvent) {

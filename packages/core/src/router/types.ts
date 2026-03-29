@@ -17,6 +17,14 @@ type RouteParameter = ZodObjectWithEffect | undefined
 export interface RouterVariables {
   [ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER]: Container
   [ROUTER_CONTEXT_KEYS.LOCALE]?: string
+  /**
+   * When set by middleware, the defaultHook returns this response after
+   * successful validation — skipping the controller handler entirely.
+   * Used by packages like `@stratal/inertia` for precognition support.
+   */
+  validationSuccessResponse?: Response
+  /** Domain parameters set by the domain matching middleware (e.g., `domain:tenant`) */
+  [key: `domain:${string}`]: string
 }
 
 /**
@@ -143,6 +151,16 @@ export interface RouteConfig {
    * For @Route() decorator, status code is auto-derived from method name
    */
   statusCode?: number
+
+  /**
+   * Explicit route name for URL generation.
+   * Used with the `route()` helper and type generation.
+   * For convention-based @Route(), names are auto-generated if not provided.
+   * For explicit @Get/@Post/etc., names must be provided manually.
+   *
+   * @example 'users.show', 'health.check'
+   */
+  name?: string
 }
 
 /**
@@ -203,6 +221,24 @@ export interface ControllerOptions {
    * Can be a single version string, array of versions, or VERSION_NEUTRAL symbol.
    */
   version?: string | string[] | typeof VERSION_NEUTRAL
+
+  /**
+   * Route name prefix for this controller.
+   * Prepended to all route names in this controller.
+   * Overrides the Router-level name prefix entirely.
+   *
+   * @example 'admin.' — routes become 'admin.users.index', 'admin.users.show'
+   */
+  name?: string
+
+  /**
+   * Domain pattern for this controller.
+   * Overrides the Router-level domain.
+   * Use `{param}` for dynamic subdomain segments.
+   *
+   * @example '{tenant}.myapp.com', 'admin.myapp.com'
+   */
+  domain?: string
 }
 
 /**
@@ -224,3 +260,26 @@ export interface VersioningOptions {
   defaultVersion?: string | string[]
 }
 
+/**
+ * Locale path configuration for route registration.
+ * Controls how locale prefixes are applied to route paths.
+ *
+ * Built from {@link I18nModuleOptions} when path-based locale detection is enabled.
+ */
+export interface LocalePathConfig {
+  /** All supported locale codes (e.g., `['en', 'fr']`) */
+  allLocales: string[]
+
+  /**
+   * Locales that require a `/{locale}` path prefix.
+   * Excludes `defaultLocale` when `prefixDefaultLocale` is not `true`.
+   */
+  prefixedLocales: string[]
+
+  /**
+   * The default locale used as the unprefixed root, derived from
+   * {@link I18nModuleOptions.defaultLocale}.
+   * `null` when all locales are prefixed (`prefixDefaultLocale: true`).
+   */
+  defaultLocale: string | null
+}

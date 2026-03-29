@@ -1,13 +1,13 @@
 import {
   Application,
-  ApplicationConfig,
+  type ApplicationConfig,
   type Constructor,
   type StratalEnv,
   type StratalExecutionContext,
 } from 'stratal'
-import { Container } from 'stratal/di'
+import { type Container } from 'stratal/di'
 import { LogLevel } from 'stratal/logger'
-import { InjectionToken, Module, ModuleClass, ModuleOptions } from 'stratal/module'
+import { type InjectionToken, Module, type ModuleClass, type ModuleOptions } from 'stratal/module'
 import { STORAGE_TOKENS } from 'stratal/storage'
 import { FakeStorageService } from '../storage'
 import { ProviderOverrideBuilder, type ProviderOverrideConfig } from './override'

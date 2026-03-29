@@ -3,6 +3,7 @@ import { CacheModule } from './cache'
 import type { CronJob } from './cron/cron-job'
 import { CronManager } from './cron/cron-manager'
 import { Container } from './di/container'
+import { runWithContainer } from './di/container-storage'
 import { DI_TOKENS } from './di/tokens'
 import { Scope } from './di/types'
 import { type StratalEnv } from './env'
@@ -26,6 +27,7 @@ import { McpServeCommand } from './quarry/commands/mcp-serve.command'
 import { McpToolsCommand } from './quarry/commands/mcp-tools.command'
 import { QueueListCommand } from './quarry/commands/queue-list.command'
 import { RouteListCommand } from './quarry/commands/route-list.command'
+import { RouteTypesCommand } from './quarry/commands/route-types.command'
 import { ScheduleListCommand } from './quarry/commands/schedule-list.command'
 import { QuarryRegistry } from './quarry/quarry-registry'
 import type { CommandInput, CommandResult } from './quarry/types'
@@ -33,8 +35,15 @@ import { type ConsumerRegistry } from './queue/consumer-registry'
 import type { IQueueConsumer, QueueMessage } from './queue/queue-consumer'
 import { type QueueManager } from './queue/queue-manager'
 import { QueueModule } from './queue/queue.module'
-import { type IController, type RouterContext } from './router'
+import { type RouterContext } from './router'
 import { HonoApp } from './router/hono-app'
+import { RouteRegistry } from './router/route-registry'
+import { RouterResolver } from './router/router-resolver'
+import { ROUTER_TOKENS } from './router/router.tokens'
+import { Uri } from './router/uri'
+import { LocalePathService } from './router/services/locale-path.service'
+import { RouteRegistrationService } from './router/services/route-registration.service'
+import { VersioningService } from './router/services/versioning.service'
 import type { VersioningOptions } from './router/types'
 import { DbSeedCommand, DbSeedListCommand, SEEDER_TOKENS, SeederRegistry, type Seeder } from './seeder'
 import type { Constructor } from './types'
@@ -167,6 +176,11 @@ export class Application {
       return
     }
 
+    // Wrap in AsyncLocalStorage so getContainer() works for route() and other standalone functions
+    await runWithContainer(this._container, () => this.initializeInternal())
+  }
+
+  private async initializeInternal(): Promise<void> {
     // Phase 1: Register core infrastructure modules (internal)
     this.moduleRegistry.registerAll([
       I18nModule,
@@ -189,12 +203,15 @@ export class Application {
     this.cronManager = this._container.resolve<CronManager>(DI_TOKENS.Cron)
     this.quarry = this._container.resolve<QuarryRegistry>(DI_TOKENS.Quarry)
 
-    // Phase 5: Create & configure HonoApp
-    const logger = this._container.resolve<LoggerService>(LOGGER_TOKENS.LoggerService)
-    this.honoApp = new HonoApp(this._container, logger)
-    const middlewareConfigs = this.moduleRegistry.getAllMiddlewareConfigs()
-    const controllers = this.moduleRegistry.getAllControllers() as Constructor<IController>[]
-    await this.honoApp.configure(middlewareConfigs, controllers, this.appConfig.versioning)
+    // Phase 4.5: Register routing services in container
+    // (After Phase 3 so I18N_TOKENS.Options is available for LocalePathService)
+    this.registerRoutingServices()
+
+    // Phase 5: Resolve & configure HonoApp
+    // LocalePathService is transitively resolved via RouteRegistrationService → RouteRegistry
+    // during configure(), which triggers locale middleware setup on HonoApp before route registration.
+    this.honoApp = this._container.resolve<HonoApp>(ROUTER_TOKENS.HonoApp)
+    await this.honoApp.configure()
 
     // Phase 6: Configure queues, cron, events, commands, seeders
     this.registerQueueConsumers()
@@ -204,6 +221,35 @@ export class Application {
     this.registerCommands()
 
     this.initialized = true
+  }
+
+  /**
+   * Register routing services as singletons in the container.
+   * Called after module initialization so I18N_TOKENS.Options is available.
+   */
+  private registerRoutingServices(): void {
+    // VersioningService — resolves version prefixes from appConfig.versioning
+    this._container.register(ROUTER_TOKENS.VersioningService, VersioningService, Scope.Singleton)
+
+    // HonoApp — the Hono application instance (must be before LocalePathService)
+    this._container.register(ROUTER_TOKENS.HonoApp, HonoApp, Scope.Singleton)
+
+    // LocalePathService — computes LocalePathConfig and applies locale middleware to HonoApp
+    this._container.register(ROUTER_TOKENS.LocalePathService, LocalePathService, Scope.Singleton)
+
+    // RouteRegistry — single source of truth, expands routes via services above
+    this._container.register(ROUTER_TOKENS.RouteRegistry, RouteRegistry, Scope.Singleton)
+
+    // Uri — URL generation service (request-scoped for access to RouterContext)
+    this._container.register(ROUTER_TOKENS.Uri, Uri, Scope.Request)
+
+    // RouterResolver — merges Router configs from modules
+    const routerConfigs = this.moduleRegistry.getAllRouterConfigs()
+    const routerResolver = routerConfigs.length > 0 ? new RouterResolver(routerConfigs) : null
+    this._container.registerValue(ROUTER_TOKENS.RouterResolver, routerResolver)
+
+    // RouteRegistrationService — transient, resolved in HonoApp.configure()
+    this._container.register(RouteRegistrationService, RouteRegistrationService)
   }
 
   /**
@@ -296,7 +342,7 @@ export class Application {
     const builtinCommands: Constructor<Command>[] = [
       HelpCommand,
       DbSeedCommand, DbSeedListCommand,
-      RouteListCommand, EventListCommand,
+      RouteListCommand, RouteTypesCommand, EventListCommand,
       ScheduleListCommand, QueueListCommand,
       McpServeCommand, McpToolsCommand, ApiCommand,
     ]

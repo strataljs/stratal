@@ -3,8 +3,8 @@
 
 // Core router types
 export type { IController } from './controller'
-export type { Middleware } from './middleware.interface'
-export type { ConventionRouteMetadata, ControllerOptions, ExplicitRouteMetadata, RouteBody, RouteBodyObject, RouteConfig, RouteMetadata, RouterEnv, RouteResponse, RouteResponseObject, RouterVariables, SecurityScheme, VersioningOptions } from './types'
+export type { Middleware, Next } from './middleware.interface'
+export type { ControllerOptions, ConventionRouteMetadata, ExplicitRouteMetadata, LocalePathConfig, RouteBody, RouteBodyObject, RouteConfig, RouteMetadata, RouterEnv, RouteResponse, RouteResponseObject, RouterVariables, SecurityScheme, VersioningOptions } from './types'
 
 // Router constants
 export { HTTP_METHODS, ROUTE_METADATA_KEYS, ROUTER_CONTEXT_KEYS, SECURITY_SCHEMES, VERSION_NEUTRAL } from './constants'
@@ -21,11 +21,32 @@ export { HonoApp } from './hono-app'
 
 // Router services
 export {
-  RouteRegistrationService
+  LocalePathService, RouteRegistrationService,
+  VersioningService, type ResolvedPath
 } from './services'
 
 // Router tokens
 export { ROUTER_TOKENS } from './router.tokens'
+
+// Route Registry (source of truth for all routes)
+export { RouteRegistry, type RegisteredRoute, type RouteRegistrationInput } from './route-registry'
+
+// Route Map (augmentable interface for type-safe URL generation)
+export type { RouteName, RouteParams, SerializedRoute, SerializedRoutes, StratalRouteMap } from './route-map'
+
+// Route URL generation
+export { route } from './route-url'
+export { buildRouteUrl, Uri, type SignedUriOptions, type UriOptions } from './uri'
+
+// Router (replaces MiddlewareConfigurable — route + middleware configuration)
+export { Router, type RouteConfigurable, type RouterGroupConfig } from './router'
+
+// Path & name utilities
+export { getPathSpecificityScore, sortRoutesBySpecificity, toOpenAPIPath } from './utils/path'
+export { extractDomainParamNames, extractParamNames, generateConventionRouteName } from './utils/route-name'
+
+// Middleware utilities
+export { createMiddlewareChain } from './middleware/middleware-chain'
 
 // Decorators
 export {
@@ -37,7 +58,17 @@ export { getRouteDecoratedMethods, getRouteMetadata, Route } from './decorators/
 // Schemas
 export * from './schemas'
 
+// Domain middleware
+export { createDomainMiddleware, parseDomainPattern } from './middleware/domain.middleware'
+
+// Signed URLs
+export { VerifySignatureMiddleware } from './middleware/verify-signature.middleware'
+export { signUrl, verifySignedUrl, type SignedUrlOptions } from './signed-url'
+
 // Errors
 export {
-  ControllerRegistrationError, HonoAppAlreadyConfiguredError, OpenAPIRouteRegistrationError, OpenAPIValidationError, RouteNotFoundError
+  ControllerRegistrationError, DomainMismatchError, DuplicateRouteNameError, HonoAppAlreadyConfiguredError, InvalidSignatureError, MissingEnvironmentVariableError, MissingRouteParamError, OpenAPIRouteRegistrationError,
+  OpenAPIValidationError, ResponseValidationError, RouteNameNotFoundError, RouteNotFoundError,
+  RouterUseScopeError, SchemaValidationError
 } from './errors'
+

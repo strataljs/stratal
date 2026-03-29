@@ -17,7 +17,8 @@ npx quarry ./custom/entry.ts <command>
 |---------|---------|
 | `list` | Show all registered commands |
 | `help <command>` | Show usage for a specific command |
-| `route:list` | List all registered HTTP routes with methods and paths |
+| `route:list {--method=} {--path=} {--name=} {--hidden}` | List all registered HTTP routes (supports filtering) |
+| `route:types {--output=}` | Generate TypeScript types for named routes |
 | `event:list` | List all registered event listeners |
 | `schedule:list` | List all cron job schedules |
 | `queue:list` | List all queue consumers |
@@ -35,6 +36,12 @@ Run these commands first to inspect your app state before reading code:
 # Verify routes are registered correctly
 npx quarry route:list
 
+# Filter routes
+npx quarry route:list --method=GET       # Only GET routes
+npx quarry route:list --path=/api/v1     # Routes containing path substring
+npx quarry route:list --name=users       # Routes with name containing 'users'
+npx quarry route:list --hidden           # Include routes hidden from OpenAPI docs
+
 # Check event listener wiring
 npx quarry event:list
 
@@ -46,6 +53,10 @@ npx quarry queue:list
 
 # List all available seeders
 npx quarry db:seed:list
+
+# Generate type-safe route names
+npx quarry route:types
+npx quarry route:types --output=types/routes.d.ts
 
 # Preview what MCP tools your API exposes
 npx quarry mcp:tools

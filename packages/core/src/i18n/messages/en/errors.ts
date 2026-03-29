@@ -18,6 +18,11 @@ export const errors = {
   routeAccessDenied: 'Resource not found',
   controllerMethodNotFound: 'Method {methodName} not found on {controllerName}',
   controllerRegistration: 'Failed to register controller {controllerName}: {reason}',
+  duplicateRouteName: 'Duplicate route name "{name}". Already registered by {existingHandler}, cannot register {newHandler}.',
+  routeNameNotFound: 'Route "{name}" not found in registry.',
+  missingRouteParam: 'Missing required parameter "{param}" for route "{name}" (path: {path}).',
+  routerUseScopeViolation: 'router.use() can only be called on the root Router, not inside group() callbacks. Use router.middleware() for scoped middleware.',
+  missingEnvironmentVariable: 'Environment variable "{variable}" is required but not set.',
 
   // WebSocket errors
   websocketBodyNotAvailable: 'body() is not available in WebSocket gateways. Use WebSocket messages instead.',
@@ -69,8 +74,18 @@ export const errors = {
   localeNotSupported: "Locale '{locale}' is not supported. Supported locales: {supportedLocales}",
   translationMissing: "Translation missing for key '{key}' in locale '{locale}'",
 
+  // Container errors
+  containerNotInitialized: 'Application container has not been initialized. Ensure Application.initialize() has been called.',
+
+  // Domain routing errors
+  domainMismatch: 'The requested domain does not match any configured route',
+
+  // Signature errors
+  invalidSignature: 'The URL signature is invalid or has expired',
+
   // Schema validation errors
   schemaValidation: 'Schema validation failed',
+  responseValidation: 'Response validation failed',
 
   // OpenAPI errors
   openapiValidation: 'OpenAPI validation failed: {details}',

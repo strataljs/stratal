@@ -295,10 +295,22 @@ export abstract class ExceptionHandler {
       return error
     }
 
-    return new InternalError({
-      originalError: error instanceof Error ? error.message : String(error),
+    const originalMessage = error instanceof Error ? error.message : String(error)
+    const internalError = new InternalError({
+      originalError: originalMessage,
       stack: error instanceof Error ? error.stack : undefined,
     })
+
+    // In development, preserve the original error message and stack
+    // so the dev error overlay shows what actually went wrong
+    if (this.environment === 'development') {
+      internalError.message = originalMessage
+      if (error instanceof Error && error.stack) {
+        internalError.stack = error.stack
+      }
+    }
+
+    return internalError
   }
 
   /**
@@ -445,10 +457,11 @@ export abstract class ExceptionHandler {
   /**
    * Default rendering — content-negotiated.
    *
-   * For HTTP requests that accept HTML in development: re-throws the error
-   * so the runtime's built-in error UI (e.g., Wrangler) can display it.
-   * For HTTP requests that accept HTML in production: renders a minimal branded HTML page.
+   * For HTTP requests that accept HTML: renders a minimal branded HTML page.
    * For everything else (API, queue, cron, CLI): returns JSON.
+   *
+   * Errors are always logged via `performReport` (non-blocking waitUntil),
+   * so they appear in the console regardless of the rendered response format.
    */
   private defaultRender(error: ApplicationError, context: ExceptionContext): Response {
     const translatedMessage = this.translateError(error, context)
@@ -456,11 +469,6 @@ export abstract class ExceptionHandler {
     const status = resolveHttpStatus(error)
 
     if (context.type === 'http' && this.wantsHtml(context)) {
-      if (this.environment === 'development') {
-        error.stack = error.stack?.replace(error.message, translatedMessage)
-        error.message = translatedMessage
-        throw error
-      }
       return this.renderDefaultHtml(errorResponse, status)
     }
 

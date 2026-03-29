@@ -19,7 +19,7 @@
  */
 
 import type { BetterAuthOptions } from 'better-auth'
-import type { MiddlewareConfigurable, MiddlewareConsumer } from 'stratal/middleware'
+import type { RouteConfigurable, Router } from 'stratal/router'
 import { Module } from 'stratal/module'
 import type { AsyncModuleOptions, DynamicModule } from 'stratal/module'
 import { AUTH_OPTIONS, AUTH_SERVICE } from './auth.tokens'
@@ -30,22 +30,16 @@ import { AuthService } from './services/auth.service'
 @Module({
   providers: []
 })
-export class AuthModule implements MiddlewareConfigurable {
+export class AuthModule implements RouteConfigurable {
   /**
-   * Configure auth middleware.
+   * Configure auth middleware globally.
    *
    * Registers middlewares in order:
    * 1. AuthContextMiddleware - Creates and registers AuthContext in request container
    * 2. SessionVerificationMiddleware - Verifies session and populates AuthContext with userId
    */
-  configure(consumer: MiddlewareConsumer): void {
-    consumer
-      .apply(AuthContextMiddleware)
-      .forRoutes('*')
-
-    consumer
-      .apply(SessionVerificationMiddleware)
-      .forRoutes('*')
+  configureRoutes(router: Router): void {
+    router.use(AuthContextMiddleware, SessionVerificationMiddleware)
   }
 
   /**

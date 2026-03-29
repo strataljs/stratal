@@ -211,7 +211,7 @@ Any module can call `registerMessages()`. Messages are deep-merged across all re
 export class TenancyModule {}
 ```
 
-The module auto-registers `LocaleExtractionMiddleware` and `I18nContextMiddleware` on all routes. Locale is extracted from the `X-Locale` request header.
+The module auto-registers language detection middleware on all routes. Locale is detected based on the configured `detection` strategy.
 
 ### I18nModule Options
 
@@ -220,6 +220,11 @@ interface I18nModuleOptions {
   defaultLocale?: string    // default: 'en'
   fallbackLocale?: string   // default: 'en'
   locales?: string[]        // default: ['en']
+  detection?: {
+    enabled?: boolean       // default: true
+    strategy?: 'cookie' | 'header' | 'querystring' | 'path'  // default: 'cookie'
+    prefixDefaultLocale?: false | true | 'redirect'           // path strategy only, default: false
+  } | { enabled: false }
 }
 ```
 
@@ -276,8 +281,99 @@ declare module 'stratal/i18n' {
 }
 ```
 
-## Locale Handling
+## Language Detection
 
-- The `X-Locale` request header controls per-request locale
+Locale is detected automatically from incoming requests via the `detection` option on `I18nModule.forRoot()`.
+
+### Detection Strategies
+
+| Strategy | Source | Example |
+|----------|--------|---------|
+| `'cookie'` (default) | `locale` cookie | Browser sends `Cookie: locale=fr` |
+| `'header'` | `Accept-Language` header | `Accept-Language: fr` |
+| `'querystring'` | `?locale=` query param | `/api/users?locale=fr` |
+| `'path'` | First URL path segment | `/fr/api/users` |
+
+### Configuration Examples
+
+```typescript
+// Cookie detection (default — no config needed)
+I18nModule.forRoot({
+  defaultLocale: 'en',
+  locales: ['en', 'fr'],
+})
+
+// Accept-Language header
+I18nModule.forRoot({
+  defaultLocale: 'en',
+  locales: ['en', 'fr'],
+  detection: { strategy: 'header' },
+})
+
+// Query string
+I18nModule.forRoot({
+  defaultLocale: 'en',
+  locales: ['en', 'fr'],
+  detection: { strategy: 'querystring' },
+})
+
+// Path-based (routes auto-register with locale prefix, e.g., /en/api/users)
+I18nModule.forRoot({
+  defaultLocale: 'en',
+  locales: ['en', 'fr'],
+  detection: { strategy: 'path' },
+})
+
+// Disable detection entirely
+I18nModule.forRoot({
+  defaultLocale: 'en',
+  locales: ['en', 'fr'],
+  detection: { enabled: false },
+})
+```
+
+### Path-Based Detection
+
+When `strategy: 'path'` is used, all routes are registered with a `/{locale}` path prefix (e.g., `/{locale}/api/users`). The `locale` parameter is auto-injected into each route's params schema and validated against the configured `locales` array. Routes appear in OpenAPI docs with the locale as a documented path parameter.
+
+#### `prefixDefaultLocale` Option
+
+Controls whether the default locale gets a URL path prefix. Only applies when `strategy: 'path'`.
+
+| Value | Behavior |
+|-------|----------|
+| `false` (default) | Default locale has no prefix (`/users`). Other locales are prefixed (`/fr/users`). Requests to the prefixed default locale (`/en/users`) return 404. |
+| `'redirect'` | Same as `false`, but requests to the prefixed default locale (`/en/users`) are 301-redirected to the unprefixed path (`/users`). |
+| `true` | All locales are prefixed (`/en/users`, `/fr/users`). |
+
+```typescript
+// Default behavior: default locale unprefixed
+I18nModule.forRoot({
+  defaultLocale: 'en',
+  locales: ['en', 'fr'],
+  detection: { strategy: 'path' },
+  // prefixDefaultLocale defaults to false
+  // GET /users -> en, GET /fr/users -> fr, GET /en/users -> 404
+})
+
+// Redirect prefixed default locale
+I18nModule.forRoot({
+  defaultLocale: 'en',
+  locales: ['en', 'fr'],
+  detection: { strategy: 'path', prefixDefaultLocale: 'redirect' },
+  // GET /users -> en, GET /fr/users -> fr, GET /en/users -> 301 to /users
+})
+
+// All locales prefixed
+I18nModule.forRoot({
+  defaultLocale: 'en',
+  locales: ['en', 'fr'],
+  detection: { strategy: 'path', prefixDefaultLocale: true },
+  // GET /en/users -> en, GET /fr/users -> fr, GET /users -> 404
+})
+```
+
+### Runtime Locale Access
+
 - `RouterContext.setLocale(locale)` / `RouterContext.getLocale()` for runtime locale changes
-- Falls back to `defaultLocale` if the requested locale isn't in `locales`
+- Falls back to `defaultLocale` if the detected locale is not in `locales`

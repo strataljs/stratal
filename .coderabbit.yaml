@@ -70,8 +70,10 @@ reviews:
     - "!**/*.lock"
     - "!yarn.lock"
   tools:
-    eslint:
+    oxc:
       enabled: true
+    eslint:
+      enabled: false
     biome:
       enabled: false
 

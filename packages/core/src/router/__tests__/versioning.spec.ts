@@ -1,166 +1,242 @@
 import { describe, expect, it } from 'vitest'
-import { createMock } from '@stratal/testing/mocks'
-import type { LoggerService } from '../../logger/services/logger.service'
-import { RouteRegistrationService } from '../services/route-registration.service'
 import { VERSION_NEUTRAL } from '../constants'
-import type { ControllerOptions, VersioningOptions } from '../types'
-import { MiddlewareConfigurationService } from '../../middleware/middleware-configuration.service'
+import { RouteRegistry, type RouteRegistrationInput } from '../route-registry'
+import type { VersioningService } from '../services/versioning.service'
+import type { LocalePathService, ResolvedPath } from '../services/locale-path.service'
+import type { LocalePathConfig, VersioningOptions } from '../types'
 
-const mockLogger = createMock<LoggerService>()
+/**
+ * Create a mock VersioningService that mirrors the real service's resolution logic.
+ */
+const createMockVersioningService = (options: VersioningOptions | null = null): VersioningService => {
+  return {
+    enabled: options !== null,
+    resolve(basePath: string, version?: string | string[] | typeof VERSION_NEUTRAL): string[] {
+      if (!options) return [basePath]
+      if (version === VERSION_NEUTRAL) return [basePath]
 
-interface RouteRegistrationServicePrivate {
-  resolveVersionedPaths(basePath: string, controllerOpts?: ControllerOptions): string[]
+      const prefix = options.prefix ?? 'v'
+
+      if (version !== undefined) {
+        const versions = Array.isArray(version) ? version : [version]
+        return versions.map(v => `/${prefix}${v}${basePath}`)
+      }
+
+      if (options.defaultVersion !== undefined) {
+        const defaults = Array.isArray(options.defaultVersion)
+          ? options.defaultVersion
+          : [options.defaultVersion]
+        return defaults.map(v => `/${prefix}${v}${basePath}`)
+      }
+
+      return [basePath]
+    },
+  } as unknown as VersioningService
 }
 
-interface MiddlewareConfigServicePrivate {
-  resolveVersionedRouteInfo(routeInfo: { path: string; method?: string; version?: string | string[] }): { path: string; method?: string }[]
+/**
+ * Create a mock LocalePathService that mirrors the real service's resolution logic.
+ */
+const createMockLocalePathService = (config: LocalePathConfig | null = null): LocalePathService => {
+  return {
+    enabled: config !== null,
+    localePathConfig: config,
+    resolve(path: string): ResolvedPath[] {
+      if (!config) return [{ path, isLocaleVariant: false }]
+
+      const locales = config.defaultLocale === null
+        ? config.allLocales
+        : config.prefixedLocales
+      const constraint = `{${locales.join('|')}}`
+
+      // All locales prefixed (defaultLocale is null)
+      if (config.defaultLocale === null) {
+        return [{ path: `/:locale${constraint}${path}`, isLocaleVariant: true }]
+      }
+
+      // Default locale unprefixed
+      const result: ResolvedPath[] = [{ path, isLocaleVariant: false }]
+      if (config.prefixedLocales.length > 0) {
+        result.push({ path: `/:locale${constraint}${path}`, isLocaleVariant: true })
+      }
+      return result
+    },
+  } as unknown as LocalePathService
+}
+
+const createInput = (overrides: Partial<RouteRegistrationInput> = {}): RouteRegistrationInput => ({
+  method: 'get',
+  basePath: '/users',
+  controller: 'UsersController',
+  action: 'index',
+  hidden: false,
+  middleware: [],
+  ...overrides,
+})
+
+/** Extract just paths from registered routes */
+const paths = (registry: RouteRegistry, input: RouteRegistrationInput): string[] => {
+  const routes = registry.register(input)
+  return routes.map(r => r.path)
 }
 
 describe('Versioning', () => {
-  describe('RouteRegistrationService.resolveVersionedPaths()', () => {
-    const createService = (versioning: VersioningOptions | null = null) => {
-      const service = new RouteRegistrationService(mockLogger as unknown as LoggerService, versioning)
-      return service as unknown as RouteRegistrationServicePrivate
-    }
-
+  describe('VersioningService via RouteRegistry', () => {
     describe('versioning disabled (no config)', () => {
       it('should return base path when no versioning config', () => {
-        const service = createService(null)
-        expect(service.resolveVersionedPaths('/users')).toEqual(['/users'])
+        const registry = new RouteRegistry(createMockVersioningService(null), createMockLocalePathService())
+        expect(paths(registry, createInput({ basePath: '/users' }))).toEqual(['/users'])
       })
 
-      it('should ignore version in controller options when versioning disabled', () => {
-        const service = createService(null)
-        expect(service.resolveVersionedPaths('/users', { version: '1' })).toEqual(['/users'])
+      it('should ignore version in input when versioning disabled', () => {
+        const registry = new RouteRegistry(createMockVersioningService(null), createMockLocalePathService())
+        expect(paths(registry, createInput({ basePath: '/users', version: '1' }))).toEqual(['/users'])
       })
     })
 
-    describe('explicit version on controller', () => {
+    describe('explicit version on input', () => {
       it('should prefix with version using default prefix "v"', () => {
-        const service = createService({})
-        expect(service.resolveVersionedPaths('/users', { version: '1' })).toEqual(['/v1/users'])
+        const registry = new RouteRegistry(createMockVersioningService({}), createMockLocalePathService())
+        expect(paths(registry, createInput({ basePath: '/users', version: '1' }))).toEqual(['/v1/users'])
       })
 
-      it('should support multi-version controller', () => {
-        const service = createService({})
-        const result = service.resolveVersionedPaths('/users', { version: ['1', '2'] })
-        expect(result).toEqual(['/v1/users', '/v2/users'])
+      it('should support multi-version input', () => {
+        const registry = new RouteRegistry(createMockVersioningService({}), createMockLocalePathService())
+        expect(paths(registry, createInput({ basePath: '/users', version: ['1', '2'] }))).toEqual(['/v1/users', '/v2/users'])
       })
 
       it('should use custom prefix', () => {
-        const service = createService({ prefix: 'api/v' })
-        expect(service.resolveVersionedPaths('/users', { version: '1' })).toEqual(['/api/v1/users'])
+        const registry = new RouteRegistry(createMockVersioningService({ prefix: 'api/v' }), createMockLocalePathService())
+        expect(paths(registry, createInput({ basePath: '/users', version: '1' }))).toEqual(['/api/v1/users'])
       })
     })
 
     describe('VERSION_NEUTRAL', () => {
       it('should return base path without prefix', () => {
-        const service = createService({})
-        expect(service.resolveVersionedPaths('/health', { version: VERSION_NEUTRAL })).toEqual(['/health'])
+        const registry = new RouteRegistry(createMockVersioningService({}), createMockLocalePathService())
+        expect(paths(registry, createInput({ basePath: '/health', version: VERSION_NEUTRAL }))).toEqual(['/health'])
       })
 
       it('should ignore defaultVersion when VERSION_NEUTRAL', () => {
-        const service = createService({ defaultVersion: '1' })
-        expect(service.resolveVersionedPaths('/health', { version: VERSION_NEUTRAL })).toEqual(['/health'])
+        const registry = new RouteRegistry(createMockVersioningService({ defaultVersion: '1' }), createMockLocalePathService())
+        expect(paths(registry, createInput({ basePath: '/health', version: VERSION_NEUTRAL }))).toEqual(['/health'])
       })
     })
 
     describe('defaultVersion', () => {
-      it('should apply defaultVersion to controllers without explicit version', () => {
-        const service = createService({ defaultVersion: '1' })
-        expect(service.resolveVersionedPaths('/status')).toEqual(['/v1/status'])
+      it('should apply defaultVersion to inputs without explicit version', () => {
+        const registry = new RouteRegistry(createMockVersioningService({ defaultVersion: '1' }), createMockLocalePathService())
+        expect(paths(registry, createInput({ basePath: '/status' }))).toEqual(['/v1/status'])
       })
 
       it('should apply array defaultVersion', () => {
-        const service = createService({ defaultVersion: ['1', '2'] })
-        expect(service.resolveVersionedPaths('/status')).toEqual(['/v1/status', '/v2/status'])
+        const registry = new RouteRegistry(createMockVersioningService({ defaultVersion: ['1', '2'] }), createMockLocalePathService())
+        expect(paths(registry, createInput({ basePath: '/status' }))).toEqual(['/v1/status', '/v2/status'])
       })
 
-      it('should not apply defaultVersion when controller has explicit version', () => {
-        const service = createService({ defaultVersion: '1' })
-        expect(service.resolveVersionedPaths('/users', { version: '2' })).toEqual(['/v2/users'])
+      it('should not apply defaultVersion when input has explicit version', () => {
+        const registry = new RouteRegistry(createMockVersioningService({ defaultVersion: '1' }), createMockLocalePathService())
+        expect(paths(registry, createInput({ basePath: '/users', version: '2' }))).toEqual(['/v2/users'])
       })
 
-      it('should not apply defaultVersion to VERSION_NEUTRAL controllers', () => {
-        const service = createService({ defaultVersion: '1' })
-        expect(service.resolveVersionedPaths('/health', { version: VERSION_NEUTRAL })).toEqual(['/health'])
+      it('should not apply defaultVersion to VERSION_NEUTRAL inputs', () => {
+        const registry = new RouteRegistry(createMockVersioningService({ defaultVersion: '1' }), createMockLocalePathService())
+        expect(paths(registry, createInput({ basePath: '/health', version: VERSION_NEUTRAL }))).toEqual(['/health'])
       })
     })
 
     describe('no version and no defaultVersion', () => {
       it('should return base path unchanged', () => {
-        const service = createService({})
-        expect(service.resolveVersionedPaths('/status')).toEqual(['/status'])
+        const registry = new RouteRegistry(createMockVersioningService({}), createMockLocalePathService())
+        expect(paths(registry, createInput({ basePath: '/status' }))).toEqual(['/status'])
       })
     })
 
     describe('custom prefix', () => {
       it('should use custom prefix for versioned paths', () => {
-        const service = createService({ prefix: 'api/v' })
-        expect(service.resolveVersionedPaths('/users', { version: '1' })).toEqual(['/api/v1/users'])
+        const registry = new RouteRegistry(createMockVersioningService({ prefix: 'api/v' }), createMockLocalePathService())
+        expect(paths(registry, createInput({ basePath: '/users', version: '1' }))).toEqual(['/api/v1/users'])
       })
 
       it('should use custom prefix with defaultVersion', () => {
-        const service = createService({ prefix: 'api/v', defaultVersion: '2' })
-        expect(service.resolveVersionedPaths('/users')).toEqual(['/api/v2/users'])
+        const registry = new RouteRegistry(createMockVersioningService({ prefix: 'api/v', defaultVersion: '2' }), createMockLocalePathService())
+        expect(paths(registry, createInput({ basePath: '/users' }))).toEqual(['/api/v2/users'])
       })
     })
   })
 
-  describe('MiddlewareConfigurationService.resolveVersionedRouteInfo()', () => {
-    const createService = (versioning: VersioningOptions | null = null) => {
-      const service = new MiddlewareConfigurationService(mockLogger as unknown as LoggerService, versioning)
-      return service as unknown as MiddlewareConfigServicePrivate
-    }
+  describe('LocalePathService via RouteRegistry', () => {
+    describe('all locales prefixed (prefixDefaultLocale: true)', () => {
+      const allPrefixed: LocalePathConfig = { allLocales: ['en', 'fr'], prefixedLocales: ['en', 'fr'], defaultLocale: null }
 
-    it('should return RouteInfo as-is when versioning disabled', () => {
-      const service = createService(null)
-      const result = service.resolveVersionedRouteInfo({ path: '/users', version: '1' })
-      expect(result).toEqual([{ path: '/users', version: '1' }])
+      it('should prefix all paths with /:locale', () => {
+        const registry = new RouteRegistry(createMockVersioningService(null), createMockLocalePathService(allPrefixed))
+        expect(paths(registry, createInput({ basePath: '/users' }))).toEqual(['/:locale{en|fr}/users'])
+      })
+
+      it('should mark locale-prefixed paths as locale variants', () => {
+        const registry = new RouteRegistry(createMockVersioningService(null), createMockLocalePathService(allPrefixed))
+        const routes = registry.register(createInput({ basePath: '/users' }))
+        expect(routes).toHaveLength(1)
+        expect(routes[0].isLocaleVariant).toBe(true)
+      })
+
+      it('should combine with versioning', () => {
+        const registry = new RouteRegistry(createMockVersioningService({ defaultVersion: '1' }), createMockLocalePathService(allPrefixed))
+        expect(paths(registry, createInput({ basePath: '/users' }))).toEqual(['/:locale{en|fr}/v1/users'])
+      })
     })
 
-    it('should return RouteInfo as-is when no version specified', () => {
-      const service = createService({})
-      const result = service.resolveVersionedRouteInfo({ path: '/users' })
-      expect(result).toEqual([{ path: '/users' }])
+    describe('default locale unprefixed (prefixDefaultLocale: false)', () => {
+      const unprefixed: LocalePathConfig = { allLocales: ['en', 'fr'], prefixedLocales: ['fr'], defaultLocale: 'en' }
+
+      it('should return both unprefixed and prefixed paths', () => {
+        const registry = new RouteRegistry(createMockVersioningService(null), createMockLocalePathService(unprefixed))
+        expect(paths(registry, createInput({ basePath: '/users' }))).toEqual(['/users', '/:locale{fr}/users'])
+      })
+
+      it('should set isLocaleVariant correctly for each path', () => {
+        const registry = new RouteRegistry(createMockVersioningService(null), createMockLocalePathService(unprefixed))
+        const routes = registry.register(createInput({ basePath: '/users' }))
+        expect(routes).toHaveLength(2)
+        expect(routes[0].isLocaleVariant).toBeUndefined() // primary path — not a locale variant
+        expect(routes[1].isLocaleVariant).toBe(true)
+      })
+
+      it('should combine with versioning', () => {
+        const registry = new RouteRegistry(createMockVersioningService({ defaultVersion: '1' }), createMockLocalePathService(unprefixed))
+        expect(paths(registry, createInput({ basePath: '/users' }))).toEqual(['/v1/users', '/:locale{fr}/v1/users'])
+      })
+
+      it('should combine with multi-version', () => {
+        const registry = new RouteRegistry(createMockVersioningService({}), createMockLocalePathService(unprefixed))
+        expect(paths(registry, createInput({ basePath: '/users', version: ['1', '2'] }))).toEqual([
+          '/v1/users', '/:locale{fr}/v1/users',
+          '/v2/users', '/:locale{fr}/v2/users',
+        ])
+      })
     })
 
-    it('should resolve version to versioned paths', () => {
-      const service = createService({})
-      const result = service.resolveVersionedRouteInfo({ path: '/users', version: '1' })
-      expect(result).toEqual([
-        { path: '/v1/users', method: undefined },
-        { path: '/v1/users/*', method: undefined },
-      ])
+    describe('single locale (only default)', () => {
+      const singleLocale: LocalePathConfig = { allLocales: ['en'], prefixedLocales: [], defaultLocale: 'en' }
+
+      it('should return only the unprefixed path (no /:locale route)', () => {
+        const registry = new RouteRegistry(createMockVersioningService(null), createMockLocalePathService(singleLocale))
+        const routes = registry.register(createInput({ basePath: '/users' }))
+        expect(routes).toHaveLength(1)
+        expect(routes[0].path).toBe('/users')
+        expect(routes[0].isLocaleVariant).toBeUndefined()
+      })
     })
 
-    it('should resolve multiple versions', () => {
-      const service = createService({})
-      const result = service.resolveVersionedRouteInfo({ path: '/users', version: ['1', '2'] })
-      expect(result).toEqual([
-        { path: '/v1/users', method: undefined },
-        { path: '/v1/users/*', method: undefined },
-        { path: '/v2/users', method: undefined },
-        { path: '/v2/users/*', method: undefined },
-      ])
-    })
-
-    it('should preserve HTTP method in resolved routes', () => {
-      const service = createService({})
-      const result = service.resolveVersionedRouteInfo({ path: '/users', version: '1', method: 'get' })
-      expect(result).toEqual([
-        { path: '/v1/users', method: 'get' },
-        { path: '/v1/users/*', method: 'get' },
-      ])
-    })
-
-    it('should use custom prefix', () => {
-      const service = createService({ prefix: 'api/v' })
-      const result = service.resolveVersionedRouteInfo({ path: '/users', version: '1' })
-      expect(result).toEqual([
-        { path: '/api/v1/users', method: undefined },
-        { path: '/api/v1/users/*', method: undefined },
-      ])
+    describe('no locale config', () => {
+      it('should return paths without locale prefix', () => {
+        const registry = new RouteRegistry(createMockVersioningService(null), createMockLocalePathService(null))
+        const routes = registry.register(createInput({ basePath: '/users' }))
+        expect(routes).toHaveLength(1)
+        expect(routes[0].path).toBe('/users')
+        expect(routes[0].isLocaleVariant).toBeUndefined()
+      })
     })
   })
 })
