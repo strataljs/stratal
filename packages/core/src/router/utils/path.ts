@@ -39,17 +39,49 @@ export function toRoutingOpenAPIPath(path: string): string {
 }
 
 /**
- * Compute specificity score and segment count in a single pass.
+ * Compute a packed specificity key for route ordering.
+ * Encodes both score and segment count into a single number to avoid object allocation.
+ *
+ * Lower score = higher priority (registered first in Hono).
+ * Scoring: static = 0, `:param{constraint}` = 5, `:param` = 10, wildcard `{.+}` / `{.*}` = 100.
+ *
+ * Packed as: score * 10000 - segmentCount (negative segment count so more segments = lower key = higher priority)
+ */
+function getPathSpecificityKey(path: string): number {
+  let score = 0
+  let segmentCount = 0
+  let i = 0
+
+  while (i < path.length) {
+    if (path.charCodeAt(i) === 47 /* '/' */) { i++; continue }
+
+    let end = path.indexOf('/', i)
+    if (end === -1) end = path.length
+
+    segmentCount++
+    const segment = path.substring(i, end)
+
+    if (segment.includes('{.+}') || segment.includes('{.*}')) {
+      score += 100
+    } else if (segment.charCodeAt(0) === 58 /* ':' */) {
+      score += segment.includes('{') ? 5 : 10
+    }
+
+    i = end
+  }
+
+  return score * 10000 - segmentCount
+}
+
+/**
+ * Compute a specificity score for route ordering.
  * Lower score = higher priority (registered first in Hono).
  *
  * Scoring: static = 0, `:param{constraint}` = 5, `:param` = 10, wildcard `{.+}` / `{.*}` = 100.
- * Constrained params (e.g., `:locale{en|fr}`) are more specific than unconstrained
- * params and register first, ensuring they match before catch-all dynamic segments.
  */
-export function getPathSpecificity(path: string): { score: number; segmentCount: number } {
+export function getPathSpecificityScore(path: string): number {
   const segments = path.split('/').filter(Boolean)
   let score = 0
-
   for (const segment of segments) {
     if (segment.includes('{.+}') || segment.includes('{.*}')) {
       score += 100
@@ -59,16 +91,7 @@ export function getPathSpecificity(path: string): { score: number; segmentCount:
       score += 10
     }
   }
-
-  return { score, segmentCount: segments.length }
-}
-
-/**
- * Compute a specificity score for route ordering (score only, no segment count).
- * @see getPathSpecificity for combined score + segment count.
- */
-export function getPathSpecificityScore(path: string): number {
-  return getPathSpecificity(path).score
+  return score
 }
 
 /**
@@ -79,16 +102,13 @@ export function getPathSpecificityScore(path: string): number {
  * 3. Primary paths before locale-prefixed variants
  */
 export function sortRoutesBySpecificity<T extends { path: string }>(routes: T[]): T[] {
-  // Pre-compute specificity for each route in a single pass (avoids re-splitting in comparator)
-  const scored = routes.map(route => {
-    const { score, segmentCount } = getPathSpecificity(route.path)
-    return { route, score, segmentCount }
-  })
+  // Pre-compute packed specificity keys (avoids object allocation per route)
+  const keys = new Map<T, number>()
+  for (const route of routes) {
+    keys.set(route, getPathSpecificityKey(route.path))
+  }
 
-  scored.sort((a, b) => {
-    if (a.score !== b.score) return a.score - b.score
-    return b.segmentCount - a.segmentCount
-  })
-
-  return scored.map(s => s.route)
+  const copy = routes.slice()
+  copy.sort((a, b) => keys.get(a)! - keys.get(b)!)
+  return copy
 }

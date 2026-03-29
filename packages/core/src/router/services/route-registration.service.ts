@@ -235,10 +235,20 @@ export class RouteRegistrationService {
       )
     }
 
+    // Pre-cache metadata for all decorated methods (avoids double getRouteMetadata lookup)
+    const methodMetadata: { method: string; meta: RouteMetadata }[] = []
+    let hasConvention = false
+    let hasExplicit = false
+    for (const m of decoratedMethods) {
+      const meta = getRouteMetadata(prototype, m)
+      if (!meta) continue
+      methodMetadata.push({ method: m, meta })
+      if (meta.type === 'convention') hasConvention = true
+      else if (meta.type === 'explicit') hasExplicit = true
+    }
+
     // Enforce mutual exclusivity: no mixing @Route() with @Get/@Post/etc.
-    const proto = ControllerClass.prototype as IController
-    const types = new Set(decoratedMethods.map(m => getRouteMetadata(proto, m)?.type))
-    if (types.has('convention') && types.has('explicit')) {
+    if (hasConvention && hasExplicit) {
       throw new ControllerRegistrationError(
         ControllerClass.name,
         'Cannot mix @Route() with HTTP method decorators (@Get, @Post, etc.) in the same controller. Use one pattern or the other.'
@@ -254,10 +264,10 @@ export class RouteRegistrationService {
     // Resolve effective name prefix: controller name overrides router name entirely
     const effectiveNamePrefix = controllerOpts?.name ?? routerConfig.name
 
-    for (const methodName of decoratedMethods) {
-      const meta = getRouteMetadata(prototype, methodName)
-      if (!meta) continue
+    // Hoist middleware name computation (same for all methods in this controller)
+    const middlewareNames = routerConfig.middleware.map(m => m.name)
 
+    for (const { method: methodName, meta } of methodMetadata) {
       const resolved = this.resolveMethodAndPath(meta, methodName, basePath, className)
       if (!resolved) continue
 
@@ -291,12 +301,14 @@ export class RouteRegistrationService {
         controller: className,
         action: methodName,
         hidden: hideFromDocs,
-        middleware: routerConfig.middleware.map(m => m.name),
+        middleware: middlewareNames,
       })
 
-      // Collect guards (reuse controllerGuards from line above, avoid redundant metadata lookup)
+      // Collect guards — avoid spread when no method-level guards (common case)
       const methodGuards = getMethodGuards(prototype, methodName)?.guards ?? []
-      const allGuards: Guard[] = [...controllerGuards, ...methodGuards]
+      const allGuards: Guard[] = methodGuards.length > 0
+        ? [...controllerGuards, ...methodGuards]
+        : controllerGuards
 
       const responseSchema = httpMethod !== 'all'
         ? this.extractResponseSchema(routeConfig)

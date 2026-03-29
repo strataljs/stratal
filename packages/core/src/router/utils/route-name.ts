@@ -48,15 +48,14 @@ export function extractDomainParamNames(domain: string): string[] {
  * generateConventionRouteName('/users/:userId/notes/:noteId/tags', 'index') // 'users.notes.tags.index'
  */
 export function generateConventionRouteName(basePath: string, methodName: string): string {
-  const segments = basePath
-    .split('/')
-    .filter(Boolean)
-    // Strip /api prefix
-    .filter(s => s !== 'api')
-    // Strip version prefixes like v1, v2
-    .filter(s => !/^v\d+$/.test(s))
-    // Strip parameter segments like :id, :companyId
-    .filter(s => !s.startsWith(':'))
+  // Single-pass: split and filter in one loop (avoids 4 intermediate arrays)
+  const parts = basePath.split('/')
+  const segments: string[] = []
+  for (const s of parts) {
+    if (s && s !== 'api' && !s.startsWith(':') && !/^v\d+$/.test(s)) {
+      segments.push(s)
+    }
+  }
 
   if (segments.length === 0) {
     return methodName

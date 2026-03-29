@@ -130,7 +130,7 @@ const multiControllerConfig: ApplicationConfig = {
 }
 
 describe('Application - Multi-Controller Bootstrap', () => {
-  bench('initialize with 5 controllers (10 routes)', async () => {
+  bench('initialize with 5 controllers (8 routes)', async () => {
     const app = new Application({ ...multiControllerConfig, env: {} as StratalEnv, ctx: mockCtx })
     await app.initialize()
   })
