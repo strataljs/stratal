@@ -14,6 +14,7 @@
  * extractParamNames('/users')                         // []
  */
 export function extractParamNames(path: string): string[] {
+  if (!path.includes(':')) return []
   const matches = path.matchAll(/:([a-zA-Z_][a-zA-Z0-9_]*)/g)
   return [...matches].map(m => m[1])
 }
@@ -27,6 +28,7 @@ export function extractParamNames(path: string): string[] {
  * extractDomainParamNames('example.com')                    // []
  */
 export function extractDomainParamNames(domain: string): string[] {
+  if (!domain.includes('{')) return []
   const matches = domain.matchAll(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g)
   return [...matches].map(m => m[1])
 }

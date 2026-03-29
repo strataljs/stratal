@@ -89,22 +89,25 @@ export class RouteRegistry {
     const versionedPaths = this.versioningService.resolve(input.basePath, input.version)
 
     const expandedRoutes: RegisteredRoute[] = []
+    const localeEnabled = this.localePathService.enabled
 
     for (const versionedPath of versionedPaths) {
       // Expand via LocalePathService
       const resolvedPaths = this.localePathService.resolve(versionedPath)
 
-      // Collect locale variant paths (for the primary route's localePaths field)
-      const localeVariantPaths = resolvedPaths
-        .filter(p => p.isLocaleVariant)
-        .map(p => p.path)
+      // Collect locale variant paths only when locale paths are enabled
+      let localeVariantPaths: string[] | undefined
+      if (localeEnabled) {
+        const variants = resolvedPaths.filter(p => p.isLocaleVariant)
+        localeVariantPaths = variants.length > 0 ? variants.map(p => p.path) : undefined
+      }
 
       for (const resolved of resolvedPaths) {
         const route: RegisteredRoute = {
           name: resolved.isLocaleVariant ? undefined : input.name,
           method: input.method,
           path: resolved.path,
-          localePaths: resolved.isLocaleVariant ? undefined : (localeVariantPaths.length > 0 ? localeVariantPaths : undefined),
+          localePaths: resolved.isLocaleVariant ? undefined : localeVariantPaths,
           paramNames: extractParamNames(resolved.path),
           domain: input.domain,
           domainParamNames,
@@ -129,10 +132,12 @@ export class RouteRegistry {
         }
 
         this.routes.push(route)
-        this._sortedCache = null
         expandedRoutes.push(route)
       }
     }
+
+    // Invalidate sort cache once per register() call, not per route
+    this._sortedCache = null
 
     return expandedRoutes
   }

@@ -208,11 +208,9 @@ export class Application {
     this.registerRoutingServices()
 
     // Phase 5: Resolve & configure HonoApp
+    // LocalePathService is transitively resolved via RouteRegistrationService → RouteRegistry
+    // during configure(), which triggers locale middleware setup on HonoApp before route registration.
     this.honoApp = this._container.resolve<HonoApp>(ROUTER_TOKENS.HonoApp)
-
-    // Resolve LocalePathService to trigger locale middleware application on HonoApp
-    this._container.resolve<LocalePathService>(ROUTER_TOKENS.LocalePathService)
-
     await this.honoApp.configure()
 
     // Phase 6: Configure queues, cron, events, commands, seeders

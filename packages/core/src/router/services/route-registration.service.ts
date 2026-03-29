@@ -34,7 +34,7 @@ import {
 import type { HonoApp } from '../hono-app'
 import { createDomainMiddleware } from '../middleware/domain.middleware'
 import { createMiddlewareChain } from '../middleware/middleware-chain'
-import { type RouteRegistry } from '../route-registry'
+import { type RegisteredRoute, type RouteRegistry } from '../route-registry'
 import { RouterContext } from '../router-context'
 import type { RouterResolver } from '../router-resolver'
 import { ROUTER_TOKENS } from '../router.tokens'
@@ -115,16 +115,14 @@ export class RouteRegistrationService {
     }
 
     // Pass 1: Collect routes into registry + store Hono registration actions
-    const actions = new Map<string, () => void>()
+    const actions = new WeakMap<RegisteredRoute, () => void>()
     for (const ControllerClass of controllers) {
       this.collectRoutes(ControllerClass, actions)
     }
 
     // Pass 2: Register in Hono in specificity order from registry
     for (const route of this.registry.all()) {
-      const key = `${route.controller}.${route.action}:${route.path}`
-      const action = actions.get(key)
-      action?.()
+      actions.get(route)?.()
     }
 
     this.logger.info('Controller registration complete')
@@ -136,7 +134,7 @@ export class RouteRegistrationService {
    */
   private collectRoutes(
     ControllerClass: Constructor<IController>,
-    actions: Map<string, () => void>,
+    actions: WeakMap<RegisteredRoute, () => void>,
   ): void {
     const isWsGateway = isGateway(ControllerClass)
     const controllerRoute = getControllerRoute(ControllerClass)
@@ -181,8 +179,7 @@ export class RouteRegistrationService {
       })
 
       for (const route of expandedRoutes) {
-        const key = `${route.controller}.${route.action}:${route.path}`
-        actions.set(key, () => {
+        actions.set(route, () => {
           // Apply scoped middleware
           if (routerConfig.middleware.length > 0) {
             this.app.use(`${route.path}/*`, createMiddlewareChain(routerConfig.middleware))
@@ -218,8 +215,7 @@ export class RouteRegistrationService {
       })
 
       for (const route of expandedRoutes) {
-        const key = `${route.controller}.${route.action}:${route.path}`
-        actions.set(key, () => {
+        actions.set(route, () => {
           if (routerConfig.middleware.length > 0) {
             this.app.use(`${route.path}/*`, createMiddlewareChain(routerConfig.middleware))
           }
@@ -298,10 +294,9 @@ export class RouteRegistrationService {
         middleware: routerConfig.middleware.map(m => m.name),
       })
 
-      // Collect guards
-      const controllerGuardsForMethod = getControllerGuards(ControllerClass)?.guards ?? []
+      // Collect guards (reuse controllerGuards from line above, avoid redundant metadata lookup)
       const methodGuards = getMethodGuards(prototype, methodName)?.guards ?? []
-      const allGuards: Guard[] = [...controllerGuardsForMethod, ...methodGuards]
+      const allGuards: Guard[] = [...controllerGuards, ...methodGuards]
 
       const responseSchema = httpMethod !== 'all'
         ? this.extractResponseSchema(routeConfig)
@@ -310,8 +305,7 @@ export class RouteRegistrationService {
       const handler = this.createControllerHandler(ControllerClass, methodName, responseSchema)
 
       for (const route of expandedRoutes) {
-        const key = `${route.controller}.${route.action}:${route.path}`
-        actions.set(key, () => {
+        actions.set(route, () => {
           // Apply scoped middleware once per controller
           if (!scopedMiddlewareApplied && routerConfig.middleware.length > 0) {
             // Use the first primary path for middleware scope

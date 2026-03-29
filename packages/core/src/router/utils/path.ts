@@ -39,14 +39,14 @@ export function toRoutingOpenAPIPath(path: string): string {
 }
 
 /**
- * Compute a specificity score for route ordering.
+ * Compute specificity score and segment count in a single pass.
  * Lower score = higher priority (registered first in Hono).
  *
  * Scoring: static = 0, `:param{constraint}` = 5, `:param` = 10, wildcard `{.+}` / `{.*}` = 100.
  * Constrained params (e.g., `:locale{en|fr}`) are more specific than unconstrained
  * params and register first, ensuring they match before catch-all dynamic segments.
  */
-export function getPathSpecificityScore(path: string): number {
+export function getPathSpecificity(path: string): { score: number; segmentCount: number } {
   const segments = path.split('/').filter(Boolean)
   let score = 0
 
@@ -54,15 +54,21 @@ export function getPathSpecificityScore(path: string): number {
     if (segment.includes('{.+}') || segment.includes('{.*}')) {
       score += 100
     } else if (segment.startsWith(':') && segment.includes('{')) {
-      // Constrained param (e.g., :locale{en|fr}) — more specific than unconstrained
       score += 5
     } else if (segment.startsWith(':')) {
       score += 10
     }
-    // static segments add 0
   }
 
-  return score
+  return { score, segmentCount: segments.length }
+}
+
+/**
+ * Compute a specificity score for route ordering (score only, no segment count).
+ * @see getPathSpecificity for combined score + segment count.
+ */
+export function getPathSpecificityScore(path: string): number {
+  return getPathSpecificity(path).score
 }
 
 /**
@@ -73,14 +79,16 @@ export function getPathSpecificityScore(path: string): number {
  * 3. Primary paths before locale-prefixed variants
  */
 export function sortRoutesBySpecificity<T extends { path: string }>(routes: T[]): T[] {
-  return [...routes].sort((a, b) => {
-    const scoreA = getPathSpecificityScore(a.path)
-    const scoreB = getPathSpecificityScore(b.path)
-    if (scoreA !== scoreB) return scoreA - scoreB
-
-    // Tie-break: more segments = more specific, register first
-    const segA = a.path.split('/').filter(Boolean).length
-    const segB = b.path.split('/').filter(Boolean).length
-    return segB - segA
+  // Pre-compute specificity for each route in a single pass (avoids re-splitting in comparator)
+  const scored = routes.map(route => {
+    const { score, segmentCount } = getPathSpecificity(route.path)
+    return { route, score, segmentCount }
   })
+
+  scored.sort((a, b) => {
+    if (a.score !== b.score) return a.score - b.score
+    return b.segmentCount - a.segmentCount
+  })
+
+  return scored.map(s => s.route)
 }
