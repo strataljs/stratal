@@ -68,6 +68,7 @@ export type RouteRegistrationInput = Omit<RegisteredRoute, 'paramNames' | 'domai
 export class RouteRegistry {
   private readonly routes: RegisteredRoute[] = []
   private readonly namedRoutes = new Map<string, RegisteredRoute>()
+  private _sortedCache: RegisteredRoute[] | null = null
 
   constructor(
     @inject(ROUTER_TOKENS.VersioningService) private readonly versioningService: VersioningService,
@@ -128,6 +129,7 @@ export class RouteRegistry {
         }
 
         this.routes.push(route)
+        this._sortedCache = null
         expandedRoutes.push(route)
       }
     }
@@ -147,7 +149,8 @@ export class RouteRegistry {
 
   /** Get all routes sorted by specificity (static > param > wildcard, primary before locale) */
   all(): RegisteredRoute[] {
-    return sortRoutesBySpecificity(this.routes)
+    this._sortedCache ??= sortRoutesBySpecificity(this.routes);
+    return this._sortedCache
   }
 
   /** Get only named routes */

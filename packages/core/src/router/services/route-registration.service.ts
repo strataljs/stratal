@@ -812,7 +812,7 @@ export class RouteRegistrationService {
         const injectedArgs = this.resolveMethodInjections(ControllerClass.prototype as object, methodName, requestContainer)
         const response = await (method as (...args: unknown[]) => Promise<Response>).apply(controller, [ctx, ...injectedArgs])
 
-        if (responseSchema) {
+        if (responseSchema && c.env.ENVIRONMENT !== 'production') {
           return this.validateResponse(response, responseSchema)
         }
 
