@@ -125,4 +125,18 @@ export class RouterUseScopeError extends ApplicationError {
   }
 }
 
+/**
+ * Thrown when a middleware calls next() more than once.
+ * This is a programming error — each middleware must call next() at most once.
+ *
+ * Error Code: 9014
+ */
+export class MiddlewareNextCalledMultipleTimesError extends ApplicationError {
+  constructor(middlewareName: string) {
+    super('errors.middlewareNextCalledMultipleTimes', ERROR_CODES.ROUTER.MIDDLEWARE_NEXT_CALLED_MULTIPLE_TIMES, {
+      middlewareName,
+    })
+  }
+}
+
 export { SchemaValidationError } from './schema-validation.error'

@@ -67,7 +67,7 @@ export { signUrl, verifySignedUrl, type SignedUrlOptions } from './signed-url'
 
 // Errors
 export {
-  ControllerRegistrationError, DomainMismatchError, DuplicateRouteNameError, HonoAppAlreadyConfiguredError, InvalidSignatureError, MissingEnvironmentVariableError, MissingRouteParamError, OpenAPIRouteRegistrationError,
+  ControllerRegistrationError, DomainMismatchError, DuplicateRouteNameError, HonoAppAlreadyConfiguredError, InvalidSignatureError, MiddlewareNextCalledMultipleTimesError, MissingEnvironmentVariableError, MissingRouteParamError, OpenAPIRouteRegistrationError,
   OpenAPIValidationError, ResponseValidationError, RouteNameNotFoundError, RouteNotFoundError,
   RouterUseScopeError, SchemaValidationError
 } from './errors'

@@ -143,6 +143,8 @@ export const ERROR_CODES = {
     MISSING_ROUTE_PARAM: 9012,
     /** router.use() called inside group() callback */
     USE_SCOPE_VIOLATION: 9013,
+    /** next() called more than once in a middleware */
+    MIDDLEWARE_NEXT_CALLED_MULTIPLE_TIMES: 9014,
   },
 
   /**

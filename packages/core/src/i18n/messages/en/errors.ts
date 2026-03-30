@@ -22,6 +22,7 @@ export const errors = {
   routeNameNotFound: 'Route "{name}" not found in registry.',
   missingRouteParam: 'Missing required parameter "{param}" for route "{name}" (path: {path}).',
   routerUseScopeViolation: 'router.use() can only be called on the root Router, not inside group() callbacks. Use router.middleware() for scoped middleware.',
+  middlewareNextCalledMultipleTimes: 'next() was called multiple times in "{middlewareName}" middleware. Ensure each middleware calls next() at most once.',
   missingEnvironmentVariable: 'Environment variable "{variable}" is required but not set.',
 
   // WebSocket errors

@@ -34,11 +34,10 @@ export class SessionVerificationMiddleware implements Middleware {
         const authContext = ctx.getContainer().resolve<AuthContext>(DI_TOKENS.AuthContext)
         authContext.setAuthContext({ userId: session.user.id })
       }
-
-      await next()
     } catch (error: unknown) {
-      this.logger.debug('Session validation failed (e.g., invalidated in DB)', { error });
-      await next()
+      this.logger.debug('Session validation failed (e.g., invalidated in DB)', { error })
     }
+
+    await next()
   }
 }
