@@ -151,7 +151,7 @@ export class S3StorageProvider implements IS3MultipartProvider {
     let command
     switch (method) {
       case 'GET':
-        command = new GetObjectCommand({ Bucket: this.bucket, Key: path })
+        command = new GetObjectCommand({ Bucket: this.bucket, Key: path, ResponseContentDisposition: 'inline' })
         break
       case 'PUT':
         command = new PutObjectCommand({ Bucket: this.bucket, Key: path })
