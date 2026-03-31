@@ -1,6 +1,6 @@
 import type { AnyPlugin, ClientOptions } from '@zenstackhq/orm'
 import type { SchemaDef } from '@zenstackhq/schema'
-import { DI_TOKENS, Scope, delay } from 'stratal/di'
+import { DI_TOKENS, Scope } from 'stratal/di'
 import type { IEventRegistry } from 'stratal/events'
 import {
   Module,
@@ -77,11 +77,9 @@ export class DatabaseModule implements OnInitialize, OnShutdown {
     const container = context.container.getTsyringeContainer();
 
     for (const conn of config.connections) {
-      const Service = createDatabaseService(conn, eventRegistry)
-
       container.register(connectionSymbol(conn.name) as InjectionToken<symbol>,
-        // @ts-expect-error Overload error
-        delay(() => Service),
+        // @ts-expect-error Dynamic class type mismatch
+        { useClass: createDatabaseService(conn, eventRegistry) },
         { lifecycle: Scope.Request })
     }
 
