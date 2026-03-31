@@ -1,6 +1,5 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 export interface TempViteConfigOptions {
   cwd: string
   server?: { port?: number; host?: boolean }
@@ -15,7 +14,7 @@ export function writeTempViteConfig(options: TempViteConfigOptions): string {
   const hasUserConfig = existsSync(join(options.cwd, 'vite.config.ts'))
 
   const serverConfig = options.server
-    ? `server: { port: ${options.server.port ?? 5173}, host: ${options.server.host ? 'true' : 'undefined'} },`
+    ? `server: { port: ${options.server.port}, host: ${options.server.host ? 'true' : 'undefined'} },`
     : ''
 
   const outDirConfig = options.outDir
@@ -48,11 +47,11 @@ const baseConfig = {
 }
 
 ${hasUserConfig
-    ? `const userModule = await import('${join(options.cwd, 'vite.config.ts').replace(/\\/g, '/')}')
+      ? `const userModule = await import('${join(options.cwd, 'vite.config.ts').replace(/\\/g, '/')}')
 const userConfig = userModule.default ?? userModule
 export default mergeConfig(baseConfig, userConfig)`
-    : 'export default baseConfig'
-  }
+      : 'export default baseConfig'
+    }
 `
 
   writeFileSync(configPath, content, 'utf-8')
