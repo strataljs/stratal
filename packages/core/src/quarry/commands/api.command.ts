@@ -59,7 +59,8 @@ export class ApiCommand extends Command {
       body: data || undefined,
     })
 
-    const response = await this.app.hono.fetch(request, this.app.env)
+    const hono = await this.app.ensureHono()
+    const response = await hono.fetch(request, this.app.env)
     const body = await response.text()
 
     // Color-coded status

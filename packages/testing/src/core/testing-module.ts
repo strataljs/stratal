@@ -115,7 +115,8 @@ export class TestingModule {
    * Execute an HTTP request through HonoApp
    */
   async fetch(request: Request): Promise<Response> {
-    return this.app.hono.fetch(request, this.env, this.ctx as ExecutionContext)
+    const hono = await this.app.ensureHono()
+    return hono.fetch(request, this.env, this.ctx as ExecutionContext)
   }
 
   /**

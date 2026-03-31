@@ -40,11 +40,11 @@ import { HonoApp } from './router/hono-app'
 import { RouteRegistry } from './router/route-registry'
 import { RouterResolver } from './router/router-resolver'
 import { ROUTER_TOKENS } from './router/router.tokens'
-import { Uri } from './router/uri'
 import { LocalePathService } from './router/services/locale-path.service'
 import { RouteRegistrationService } from './router/services/route-registration.service'
 import { VersioningService } from './router/services/versioning.service'
 import type { VersioningOptions } from './router/types'
+import { Uri } from './router/uri'
 import { DbSeedCommand, DbSeedListCommand, SEEDER_TOKENS, SeederRegistry, type Seeder } from './seeder'
 import type { Constructor } from './types'
 
@@ -118,6 +118,8 @@ export class Application {
   private cronManager!: CronManager
   private quarry!: QuarryRegistry
   private initialized = false
+  private routingInitPromise: Promise<void> | null = null
+  private handlerInitPromise: Promise<void> | null = null
 
   readonly env: StratalEnv
   private readonly appConfig: ApplicationConfig
@@ -158,9 +160,14 @@ export class Application {
   }
 
   /**
-   * Get the HonoApp instance
+   * Lazily initialize routing and return the HonoApp instance.
+   *
+   * Routing (service registration, HonoApp resolution, route configuration)
+   * is deferred so that `scheduled` and `queue` handlers don't pay the CPU
+   * cost of route setup on cold start.
    */
-  get hono(): HonoApp {
+  async ensureHono(): Promise<HonoApp> {
+    await this.initializeRouting()
     return this.honoApp
   }
 
@@ -182,9 +189,9 @@ export class Application {
 
   private async initializeInternal(): Promise<void> {
     // Phase 1: Register core infrastructure modules (internal)
+    // OpenAPIModule is deferred to initializeRouting() (only needed for fetch)
     this.moduleRegistry.registerAll([
       I18nModule,
-      OpenAPIModule,
       QueueModule,
       CacheModule,
     ])
@@ -203,20 +210,10 @@ export class Application {
     this.cronManager = this._container.resolve<CronManager>(DI_TOKENS.Cron)
     this.quarry = this._container.resolve<QuarryRegistry>(DI_TOKENS.Quarry)
 
-    // Phase 4.5: Register routing services in container
-    // (After Phase 3 so I18N_TOKENS.Options is available for LocalePathService)
-    this.registerRoutingServices()
-
-    // Phase 5: Resolve & configure HonoApp
-    // LocalePathService is transitively resolved via RouteRegistrationService → RouteRegistry
-    // during configure(), which triggers locale middleware setup on HonoApp before route registration.
-    this.honoApp = this._container.resolve<HonoApp>(ROUTER_TOKENS.HonoApp)
-    await this.honoApp.configure()
-
-    // Phase 6: Configure queues, cron, events, commands, seeders
-    this.registerQueueConsumers()
+    // Phase 5: Register cron jobs, seeders, and commands (cheap — stores class refs)
+    // Queue consumers and event listeners are deferred (they resolve instances
+    // from the container, which is expensive). Routing is also deferred.
     this.registerCronJobs()
-    this.registerEventListeners()
     this.registerSeeders()
     this.registerCommands()
 
@@ -253,6 +250,34 @@ export class Application {
   }
 
   /**
+   * Wire up queue consumers and event listeners.
+   * Called lazily on first fetch/queue — not during scheduled handling.
+   */
+  private initializeHandlers(): Promise<void> {
+    this.handlerInitPromise ??= runWithContainer(this._container, () => {
+      this.registerQueueConsumers()
+      this.registerEventListeners()
+      return Promise.resolve()
+    })
+    return this.handlerInitPromise
+  }
+
+  /**
+   * Register routing services, resolve HonoApp, and configure routes.
+   * Called lazily on first fetch — not during scheduled/queue handling.
+   */
+  private initializeRouting(): Promise<void> {
+    this.routingInitPromise ??= runWithContainer(this._container, async () => {
+      await this.initializeHandlers()
+      this.moduleRegistry.register(OpenAPIModule as unknown as ModuleClass)
+      this.registerRoutingServices()
+      this.honoApp = this._container.resolve<HonoApp>(ROUTER_TOKENS.HonoApp)
+      await this.honoApp.configure()
+    })
+    return this.routingInitPromise
+  }
+
+  /**
    * Resolve a service from the container
    */
   resolve<T>(token: symbol): T {
@@ -271,6 +296,8 @@ export class Application {
    * Handle queue batch processing
    */
   async handleQueue(batch: MessageBatch, queueName: string): Promise<void> {
+    await this.initializeHandlers()
+
     const firstMessage = batch.messages[0]?.body as QueueMessage | undefined
     const locale = firstMessage?.metadata?.locale ?? 'en'
     const mockRouterContext = this.createMockRouterContext(locale)
@@ -295,7 +322,7 @@ export class Application {
 
     await this._container.runInRequestScope(mockRouterContext, async (requestContainer) => {
       try {
-        await this.cronManager.executeScheduled(controller)
+        await this.cronManager.executeScheduled(controller, requestContainer)
       } catch (error) {
         const handler = requestContainer.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
         await handler.handle(error, createCronExceptionContext())
@@ -381,8 +408,11 @@ export class Application {
 
   private registerCronJobs(): void {
     for (const JobClass of this.moduleRegistry.getAllJobs()) {
-      const job = this._container.resolve(JobClass) as CronJob
-      this.cronManager.registerJob(job)
+      // Resolve temporarily to read the schedule property.
+      // The delay() proxy on DB dependencies is created but never triggered
+      // since we only access the schedule string.
+      const tempJob = this._container.resolve(JobClass) as CronJob
+      this.cronManager.registerJob(tempJob.schedule, JobClass as Constructor<CronJob>)
     }
   }
 

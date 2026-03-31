@@ -23,8 +23,8 @@ export class ScheduleListCommand extends Command {
 
     for (const schedule of schedules) {
       const jobs = this.cron.getJobsForSchedule(schedule)
-      for (const job of jobs) {
-        rows.push([schedule, job.constructor.name])
+      for (const { jobClass } of jobs) {
+        rows.push([schedule, jobClass.name])
       }
     }
 

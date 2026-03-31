@@ -46,7 +46,8 @@ export class Stratal<Env extends StratalEnv = StratalEnv> {
 
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const app = await this.ensureReady()
-    return app.hono.fetch(request, env, ctx)
+    const hono = await app.ensureHono()
+    return hono.fetch(request, env, ctx)
   }
 
   async queue(batch: MessageBatch): Promise<void> {
@@ -60,7 +61,7 @@ export class Stratal<Env extends StratalEnv = StratalEnv> {
   }
 
   get hono(): Promise<HonoApp> {
-    return this.initPromise.then(app => app.hono)
+    return this.initPromise.then(app => app.ensureHono())
   }
 
   async shutdown(): Promise<void> {

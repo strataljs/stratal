@@ -1,14 +1,15 @@
+import type { Container } from '../di/container'
 import { Transient } from '../di/decorators'
-import type { CronJob } from './cron-job'
+import type { CronJob, RegisteredJob } from './cron-job'
 import { CronExecutionError } from './errors/cron-execution.error'
 
 /**
  * Manages cron job registration and execution
  *
  * CronManager is a singleton service that:
- * - Registers cron jobs from modules
+ * - Registers cron job class references from modules
  * - Routes scheduled events to matching jobs
- * - Handles errors during job execution
+ * - Resolves jobs from a request-scoped container at execution time
  *
  * Jobs are grouped by their cron expression, allowing multiple jobs
  * to run on the same schedule.
@@ -16,37 +17,42 @@ import { CronExecutionError } from './errors/cron-execution.error'
 @Transient()
 export class CronManager {
 	/**
-	 * Map of cron expressions to jobs
+	 * Map of cron expressions to registered job entries
 	 * Key: Cron expression (e.g., '0 2 * * *')
-	 * Value: Array of jobs matching that expression
+	 * Value: Array of registered jobs (class ref + schedule)
 	 */
-	private jobs = new Map<string, CronJob[]>()
+	private jobs = new Map<string, RegisteredJob[]>()
 
 	/**
-	 * Register a cron job
+	 * Register a cron job class
 	 *
 	 * Jobs with the same schedule are grouped together and executed
 	 * sequentially when the trigger fires.
 	 *
-	 * @param job - CronJob instance to register
+	 * @param schedule - Cron expression (e.g., '0 2 * * *')
+	 * @param jobClass - CronJob class constructor (resolved at execution time)
 	 */
-	registerJob(job: CronJob): void {
-		const existing = this.jobs.get(job.schedule) ?? []
-		existing.push(job)
-		this.jobs.set(job.schedule, existing)
+	registerJob(schedule: string, jobClass: RegisteredJob['jobClass']): void {
+		const existing = this.jobs.get(schedule) ?? []
+		existing.push({ schedule, jobClass })
+		this.jobs.set(schedule, existing)
 	}
 
 	/**
 	 * Execute all jobs matching the triggered cron expression
 	 *
+	 * Jobs are resolved from the provided request-scoped container,
+	 * ensuring dependencies (e.g. database) are properly scoped.
+	 *
 	 * Jobs are executed sequentially. If a job fails:
 	 * - Its onError() hook is called (if defined)
 	 * - Execution continues with the next job
-	 * - Errors are collected and logged
+	 * - Errors are collected and thrown as CronExecutionError
 	 *
 	 * @param controller - Cloudflare ScheduledController
+	 * @param container - Request-scoped container to resolve jobs from
 	 */
-	async executeScheduled(controller: ScheduledController): Promise<void> {
+	async executeScheduled(controller: ScheduledController, container: Container): Promise<void> {
 		const { cron } = controller
 		const matchingJobs = this.jobs.get(cron) ?? []
 
@@ -56,23 +62,29 @@ export class CronManager {
 
 		const errors: { job: string; error: Error }[] = []
 
-		for (const job of matchingJobs) {
-			const jobName = job.constructor.name
+		for (const { jobClass } of matchingJobs) {
+			const jobName = jobClass.name
 
 			try {
+				// Register the job class in the request-scoped container so its
+				// dependencies are resolved from request scope (not the parent).
+				// Without this, tsyringe falls through to the parent container
+				// and request-scoped services (e.g. database) get stale instances.
+				container.register(jobClass, jobClass)
+				const job = container.resolve<CronJob>(jobClass)
 				await job.execute(controller)
 			} catch (error) {
 				const err = error as Error
 				errors.push({ job: jobName, error: err })
 
-				// Call job's error handler if defined
-				if (job.onError) {
-					try {
+				// Try to resolve and call onError if possible
+				try {
+					const job = container.resolve<CronJob>(jobClass)
+					if (job.onError) {
 						await job.onError(err, controller)
-					} catch {
-						// If onError() itself fails, we just continue
-						// The error will be logged by ExceptionHandler
 					}
+				} catch {
+					// If resolution or onError fails, continue
 				}
 			}
 		}
@@ -92,9 +104,9 @@ export class CronManager {
 	 * Get all registered jobs for a specific cron expression
 	 *
 	 * @param schedule - Cron expression
-	 * @returns Array of jobs for that schedule, or empty array if none
+	 * @returns Array of registered jobs, or empty array if none
 	 */
-	getJobsForSchedule(schedule: string): CronJob[] {
+	getJobsForSchedule(schedule: string): RegisteredJob[] {
 		return this.jobs.get(schedule) ?? []
 	}
 

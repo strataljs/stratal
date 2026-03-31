@@ -144,7 +144,7 @@ describe('ModuleRegistry', () => {
       )
     })
 
-    it('should call configureRoutes() for RouteConfigurable modules', async () => {
+    it('should defer configureRoutes() to getAllRouterConfigs()', async () => {
       const configureRoutes = vi.fn()
 
       @Module({ providers: [] })
@@ -155,6 +155,11 @@ describe('ModuleRegistry', () => {
       registry.register(TestModule)
       await registry.initialize()
 
+      // Deferred — not called during initialize
+      expect(configureRoutes).not.toHaveBeenCalled()
+
+      // Called lazily when router configs are requested
+      registry.getAllRouterConfigs()
       expect(configureRoutes).toHaveBeenCalledWith(expect.any(Object))
     })
   })

@@ -1,3 +1,5 @@
+import { type Constructor } from "../types"
+
 /**
  * Interface for cron jobs that can be registered by modules
  *
@@ -25,6 +27,13 @@
  * }
  * ```
  */
+export interface RegisteredJob {
+	/** The cron schedule expression */
+	schedule: string
+	/** The job class constructor (resolved from container at execution time) */
+	jobClass: Constructor<CronJob>
+}
+
 export interface CronJob {
 	/**
 	 * Cron expression that triggers this job
