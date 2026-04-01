@@ -163,7 +163,7 @@
     "@swc-node/register": "^1.11.1",
     "@swc/core": "^1.15.21",
     "@swc/helpers": "^0.5.20",
-    "@xmldom/xmldom": "^0.8.11",
+    "@xmldom/xmldom": "^0.8.12",
     "clipanion": "^4.0.0-rc.4",
     "hono": "^4.12.9",
     "tsyringe": "^4.10.0",
