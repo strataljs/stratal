@@ -66,7 +66,7 @@
     "lint:fix": "npx oxlint --fix ."
   },
   "dependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.13.5",
+    "@cloudflare/vitest-pool-workers": "^0.14.0",
     "@golevelup/ts-vitest": "^4.0.0",
     "msw": "^2.12.14"
   },
@@ -86,7 +86,7 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "4.20260317.1",
+    "@cloudflare/workers-types": "4.20260401.1",
     "@stratal/framework": "workspace:*",
     "@types/node": "^25.5.0",
     "@vitest/runner": "~4.1.2",

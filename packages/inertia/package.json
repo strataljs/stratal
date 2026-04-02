@@ -111,7 +111,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.30.2",
-    "@cloudflare/workers-types": "4.20260317.1",
+    "@cloudflare/workers-types": "4.20260401.1",
     "@inertiajs/core": "^3.0.0",
     "@inertiajs/react": "^3.0.0",
     "@inertiajs/vite": "^3.0.0",
