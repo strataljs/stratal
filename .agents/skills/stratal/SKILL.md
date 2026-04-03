@@ -12,7 +12,7 @@ metadata:
 
 Stratal is a modular Cloudflare Workers framework. ESM-only. Three packages:
 - `stratal` — core (modules, DI, routing, queues, cron, events, seeders, CLI)
-- `@stratal/framework` — auth (Better Auth), database (ZenStack), RBAC (Casbin), guards
+- `@stratal/framework` — auth (Better Auth), database (ZenStack), access control, guards
 - `@stratal/testing` — test utilities, mocks, HTTP client
 - `@stratal/inertia` — Inertia.js server adapter for React SSR
 
@@ -180,7 +180,7 @@ Run `wrangler types` to generate `Cloudflare.Env` from your `wrangler.jsonc` bin
 
 Core: `stratal`, `stratal/cache`, `stratal/config`, `stratal/cron`, `stratal/di`, `stratal/email`, `stratal/errors`, `stratal/events`, `stratal/guards`, `stratal/i18n`, `stratal/i18n/messages/en`, `stratal/i18n/utils`, `stratal/logger`, `stratal/module`, `stratal/openapi`, `stratal/quarry`, `stratal/queue`, `stratal/router`, `stratal/seeder`, `stratal/storage`, `stratal/storage/providers`, `stratal/validation`, `stratal/websocket`, `stratal/workers`
 
-Framework: `@stratal/framework/auth`, `@stratal/framework/context`, `@stratal/framework/database`, `@stratal/framework/factory`, `@stratal/framework/guards`, `@stratal/framework/rbac`
+Framework: `@stratal/framework/access-control`, `@stratal/framework/auth`, `@stratal/framework/context`, `@stratal/framework/database`, `@stratal/framework/factory`, `@stratal/framework/guards`
 
 Testing: `@stratal/testing`, `@stratal/testing/mocks`, `@stratal/testing/mocks/nodemailer`, `@stratal/testing/mocks/zenstack-language`, `@stratal/testing/storage`, `@stratal/testing/vitest-plugin`
 
@@ -277,7 +277,7 @@ Load these when the task needs deeper knowledge:
 | `references/errors-and-i18n.md` | ExceptionHandler, ApplicationError, error codes, i18n, withI18n() |
 | `references/inertia.md` | Inertia.js setup, rendering, props, SSR, type safety, Vite |
 | `references/database.md` | DatabaseModule, ZenStack, connections, plugins, transactions |
-| `references/auth-and-rbac.md` | Better Auth, AuthContext, Casbin RBAC, AuthGuard |
+| `references/auth-and-rbac.md` | Better Auth, AuthContext, access control, AuthGuard |
 | `references/events.md` | Event listeners, @On/@Listener, database events, wildcards |
 | `references/queues-and-cron.md` | Queue consumers, senders, cron jobs, wrangler config |
 | `references/seeders.md` | Database seeders, calling other seeders |
