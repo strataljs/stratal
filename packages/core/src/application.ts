@@ -358,6 +358,7 @@ export class Application {
    * Execute a command by name in a request-scoped container.
    */
   async handleCommand(name: string, input?: CommandInput): Promise<CommandResult> {
+    await this.initializeRouting()
     const mockContext = this.createMockRouterContext('en')
     return this._container.runInRequestScope(mockContext, async () => {
       return this.quarry.call(name, input)
