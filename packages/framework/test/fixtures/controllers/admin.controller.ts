@@ -5,7 +5,7 @@ import { UseGuards } from 'stratal/guards'
 import { AuthGuard } from '../../../src/guards/auth.guard'
 
 @Controller('/api/test/admin')
-@UseGuards(AuthGuard({ scopes: ['admin:dashboard'] }))
+@UseGuards(AuthGuard({ permissions: 'admin:access' }))
 export class AdminController {
   @Route({
     summary: 'Admin dashboard',

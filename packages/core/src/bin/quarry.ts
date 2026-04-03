@@ -4,9 +4,8 @@ import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from
 import { createRequire, register } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { URL, pathToFileURL } from 'node:url'
 import type { QuarryRegistry } from 'stratal/quarry'
-
 import { type Application } from '../application'
 import { errors as errorMessages } from '../i18n/messages/en/errors'
 import { createDynamicCommands } from './commands/dynamic-command'

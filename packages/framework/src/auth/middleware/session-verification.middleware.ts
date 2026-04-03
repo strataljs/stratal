@@ -32,7 +32,10 @@ export class SessionVerificationMiddleware implements Middleware {
 
       if (session) {
         const authContext = ctx.getContainer().resolve<AuthContext>(DI_TOKENS.AuthContext)
-        authContext.setAuthContext({ userId: session.user.id })
+        authContext.setAuthContext({
+          userId: session.user.id,
+          role: (session.user as Record<string, unknown>).role as string | undefined,
+        })
       }
     } catch (error: unknown) {
       this.logger.debug('Session validation failed (e.g., invalidated in DB)', { error })

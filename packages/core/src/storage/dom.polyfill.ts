@@ -6,15 +6,18 @@
  *
  * @see https://github.com/aws/aws-sdk-js-v3/issues/7375
  */
-import { DOMParser } from '@xmldom/xmldom'
+import { DOMParser, type Node } from '@xmldom/xmldom'
 
 // DOMParser polyfill for XML response parsing
-globalThis.DOMParser = DOMParser
+// oxlint-disable-next-line typescript/no-explicit-any typescript/no-unsafe-member-access
+(globalThis as any).DOMParser = DOMParser
 
 // Node interface polyfill with DOM node type constants
 // Required by AWS SDK for XML response parsing
-if (typeof globalThis.Node === 'undefined') {
-  globalThis.Node = {
+// oxlint-disable-next-line typescript/no-explicit-any typescript/no-unsafe-member-access
+if (typeof (globalThis as any).Node === 'undefined') {
+  // oxlint-disable-next-line typescript/no-explicit-any typescript/no-unsafe-member-access
+  (globalThis as any).Node = {
     ELEMENT_NODE: 1,
     ATTRIBUTE_NODE: 2,
     TEXT_NODE: 3,
@@ -27,5 +30,5 @@ if (typeof globalThis.Node === 'undefined') {
     DOCUMENT_TYPE_NODE: 10,
     DOCUMENT_FRAGMENT_NODE: 11,
     NOTATION_NODE: 12,
-  } as unknown as typeof Node
+  } as unknown as Node
 }

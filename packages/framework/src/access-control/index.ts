@@ -1,0 +1,7 @@
+export { AC_TOKENS } from './tokens'
+export type { AccessControlOptions } from './types'
+export { createAccessControl } from './create-access-control'
+export { extendRole } from './extend-role'
+export { createStratalAcPlugin } from './plugin'
+export { AccessService } from './services/access.service'
+export { InsufficientPermissionsError } from './errors/insufficient-permissions.error'
