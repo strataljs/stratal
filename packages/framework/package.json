@@ -26,6 +26,10 @@
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
     },
+    "./access-control": {
+      "types": "./dist/access-control/index.d.mts",
+      "import": "./dist/access-control/index.mjs"
+    },
     "./auth": {
       "types": "./dist/auth/index.d.mts",
       "import": "./dist/auth/index.mjs"
@@ -45,10 +49,6 @@
     "./guards": {
       "types": "./dist/guards/index.d.mts",
       "import": "./dist/guards/index.mjs"
-    },
-    "./access-control": {
-      "types": "./dist/access-control/index.d.mts",
-      "import": "./dist/access-control/index.mjs"
     },
     "./package.json": "./package.json"
   },
