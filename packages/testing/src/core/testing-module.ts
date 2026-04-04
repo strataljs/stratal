@@ -3,7 +3,7 @@ import { connectionSymbol } from '@stratal/framework/database'
 import type { Application, Constructor, StratalEnv, StratalExecutionContext } from 'stratal'
 import { DI_TOKENS, type Container } from 'stratal/di'
 import { type InjectionToken } from 'stratal/module'
-import { SEEDER_TOKENS, type Seeder, type SeederRegistry, SeederNotRegisteredError } from 'stratal/seeder'
+import { SEEDER_TOKENS, SeederNotRegisteredError, type Seeder, type SeederRegistry } from 'stratal/seeder'
 import { STORAGE_TOKENS } from 'stratal/storage'
 import { expect } from 'vitest'
 import type { FakeStorageService } from '../storage'
@@ -67,6 +67,14 @@ export class TestingModule {
   get http(): TestHttpClient {
     this._http ??= new TestHttpClient(this)
     return this._http
+  }
+
+
+  /**
+   * Get Inertia test client for making Inertia requests
+   */
+  get inertia(): TestHttpClient {
+    return this.http.withHeaders({ 'X-Inertia': 'true', 'X-Inertia-Version': '1' })
   }
 
   /**
