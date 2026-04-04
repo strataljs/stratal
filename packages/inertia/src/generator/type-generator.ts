@@ -70,7 +70,8 @@ export function extractControllerPageTypes(
 ): PageTypeInfo[] {
   project.addSourceFilesAtPaths(join(srcDir, '**/*.ts'))
 
-  const pages = new Map<string, string>()
+  // Map from component name to all collected prop type strings (one per call site)
+  const pages = new Map<string, string[]>()
 
   for (const sourceFile of project.getSourceFiles()) {
     const filePath = sourceFile.getFilePath()
@@ -93,12 +94,13 @@ export function extractControllerPageTypes(
       if (!firstArg.isKind(SK.StringLiteral)) continue
       const componentName = firstArg.getLiteralValue()
 
-      // Already have this component from a previous call — skip
-      if (pages.has(componentName)) continue
+      if (!pages.has(componentName)) {
+        pages.set(componentName, [])
+      }
 
       // Second arg is the props object
       if (args.length < 2) {
-        pages.set(componentName, 'Record<string, never>')
+        pages.get(componentName)!.push('Record<string, never>')
         continue
       }
 
@@ -109,7 +111,7 @@ export function extractControllerPageTypes(
       if (propsType.isObject() && !propsType.isArray()) {
         const properties = propsType.getProperties()
         if (properties.length === 0) {
-          pages.set(componentName, 'Record<string, never>')
+          pages.get(componentName)!.push('Record<string, never>')
           continue
         }
 
@@ -124,15 +126,20 @@ export function extractControllerPageTypes(
           return `${prop.getName()}${isOptional ? '?' : ''}: ${unwrapped}`
         })
 
-        pages.set(componentName, `{ ${members.join('; ')} }`)
+        pages.get(componentName)!.push(`{ ${members.join('; ')} }`)
       } else {
-        pages.set(componentName, typeToString(propsType, tsObj))
+        pages.get(componentName)!.push(typeToString(propsType, tsObj))
       }
     }
   }
 
   return Array.from(pages.entries())
-    .map(([componentName, propsType]) => ({ componentName, propsType }))
+    .map(([componentName, typeVariants]) => {
+      // Deduplicate identical variants then join with union
+      const unique = [...new Set(typeVariants)]
+      const propsType = unique.length === 1 ? unique[0] : unique.join(' | ')
+      return { componentName, propsType }
+    })
     .sort((a, b) => a.componentName.localeCompare(b.componentName))
 }
 
@@ -539,7 +546,13 @@ function expandTypeToInline(type: Type, tsObj: TsObj, visiting = new Set<Type>()
   try {
     if (type.isObject() && !type.isArray()) {
       const properties = type.getProperties()
-      if (properties.length === 0) return 'Record<string, never>'
+      if (properties.length === 0) {
+        const stringIndexType = type.getStringIndexType()
+        if (stringIndexType) {
+          return `Record<string, ${expandTypeToInline(stringIndexType, tsObj, visiting)}>`
+        }
+        return 'Record<string, never>'
+      }
 
       const members = properties.map((prop) => {
         const decl = prop.getDeclarations()[0] ?? prop.getValueDeclaration()
