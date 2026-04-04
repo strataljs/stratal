@@ -26,9 +26,9 @@ export function createMiddlewareChain(
     let current = next
     for (let i = classes.length - 1; i >= 0; i--) {
       const prevNext = current
-      const middleware = requestContainer.resolve<Middleware>(classes[i])
       const middlewareClass = classes[i]
       current = () => {
+        const middleware = requestContainer.resolve<Middleware>(middlewareClass)
         let called = false
         const guardedNext: Next = () => {
           if (called) {
