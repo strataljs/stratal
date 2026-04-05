@@ -102,17 +102,29 @@ async function main(): Promise<void> {
   const { getPlatformProxy } = await import(cwdRequire.resolve('wrangler')) as typeof import('wrangler')
 
   const tmpConfigPath = await createStrippedConfig(cwdRequire)
+
   const envFiles = discoverEnvFiles()
   const { env, ctx, dispose } = await getPlatformProxy({
     envFiles, configPath: tmpConfigPath,
   })
 
+  // Track waitUntil promises so we can drain them before shutdown.
+  // In Workers runtime, waitUntil keeps the isolate alive. In Quarry (miniflare),
+  // dispose() tears down without awaiting pending promises — so we track and drain them.
+  const pendingPromises: Promise<unknown>[] = []
+  const trackedWaitUntil = (promise: Promise<unknown>) => {
+    pendingPromises.push(promise)
+    ctx.waitUntil(promise)
+  }
+
   let app: Application | undefined
   try {
+    env.QUEUE_PROVIDER = 'sync';
+
     // Store platform proxy on globalThis so the cloudflare:workers virtual module can read it
     (globalThis as Record<string, unknown>).__stratalPlatformProxy = {
       env,
-      waitUntil: ctx.waitUntil.bind(ctx),
+      waitUntil: trackedWaitUntil,
     }
 
     // Import user's entry file — triggers `new Stratal(...)` + full Application init
@@ -148,6 +160,8 @@ async function main(): Promise<void> {
 
     await cli.runExit(process.argv.slice(2), { ...Cli.defaultContext })
   } finally {
+    await Promise.allSettled(pendingPromises);
+
     await app?.shutdown()
     await dispose()
     if (tmpConfigPath) {
