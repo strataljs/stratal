@@ -165,7 +165,7 @@
     "@swc/helpers": "^0.5.20",
     "@xmldom/xmldom": "^0.8.11",
     "clipanion": "^4.0.0-rc.4",
-    "hono": "^4.12.9",
+    "hono": "^4.12.12",
     "tsyringe": "^4.10.0",
     "zod": "^4.3.6"
   },
