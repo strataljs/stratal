@@ -222,7 +222,7 @@
     "@vitest/runner": "~4.1.2",
     "@vitest/snapshot": "~4.1.2",
     "jsonc-parser": "^3.3.1",
-    "nodemailer": "^8.0.4",
+    "nodemailer": "^8.0.5",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "reflect-metadata": "^0.2.2",
