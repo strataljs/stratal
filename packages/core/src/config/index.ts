@@ -12,3 +12,4 @@ export { ConfigValidationError } from './config.types'
 
 // Export services (for testing or advanced use cases)
 export { ConfigService } from './services/config.service'
+export { ConfigStore } from './services/config.store'
