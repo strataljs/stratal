@@ -143,3 +143,39 @@ export class TokenExpiredError extends ApplicationError {
     super('errors.auth.tokenExpired', ERROR_CODES.VALIDATION.GENERIC)
   }
 }
+
+export class InvalidCallbackUrlError extends ApplicationError {
+  constructor() {
+    super('errors.auth.invalidCallbackUrl', ERROR_CODES.VALIDATION.INVALID_FORMAT)
+  }
+}
+
+export class InvalidOriginError extends ApplicationError {
+  constructor() {
+    super('errors.auth.invalidOrigin', ERROR_CODES.AUTHZ.FORBIDDEN)
+  }
+}
+
+export class AuthValidationFailedError extends ApplicationError {
+  constructor() {
+    super('errors.auth.validationFailed', ERROR_CODES.VALIDATION.GENERIC)
+  }
+}
+
+export class EmailAlreadyVerifiedError extends ApplicationError {
+  constructor() {
+    super('errors.auth.emailAlreadyVerified', ERROR_CODES.RESOURCE.CONFLICT)
+  }
+}
+
+export class EmailMismatchError extends ApplicationError {
+  constructor() {
+    super('errors.auth.emailMismatch', ERROR_CODES.VALIDATION.INVALID_FORMAT)
+  }
+}
+
+export class BetterAuthUnknownError extends ApplicationError {
+  constructor(errorCode?: string) {
+    super('errors.auth.unknownError', ERROR_CODES.SYSTEM.INTERNAL_ERROR, errorCode ? { errorCode } : undefined)
+  }
+}

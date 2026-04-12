@@ -46,14 +46,16 @@
  */
 
 import type { BetterAuthOptions } from 'better-auth'
-import type { RouteConfigurable, Router } from 'stratal/router'
-import { Module } from 'stratal/module'
+import { I18nModule } from 'stratal/i18n'
 import type { AsyncModuleOptions, DynamicModule } from 'stratal/module'
-import { AccessService } from '../access-control/services/access.service'
+import { Module } from 'stratal/module'
+import type { RouteConfigurable, Router } from 'stratal/router'
 import { createStratalAcPlugin } from '../access-control/plugin'
+import { AccessService } from '../access-control/services/access.service'
 import { AC_TOKENS } from '../access-control/tokens'
 import type { AccessControlOptions } from '../access-control/types'
 import { AUTH_OPTIONS, AUTH_SERVICE } from './auth.tokens'
+import { messages } from './i18n'
 import { AuthContextMiddleware } from './middleware/auth-context.middleware'
 import { SessionVerificationMiddleware } from './middleware/session-verification.middleware'
 import { AuthService } from './services/auth.service'
@@ -68,6 +70,9 @@ export interface AuthModuleAsyncOptions<TOptions extends BetterAuthOptions = Bet
 }
 
 @Module({
+  imports: [
+    I18nModule.registerMessages(messages),
+  ],
   providers: []
 })
 export class AuthModule implements RouteConfigurable {
@@ -93,21 +98,21 @@ export class AuthModule implements RouteConfigurable {
 
     const authOptionsProvider = accessControl
       ? {
-          provide: AUTH_OPTIONS,
-          useFactory: (...deps: unknown[]) => {
-            const raw = (options.useFactory as (...args: unknown[]) => TOptions)(...deps) as BetterAuthOptions
-            return {
-              ...raw,
-              plugins: [createStratalAcPlugin(accessControl), ...(raw.plugins ?? [])],
-            }
-          },
-          inject: options.inject,
-        }
+        provide: AUTH_OPTIONS,
+        useFactory: (...deps: unknown[]) => {
+          const raw = (options.useFactory as (...args: unknown[]) => TOptions)(...deps) as BetterAuthOptions
+          return {
+            ...raw,
+            plugins: [createStratalAcPlugin(accessControl), ...(raw.plugins ?? [])],
+          }
+        },
+        inject: options.inject,
+      }
       : {
-          provide: AUTH_OPTIONS,
-          useFactory: options.useFactory,
-          inject: options.inject,
-        }
+        provide: AUTH_OPTIONS,
+        useFactory: options.useFactory,
+        inject: options.inject,
+      }
 
     return {
       module: AuthModule,
@@ -119,9 +124,9 @@ export class AuthModule implements RouteConfigurable {
         },
         ...(accessControl
           ? [
-              { provide: AC_TOKENS.Options, useValue: accessControl as unknown as object },
-              { provide: AC_TOKENS.AccessService, useClass: AccessService },
-            ]
+            { provide: AC_TOKENS.Options, useValue: accessControl as unknown as object },
+            { provide: AC_TOKENS.AccessService, useClass: AccessService },
+          ]
           : []),
       ],
     }
