@@ -1,6 +1,6 @@
 /**
  * Storage Module
- * Provides file storage capabilities using AWS S3/Cloudflare R2
+ * Provides file storage capabilities using Cloudflare R2
  */
 
 // Module
@@ -13,11 +13,14 @@ export { STORAGE_TOKENS } from './storage.tokens'
 export { StorageManagerService } from './services/storage-manager.service'
 export { StorageService } from './services/storage.service'
 
+// Controller
+export { StorageController } from './controllers/storage.controller'
+
 // Contracts
 export * from './contracts'
 
 // Types
-export type { PresignedUrlConfig, StorageConfig, StorageEntry } from './types'
+export type { PresignedUrlConfig, StorageConfig, StorageEntry, StorageRouteConfig } from './types'
 
 // Errors
 export * from './errors'

@@ -1,6 +1,6 @@
 /**
  * Storage Module
- * Provides file storage capabilities using AWS S3
+ * Provides file storage capabilities using Cloudflare R2
  * Supports multiple disk configurations with dynamic path templates
  */
 
@@ -19,20 +19,19 @@ import type { StorageConfig } from './types'
 export type StorageModuleOptions = StorageConfig
 
 @Module({
-  providers: [{ provide: STORAGE_TOKENS.StorageManager, useClass: StorageManagerService, scope: Scope.Singleton },
-  { provide: STORAGE_TOKENS.StorageService, useClass: StorageService },],
+  providers: [
+    { provide: STORAGE_TOKENS.StorageManager, useClass: StorageManagerService, scope: Scope.Singleton },
+    { provide: STORAGE_TOKENS.StorageService, useClass: StorageService },
+  ],
 })
 export class StorageModule {
   /**
    * Configure StorageModule with static options
    *
-   * @param options - Storage configuration options
-   * @returns Dynamic module with storage infrastructure
-   *
    * @example
    * ```typescript
    * StorageModule.forRoot({
-   *   storage: [{ disk: 'uploads', provider: 's3', ... }],
+   *   storage: [{ disk: 'uploads', binding: 'MY_BUCKET', root: 'uploads' }],
    *   defaultStorageDisk: 'uploads',
    *   presignedUrl: { defaultExpiry: 3600, maxExpiry: 86400 }
    * })
@@ -51,9 +50,6 @@ export class StorageModule {
    * Configure StorageModule with async factory
    *
    * Use when configuration depends on other services.
-   *
-   * @param options - Async configuration with factory and inject tokens
-   * @returns Dynamic module with storage infrastructure
    *
    * @example
    * ```typescript

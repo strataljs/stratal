@@ -8,17 +8,15 @@ export interface CreateMultipartOptions {
   contentType?: string
   /** Cache control header */
   cacheControl?: string
-  /** Custom S3 metadata */
+  /** Custom metadata */
   metadata?: Record<string, string>
-  /** S3 object tagging (key=value format) */
-  tagging?: string
 }
 
 /**
  * Result of creating a multipart upload
  */
 export interface CreateMultipartResult {
-  /** S3 upload ID for subsequent part uploads */
+  /** Upload ID for subsequent part uploads */
   uploadId: string
   /** Object key */
   key: string
@@ -28,7 +26,7 @@ export interface CreateMultipartResult {
  * Result of uploading a part
  */
 export interface UploadPartResult {
-  /** ETag returned by S3 */
+  /** ETag returned by the storage provider */
   etag: string
   /** Part number */
   partNumber: number
@@ -48,7 +46,7 @@ export interface CompletedPart {
  * Result of completing a multipart upload
  */
 export interface CompleteMultipartResult {
-  /** S3 location URL */
+  /** Location URL */
   location?: string
   /** Object key */
   key: string
@@ -131,13 +129,12 @@ export interface DeleteObjectsResult {
 }
 
 /**
- * S3-specific storage provider interface with multipart upload support
+ * Storage provider interface with multipart upload support
  *
- * Extends the generic IStorageProvider with S3 multipart upload operations.
- * This interface is S3-specific - other providers (GCS, local) would have
- * their own resumable upload interfaces if needed.
+ * Extends the generic IStorageProvider with multipart upload operations
+ * needed by resumable upload protocols like TUS.
  */
-export interface IS3MultipartProvider extends IStorageProvider {
+export interface IMultipartProvider extends IStorageProvider {
   // ============================================
   // Multipart upload primitives
   // ============================================
@@ -190,6 +187,7 @@ export interface IS3MultipartProvider extends IStorageProvider {
 
   /**
    * List parts of a multipart upload
+   * Requires s3Compat configuration on the storage entry
    * @param key - Object key
    * @param uploadId - Upload ID
    * @param partNumberMarker - Optional marker for pagination
@@ -203,6 +201,7 @@ export interface IS3MultipartProvider extends IStorageProvider {
 
   /**
    * List all in-progress multipart uploads
+   * Requires s3Compat configuration on the storage entry
    * @param keyMarker - Optional key marker for pagination
    * @param uploadIdMarker - Optional upload ID marker for pagination
    * @returns List of uploads
@@ -237,8 +236,8 @@ export interface IS3MultipartProvider extends IStorageProvider {
   // ============================================
 
   /**
-   * Get the bucket name
-   * @returns Bucket name from configuration
+   * Get the bucket/binding name
+   * @returns Bucket or binding name from configuration
    */
   getBucket(): string
 }

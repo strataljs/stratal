@@ -17,4 +17,5 @@
 export interface StratalEnv {
   ENVIRONMENT: string;
   CACHE: KVNamespace;
+  APP_SECRET?: string;
 }

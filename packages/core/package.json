@@ -167,16 +167,12 @@
     "@swc-node/register": "^1.11.1",
     "@swc/core": "^1.15.24",
     "@swc/helpers": "^0.5.21",
-    "@xmldom/xmldom": "^0.9.9",
     "clipanion": "^4.0.0-rc.4",
     "hono": "^4.12.12",
     "tsyringe": "^4.10.0",
     "zod": "^4.3.6"
   },
   "peerDependencies": {
-    "@aws-sdk/client-s3": ">=3",
-    "@aws-sdk/lib-storage": ">=3",
-    "@aws-sdk/s3-request-presigner": ">=3",
     "@react-email/components": ">=1",
     "nodemailer": ">=7",
     "react": ">=19",
@@ -185,15 +181,6 @@
     "resend": ">=6"
   },
   "peerDependenciesMeta": {
-    "@aws-sdk/client-s3": {
-      "optional": true
-    },
-    "@aws-sdk/lib-storage": {
-      "optional": true
-    },
-    "@aws-sdk/s3-request-presigner": {
-      "optional": true
-    },
     "@react-email/components": {
       "optional": true
     },
@@ -211,9 +198,6 @@
     }
   },
   "devDependencies": {
-    "@aws-sdk/client-s3": "3.1029.0",
-    "@aws-sdk/lib-storage": "^3.1029.0",
-    "@aws-sdk/s3-request-presigner": "3.1029.0",
     "@cloudflare/vitest-pool-workers": "^0.14.3",
     "@cloudflare/workers-types": "4.20260412.1",
     "@react-email/components": "^1.0.12",

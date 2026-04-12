@@ -1,11 +1,16 @@
-import type { PutObjectCommandInput } from '@aws-sdk/client-s3'
 import type { DownloadResult, PresignedUrlResult, UploadOptions, UploadResult } from '../contracts'
 
 /**
- * Streaming blob payload input types from AWS SDK
- * Represents the types that can be used as the Body of a PutObjectCommand
+ * Streaming blob payload input types
+ * Represents the types that can be used as the body of an upload operation
  */
-export type StreamingBlobPayloadInputTypes = PutObjectCommandInput['Body']
+export type StreamingBlobPayloadInputTypes =
+  | ReadableStream
+  | ArrayBuffer
+  | ArrayBufferView
+  | string
+  | Blob
+  | null
 
 /**
  * Storage provider interface

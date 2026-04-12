@@ -110,8 +110,9 @@ export const errors = {
     fileTooLarge: 'File size {size} exceeds maximum allowed size of {maxSize}',
     presignedUrlInvalidExpiry: 'Expiry must be between {min} and {max} seconds',
     diskNotConfigured: 'Disk "{disk}" is not configured',
-    providerNotSupported: 'Storage provider "{provider}" is not supported',
-    responseBodyMissing: 'No body in storage response for path: {path}'
+    responseBodyMissing: 'No body in storage response for path: {path}',
+    r2BindingNotFound: 'R2 binding "{binding}" was not found in the environment',
+    r2PresignedUrlSecretMissing: 'APP_SECRET environment variable is required for presigned URLs',
   },
 
   // Cache errors
