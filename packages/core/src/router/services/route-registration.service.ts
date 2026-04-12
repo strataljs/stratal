@@ -80,7 +80,7 @@ const invokeHandler = (instance: Record<string, (...args: unknown[]) => unknown>
  */
 @Transient()
 export class RouteRegistrationService {
-  private controllerClasses = new Map<string, Constructor<IController>>()
+  private controllerClasses = new Map<string, Constructor>()
   private upgradeWebSocketFn: UpgradeWebSocket | null = null
 
   constructor(
@@ -97,7 +97,7 @@ export class RouteRegistrationService {
    * Resolves controllers from ModuleRegistry and global middleware from RouterResolver.
    */
   async configure(): Promise<void> {
-    const controllers = this.moduleRegistry.getAllControllers() as Constructor<IController>[]
+    const controllers = this.moduleRegistry.getAllControllers()
     const globalMiddleware = this.routerResolver?.getGlobalMiddleware() ?? []
 
     this.logger.info('Registering controllers', {
@@ -134,7 +134,7 @@ export class RouteRegistrationService {
    * Versioning and locale expansion are handled by RouteRegistry.register().
    */
   private collectRoutes(
-    ControllerClass: Constructor<IController>,
+    ControllerClass: Constructor,
     actions: WeakMap<RegisteredRoute, () => void>,
   ): void {
     const isWsGateway = isGateway(ControllerClass)
@@ -153,7 +153,7 @@ export class RouteRegistrationService {
     const controllerGuards = getControllerGuards(ControllerClass)?.guards ?? []
 
     // Resolve Router config for this controller (prefix, domain, name, middleware, version, hideFromDocs)
-    const routerConfig = this.routerResolver?.resolveForController(ControllerClass as Constructor) ?? { middleware: [] }
+    const routerConfig = this.routerResolver?.resolveForController(ControllerClass) ?? { middleware: [] }
 
     // Apply Router prefix to controller base path
     const basePath = routerConfig.prefix
@@ -286,7 +286,7 @@ export class RouteRegistrationService {
       // Auto-inject prefix params from Router.prefix() into route params
       if (routerConfig.params) {
         routeConfig.params = routeConfig.params
-          ? (routerConfig.params as z.ZodObject<z.ZodRawShape>).extend((routeConfig.params as z.ZodObject<z.ZodRawShape>).shape)
+          ? (routerConfig.params as z.ZodObject).extend((routeConfig.params as z.ZodObject).shape)
           : routerConfig.params
       }
 
@@ -417,7 +417,7 @@ export class RouteRegistrationService {
    * Register a single WebSocket gateway route
    */
   private registerGatewayForPath(
-    GatewayClass: Constructor<IController>,
+    GatewayClass: Constructor,
     fullPath: string,
     guards: Guard[],
   ): void {
@@ -564,7 +564,7 @@ export class RouteRegistrationService {
    * Register wildcard route for non-RESTful controllers
    */
   private registerWildcardRoute(
-    ControllerClass: Constructor<IController>,
+    ControllerClass: Constructor,
     route: string
   ): void {
     this.logger.info(`Registering wildcard route`, {
@@ -642,7 +642,7 @@ export class RouteRegistrationService {
   private mergeMetadata(
     controllerOpts: ControllerOptions | undefined,
     routeConfig: RouteConfig,
-    ControllerClass: Constructor<IController>,
+    ControllerClass: Constructor,
     methodName: string
   ): { tags: string[]; security: SecuritySchemeRecord[] } {
     const tags = [...(controllerOpts?.tags ?? []), ...(routeConfig.tags ?? [])]
@@ -753,7 +753,7 @@ export class RouteRegistrationService {
         route.request = {
           ...route.request,
           params: route.request!.params
-            ? (route.request!.params as z.ZodObject<z.ZodRawShape>).extend(localeParam.shape)
+            ? (route.request!.params as z.ZodObject).extend(localeParam.shape)
             : localeParam,
         }
       }

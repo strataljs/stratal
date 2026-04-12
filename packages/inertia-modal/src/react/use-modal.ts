@@ -1,11 +1,7 @@
-import type { PageProps } from '@inertiajs/core'
 import { router, usePage } from '@inertiajs/react'
 import { useCallback } from 'react'
-import type { ModalData } from '../services/modal.service'
+import { type ModalData } from '../services/modal.service'
 
-interface ModalPageProps extends PageProps {
-  modal?: ModalData
-}
 
 interface UseModalReturn {
   /** Whether a modal is currently active on this page. */
@@ -17,8 +13,8 @@ interface UseModalReturn {
 }
 
 export function useModal(): UseModalReturn {
-  const page = usePage<ModalPageProps>()
-  const modal = page.props.modal
+  const page = usePage()
+  const modal = page.props.modal as ModalData
 
   const redirect = useCallback(() => {
     if (!modal) return

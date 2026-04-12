@@ -19,7 +19,7 @@ export interface ModalRenderOptions {
 }
 
 // Page from @inertiajs/core doesn't have a 'modal' prop — we extend it here
-type PageWithModal = Page<{ modal?: ModalData }>
+type PageWithModal = Page
 
 // HonoApp extends OpenAPIHono which extends Hono — it has a standard fetch() method
 interface FetchableApp {
