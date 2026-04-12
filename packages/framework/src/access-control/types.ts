@@ -5,6 +5,6 @@ export type RolePermissions<TStatements extends Statements> = {
 }
 
 export interface AccessControlOptions<TStatements extends Statements = Statements, TRoles extends Record<string, RolePermissions<TStatements>> = Record<string, RolePermissions<TStatements>>> {
-  ac: AccessControl<TStatements>;
-  roles: { [K in keyof TRoles]: Role<TStatements> }
+  ac: AccessControl;
+  roles: { [K in keyof TRoles]: Role }
 }
