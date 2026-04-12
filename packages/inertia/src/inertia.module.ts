@@ -158,7 +158,11 @@ export class InertiaModule implements RouteConfigurable, OnInitialize, OnExcepti
 
   private redirectBack(context: HttpExceptionContext): Response {
     const referer = context.ctx.header('referer')
-    const url = referer ? new URL(referer).pathname : '/'
-    return context.ctx.redirect(url, 303)
+    if (referer) {
+      const parsed = new URL(referer)
+      const url = parsed.search ? `${parsed.pathname}${parsed.search}` : parsed.pathname
+      return context.ctx.redirect(url, 303)
+    }
+    return context.ctx.redirect('/', 303)
   }
 }

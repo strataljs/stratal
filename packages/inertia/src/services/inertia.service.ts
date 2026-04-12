@@ -81,7 +81,8 @@ export class InertiaService {
     props: Record<string, unknown> = {},
     renderOptions: InertiaRenderOptions = {},
   ): Promise<Response> {
-    const url = new URL(ctx.c.req.url).pathname
+    const reqUrl = new URL(ctx.c.req.url)
+    const url = reqUrl.search ? `${reqUrl.pathname}${reqUrl.search}` : reqUrl.pathname
     const isInertia = ctx.c.get('inertia')
 
     // Resolve shared data from module options
