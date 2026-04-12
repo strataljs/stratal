@@ -117,18 +117,16 @@ export function extractControllerPageTypes(
 
         const members = properties.map((prop) => {
           const decl = prop.getDeclarations()[0] ?? prop.getValueDeclaration()
+          const location = decl ?? propsArg
           const isOptional = prop.isOptional()
-          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-          if (!decl) return `${prop.getName()}${isOptional ? '?' : ''}: unknown`
-
-          const propType = prop.getTypeAtLocation(decl)
-          const unwrapped = unwrapWrapperType(propType, tsObj)
+          const propType = prop.getTypeAtLocation(location)
+          const unwrapped = unwrapWrapperType(propType, tsObj, propsArg)
           return `${prop.getName()}${isOptional ? '?' : ''}: ${unwrapped}`
         })
 
         pages.get(componentName)!.push(`{ ${members.join('; ')} }`)
       } else {
-        pages.get(componentName)!.push(typeToString(propsType, tsObj))
+        pages.get(componentName)!.push(typeToString(propsType, tsObj, propsArg))
       }
     }
   }
@@ -143,7 +141,7 @@ export function extractControllerPageTypes(
     .sort((a, b) => a.componentName.localeCompare(b.componentName))
 }
 
-function unwrapWrapperType(type: Type, tsObj: TsObj): string {
+function unwrapWrapperType(type: Type, tsObj: TsObj, fallbackLocation?: Node): string {
   if (type.isUnion()) {
     const unionTypes = type.getUnionTypes()
     const unwrapped = unionTypes
@@ -151,7 +149,7 @@ function unwrapWrapperType(type: Type, tsObj: TsObj): string {
         const text = t.getText(undefined, tsObj.TypeFormatFlags.NoTruncation)
         return !WRAPPER_TYPE_NAMES.some((name) => text.includes(name))
       })
-      .map((t) => typeToString(t, tsObj))
+      .map((t) => typeToString(t, tsObj, fallbackLocation))
 
     if (unwrapped.length > 0) {
       return unwrapped.join(' | ')
@@ -165,34 +163,36 @@ function unwrapWrapperType(type: Type, tsObj: TsObj): string {
       const callbackProp = type.getProperty('callback')
       if (callbackProp) {
         const decl = callbackProp.getDeclarations()[0] ?? callbackProp.getValueDeclaration()
-        const callbackType = callbackProp.getTypeAtLocation(decl)
+        const location = decl ?? fallbackLocation
+        if (!location) return 'unknown'
+        const callbackType = callbackProp.getTypeAtLocation(location)
         const callSignatures = callbackType.getCallSignatures()
         if (callSignatures.length > 0) {
-          return unwrapPromise(callSignatures[0].getReturnType(), tsObj)
+          return unwrapPromise(callSignatures[0].getReturnType(), tsObj, fallbackLocation)
         }
       }
       return 'unknown'
     }
   }
 
-  return widenLiteralType(type, tsObj)
+  return widenLiteralType(type, tsObj, fallbackLocation)
 }
 
-function unwrapPromise(type: Type, tsObj: TsObj): string {
+function unwrapPromise(type: Type, tsObj: TsObj, fallbackLocation?: Node): string {
   const text = type.getText(undefined, tsObj.TypeFormatFlags.NoTruncation)
   if (text.startsWith('Promise<')) {
     const typeArgs = type.getTypeArguments()
     if (typeArgs.length > 0) {
-      return stripReadonly(typeArgs[0], tsObj)
+      return stripReadonly(typeArgs[0], tsObj, fallbackLocation)
     }
   }
-  return stripReadonly(type, tsObj)
+  return stripReadonly(type, tsObj, fallbackLocation)
 }
 
-function stripReadonly(type: Type, tsObj: TsObj): string {
+function stripReadonly(type: Type, tsObj: TsObj, fallbackLocation?: Node): string {
   if (type.isTuple()) {
     const elements = type.getTupleElements()
-    const parts = elements.map((e) => typeToString(e, tsObj))
+    const parts = elements.map((e) => typeToString(e, tsObj, fallbackLocation))
     return `[${parts.join(', ')}]`
   }
 
@@ -200,11 +200,11 @@ function stripReadonly(type: Type, tsObj: TsObj): string {
   if (text.startsWith('readonly ') && type.isArray()) {
     const elementType = type.getArrayElementType()
     if (elementType) {
-      return `Array<${typeToString(elementType, tsObj)}>`
+      return `Array<${typeToString(elementType, tsObj, fallbackLocation)}>`
     }
   }
 
-  return typeToString(type, tsObj)
+  return typeToString(type, tsObj, fallbackLocation)
 }
 
 // --- Extract this.inertia.share() call types ---
@@ -523,68 +523,115 @@ export function generateInertiaTypes(input: GenerateTypesInput): string {
 
 // --- Type string helpers ---
 
-function widenLiteralType(type: Type, tsObj: TsObj): string {
+function widenLiteralType(type: Type, tsObj: TsObj, fallbackLocation?: Node): string {
   if (type.isStringLiteral()) return 'string'
   if (type.isNumberLiteral()) return 'number'
   if (type.isBooleanLiteral()) return 'boolean'
-  return typeToString(type, tsObj)
+  return typeToString(type, tsObj, fallbackLocation)
 }
 
-function typeToString(type: Type, tsObj: TsObj): string {
+function typeToString(type: Type, tsObj: TsObj, fallbackLocation?: Node): string {
+  // Always expand objects/unions/intersections so getText() can't leak inline
+  // index signatures (e.g. StratalRouteMap params' `[key: string]: ...`).
+  if (type.isObject() || type.isUnion() || type.isIntersection()) {
+    return expandTypeToInline(type, tsObj, fallbackLocation)
+  }
+
   const text = type.getText(undefined, tsObj.TypeFormatFlags.NoTruncation | tsObj.TypeFormatFlags.UseFullyQualifiedType)
 
   if (text.includes('import(')) {
-    return expandTypeToInline(type, tsObj)
+    return expandTypeToInline(type, tsObj, fallbackLocation)
   }
 
   return text
 }
 
-function expandTypeToInline(type: Type, tsObj: TsObj, visiting = new Set<Type>()): string {
-  if (visiting.has(type)) return 'Record<string, unknown>'
+function expandPropertyType(
+  type: Type,
+  tsObj: TsObj,
+  fallbackLocation: Node | undefined,
+  visiting: Set<Type>,
+  isOptional: boolean,
+): string {
+  // The `?` marker already implies `undefined`, so strip it from the union
+  // to avoid `id?: undefined | string`.
+  if (isOptional && type.isUnion()) {
+    const parts = type.getUnionTypes().filter((t) => !t.isUndefined())
+    if (parts.length === 0) return 'undefined'
+    if (parts.length === 1) return expandTypeToInline(parts[0], tsObj, fallbackLocation, visiting)
+    return parts.map((t) => expandTypeToInline(t, tsObj, fallbackLocation, visiting)).join(' | ')
+  }
+  return expandTypeToInline(type, tsObj, fallbackLocation, visiting)
+}
+
+function expandTypeToInline(
+  type: Type,
+  tsObj: TsObj,
+  fallbackLocation?: Node,
+  visiting = new Set<Type>(),
+): string {
+  if (visiting.has(type)) return 'unknown'
+  // `boolean` is internally `true | false` — short-circuit before the union branch.
+  if (type.isBoolean()) return 'boolean'
   visiting.add(type)
   try {
-    if (type.isObject() && !type.isArray()) {
+    if (type.isObject() && !type.isArray() && !type.isReadonlyArray()) {
+      // Named global types (Date, RegExp, Map, Set, ...) — emit text as-is.
+      // Expanding them iterates every method and produces garbage like
+      // `{ toString: ...; getTime: ...; }` for Date.
+      const symbolName = type.getSymbol()?.getName()
+      const text = type.getText(undefined, tsObj.TypeFormatFlags.NoTruncation | tsObj.TypeFormatFlags.UseFullyQualifiedType)
+      if (
+        symbolName
+        && !symbolName.startsWith('__')
+        && symbolName !== 'Object'
+        && !text.includes('import(')
+      ) {
+        return text
+      }
+
       const properties = type.getProperties()
       if (properties.length === 0) {
         const stringIndexType = type.getStringIndexType()
         if (stringIndexType) {
-          return `Record<string, ${expandTypeToInline(stringIndexType, tsObj, visiting)}>`
+          return `Record<string, ${expandTypeToInline(stringIndexType, tsObj, fallbackLocation, visiting)}>`
         }
-        return 'Record<string, never>'
+        // Use `{}` not `Record<string, never>` — `never` collapses intersections.
+        return '{}'
       }
 
       const members = properties.map((prop) => {
         const decl = prop.getDeclarations()[0] ?? prop.getValueDeclaration()
+        const location = decl ?? fallbackLocation
         const isOptional = prop.isOptional()
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- defensive: ambient/synthetic symbols may lack declarations at runtime
-        if (!decl) return `${prop.getName()}${isOptional ? '?' : ''}: unknown`
-        const propType = prop.getTypeAtLocation(decl)
-        const propTypeStr = expandTypeToInline(propType, tsObj, visiting)
+        if (!location) return `${prop.getName()}${isOptional ? '?' : ''}: unknown`
+        const propType = prop.getTypeAtLocation(location)
+        const propTypeStr = expandPropertyType(propType, tsObj, fallbackLocation, visiting, isOptional)
         return `${prop.getName()}${isOptional ? '?' : ''}: ${propTypeStr}`
       })
 
       return `{ ${members.join('; ')} }`
     }
 
-    if (type.isArray()) {
+    if (type.isArray() || type.isReadonlyArray()) {
       const elementType = type.getArrayElementType()
       if (elementType) {
-        return `Array<${expandTypeToInline(elementType, tsObj, visiting)}>`
+        const inner = expandTypeToInline(elementType, tsObj, fallbackLocation, visiting)
+        return type.isReadonlyArray() ? `ReadonlyArray<${inner}>` : `Array<${inner}>`
       }
     }
 
     if (type.isUnion()) {
-      return type.getUnionTypes().map((t) => expandTypeToInline(t, tsObj, visiting)).join(' | ')
+      return type.getUnionTypes().map((t) => expandTypeToInline(t, tsObj, fallbackLocation, visiting)).join(' | ')
     }
 
     if (type.isIntersection()) {
-      return type.getIntersectionTypes().map((t) => expandTypeToInline(t, tsObj, visiting)).join(' & ')
+      return type.getIntersectionTypes().map((t) => expandTypeToInline(t, tsObj, fallbackLocation, visiting)).join(' & ')
     }
 
     const text = type.getText(undefined, tsObj.TypeFormatFlags.NoTruncation)
     if (text.includes('import(')) {
-      return 'Record<string, unknown>'
+      return 'unknown'
     }
     return text
   } finally {

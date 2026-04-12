@@ -24,7 +24,7 @@ import {
 import type { SsrRendererService } from './ssr-renderer.service'
 import type { TemplateService } from './template.service'
 
-@Transient()
+@Transient(INERTIA_TOKENS.InertiaService)
 export class InertiaService {
   private sharedData: Record<string, unknown> = {}
 

@@ -1,10 +1,6 @@
-import type { AccessControl, Role, Statements } from 'better-auth/plugins/access'
+import type { Role, Statements } from 'better-auth/plugins/access'
 import { createAccessControl as baCreateAC } from 'better-auth/plugins/access'
-import type { AccessControlOptions } from './types'
-
-type RolePermissions<TStatements extends Statements> = {
-  [K in keyof TStatements]?: readonly TStatements[K][number][]
-}
+import type { AccessControlOptions, RolePermissions } from './types'
 
 /**
  * Define access control resources and roles in one place.
@@ -38,7 +34,7 @@ export function createAccessControl<
 >(config: {
   resources: TResources
   roles: TRoles
-}): AccessControlOptions<TResources> & { ac: AccessControl<TResources>; roles: { [K in keyof TRoles]: Role<TResources> } } {
+}): AccessControlOptions<TResources, TRoles> {
   const ac = baCreateAC(config.resources)
   const roles = Object.fromEntries(
     Object.entries(config.roles).map(([name, perms]) => [name, ac.newRole(perms as unknown as Statements)])

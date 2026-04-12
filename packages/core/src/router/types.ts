@@ -113,7 +113,7 @@ export interface RouteConfig {
    * Status code auto-derived: create()->201, others->200
    * @example userSchema or { schema: userSchema, description: 'User details' }
    */
-  response: RouteResponse
+  response?: RouteResponse
 
   /**
    * OpenAPI tags for grouping endpoints

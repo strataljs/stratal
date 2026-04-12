@@ -32,6 +32,7 @@ import {
   ResponseValidationError,
 } from '../errors'
 import type { HonoApp } from '../hono-app'
+import type { Middleware } from '../middleware.interface'
 import { createDomainMiddleware } from '../middleware/domain.middleware'
 import { createMiddlewareChain } from '../middleware/middleware-chain'
 import { type RegisteredRoute, type RouteRegistry } from '../route-registry'
@@ -180,9 +181,12 @@ export class RouteRegistrationService {
 
       for (const route of expandedRoutes) {
         actions.set(route, () => {
-          // Apply scoped middleware
+          // Apply scoped middleware at the exact route path so it runs
+          // for this specific route (including the root of the group) —
+          // not via a `/*` sub-path wildcard, which would miss the exact
+          // path match.
           if (routerConfig.middleware.length > 0) {
-            this.app.use(`${route.path}/*`, createMiddlewareChain(routerConfig.middleware))
+            this.app.use(route.path, createMiddlewareChain(routerConfig.middleware))
           }
           // Apply domain middleware
           if (effectiveDomain) {
@@ -217,7 +221,7 @@ export class RouteRegistrationService {
       for (const route of expandedRoutes) {
         actions.set(route, () => {
           if (routerConfig.middleware.length > 0) {
-            this.app.use(`${route.path}/*`, createMiddlewareChain(routerConfig.middleware))
+            this.app.use(route.path, createMiddlewareChain(routerConfig.middleware))
           }
           this.registerWildcardRoute(ControllerClass, route.path)
         })
@@ -255,14 +259,20 @@ export class RouteRegistrationService {
       )
     }
 
-    // Apply scoped middleware once for this controller
-    let scopedMiddlewareApplied = false
-
     const routerHidden = routerConfig.hideFromDocs
     const controllerHidden = controllerOpts?.hideFromDocs ?? false
 
-    // Resolve effective name prefix: controller name overrides router name entirely
-    const effectiveNamePrefix = controllerOpts?.name ?? routerConfig.name
+    // Resolve effective name prefix: router-level name (module + group merged by
+    // RouterResolver) concatenates with the controller-level name, mirroring how
+    // prefixes compose. A controller's `{ name: 'dashboard.' }` inside a module
+    // that calls `router.name('admin.')` becomes `admin.dashboard.*` — not
+    // `dashboard.*`.
+    const routerName = routerConfig.name
+    const controllerName = controllerOpts?.name
+    const effectiveNamePrefix =
+      routerName && controllerName
+        ? `${routerName}${controllerName}`
+        : (routerName ?? controllerName)
 
     // Hoist middleware name computation (same for all methods in this controller)
     const middlewareNames = routerConfig.middleware.map(m => m.name)
@@ -318,14 +328,6 @@ export class RouteRegistrationService {
 
       for (const route of expandedRoutes) {
         actions.set(route, () => {
-          // Apply scoped middleware once per controller
-          if (!scopedMiddlewareApplied && routerConfig.middleware.length > 0) {
-            // Use the first primary path for middleware scope
-            const primaryRoute = expandedRoutes.find(r => !r.isLocaleVariant) ?? expandedRoutes[0]
-            this.app.use(`${primaryRoute.path}/*`, createMiddlewareChain(routerConfig.middleware))
-            scopedMiddlewareApplied = true
-          }
-
           // Apply domain middleware
           if (effectiveDomain) {
             const domainHandler = createDomainMiddleware(effectiveDomain)
@@ -343,7 +345,8 @@ export class RouteRegistrationService {
             })
           }
 
-          // @All routes can't use OpenAPI — register directly with guards
+          // @All routes can't use OpenAPI — register directly with
+          // scoped middleware (if any) + guard middleware + handler.
           if (httpMethod === 'all') {
             this.logger.info(`Registering @All route`, {
               controller: className,
@@ -351,11 +354,13 @@ export class RouteRegistrationService {
               methodName,
             })
 
-            if (allGuards.length > 0) {
-              this.app.all(route.path, this.createGuardMiddleware(allGuards), handler)
-            } else {
-              this.app.all(route.path, handler)
+            if (routerConfig.middleware.length > 0) {
+              this.app.use(route.path, createMiddlewareChain(routerConfig.middleware))
             }
+            if (allGuards.length > 0) {
+              this.app.use(route.path, this.createGuardMiddleware(allGuards))
+            }
+            this.app.all(route.path, handler)
             return
           }
 
@@ -366,7 +371,6 @@ export class RouteRegistrationService {
             route.path,
             routeConfig,
             metadata,
-            allGuards,
             meta.type === 'convention' ? methodName : undefined,
             statusCodeOverride,
             route.isLocaleVariant ?? false,
@@ -381,8 +385,19 @@ export class RouteRegistrationService {
             hidden: route.hidden,
           })
 
-          // Register Hono route (hidden from OpenAPI spec — clean paths registered separately)
-          this.app.openapi(openApiRoute, handler)
+          // Wrap the controller handler so scoped middleware and guards
+          // run AFTER Hono's request validators. @hono/zod-openapi
+          // composes a route as `...routeMiddleware, ...validators, handler`
+          // (see node_modules/@hono/zod-openapi/dist/index.js), which means
+          // anything attached via `route.middleware` runs *before*
+          // validation — and therefore can't read `c.req.valid('param')`.
+          // Wrapping the handler is the only place we can run middleware
+          // after validators in this Hono pipeline.
+          //
+          // Final order: global app.use → request validators → scoped
+          // middleware → guards → controller handler.
+          const wrappedHandler = this.wrapHandlerWithChain(handler, routerConfig.middleware, allGuards)
+          this.app.openapi(openApiRoute, wrappedHandler)
 
           // Register clean path in OpenAPI spec (strips regex constraints from params)
           if (!route.hidden) {
@@ -494,6 +509,54 @@ export class RouteRegistrationService {
 
       // All guards passed, continue to handler
       await next()
+    }
+  }
+
+  /**
+   * Wrap a controller handler with a `scopedMiddleware → guards → handler`
+   * chain that runs *inside* the Hono route handler — after request
+   * validators have populated `c.req.valid(...)`. This is the only place
+   * we can run user middleware after `@hono/zod-openapi`'s validators in
+   * the same pipeline.
+   *
+   * Returns a Hono handler with the same signature as the original so
+   * `app.openapi(route, wrapped)` works transparently.
+   */
+  private wrapHandlerWithChain(
+    handler: (c: Context<RouterEnv>) => Promise<Response>,
+    scopedMiddleware: Constructor<Middleware>[],
+    guards: Guard[],
+  ) {
+    if (scopedMiddleware.length === 0 && guards.length === 0) {
+      return handler
+    }
+
+    const scopedChain = scopedMiddleware.length > 0
+      ? createMiddlewareChain(scopedMiddleware)
+      : null
+    const guardChain = guards.length > 0
+      ? this.createGuardMiddleware(guards)
+      : null
+
+    return async (c: Context<RouterEnv>): Promise<Response> => {
+      let captured: Response | undefined
+
+      const runHandler = async () => {
+        captured = await handler(c)
+      }
+      const runGuards = guardChain
+        ? () => guardChain(c, runHandler)
+        : runHandler
+      const runScoped = scopedChain
+        ? () => scopedChain(c, runGuards)
+        : runGuards
+
+      const result = await runScoped()
+      // A middleware (scoped or guard) may short-circuit by returning a
+      // Response from its createMiddlewareChain — surface that. Otherwise
+      // the handler always sets `captured`.
+      if (result instanceof Response) return result
+      return captured!
     }
   }
 
@@ -617,17 +680,17 @@ export class RouteRegistrationService {
 
   /**
    * Build OpenAPI route configuration from metadata
-   * Creates a route definition compatible with @hono/zod-openapi
-   * Includes guard execution for proper access control
+   * Creates a route definition compatible with @hono/zod-openapi.
    *
-   * Execution order: Global middlewares → Guards → Handler
+   * Scoped middleware and guards are NOT attached to `route.middleware`
+   * here — they're composed into a wrapped handler in `collectRoutes` so
+   * they run after Hono's request validators. See `wrapHandlerWithChain`.
    */
   private buildOpenAPIRoute(
     method: Exclude<HttpMethod, 'all'>,
     path: string,
     routeConfig: RouteConfig,
     metadata: { tags: string[]; security: Record<string, string[]>[] },
-    guards: Guard[],
     methodName?: string,
     statusCodeOverride?: number,
     hasLocaleParam = false,
@@ -640,11 +703,6 @@ export class RouteRegistrationService {
         responses: {},
         // Always hide from OpenAPI registry — clean paths are registered separately via registerPath()
         hide: true,
-      }
-
-      // Add guard execution middleware using Hono's built-in middleware property
-      if (guards.length > 0) {
-        route.middleware = [this.createGuardMiddleware(guards)]
       }
 
       // Add request body if defined
@@ -710,7 +768,6 @@ export class RouteRegistrationService {
 
       // Add success response with derived status code
       const responseDef = routeConfig.response
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- response may be undefined at runtime
       if (responseDef) {
         if (typeof responseDef === 'object' && 'schema' in responseDef) {
           const responseContentType = responseDef.contentType ?? DEFAULT_CONTENT_TYPE
