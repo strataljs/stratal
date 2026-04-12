@@ -1,10 +1,15 @@
 import { inject } from 'tsyringe'
+import { z } from '../../i18n/validation'
 import { Controller } from '../../router/decorators/controller.decorator'
 import { Delete, Get, Put } from '../../router/decorators/http-method.decorator'
 import { type RouterContext } from '../../router/router-context'
 import { FileNotFoundError } from '../errors'
+import type { StorageService } from '../services/storage.service'
 import { STORAGE_TOKENS } from '../storage.tokens'
-import type { StorageManagerService } from '../services/storage-manager.service'
+
+const diskParam = z.object({
+  disk: z.string(),
+})
 
 /**
  * Storage Controller
@@ -21,16 +26,15 @@ import type { StorageManagerService } from '../services/storage-manager.service'
 @Controller('/storage', { hideFromDocs: true })
 export class StorageController {
   constructor(
-    @inject(STORAGE_TOKENS.StorageManager)
-    private readonly storageManager: StorageManagerService
+    @inject(STORAGE_TOKENS.StorageService)
+    private readonly storage: StorageService
   ) {}
 
-  @Get('/:disk/*', { hideFromDocs: true })
+  @Get('/:disk/*', { hideFromDocs: true, params: diskParam })
   async download(ctx: RouterContext): Promise<Response> {
     const disk = ctx.param('disk')
     const path = extractWildcardPath(ctx)
-    const provider = await this.storageManager.getProvider(disk)
-    const result = await provider.download(path)
+    const result = await this.storage.download(path, disk)
 
     const stream = result.toStream()
     if (!stream) {
@@ -46,31 +50,29 @@ export class StorageController {
     })
   }
 
-  @Put('/:disk/*', { hideFromDocs: true })
+  @Put('/:disk/*', { hideFromDocs: true, params: diskParam })
   async upload(ctx: RouterContext): Promise<Response> {
     const disk = ctx.param('disk')
     const path = extractWildcardPath(ctx)
-    const provider = await this.storageManager.getProvider(disk)
 
     const body = ctx.c.req.raw.body
     const contentType = ctx.header('content-type') ?? 'application/octet-stream'
     const contentLength = ctx.header('content-length')
 
-    await provider.upload(body, path, {
+    await this.storage.upload(body, path, {
       mimeType: contentType,
       size: contentLength ? parseInt(contentLength, 10) : 0,
-    })
+    }, disk)
 
     return ctx.json({ path, disk }, 200)
   }
 
-  @Delete('/:disk/*', { hideFromDocs: true })
+  @Delete('/:disk/*', { hideFromDocs: true, params: diskParam })
   async destroy(ctx: RouterContext): Promise<Response> {
     const disk = ctx.param('disk')
     const path = extractWildcardPath(ctx)
-    const provider = await this.storageManager.getProvider(disk)
 
-    await provider.delete(path)
+    await this.storage.delete(path, disk)
 
     return ctx.c.body(null, 204)
   }

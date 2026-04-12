@@ -115,10 +115,10 @@ export class TestingModuleBuilder {
       ctx,
     })
 
-    // Auto-register FakeStorageService (can be overridden by user)
-    app.container.registerSingleton(STORAGE_TOKENS.StorageService, FakeStorageService)
-
     await app.initialize()
+
+    // Auto-register FakeStorageService after initialize so it replaces module-registered StorageService
+    app.container.registerSingleton(STORAGE_TOKENS.StorageService, FakeStorageService)
 
     // Apply user overrides AFTER initialize so they replace module-registered providers
     for (const override of this.overrides) {
