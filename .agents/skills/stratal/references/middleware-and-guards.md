@@ -146,7 +146,7 @@ Guards can be:
 @UseGuards(RoleGuard)
 
 // Instance guard (factory-created with config)
-@UseGuards(AuthGuard({ scopes: ['admin:read'] }))
+@UseGuards(AuthGuard({ permissions: 'admin:access' }))
 
 // Multiple guards (all must pass)
 @UseGuards(AuthGuard(), RateLimitGuard)
@@ -162,12 +162,18 @@ import { AuthGuard } from '@stratal/framework/guards'
 // Authentication only
 AuthGuard()
 
-// Authentication + authorization
-AuthGuard({ scopes: ['users:read', 'users:write'] })
+// Authentication + single permission
+AuthGuard({ permissions: 'posts:update' })
+
+// Authentication + any one of these permissions
+AuthGuard({ permissions: ['posts:update', 'posts:delete'] })
+
+// Wildcard — any action on the resource
+AuthGuard({ permissions: 'posts' })
 ```
 
 Options:
-- `scopes?: string[]` — Required permissions. If provided, checks `CasbinService.hasAnyPermission()` after authentication.
+- `permissions?: string | string[]` — Required permissions in `"resource:action"` format. If provided, checks `AccessService` after authentication. Permission check reads from `AuthContext` (no DB hit).
 
 ### Guard Execution Order
 

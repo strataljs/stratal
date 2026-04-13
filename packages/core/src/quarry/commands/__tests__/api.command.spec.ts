@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 
-import { container as tsyringeRootContainer, injectable } from 'tsyringe'
+import { injectable, container as tsyringeRootContainer } from 'tsyringe'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Container } from '../../../di/container'
 import { DI_TOKENS } from '../../../di/tokens'
@@ -31,7 +31,7 @@ const mockHono = {
 }
 
 const mockApp = {
-  hono: mockHono,
+  ensureHono: () => mockHono,
   env: {},
 }
 

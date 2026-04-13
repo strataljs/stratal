@@ -1,6 +1,8 @@
 import { inject } from 'tsyringe'
 import { Transient } from '../../di/decorators'
-import { DiskNotConfiguredError, StorageProviderNotSupportedError } from '../errors'
+import { DI_TOKENS } from '../../di/tokens'
+import { type StratalEnv } from '../../env'
+import { DiskNotConfiguredError, R2BindingNotFoundError } from '../errors'
 import type { IStorageProvider } from '../providers/storage-provider.interface'
 import { STORAGE_TOKENS } from '../storage.tokens'
 import type { StorageConfig, StorageEntry } from '../types'
@@ -8,7 +10,7 @@ import type { StorageConfig, StorageEntry } from '../types'
 /**
  * Storage Manager Service
  * Manages multiple storage providers (one per disk)
- * Handles lazy initialization and caching of S3Clients
+ * Handles lazy initialization and caching of R2 providers
  */
 @Transient(STORAGE_TOKENS.StorageManager)
 export class StorageManagerService {
@@ -18,7 +20,9 @@ export class StorageManagerService {
 
   constructor(
     @inject(STORAGE_TOKENS.Options)
-    private readonly options: StorageConfig
+    private readonly options: StorageConfig,
+    @inject(DI_TOKENS.CloudflareEnv)
+    private readonly env: StratalEnv
   ) {
     this.initializeDiskConfigs()
   }
@@ -73,22 +77,18 @@ export class StorageManagerService {
   }
 
   /**
-   * Create a provider instance based on configuration
-   * Dynamically imports S3StorageProvider to avoid loading AWS SDK at module evaluation time
+   * Create an R2 provider instance
+   * Dynamically imports R2StorageProvider to support code splitting
    * @param config - Storage entry configuration
    * @returns Storage provider instance
    */
   private async createProvider(config: StorageEntry): Promise<IStorageProvider> {
-    switch (config.provider) {
-      case 's3': {
-        const { S3StorageProvider } = await import('../providers/s3-storage.provider')
-        return new S3StorageProvider(config)
-      }
-      case 'gcs':
-        throw new StorageProviderNotSupportedError(config.provider)
-      default:
-        throw new StorageProviderNotSupportedError(config.provider)
+    const { R2StorageProvider } = await import('../providers/r2-storage.provider')
+    const bucket = this.env[config.binding as keyof StratalEnv] as unknown as R2Bucket | undefined
+    if (!bucket) {
+      throw new R2BindingNotFoundError(config.binding)
     }
+    return new R2StorageProvider(config, bucket, this.env, this.options.route)
   }
 
   /**

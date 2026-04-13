@@ -8,6 +8,7 @@ import { ConfigValidationError, type ModuleConfig } from './config.types'
 import { ConfigModuleNotInitializedError } from './errors'
 import type { ConfigNamespace } from './register-as'
 import { ConfigService } from './services/config.service'
+import { ConfigStore } from './services/config.store'
 
 /**
  * Any config namespace - uses structural typing for flexibility
@@ -79,11 +80,18 @@ let moduleOptions: ConfigModuleOptions | null = null
  */
 @Module({
   providers: [
-    // Register the main ConfigService as Singleton so initialization persists
+    // ConfigStore is the singleton source of truth for validated config.
+    {
+      provide: CONFIG_TOKENS.ConfigStore,
+      useClass: ConfigStore,
+      scope: Scope.Singleton,
+    },
+    // ConfigService is request-scoped: each request gets its own
+    // overrides map layered over the shared ConfigStore.
     {
       provide: CONFIG_TOKENS.ConfigService,
       useClass: ConfigService,
-      scope: Scope.Singleton,
+      scope: Scope.Request,
     },
   ],
 })
@@ -120,7 +128,7 @@ export class ConfigModule implements OnInitialize {
     }
 
     const env = context.container.resolve<unknown>(DI_TOKENS.CloudflareEnv)
-    const configService = context.container.resolve<ConfigService>(CONFIG_TOKENS.ConfigService)
+    const configStore = context.container.resolve<ConfigStore>(CONFIG_TOKENS.ConfigStore)
 
     // Build merged config from all namespaces
     const mergedConfig: Record<string, unknown> = {}
@@ -140,8 +148,8 @@ export class ConfigModule implements OnInitialize {
       }
     }
 
-    // Initialize ConfigService with merged config
-    configService.initialize(mergedConfig as ModuleConfig)
+    // Initialize the shared ConfigStore with merged config.
+    configStore.initialize(mergedConfig as ModuleConfig)
 
     context.logger.debug('ConfigModule initialized', {
       namespaces: moduleOptions.load.map((n) => n.namespace),

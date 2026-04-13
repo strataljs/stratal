@@ -198,10 +198,12 @@ describe('HTTP Method Decorators', () => {
       })
       class MixedAppModule {}
 
+      const testModule = await Test.createTestingModule({
+        imports: [MixedAppModule],
+      }).compile()
+
       await expect(
-        Test.createTestingModule({
-          imports: [MixedAppModule],
-        }).compile()
+        testModule.application.ensureHono()
       ).rejects.toMatchObject({
         name: 'ControllerRegistrationError',
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -210,6 +212,8 @@ describe('HTTP Method Decorators', () => {
           reason: expect.stringContaining('Cannot mix @Route() with HTTP method decorators'),
         }),
       })
+
+      await testModule.close()
     })
   })
 })

@@ -17,6 +17,6 @@ export class AuthContextMiddleware implements Middleware {
     const authContext = new AuthContext()
     requestContainer.registerValue(DI_TOKENS.AuthContext, authContext)
 
-    await next()
+    return next()
   }
 }

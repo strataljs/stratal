@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { ConfigPath } from '../config.types'
 import { ConfigService } from '../services/config.service'
+import { ConfigStore } from '../services/config.store'
 import { ConfigNotInitializedError } from '../errors/config-not-initialized.error'
 
 describe('ConfigService', () => {
+  let store: ConfigStore<TestConfig>
   let service: ConfigService<TestConfig>
 
   interface TestConfig {
@@ -35,8 +37,9 @@ describe('ConfigService', () => {
   })
 
   beforeEach(() => {
-    service = new ConfigService<TestConfig>()
-    service.initialize(createConfig())
+    store = new ConfigStore<TestConfig>()
+    store.initialize(createConfig())
+    service = new ConfigService<TestConfig>(store)
   })
 
   describe('get()', () => {
@@ -72,7 +75,7 @@ describe('ConfigService', () => {
       expect(service.get('database.url')).toBe('postgres://production')
     })
 
-    it('should create intermediate objects for new paths', () => {
+    it('should create override for new paths', () => {
       service.set('new.nested.path' as ConfigPath<TestConfig>, 'value')
       expect(service.get('new.nested.path' as ConfigPath<TestConfig>)).toBe('value')
     })
@@ -80,6 +83,11 @@ describe('ConfigService', () => {
     it('should not affect other values', () => {
       service.set('database.url', 'postgres://new')
       expect(service.get('database.port')).toBe(5432)
+    })
+
+    it('should not leak overrides into the shared store', () => {
+      service.set('database.url', 'postgres://override')
+      expect(store.get('database.url')).toBe('postgres://localhost')
     })
   })
 
@@ -90,7 +98,7 @@ describe('ConfigService', () => {
       expect(service.get('database.url')).toBe('postgres://localhost')
     })
 
-    it('should restore entire config to original when called without path', () => {
+    it('should clear all overrides when called without a path', () => {
       service.set('database.url', 'changed')
       service.set('appName', 'Changed')
       service.reset()
@@ -100,9 +108,22 @@ describe('ConfigService', () => {
   })
 
   describe('all()', () => {
-    it('should return full config object', () => {
+    it('should return full config object when no overrides are set', () => {
       const result = service.all()
       expect(result).toEqual(createConfig())
+    })
+
+    it('should merge request overrides into the returned snapshot', () => {
+      service.set('database.url', 'postgres://override')
+      const result = service.all()
+      expect(result.database.url).toBe('postgres://override')
+      expect(result.database.port).toBe(5432)
+    })
+
+    it('should not mutate the shared store when merging overrides', () => {
+      service.set('database.url', 'postgres://override')
+      service.all()
+      expect(store.all().database.url).toBe('postgres://localhost')
     })
   })
 
@@ -118,10 +139,41 @@ describe('ConfigService', () => {
     it('should return true for intermediate path', () => {
       expect(service.has('database')).toBe(true)
     })
+
+    it('should return true for paths only present in overrides', () => {
+      service.set('new.path' as ConfigPath<TestConfig>, 'value')
+      expect(service.has('new.path' as ConfigPath<TestConfig>)).toBe(true)
+    })
+  })
+
+  describe('request isolation', () => {
+    it('two ConfigService instances over the same store have independent overrides', () => {
+      const a = new ConfigService<TestConfig>(store)
+      const b = new ConfigService<TestConfig>(store)
+
+      a.set('database.url', 'postgres://request-a')
+      b.set('database.url', 'postgres://request-b')
+
+      expect(a.get('database.url')).toBe('postgres://request-a')
+      expect(b.get('database.url')).toBe('postgres://request-b')
+      expect(store.get('database.url')).toBe('postgres://localhost')
+    })
+
+    it('resetting one instance does not touch another instance', () => {
+      const a = new ConfigService<TestConfig>(store)
+      const b = new ConfigService<TestConfig>(store)
+
+      a.set('appName', 'Alpha')
+      b.set('appName', 'Beta')
+      a.reset()
+
+      expect(a.get('appName')).toBe('TestApp')
+      expect(b.get('appName')).toBe('Beta')
+    })
   })
 
   describe('deep clone isolation', () => {
-    it('should not affect original config when current config is modified and reset', () => {
+    it('should not affect original config when overrides are reset', () => {
       service.set('database.url', 'changed')
       service.reset()
       expect(service.get('database.url')).toBe('postgres://localhost')
@@ -129,22 +181,14 @@ describe('ConfigService', () => {
 
     it('should initialize with deep clone so original object mutations do not affect config', () => {
       const original = createConfig()
-      const freshService = new ConfigService<TestConfig>()
-      freshService.initialize(original)
+      const freshStore = new ConfigStore<TestConfig>()
+      freshStore.initialize(original)
+      const freshService = new ConfigService<TestConfig>(freshStore)
 
-      // Mutate original object
+      // Mutate the original object after initialization
       original.database.url = 'mutated'
 
-      // Config should not be affected
       expect(freshService.get('database.url')).toBe('postgres://localhost')
-    })
-
-    it('should deep clone on reset so mutations after reset do not affect original', () => {
-      service.set('database.url', 'changed')
-      service.reset('database.url')
-      service.set('database.url', 'changed-again')
-      service.reset('database.url')
-      expect(service.get('database.url')).toBe('postgres://localhost')
     })
   })
 
@@ -179,29 +223,29 @@ describe('ConfigService', () => {
   })
 
   describe('error handling', () => {
-    it('should throw ConfigNotInitializedError when accessing before initialize()', () => {
-      const uninitializedService = new ConfigService<TestConfig>()
-      expect(() => uninitializedService.get('any' as ConfigPath<TestConfig>)).toThrow(ConfigNotInitializedError)
+    it('should throw ConfigNotInitializedError when reading from an uninitialized store', () => {
+      const uninitializedStore = new ConfigStore<TestConfig>()
+      const uninitialized = new ConfigService<TestConfig>(uninitializedStore)
+      expect(() => uninitialized.get('any' as ConfigPath<TestConfig>)).toThrow(ConfigNotInitializedError)
     })
 
     it('should throw ConfigNotInitializedError for has() before initialize()', () => {
-      const uninitializedService = new ConfigService<TestConfig>()
-      expect(() => uninitializedService.has('any' as ConfigPath<TestConfig>)).toThrow(ConfigNotInitializedError)
+      const uninitializedStore = new ConfigStore<TestConfig>()
+      const uninitialized = new ConfigService<TestConfig>(uninitializedStore)
+      expect(() => uninitialized.has('any' as ConfigPath<TestConfig>)).toThrow(ConfigNotInitializedError)
     })
 
     it('should throw ConfigNotInitializedError for all() before initialize()', () => {
-      const uninitializedService = new ConfigService<TestConfig>()
-      expect(() => uninitializedService.all()).toThrow(ConfigNotInitializedError)
+      const uninitializedStore = new ConfigStore<TestConfig>()
+      const uninitialized = new ConfigService<TestConfig>(uninitializedStore)
+      expect(() => uninitialized.all()).toThrow(ConfigNotInitializedError)
     })
 
-    it('should throw ConfigNotInitializedError for set() before initialize()', () => {
-      const uninitializedService = new ConfigService<TestConfig>()
-      expect(() => uninitializedService.set('any' as ConfigPath<TestConfig>, 'value')).toThrow(ConfigNotInitializedError)
-    })
-
-    it('should throw ConfigNotInitializedError for reset() before initialize()', () => {
-      const uninitializedService = new ConfigService<TestConfig>()
-      expect(() => uninitializedService.reset()).toThrow(ConfigNotInitializedError)
+    it('set() should be allowed on an uninitialized store (override layer is independent)', () => {
+      const uninitializedStore = new ConfigStore<TestConfig>()
+      const uninitialized = new ConfigService<TestConfig>(uninitializedStore)
+      expect(() => uninitialized.set('appName' as ConfigPath<TestConfig>, 'Override')).not.toThrow()
+      expect(uninitialized.get('appName' as ConfigPath<TestConfig>)).toBe('Override')
     })
   })
 })

@@ -2,7 +2,6 @@ import { Test, type TestingModule } from '@stratal/testing'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { PostFactory } from '../factories/post.factory'
 import { TestAppModule } from '../fixtures/app.module'
-import { RbacSeeder } from '../seeders/rbac.seeder'
 import { ADMIN_USER_ID, REGULAR_USER_ID, UserSeeder } from '../seeders/user.seeder'
 
 describe('Cross-Module Integration', () => {
@@ -28,7 +27,6 @@ describe('Cross-Module Integration', () => {
     it('create user → assign role → authenticated request to guarded route → verify DB', async () => {
       // 1. Seed users and roles
       await module.seed(UserSeeder)
-      await module.seed(RbacSeeder)
 
       // 2. Authenticated request to protected route
       const response = await module.http
@@ -51,7 +49,6 @@ describe('Cross-Module Integration', () => {
   describe('Post Creation Flow', () => {
     it('auth + guard + DB insert + correct authorId', async () => {
       await module.seed(UserSeeder)
-      await module.seed(RbacSeeder)
 
       // Create post as authenticated user
       const createResponse = await module.http
@@ -77,7 +74,6 @@ describe('Cross-Module Integration', () => {
   describe('Concurrent Requests', () => {
     it('5 parallel POST requests all succeed', async () => {
       await module.seed(UserSeeder)
-      await module.seed(RbacSeeder)
 
       const requests = Array.from({ length: 5 }, (_, i) =>
         module.http
@@ -100,7 +96,6 @@ describe('Cross-Module Integration', () => {
   describe('Unauthenticated to Authenticated Upgrade', () => {
     it('public route accessible, then authenticated route succeeds', async () => {
       await module.seed(UserSeeder)
-      await module.seed(RbacSeeder)
 
       // 1. Access public route without auth
       const publicResponse = await module.http
@@ -130,7 +125,6 @@ describe('Cross-Module Integration', () => {
   describe('Role-Based Access Differentiation', () => {
     it('admin and regular user get different outcomes on admin route', async () => {
       await module.seed(UserSeeder)
-      await module.seed(RbacSeeder)
 
       // Admin can access
       const adminResponse = await module.http
@@ -152,7 +146,6 @@ describe('Cross-Module Integration', () => {
 
     it('admin can update and delete posts, regular user cannot', async () => {
       await module.seed(UserSeeder)
-      await module.seed(RbacSeeder)
 
       const db = module.getDb()
       const post = await new PostFactory().forAuthor(ADMIN_USER_ID).published().create(db)

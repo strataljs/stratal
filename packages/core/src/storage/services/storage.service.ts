@@ -224,7 +224,6 @@ export class StorageService {
     const presignedUrlConfig = this.options.presignedUrl
     const validatedExpiresIn = expiresIn ?? presignedUrlConfig.defaultExpiry
 
-    // S3 presigned URL limits: 1 second to 7 days (604800 seconds)
     const minExpiry = 1
     const maxExpiry = presignedUrlConfig.maxExpiry
 

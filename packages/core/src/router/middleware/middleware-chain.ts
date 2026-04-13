@@ -1,6 +1,7 @@
 import type { Context, MiddlewareHandler } from 'hono'
 import type { Constructor } from '../../types'
 import { ROUTER_CONTEXT_KEYS } from '../constants'
+import { MiddlewareNextCalledMultipleTimesError } from '../errors'
 import type { Middleware, Next } from '../middleware.interface'
 import { RouterContext } from '../router-context'
 import type { RouterEnv } from '../types'
@@ -25,14 +26,28 @@ export function createMiddlewareChain(
     let current = next
     for (let i = classes.length - 1; i >= 0; i--) {
       const prevNext = current
-      const middleware = requestContainer.resolve<Middleware>(classes[i])
-      current = () => middleware.handle(ctx, prevNext as Next) as Promise<void>
+      const middlewareClass = classes[i]
+      current = () => {
+        const middleware = requestContainer.resolve<Middleware>(middlewareClass)
+        let called = false
+        const guardedNext: Next = () => {
+          if (called) {
+            const err = new MiddlewareNextCalledMultipleTimesError(middlewareClass.name ?? 'anonymous')
+            console.error('[STRATAL DEBUG] next() called multiple times for ' + middlewareClass.name)
+            console.error('[STRATAL DEBUG] Stack trace:', new Error().stack)
+            return Promise.reject(err)
+          }
+          called = true
+          return prevNext() as Promise<void>
+        }
+        return middleware.handle(ctx, guardedNext) as Promise<void>
+      }
     }
 
     const result = await current()
 
     if (result instanceof Response) {
-      return result  // return to Hono                                                      
+      return result  // return to Hono
     }
   }
 }

@@ -15,14 +15,16 @@ describe('WebSocket Gateway Integration', () => {
     await module.close()
   })
 
-  it('should register gateway as a GET route', () => {
-    const routes = module.application.hono.routes
+  it('should register gateway as a GET route', async () => {
+    const hono = await module.application.ensureHono()
+    const routes = hono.routes
     const wsRoute = routes.find(r => r.path === '/ws/chat' && r.method === 'GET')
     expect(wsRoute).toBeDefined()
   })
 
-  it('should not register gateway as a non-GET route', () => {
-    const routes = module.application.hono.routes
+  it('should not register gateway as a non-GET route', async () => {
+    const hono = await module.application.ensureHono()
+    const routes = hono.routes
     const nonGetRoutes = routes.filter(r => r.path === '/ws/chat' && r.method !== 'GET' && r.method !== 'ALL')
     expect(nonGetRoutes).toHaveLength(0)
   })

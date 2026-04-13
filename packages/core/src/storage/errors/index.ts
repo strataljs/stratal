@@ -4,6 +4,6 @@ export * from './file-too-large.error'
 export * from './invalid-disk.error'
 export * from './invalid-file-type.error'
 export * from './presigned-url-invalid-expiry.error'
-export * from './storage-provider-not-supported.error'
+export * from './r2-binding-not-found.error'
+export * from './r2-presigned-url-secret-missing.error'
 export * from './storage-response-body-missing.error'
-

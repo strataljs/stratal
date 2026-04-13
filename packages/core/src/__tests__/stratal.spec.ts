@@ -1,6 +1,8 @@
-import { injectable } from 'tsyringe'
+import { inject, injectable } from 'tsyringe'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Application, type ApplicationOptions } from '../application'
+import type { CronJob } from '../cron/cron-job'
+import { Transient } from '../di/decorators'
 import { Scope } from '../di/types'
 import type { StratalEnv } from '../env'
 import { z } from '../i18n/validation'
@@ -10,6 +12,7 @@ import { Controller } from '../router/decorators/controller.decorator'
 import { Route } from '../router/decorators/route.decorator'
 import { ControllerRegistrationError } from '../router/errors'
 import type { RouterContext } from '../router/router-context'
+import type { Constructor } from '../types'
 
 // Fixtures
 
@@ -79,9 +82,10 @@ describe('Application (eager bootstrap)', () => {
     expect(app).toBeInstanceOf(Application)
   })
 
-  it('should handle HTTP requests via hono', async () => {
+  it('should handle HTTP requests via ensureHono', async () => {
     const request = new Request('http://localhost/test')
-    const response = await app.hono.fetch(request, mockEnv, mockCtx)
+    const hono = await app.ensureHono()
+    const response = await hono.fetch(request, mockEnv, mockCtx)
 
     expect(response).toBeInstanceOf(Response)
     expect(response.status).toBe(200)
@@ -101,10 +105,11 @@ describe('Application (eager bootstrap)', () => {
 
   it('should handle concurrent fetch requests', async () => {
     const request = new Request('http://localhost/test')
+    const hono = await app.ensureHono()
     const [r1, r2, r3] = await Promise.all([
-      app.hono.fetch(request, mockEnv, mockCtx),
-      app.hono.fetch(request, mockEnv, mockCtx),
-      app.hono.fetch(request, mockEnv, mockCtx),
+      hono.fetch(request, mockEnv, mockCtx),
+      hono.fetch(request, mockEnv, mockCtx),
+      hono.fetch(request, mockEnv, mockCtx),
     ])
 
     expect(r1.status).toBe(200)
@@ -143,9 +148,10 @@ describe('Application (eager bootstrap)', () => {
     handleScheduledSpy.mockRestore()
   })
 
-  it('should expose hono getter', () => {
-    expect(app.hono).toBeDefined()
-    expect(app.hono.fetch).toBeDefined()
+  it('should expose ensureHono', async () => {
+    const hono = await app.ensureHono()
+    expect(hono).toBeDefined()
+    expect(hono.fetch).toBeDefined()
   })
 
   it('should clean up on shutdown()', async () => {
@@ -155,6 +161,92 @@ describe('Application (eager bootstrap)', () => {
 
   it('should throw ControllerRegistrationError for controller without route decorators', async () => {
     const noDecoratorApp = createTestApp({ module: NoDecoratorModule })
-    await expect(noDecoratorApp.initialize()).rejects.toThrow(ControllerRegistrationError)
+    await noDecoratorApp.initialize()
+    await expect(noDecoratorApp.ensureHono()).rejects.toThrow(ControllerRegistrationError)
+  })
+})
+
+// ──────────────────────────────────────────────────────────────────
+// Cron job with request-scoped dependency
+// Regression: jobs must resolve from request-scoped container
+// so that ContainerScoped services (like DB) get a fresh instance
+// per scheduled invocation rather than a stale global-scope proxy.
+// ──────────────────────────────────────────────────────────────────
+
+const REQUEST_SCOPED_TOKEN = Symbol('RequestScopedService')
+
+@Transient(REQUEST_SCOPED_TOKEN)
+class RequestScopedService {
+  readonly instanceId = crypto.randomUUID()
+}
+
+const cronJobExecutions: string[] = []
+
+@Transient()
+class TestCronJob implements CronJob {
+  readonly schedule = '*/5 * * * *'
+
+  constructor(
+    @inject(REQUEST_SCOPED_TOKEN) private readonly service: RequestScopedService,
+  ) { }
+
+  async execute(): Promise<void> {
+    cronJobExecutions.push(this.service.instanceId)
+
+    return Promise.resolve();
+  }
+}
+
+@Module({
+  providers: [
+    { provide: REQUEST_SCOPED_TOKEN, useClass: RequestScopedService, scope: Scope.Request },
+  ],
+  jobs: [TestCronJob as Constructor],
+})
+class CronJobModule { }
+
+describe('handleScheduled (cron jobs with request-scoped deps)', () => {
+  let app: Application
+
+  beforeEach(async () => {
+    cronJobExecutions.length = 0
+    app = new Application({
+      module: CronJobModule,
+      logging: { level: LogLevel.ERROR },
+      env: mockEnv,
+      ctx: { waitUntil: vi.fn() },
+    })
+    await app.initialize()
+  })
+
+  afterEach(async () => {
+    await app.shutdown()
+  })
+
+  it('should resolve cron job dependencies from request-scoped container', async () => {
+    const controller = {
+      scheduledTime: Date.now(),
+      cron: '*/5 * * * *',
+      noRetry: vi.fn(),
+    } as unknown as ScheduledController
+
+    await app.handleScheduled(controller)
+
+    expect(cronJobExecutions).toHaveLength(1)
+  })
+
+  it('should create fresh request-scoped instances for each invocation', async () => {
+    const controller = {
+      scheduledTime: Date.now(),
+      cron: '*/5 * * * *',
+      noRetry: vi.fn(),
+    } as unknown as ScheduledController
+
+    await app.handleScheduled(controller)
+    await app.handleScheduled(controller)
+
+    expect(cronJobExecutions).toHaveLength(2)
+    // Each invocation must get a different service instance
+    expect(cronJobExecutions[0]).not.toBe(cronJobExecutions[1])
   })
 })

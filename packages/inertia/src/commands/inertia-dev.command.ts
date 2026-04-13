@@ -5,7 +5,7 @@ import { Command } from 'stratal/quarry'
 import { writeTempViteConfig } from '../vite/create-vite-config'
 
 export class InertiaDevCommand extends Command {
-  static command = 'inertia:dev {--port=5173 : Dev server port} {--host : Expose to network}'
+  static command = 'inertia:dev {--port= : Dev server port} {--host : Expose to network}'
   static description = 'Start Inertia.js Vite development server'
 
   async handle(): Promise<number | undefined> {
@@ -26,7 +26,7 @@ export class InertiaDevCommand extends Command {
 
     this.info('Starting Vite dev server...')
 
-    const args = ['vite', 'dev', '--config', configPath, '--port', String(port)]
+    const args = ['vite', 'dev', '--config', configPath]
     if (host) args.push('--host')
 
     return new Promise<number>((resolve) => {

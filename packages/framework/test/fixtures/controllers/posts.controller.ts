@@ -95,7 +95,7 @@ export class PostsController {
       authorId: z.string(),
     }),
   })
-  @UseGuards(AuthGuard({ scopes: ['posts:update'] }))
+  @UseGuards(AuthGuard({ permissions: 'posts:update' }))
   async update(ctx: RouterContext) {
     const id = ctx.param('id')
     const body = await ctx.body<{ title?: string; content?: string; published?: boolean }>()
@@ -111,7 +111,7 @@ export class PostsController {
     params: z.object({ id: z.string() }),
     response: z.object({ deleted: z.boolean() }),
   })
-  @UseGuards(AuthGuard({ scopes: ['posts:delete'] }))
+  @UseGuards(AuthGuard({ permissions: 'posts:delete' }))
   async destroy(ctx: RouterContext) {
     const id = ctx.param('id')
     await this.db.post.delete({ where: { id } })

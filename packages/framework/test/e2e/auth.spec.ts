@@ -54,6 +54,40 @@ describe('Auth Module', () => {
 
       response.assertUnauthorized()
     })
+
+    it('returns 401 with signed-format cookie that has invalid signature', async () => {
+      // Simulates an expired/invalidated cookie that still has the signed format (value.signature)
+      // This triggers Better Auth's getSignedCookie to verify signature → fail → return false
+      const response = await module.http
+        .withHeaders({ cookie: 'better-auth.session_token=some-session-token.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' })
+        .get('/api/test/users')
+        .send()
+
+      response.assertUnauthorized()
+    })
+
+    it('returns 401 with signed-format cookie that has valid signature but no DB session', async () => {
+      // Cookie with proper format but non-existent session in DB
+      // This triggers the full getSession flow: getSignedCookie → findSession → not found → deleteSessionCookie → return null
+      const response = await module.http
+        .withHeaders({ cookie: 'better-auth.session_token=non-existent-session-id.BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=' })
+        .get('/api/test/users')
+        .send()
+
+      response.assertUnauthorized()
+    })
+
+    it('does not throw MiddlewareNextCalledMultipleTimesError on public route with invalid cookie', async () => {
+      // This is the exact scenario reported: invalid cookie on ANY route should not crash
+      const response = await module.http
+        .withHeaders({ cookie: 'better-auth.session_token=expired-token.CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=' })
+        .get('/api/test/public')
+        .send()
+
+      // Should succeed (public route), NOT return 500 with MiddlewareNextCalledMultipleTimesError
+      response.assertOk()
+      await response.assertJsonPath('message', 'public')
+    })
   })
 
   describe('Multiple Users', () => {

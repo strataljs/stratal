@@ -97,6 +97,6 @@ export class SmtpProvider extends BaseEmailProvider {
       return content
     }
     // Convert web ReadableStream to Node.js Readable
-    return Readable.fromWeb(content as Parameters<typeof Readable.fromWeb>[0])
+    return Readable.fromWeb(content as unknown as Parameters<typeof Readable.fromWeb>[0])
   }
 }

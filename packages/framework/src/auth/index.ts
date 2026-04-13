@@ -1,6 +1,7 @@
 export * from './auth.module'
 export * from './auth.tokens'
 export * from './errors'
+export * from './i18n'
 export * from './middleware'
 export * from './services'
 export * from './utils'

@@ -155,17 +155,6 @@ export class ModuleRegistry {
       const instance = new registered.moduleClass()
       registered.instance = instance
 
-      // Call configureRoutes() for route + middleware configuration if implemented
-      if (this.hasRouteConfigurable(instance)) {
-        this.logger.debug(`Configuring routes for: ${registered.moduleClass.name}`)
-        const router = new Router()
-        instance.configureRoutes(router)
-        // Collect controllers belonging to this module for Router scoping
-        const moduleControllers = registered.options.controllers ?? []
-        this.allRouterConfigs.push({ router, controllers: moduleControllers })
-        this.logger.debug(`Collected route config from ${registered.moduleClass.name} (${moduleControllers.length} controllers)`)
-      }
-
       // Call onInitialize if implemented
       if (this.hasOnInitialize(instance)) {
         this.logger.info(`Initializing: ${registered.moduleClass.name}`)
@@ -220,9 +209,21 @@ export class ModuleRegistry {
   }
 
   /**
-   * Get all Router configurations from modules implementing RouteConfigurable
+   * Get all Router configurations from modules implementing RouteConfigurable.
+   * Runs configureRoutes() lazily on first call (deferred from initialize()).
    */
   getAllRouterConfigs(): { router: Router; controllers: Constructor[] }[] {
+    if (this.allRouterConfigs.length === 0) {
+      for (const { moduleClass, options, instance } of this.modules) {
+        if (instance && this.hasRouteConfigurable(instance)) {
+          this.logger.debug(`Configuring routes for: ${moduleClass.name}`)
+          const router = new Router()
+          instance.configureRoutes(router)
+          const moduleControllers = options.controllers ?? []
+          this.allRouterConfigs.push({ router, controllers: moduleControllers })
+        }
+      }
+    }
     return this.allRouterConfigs
   }
 

@@ -1,6 +1,6 @@
 import type { AnyPlugin, ClientOptions } from '@zenstackhq/orm'
 import type { SchemaDef } from '@zenstackhq/schema'
-import { DI_TOKENS, Scope, delay } from 'stratal/di'
+import { delay, DI_TOKENS, Scope } from 'stratal/di'
 import type { IEventRegistry } from 'stratal/events'
 import {
   Module,
@@ -19,7 +19,7 @@ import { MigrateDevCommand } from './commands/migrate-dev.command'
 import { MigrateResetCommand } from './commands/migrate-reset.command'
 import { MigrateStatusCommand } from './commands/migrate-status.command'
 import { createDatabaseService } from './database.helpers'
-import { DATABASE_TOKENS, connectionSymbol } from './database.tokens'
+import { connectionSymbol, DATABASE_TOKENS } from './database.tokens'
 import type { ConnectionName, DefaultConnectionName } from './types'
 
 export interface DatabaseConnectionConfig<
@@ -77,10 +77,10 @@ export class DatabaseModule implements OnInitialize, OnShutdown {
     const container = context.container.getTsyringeContainer();
 
     for (const conn of config.connections) {
-      const Service = createDatabaseService(conn, eventRegistry)
+      const Service = createDatabaseService(conn, eventRegistry);
 
       container.register(connectionSymbol(conn.name) as InjectionToken<symbol>,
-        // @ts-expect-error Overload error
+        // @ts-expect-error Dynamic class type mismatch
         delay(() => Service),
         { lifecycle: Scope.Request })
     }

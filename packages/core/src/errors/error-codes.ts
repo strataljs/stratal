@@ -75,6 +75,20 @@ export const ERROR_CODES = {
     SOCIAL_ACCOUNT_LINKED: 3014,
     /** Last account cannot be unlinked */
     CANNOT_UNLINK_LAST_ACCOUNT: 3015,
+
+    // Organization Errors (3020-3029)
+    /** Organization not found */
+    ORGANIZATION_NOT_FOUND: 3020,
+    /** Organization member not found */
+    MEMBER_NOT_FOUND: 3021,
+    /** Organization invitation not found */
+    INVITATION_NOT_FOUND: 3022,
+    /** Invitation recipient mismatch */
+    INVITATION_RECIPIENT_MISMATCH: 3023,
+    /** Organization limit reached */
+    ORGANIZATION_LIMIT_REACHED: 3024,
+    /** Organization membership constraint violation */
+    ORGANIZATION_MEMBERSHIP_REQUIRED: 3025,
   },
 
   /**
@@ -143,6 +157,8 @@ export const ERROR_CODES = {
     MISSING_ROUTE_PARAM: 9012,
     /** router.use() called inside group() callback */
     USE_SCOPE_VIOLATION: 9013,
+    /** next() called more than once in a middleware */
+    MIDDLEWARE_NEXT_CALLED_MULTIPLE_TIMES: 9014,
   },
 
   /**

@@ -20,42 +20,55 @@ import { TestHttpRequest } from './test-http-request'
  * ```
  */
 export class TestHttpClient {
-  private defaultHeaders: Headers = new Headers()
-  private host: string | null = null
-  private localeConfig: { locale: string; strategy: DetectionStrategy } | null = null
+  private defaultHeaders: Headers
+  private host: string | null
+  private localeConfig: { locale: string; strategy: DetectionStrategy } | null
 
-  constructor(private readonly module: TestingModule) { }
-
-  /**
-   * Set the host for the request
-   */
-  forHost(host: string): this {
+  constructor(
+    private readonly module: TestingModule,
+    host: string | null = null,
+    headers: Headers = new Headers(),
+    localeConfig: { locale: string; strategy: DetectionStrategy } | null = null,
+  ) {
     this.host = host
-    return this
+    this.defaultHeaders = headers
+    this.localeConfig = localeConfig
   }
 
   /**
-   * Set default headers for all requests
+   * Set the host for the request (returns a new client).
+   * Also sets the Host header to ensure domain routing works
+   * even when the runtime reads the header instead of the URL host.
    */
-  withHeaders(headers: Record<string, string>): this {
-    for (const [key, value] of Object.entries(headers)) {
-      this.defaultHeaders.set(key, value)
-    }
-    return this
+  forHost(host: string): TestHttpClient {
+    const newHeaders = new Headers(this.defaultHeaders)
+    newHeaders.set('Host', host)
+    return new TestHttpClient(this.module, host, newHeaders, this.localeConfig)
   }
 
   /**
-   * Set the locale for all requests from this client.
+   * Set default headers for all requests (returns a new client)
+   */
+  withHeaders(headers: Record<string, string>): TestHttpClient {
+    const newHeaders = new Headers(this.defaultHeaders)
+    for (const [key, value] of Object.entries(headers)) {
+      newHeaders.set(key, value)
+    }
+    return new TestHttpClient(this.module, this.host, newHeaders, this.localeConfig)
+  }
+
+  /**
+   * Set the locale for all requests from this client (returns a new client).
    * If strategy is not provided, resolves from the module's I18n configuration.
    *
    * @param locale - Locale code (e.g., 'en', 'fr')
    * @param strategy - Detection strategy override
    */
-  withLocale(locale: string, strategy?: DetectionStrategy): this {
+  withLocale(locale: string, strategy?: DetectionStrategy): TestHttpClient {
     const resolved = strategy ?? resolveLocaleStrategy(this.module)
-    this.localeConfig = { locale, strategy: resolved }
-    applyLocaleToHeaders(this.defaultHeaders, locale, resolved)
-    return this
+    const newHeaders = new Headers(this.defaultHeaders)
+    applyLocaleToHeaders(newHeaders, locale, resolved)
+    return new TestHttpClient(this.module, this.host, newHeaders, { locale, strategy: resolved })
   }
 
   /**
