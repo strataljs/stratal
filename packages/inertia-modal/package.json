@@ -58,7 +58,7 @@
     "@stratal/inertia": "workspace:*",
     "@types/node": "^25.6.0",
     "@types/react": "^19.2.14",
-    "hono": "^4.12.12",
+    "hono": "^4.12.14",
     "react": "^19.2.5",
     "reflect-metadata": "^0.2.2",
     "stratal": "workspace:*",
