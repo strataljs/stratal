@@ -33,25 +33,40 @@ export type DeepKeys<T, Prefix extends string = ''> = T extends object
 export type SystemMessageKeys = DeepKeys<typeof systemEn>
 
 /**
- * Augmentable interface for app-specific messages
+ * Augmentable registry for app-specific message namespaces.
  *
- * Applications should augment this interface with their message types:
+ * Each module owns ONE top-level key here. Two modules CANNOT augment the same
+ * key with different shapes — TypeScript requires same-named interface properties
+ * across declarations to be structurally identical. By giving every module its
+ * own distinct key, interface merging is safe.
  *
- * @example
+ * @example Module declares its own namespace
  * ```typescript
- * // In apps/backend/src/i18n/types.ts
- * import type * as appEn from 'stratal/i18n/messages/en'
+ * // packages/framework/src/auth/i18n/en.ts
+ * export const authMessages = {
+ *   en: { errors: { invalidCredentials: '...' }, org: { ... } },
+ * } as const
  *
- * declare module 'stratal' {
- *   interface AppMessages extends typeof appEn {}
+ * declare module 'stratal/i18n' {
+ *   interface AppMessageNamespaces {
+ *     auth: typeof authMessages['en']
+ *   }
  * }
  * ```
+ *
+ * Access with flat dot-notation: `i18n.t('auth.errors.invalidCredentials')`.
  */
-export interface AppMessages { }
+export interface AppMessageNamespaces { }
+
+/**
+ * Composed app messages tree, derived from AppMessageNamespaces.
+ * Each module contributes one property; the union forms the full tree.
+ */
+export type AppMessages = { [K in keyof AppMessageNamespaces]: AppMessageNamespaces[K] }
 
 /**
  * Auto-derive app keys from AppMessages
- * When AppMessages is augmented, this type automatically includes all app message keys
+ * When AppMessageNamespaces is augmented, this type automatically includes all app message keys
  */
 export type AppMessageKeys = DeepKeys<AppMessages>
 

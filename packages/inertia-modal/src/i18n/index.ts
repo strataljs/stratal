@@ -1,3 +1,3 @@
-import { enMessages } from './en'
+import { modalMessages } from './en'
 
-export const i18nMessages = { en: enMessages }
+export const i18nMessages = { en: { modal: modalMessages.en } }

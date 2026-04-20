@@ -55,7 +55,7 @@ import { AccessService } from '../access-control/services/access.service'
 import { AC_TOKENS } from '../access-control/tokens'
 import type { AccessControlOptions } from '../access-control/types'
 import { AUTH_OPTIONS, AUTH_SERVICE } from './auth.tokens'
-import { messages } from './i18n'
+import { authMessages } from './i18n'
 import { AuthContextMiddleware } from './middleware/auth-context.middleware'
 import { SessionVerificationMiddleware } from './middleware/session-verification.middleware'
 import { AuthService } from './services/auth.service'
@@ -71,7 +71,7 @@ export interface AuthModuleAsyncOptions<TOptions extends BetterAuthOptions = Bet
 
 @Module({
   imports: [
-    I18nModule.registerMessages(messages),
+    I18nModule.registerMessages({ en: { auth: authMessages.en } }),
   ],
   providers: []
 })

@@ -1,5 +1,5 @@
-export const databaseI18n = {
-  database: {
+export const databaseMessages = {
+  en: {
     connectionNameRequired: 'Connection name is required',
     defaultConnectionRequired: 'Default connection name is required',
     connectionRequired: 'At least one connection is required',
@@ -9,7 +9,7 @@ export const databaseI18n = {
 } as const
 
 declare module 'stratal/i18n' {
-  interface AppMessages {
-    database: typeof databaseI18n['database']
+  interface AppMessageNamespaces {
+    database: typeof databaseMessages['en']
   }
 }
