@@ -71,7 +71,7 @@ export interface AuthModuleAsyncOptions<TOptions extends BetterAuthOptions = Bet
 
 @Module({
   imports: [
-    I18nModule.registerMessages({ en: { auth: authMessages.en } }),
+    I18nModule.registerMessages(authMessages),
   ],
   providers: []
 })
