@@ -613,8 +613,8 @@ export class RouteRegistrationService {
    * Join a base path and a route path, normalizing slashes
    */
   private joinPaths(basePath: string, routePath: string): string {
-    if (routePath === '/' || routePath === '') return basePath
     if (basePath.endsWith('/')) basePath = basePath.slice(0, -1)
+    if (routePath === '/' || routePath === '') return basePath || '/'
     if (!routePath.startsWith('/')) routePath = '/' + routePath
     return basePath + routePath
   }

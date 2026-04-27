@@ -44,12 +44,12 @@ export type SystemMessageKeys = DeepKeys<typeof systemEn>
  * ```typescript
  * // packages/framework/src/auth/i18n/en.ts
  * export const authMessages = {
- *   en: { errors: { invalidCredentials: '...' }, org: { ... } },
+ *   en: { auth: { errors: { invalidCredentials: '...' }, org: { ... } } },
  * } as const
  *
  * declare module 'stratal/i18n' {
  *   interface AppMessageNamespaces {
- *     auth: typeof authMessages['en']
+ *     auth: typeof authMessages['en']['auth']
  *   }
  * }
  * ```

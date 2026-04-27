@@ -23,7 +23,7 @@ export function writeTempViteConfig(options: TempViteConfigOptions): string {
     : ''
 
   const cloudflareArgs = options.persistTo
-    ? `{ persistState: { path: '${options.persistTo.replace(/'/g, "\\'")}' } }`
+    ? `{ persistState: { path: ${JSON.stringify(options.persistTo)} } }`
     : ''
 
   const content = `

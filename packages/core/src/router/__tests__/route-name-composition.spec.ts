@@ -175,4 +175,20 @@ describe('Route path composition', () => {
     const route = registry.get('show')
     expect(route?.path).toBe('/users/:id')
   })
+
+  it('strips a trailing slash from a non-root controller path when the route path is "/"', () => {
+    @Controller('/users/')
+    class UsersIndexController {
+      @Get('/', { name: 'index' })
+      index() { /**/ }
+    }
+
+    const router = new Router()
+    router.group([UsersIndexController], () => { /**/ })
+
+    const registry = registerController(router, UsersIndexController)
+
+    const route = registry.get('index')
+    expect(route?.path).toBe('/users')
+  })
 })

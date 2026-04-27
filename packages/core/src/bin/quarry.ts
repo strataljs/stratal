@@ -79,6 +79,13 @@ async function createStrippedConfig(cwdRequire: NodeRequire): Promise<string | u
   if (typeof config.name === 'string') {
     config.name = `quarry-${config.name}-${process.pid}`
   }
+  if (config.env && typeof config.env === 'object') {
+    for (const envConfig of Object.values(config.env as Record<string, Record<string, unknown>>)) {
+      if (typeof envConfig.name === 'string') {
+        envConfig.name = `quarry-${envConfig.name}-${process.pid}`
+      }
+    }
+  }
 
   stripDurableObjects(config)
 
