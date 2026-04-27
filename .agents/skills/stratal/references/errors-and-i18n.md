@@ -118,7 +118,7 @@ import type { ErrorCode, MessageKeys } from 'stratal/errors'
 export class NoteNotFoundError extends ApplicationError {
   constructor(noteId: string) {
     super(
-      'errors.notes.not_found',  // i18n key (used as message)
+      'notes.errors.notFound',  // i18n key (used as message)
       5000 as ErrorCode,                         // Custom error code
       { noteId },                                // Optional metadata
     )
@@ -183,11 +183,13 @@ import { I18nModule } from 'stratal/i18n'
     }),
     I18nModule.registerMessages({
       en: {
-        errors: { notes: { not_found: 'Note {noteId} not found' } },
-        validation: { notes: { title: { required: 'Title is required' } } },
+        notes: {
+          errors: { notFound: 'Note {noteId} not found' },
+          validation: { title: { required: 'Title is required' } },
+        },
       },
       fr: {
-        errors: { notes: { not_found: 'Note {noteId} introuvable' } },
+        notes: { errors: { notFound: 'Note {noteId} introuvable' } },
       },
     }),
   ],
@@ -199,17 +201,37 @@ export class AppModule {}
 
 Any module can call `registerMessages()`. Messages are deep-merged across all registrations — later calls override at leaf level.
 
+**Each module must own one distinct top-level namespace** (e.g., `tenancy`, `billing`, `uploads`). Two modules cannot augment the same top-level key with different sub-shapes — TypeScript's interface merging requires same-named properties across declarations to be structurally identical, so sharing a parent namespace (`errors`, etc.) between modules produces a TS2717 collision.
+
 ```typescript
+// packages/tenancy/src/i18n/en.ts
+export const tenancyMessages = {
+  en: {
+    errors: { tenantNotFound: 'Tenant not found' },
+  },
+} as const
+
+declare module 'stratal/i18n' {
+  interface AppMessageNamespaces {
+    tenancy: typeof tenancyMessages['en']
+  }
+}
+
+// packages/tenancy/src/tenancy.module.ts
 @Module({
   imports: [
     I18nModule.registerMessages({
-      en: { tenancy: { tenantNotFound: 'Tenant not found' } },
-      fr: { tenancy: { tenantNotFound: 'Locataire introuvable' } },
+      en: { tenancy: tenancyMessages.en },
+      fr: { tenancy: { errors: { tenantNotFound: 'Locataire introuvable' } } },
     }),
   ],
 })
 export class TenancyModule {}
 ```
+
+Access with flat dot-notation: `i18n.t('tenancy.errors.tenantNotFound')`.
+
+**Reserved top-level namespaces** (owned by core — do not reuse as a module namespace): `errors`, `common`, `emails`, `validation`, `zodI18n`. You may still register additional locale translations for these (e.g., providing `fr` strings for `errors.notFound`), but you may not augment their type shapes.
 
 The module auto-registers language detection middleware on all routes. Locale is detected based on the configured `detection` strategy.
 
@@ -242,11 +264,11 @@ export class MyService {
   ) {}
 
   getMessage(noteId: string) {
-    return this.i18n.t('errors.notes.not_found', { noteId })
+    return this.i18n.t('notes.errors.notFound', { noteId })
   }
 
   getWelcome(name: string) {
-    return this.i18n.t('messages.welcome', { name })
+    return this.i18n.t('common.welcome', { name })
   }
 }
 ```
@@ -262,24 +284,40 @@ import { z, withI18n } from 'stratal/validation'
 
 export const createNoteSchema = z.object({
   title: z.string()
-    .min(1, withI18n('validation.notes.title.required'))
-    .max(255, withI18n('validation.notes.title.max', { max: 255 })),
+    .min(1, withI18n('notes.validation.title.required'))
+    .max(255, withI18n('notes.validation.title.max', { max: 255 })),
   content: z.string().optional(),
 }).openapi('CreateNote')
 ```
 
 `withI18n(key, params?)` returns `{ error: () => string }` — a Zod error config that resolves the i18n message at validation time using `AsyncLocalStorage` to read the current locale context.
 
-## MessageKeys Type
+## Type-Safe Message Keys
 
-Augment `MessageKeys` for type-safe i18n keys:
+`MessageKeys` is derived from two sources:
+
+1. **System keys** — inferred from core's built-in `errors.*`, `common.*`, `emails.*`, `validation.*`, `zodI18n.*` messages.
+2. **App keys** — derived from `AppMessageNamespaces`, a keyed registry each module augments with its own distinct namespace.
+
+Augment `AppMessageNamespaces` from any module or app file (commonly colocated with the messages themselves):
 
 ```typescript
-// src/types/i18n.d.ts
+// src/modules/billing/i18n/en.ts
+export const billingMessages = {
+  en: {
+    errors: { subscriptionNotFound: 'Subscription not found' },
+    invoices: { issued: 'Invoice issued' },
+  },
+} as const
+
 declare module 'stratal/i18n' {
-  interface MessageKeys extends typeof appEnMessage {}
+  interface AppMessageNamespaces {
+    billing: typeof billingMessages['en']
+  }
 }
 ```
+
+Once augmented, `i18n.t('billing.errors.subscriptionNotFound')` is fully type-checked. Each module owns exactly one key on `AppMessageNamespaces`; two modules augmenting the same key with different shapes will fail with TS2717, which is the guardrail that keeps namespace ownership unambiguous.
 
 ## Language Detection
 

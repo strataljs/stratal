@@ -1,1 +1,1 @@
-export { databaseI18n } from './en'
+export { databaseMessages } from './en'

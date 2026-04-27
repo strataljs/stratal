@@ -1,7 +1,6 @@
 import 'reflect-metadata'
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { createRequire, register } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -54,12 +53,7 @@ function stripDurableObjects(config: Record<string, unknown>): void {
   }
 }
 
-interface StrippedConfigResult {
-  tmpPath: string
-  workerName: string | undefined
-}
-
-async function createStrippedConfig(cwdRequire: NodeRequire): Promise<StrippedConfigResult | undefined> {
+async function createStrippedConfig(cwdRequire: NodeRequire): Promise<string | undefined> {
   const candidates = ['wrangler.jsonc', 'wrangler.json', 'wrangler.toml']
   const configName = candidates.find(c => existsSync(resolve(process.cwd(), c)))
   if (!configName) return undefined
@@ -76,13 +70,28 @@ async function createStrippedConfig(cwdRequire: NodeRequire): Promise<StrippedCo
     config = parseJsonc(raw)
   }
 
-  const workerName = typeof config.name === 'string' ? config.name : undefined
+  // Rename so quarry's ephemeral miniflare doesn't claim the running
+  // `wrangler dev` session's dev-registry slot. getPlatformProxy registers
+  // its worker with empty entrypointAddresses (no direct sockets), and that
+  // overwrite makes peer workers route TenantsRpc/BrandingRpc/etc. calls to
+  // their fallback service ("couldn't find a local dev session for the X
+  // entrypoint"). A unique name keeps the running session's entry untouched.
+  if (typeof config.name === 'string') {
+    config.name = `quarry-${config.name}-${process.pid}`
+  }
+  if (config.env && typeof config.env === 'object') {
+    for (const envConfig of Object.values(config.env as Record<string, Record<string, unknown>>)) {
+      if (typeof envConfig.name === 'string') {
+        envConfig.name = `quarry-${envConfig.name}-${process.pid}`
+      }
+    }
+  }
 
   stripDurableObjects(config)
 
   const tmpPath = resolve(tmpdir(), `quarry-wrangler-${Date.now()}.json`)
   writeFileSync(tmpPath, JSON.stringify(config, null, 2))
-  return { tmpPath, workerName }
+  return tmpPath
 }
 
 function discoverEnvFiles(): string[] {
@@ -104,59 +113,17 @@ function discoverEnvFiles(): string[] {
     .map(file => join(cwd, file))
 }
 
-/**
- * Preserve and restore the wrangler dev registry entry for this worker.
- *
- * getPlatformProxy creates an isolated miniflare instance that overwrites
- * the existing registry entry for the worker name. If a `wrangler dev`
- * session is already running for this worker, the overwrite makes other
- * dev workers unable to call back into it via service bindings.
- *
- * We save the existing entry before getPlatformProxy and restore it
- * immediately after, so the running dev session stays discoverable.
- */
-function getRegistryDir(): string {
-  return join(homedir(), '.wrangler', 'registry')
-}
-
-function saveRegistryEntry(workerName: string): string | null {
-  const entryPath = join(getRegistryDir(), workerName)
-  try {
-    return readFileSync(entryPath, 'utf-8')
-  } catch {
-    return null
-  }
-}
-
-function restoreRegistryEntry(workerName: string, content: string | null): void {
-  const entryPath = join(getRegistryDir(), workerName)
-  if (content === null) return
-  try {
-    mkdirSync(getRegistryDir(), { recursive: true })
-    writeFileSync(entryPath, content)
-  } catch {
-    // Best-effort restore — don't crash quarry if this fails
-  }
-}
-
 async function main(): Promise<void> {
   const cwdRequire = createRequire(join(process.cwd(), 'package.json'))
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const { getPlatformProxy } = await import(cwdRequire.resolve('wrangler')) as typeof import('wrangler')
 
-  const strippedConfig = await createStrippedConfig(cwdRequire)
-
-  // Save the existing dev registry entry before getPlatformProxy overwrites it
-  const workerName = strippedConfig?.workerName
-  const savedRegistryEntry = workerName ? saveRegistryEntry(workerName) : null
+  const strippedConfigPath = await createStrippedConfig(cwdRequire)
 
   const envFiles = discoverEnvFiles()
   const { env, ctx, dispose } = await getPlatformProxy({
-    envFiles, configPath: strippedConfig?.tmpPath,
+    envFiles, configPath: strippedConfigPath,
   })
-
-  // Restore the dev session's registry entry so other workers can still reach it
-  if (workerName) restoreRegistryEntry(workerName, savedRegistryEntry)
 
   // Track waitUntil promises so we can drain them before shutdown.
   // In Workers runtime, waitUntil keeps the isolate alive. In Quarry (miniflare),
@@ -215,11 +182,8 @@ async function main(): Promise<void> {
     await app?.shutdown()
     await dispose()
 
-    // Restore the dev session's registry entry after dispose() may have removed it
-    if (workerName) restoreRegistryEntry(workerName, savedRegistryEntry)
-
-    if (strippedConfig?.tmpPath) {
-      try { unlinkSync(strippedConfig.tmpPath) } catch {
+    if (strippedConfigPath) {
+      try { unlinkSync(strippedConfigPath) } catch {
         //
       }
     }

@@ -9,6 +9,6 @@ import { HttpException } from 'stratal/errors'
  */
 export class ModalBackgroundFetchError extends HttpException {
   constructor() {
-    super(502, 'errors.modal.backgroundFetchFailed')
+    super(502, 'modal.errors.backgroundFetchFailed')
   }
 }

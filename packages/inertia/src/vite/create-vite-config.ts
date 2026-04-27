@@ -4,6 +4,7 @@ export interface TempViteConfigOptions {
   cwd: string
   server?: { port?: number; host?: boolean }
   outDir?: string
+  persistTo?: string
 }
 
 export function writeTempViteConfig(options: TempViteConfigOptions): string {
@@ -21,6 +22,10 @@ export function writeTempViteConfig(options: TempViteConfigOptions): string {
     ? `outDir: '${options.outDir}',`
     : ''
 
+  const cloudflareArgs = options.persistTo
+    ? `{ persistState: { path: ${JSON.stringify(options.persistTo)} } }`
+    : ''
+
   const content = `
 import { mergeConfig } from 'vite'
 import { cloudflare } from '@cloudflare/vite-plugin'
@@ -35,7 +40,7 @@ try {
 
 const baseConfig = {
   plugins: [
-    cloudflare(),
+    cloudflare(${cloudflareArgs}),
     ...(inertiaPlugin ? [inertiaPlugin] : []),
     ...stratalInertia(),
   ],

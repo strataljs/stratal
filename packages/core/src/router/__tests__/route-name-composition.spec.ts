@@ -126,3 +126,69 @@ describe('Route name composition', () => {
     expect(registry.has('admin.v1.dashboard.index')).toBe(true)
   })
 })
+
+describe('Route path composition', () => {
+  it('joins a root controller path with a child route without producing double slashes', () => {
+    @Controller('/')
+    class RootController {
+      @Get('/health', { name: 'health' })
+      health() { /**/ }
+    }
+
+    const router = new Router()
+    router.group([RootController], () => { /**/ })
+
+    const registry = registerController(router, RootController)
+
+    const route = registry.get('health')
+    expect(route?.path).toBe('/health')
+  })
+
+  it('joins a root controller path with a "/" child route producing a single "/"', () => {
+    @Controller('/')
+    class RootIndexController {
+      @Get('/', { name: 'index' })
+      index() { /**/ }
+    }
+
+    const router = new Router()
+    router.group([RootIndexController], () => { /**/ })
+
+    const registry = registerController(router, RootIndexController)
+
+    const route = registry.get('index')
+    expect(route?.path).toBe('/')
+  })
+
+  it('strips a trailing slash from a non-root controller path', () => {
+    @Controller('/users/')
+    class UsersController {
+      @Get('/:id', { name: 'show' })
+      show() { /**/ }
+    }
+
+    const router = new Router()
+    router.group([UsersController], () => { /**/ })
+
+    const registry = registerController(router, UsersController)
+
+    const route = registry.get('show')
+    expect(route?.path).toBe('/users/:id')
+  })
+
+  it('strips a trailing slash from a non-root controller path when the route path is "/"', () => {
+    @Controller('/users/')
+    class UsersIndexController {
+      @Get('/', { name: 'index' })
+      index() { /**/ }
+    }
+
+    const router = new Router()
+    router.group([UsersIndexController], () => { /**/ })
+
+    const registry = registerController(router, UsersIndexController)
+
+    const route = registry.get('index')
+    expect(route?.path).toBe('/users')
+  })
+})

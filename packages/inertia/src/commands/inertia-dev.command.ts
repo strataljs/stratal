@@ -5,12 +5,13 @@ import { Command } from 'stratal/quarry'
 import { writeTempViteConfig } from '../vite/create-vite-config'
 
 export class InertiaDevCommand extends Command {
-  static command = 'inertia:dev {--port= : Dev server port} {--host : Expose to network}'
+  static command = 'inertia:dev {--port= : Dev server port} {--host : Expose to network} {--persist-to= : Shared persist directory for @cloudflare/vite-plugin (relative to cwd; the plugin appends /v3). Use to share R2/KV/cache emulator state across multiple workers in dev.}'
   static description = 'Start Inertia.js Vite development server'
 
   async handle(): Promise<number | undefined> {
     const port = this.number('port')
     const host = this.boolean('host')
+    const persistTo = this.string('persist-to')
     const cwd = process.cwd()
 
     const entryPath = 'src/inertia/app.tsx'
@@ -22,6 +23,7 @@ export class InertiaDevCommand extends Command {
     const configPath = writeTempViteConfig({
       cwd,
       server: { port, host },
+      persistTo,
     })
 
     this.info('Starting Vite dev server...')

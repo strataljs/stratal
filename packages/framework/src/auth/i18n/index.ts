@@ -1,1 +1,1 @@
-export { messages } from './en';
+export { authMessages } from './en';

@@ -123,36 +123,6 @@ export const errors = {
     listFailed: 'Failed to list cache keys'
   },
 
-  // Authentication errors
-  auth: {
-    tokenRequired: 'Verification token is required',
-    invalidToken: 'Invalid or expired verification token',
-    verificationFailed: 'Verification failed. Please try again.',
-    userNotFound: 'User not found. Please check your credentials.',
-    invalidCredentials: 'Invalid email or password',
-    invalidPassword: 'Invalid password',
-    invalidEmail: 'Invalid email address',
-    sessionExpired: 'Your session has expired. Please sign in again.',
-    emailNotVerified: 'Please verify your email address before signing in',
-    passwordTooShort: 'Password must be at least {minLength} characters',
-    passwordTooLong: 'Password must be at most {maxLength} characters',
-    accountAlreadyExists: 'An account with this email already exists',
-    failedToCreateUser: 'Failed to create user account. Please try again.',
-    failedToCreateSession: 'Failed to create session. Please try again.',
-    failedToGetSession: 'Failed to retrieve session. Please try again.',
-    failedToUpdateUser: 'Failed to update user information. Please try again.',
-    failedToGetUserInfo: 'Failed to retrieve user information. Please try again.',
-    socialAccountLinked: 'This social account is already linked to another user',
-    providerNotFound: 'Authentication provider not found',
-    userEmailNotFound: 'User email address not found',
-    accountNotFound: 'Account not found',
-    credentialAccountNotFound: 'Credential account not found',
-    cannotUnlinkLastAccount: 'Cannot unlink your last account',
-    userAlreadyHasPassword: 'User already has a password set',
-    emailCannotBeUpdated: 'Email address cannot be updated at this time',
-    tokenExpired: 'The verification token has expired. Please request a new verification email.'
-  },
-
   // Seeder errors
   seederNameCollision: 'Seeder name collision: "{name}" is already registered. Use distinct class names for each seeder.',
   seederNotRegistered: 'Seeder "{name}" is not registered',

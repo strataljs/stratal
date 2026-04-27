@@ -2,6 +2,7 @@ import type { AnyPlugin, ClientOptions } from '@zenstackhq/orm'
 import type { SchemaDef } from '@zenstackhq/schema'
 import { delay, DI_TOKENS, Scope } from 'stratal/di'
 import type { IEventRegistry } from 'stratal/events'
+import { I18nModule } from 'stratal/i18n'
 import {
   Module,
   type AsyncModuleOptions,
@@ -20,6 +21,7 @@ import { MigrateResetCommand } from './commands/migrate-reset.command'
 import { MigrateStatusCommand } from './commands/migrate-status.command'
 import { createDatabaseService } from './database.helpers'
 import { connectionSymbol, DATABASE_TOKENS } from './database.tokens'
+import { databaseMessages } from './i18n'
 import type { ConnectionName, DefaultConnectionName } from './types'
 
 export interface DatabaseConnectionConfig<
@@ -38,6 +40,9 @@ export interface DatabaseModuleConfig {
 }
 
 @Module({
+  imports: [
+    I18nModule.registerMessages({ en: { database: databaseMessages.en } }),
+  ],
   providers: [
     DbGenerateCommand,
     DbPushCommand,
