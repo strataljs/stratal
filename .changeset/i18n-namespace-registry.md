@@ -1,7 +1,7 @@
 ---
-"stratal": major
-"@stratal/framework": major
-"@stratal/inertia-modal": major
+"stratal": patch
+"@stratal/framework": patch
+"@stratal/inertia-modal": patch
 ---
 
 Rearchitect i18n module augmentation to a per-module keyed registry (breaking change)
