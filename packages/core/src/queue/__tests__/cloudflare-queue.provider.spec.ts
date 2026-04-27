@@ -5,6 +5,24 @@ import { QueueBindingNotFoundError } from '../errors'
 import { CloudflareQueueProvider } from '../providers/cloudflare-queue.provider'
 import type { QueueMessage } from '../queue-consumer'
 
+/** Minimal stubs matching Cloudflare Workers `Queue.send` / `sendBatch` return shapes */
+const mockSendResponse: QueueSendResponse = {
+  metadata: {
+    metrics: {
+      backlogCount: 0,
+      backlogBytes: 0,
+    },
+  },
+}
+const mockSendBatchResponse: QueueSendBatchResponse = {
+  metadata: {
+    metrics: {
+      backlogCount: 0,
+      backlogBytes: 0,
+    },
+  },
+}
+
 describe('CloudflareQueueProvider', () => {
   let provider: CloudflareQueueProvider
   let mockEnv: StratalEnv
@@ -12,8 +30,8 @@ describe('CloudflareQueueProvider', () => {
 
   beforeEach(() => {
     mockQueue = createMock<Queue>()
-    mockQueue.send.mockResolvedValue(undefined)
-    mockQueue.sendBatch.mockResolvedValue(undefined)
+    mockQueue.send.mockResolvedValue(mockSendResponse)
+    mockQueue.sendBatch.mockResolvedValue(mockSendBatchResponse)
 
     mockEnv = {
       NOTIFICATIONS_QUEUE: mockQueue,
