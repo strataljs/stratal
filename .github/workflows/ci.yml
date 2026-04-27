@@ -8,11 +8,15 @@ on:
     paths:
       - 'packages/**'
       - 'yarn.lock'
+      - '.github/workflows/**'
+      - '.github/actions/**'
   pull_request:
     branches: [main]
     paths:
       - 'packages/**'
       - 'yarn.lock'
+      - '.github/workflows/**'
+      - '.github/actions/**'
 
 jobs:
   build:
