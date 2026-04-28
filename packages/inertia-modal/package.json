@@ -8,6 +8,14 @@
   "engines": {
     "node": ">=22.0.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/strataljs/stratal.git",
+    "directory": "packages/inertia-modal"
+  },
+  "bugs": {
+    "url": "https://github.com/strataljs/stratal/issues"
+  },
   "publishConfig": {
     "access": "public",
     "provenance": true
