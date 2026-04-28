@@ -1,5 +1,27 @@
 # @stratal/testing
 
+## 0.0.19
+
+### Patch Changes
+
+- 3b16f5b: Make `TestHttpClient` immutable and extend test classes with `Macroable`
+
+  - `TestHttpClient.forHost()`, `withHeaders()`, and `withLocale()` now return new instances instead of mutating `this`, preventing shared state between tests.
+  - `TestHttpRequest` and `TestResponse` now extend `Macroable`, allowing apps to register custom assertion methods and helpers at runtime.
+  - Add `TestingModule.inertia` getter for convenient Inertia request testing.
+
+- Updated dependencies [3b16f5b]
+- Updated dependencies [3b16f5b]
+- Updated dependencies [3b16f5b]
+- Updated dependencies [5d26c24]
+- Updated dependencies [3b16f5b]
+- Updated dependencies [3b16f5b]
+- Updated dependencies [5d26c24]
+- Updated dependencies [5d26c24]
+- Updated dependencies [3b16f5b]
+  - @stratal/framework@0.0.19
+  - stratal@0.0.19
+
 ## 0.0.18
 
 ### Patch Changes

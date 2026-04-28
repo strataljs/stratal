@@ -1,5 +1,105 @@
 # stratal
 
+## 0.0.19
+
+### Patch Changes
+
+- 3b16f5b: Resolve cron jobs from request-scoped DI container at execution time
+
+  ### Breaking Changes
+
+  - `CronManager.registerJob()` now accepts `(schedule, jobClass)` instead of a `CronJob` instance. Jobs are resolved from the container at execution time, ensuring request-scoped dependencies (e.g. database connections) are properly scoped.
+  - `CronManager.executeScheduled()` now requires a `Container` as its second argument.
+  - `CronManager.getJobsForSchedule()` returns `RegisteredJob[]` instead of `CronJob[]`.
+
+- 5d26c24: Rearchitect i18n module augmentation to a per-module keyed registry (breaking change)
+
+  **Why:** Multiple modules augmenting `AppMessages` with a shared top-level parent (e.g., `errors.auth`, `errors.uploads`, `errors.branding`) collided with TypeScript error **TS2717** ("Subsequent property declarations must have the same type"). Interface merging adds new properties across declarations but requires same-named properties to have structurally identical types — it does not deep-merge nested shapes.
+
+  **What changed:**
+
+  - Replaced the single augmentable `AppMessages` interface with an `AppMessageNamespaces` keyed registry. Each module declares its own distinct top-level key (Laravel-style package namespacing). Because each declaration adds a different property, interface merging accepts them all.
+  - `AppMessages` is now derived: `{ [K in keyof AppMessageNamespaces]: AppMessageNamespaces[K] }`.
+  - Access keys are unchanged dot-notation — `i18n.t('auth.errors.invalidCredentials')` — so no custom resolver is needed.
+
+  **Migration:**
+
+  Before:
+
+  ```ts
+  declare module "stratal/i18n" {
+    interface AppMessages {
+      errors: { uploads: { notFound: string } };
+    }
+  }
+  ```
+
+  After:
+
+  ```ts
+  declare module "stratal/i18n" {
+    interface AppMessageNamespaces {
+      uploads: { errors: { notFound: string } };
+    }
+  }
+  ```
+
+  **Framework package moves:**
+
+  - All `errors.auth.*` keys (previously split between `stratal` core and `@stratal/framework`) now live in the auth module as `auth.errors.*`. `errors.auth.org.*` → `auth.org.*`. The `errors.auth.*` namespace has been removed from `stratal`'s core messages.
+  - `@stratal/framework`'s `DatabaseModule` now registers its `database.*` validation messages via `I18nModule.registerMessages` (previously the messages file existed but was never wired up).
+  - `@stratal/inertia-modal`'s `errors.modal.*` key moved to `modal.errors.*`.
+
+  **Callsite updates required in downstream apps:**
+
+  ```ts
+  // Before
+  new ApplicationError('errors.auth.invalidCredentials', ...)
+  i18n.t('errors.auth.org.organizationNotFound')
+
+  // After
+  new ApplicationError('auth.errors.invalidCredentials', ...)
+  i18n.t('auth.org.organizationNotFound')
+  ```
+
+  No runtime API change: `I18nModule.registerMessages(messages)` keeps its existing signature, and deep-merge behavior is unchanged. Locale-only contributions that override core's built-in `errors.*` / `common.*` / etc. continue to work.
+
+- 3b16f5b: Add `Macroable` base class for dynamic method registration and introduce `ConfigStore` for request-scoped configuration
+
+  - Add `Macroable` class (inspired by Laravel/AdonisJS) that supports `macro()`, `instanceProperty()`, and `getter()` for runtime method registration with full inheritance support.
+  - Introduce `ConfigStore` as a singleton source of truth for validated config, making `ConfigService` request-scoped with per-request overrides via `set()` and `reset()`.
+  - `ConfigService` now extends `Macroable`, allowing apps to add domain-specific getters and methods.
+
+- 3b16f5b: Improve middleware error handling and defer routing initialization for better performance
+
+  - Add `MiddlewareNextCalledMultipleTimesError` to detect and report when `next()` is called more than once in a middleware.
+  - Defer routing and handler initialization until first request for improved cold-start performance.
+  - Improve `isApplicationError` type guard with structural fallback for cross-module boundary cases.
+
+- 5d26c24: Prevent `quarry` from breaking a concurrent `wrangler dev` session
+
+  Running a Quarry command while `wrangler dev` was active could overwrite the worker's entry in the local dev registry, causing peer workers to fail service-binding RPC calls (e.g. `couldn't find a local dev session for the X entrypoint`). Quarry now registers its ephemeral miniflare under a unique per-process worker name, leaving the running dev session's registry entry untouched.
+
+- 5d26c24: Fix route path joining to avoid double slashes and handle empty route paths
+
+  Composing a controller base path with an empty `@Route({ path: '' })` or a base path ending in `/` could previously yield URLs with double slashes or a missing trailing route. Empty route paths now resolve to the controller's base path, and trailing slashes on the base path are stripped consistently.
+
+- 3b16f5b: Migrate storage from AWS S3 to Cloudflare R2 for all storage operations
+
+  ### Breaking Changes
+
+  - The `S3StorageProvider` has been removed. All storage operations now use the native Cloudflare R2 API via `R2StorageProvider`.
+  - Storage configuration no longer requires AWS credentials or S3 endpoint settings. Instead, configure an R2 bucket binding in your `wrangler.toml` and reference it in your storage config.
+  - Presigned URLs now require the `APP_SECRET` environment variable instead of AWS credentials.
+  - The `StorageProviderNotSupportedError` has been replaced with `R2BindingNotFoundError` and `R2PresignedUrlSecretMissingError`.
+
+  ### Migration
+
+  1. Replace any `S3StorageProvider` references with `R2StorageProvider`.
+  2. Update your `wrangler.toml` to bind your R2 bucket.
+  3. Set `APP_SECRET` in your environment for presigned URL support.
+  4. Remove AWS SDK credentials from your environment.
+
 ## 0.0.18
 
 ### Patch Changes

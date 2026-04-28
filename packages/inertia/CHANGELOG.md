@@ -1,5 +1,24 @@
 # @stratal/inertia
 
+## 0.0.19
+
+### Patch Changes
+
+- 5d26c24: Add `--persist-to` option to `inertia:dev` for shared emulator state
+
+  The `inertia:dev` command now accepts a `--persist-to=<dir>` flag that is forwarded to `@cloudflare/vite-plugin` as `persistState.path`. This lets multiple workers running in development share the same R2, KV, and cache emulator state.
+
+- Updated dependencies [3b16f5b]
+- Updated dependencies [5d26c24]
+- Updated dependencies [3b16f5b]
+- Updated dependencies [3b16f5b]
+- Updated dependencies [3b16f5b]
+- Updated dependencies [5d26c24]
+- Updated dependencies [5d26c24]
+- Updated dependencies [3b16f5b]
+  - stratal@0.0.19
+  - @stratal/testing@0.0.19
+
 ## 0.0.18
 
 ### Patch Changes

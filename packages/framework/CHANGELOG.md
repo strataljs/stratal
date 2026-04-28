@@ -1,5 +1,89 @@
 # @stratal/framework
 
+## 0.0.19
+
+### Patch Changes
+
+- 3b16f5b: Replace Casbin-based RBAC module with Better Auth access control module
+
+  ### Breaking Changes
+
+  - The `RbacModule`, `CasbinService`, `CasbinEnforcerService`, and all Casbin-related exports under `@stratal/framework/rbac` have been removed.
+  - Use the new `@stratal/framework/access-control` module instead, which integrates with Better Auth's built-in access control system.
+  - `AuthGuard` now uses `AccessService` instead of `CasbinService` for permission checks.
+
+  ### Migration
+
+  1. Replace `RbacModule` imports with the new access control setup via `createAccessControl()`.
+  2. Define resources and roles using `createAccessControl({ resources, roles })` and pass the result to `AuthModule.forRootAsync()`.
+  3. Replace `CasbinService` usage with `AccessService` from `@stratal/framework/access-control`.
+
+- 3b16f5b: Add organization-related error handling and internationalization support for auth module
+
+  - Add structured error codes and i18n messages for organization operations (not found, member not found, invitation errors, limit reached).
+  - Enhance Better Auth error handler to map organization-specific errors to appropriate HTTP responses.
+
+- 5d26c24: Rearchitect i18n module augmentation to a per-module keyed registry (breaking change)
+
+  **Why:** Multiple modules augmenting `AppMessages` with a shared top-level parent (e.g., `errors.auth`, `errors.uploads`, `errors.branding`) collided with TypeScript error **TS2717** ("Subsequent property declarations must have the same type"). Interface merging adds new properties across declarations but requires same-named properties to have structurally identical types — it does not deep-merge nested shapes.
+
+  **What changed:**
+
+  - Replaced the single augmentable `AppMessages` interface with an `AppMessageNamespaces` keyed registry. Each module declares its own distinct top-level key (Laravel-style package namespacing). Because each declaration adds a different property, interface merging accepts them all.
+  - `AppMessages` is now derived: `{ [K in keyof AppMessageNamespaces]: AppMessageNamespaces[K] }`.
+  - Access keys are unchanged dot-notation — `i18n.t('auth.errors.invalidCredentials')` — so no custom resolver is needed.
+
+  **Migration:**
+
+  Before:
+
+  ```ts
+  declare module "stratal/i18n" {
+    interface AppMessages {
+      errors: { uploads: { notFound: string } };
+    }
+  }
+  ```
+
+  After:
+
+  ```ts
+  declare module "stratal/i18n" {
+    interface AppMessageNamespaces {
+      uploads: { errors: { notFound: string } };
+    }
+  }
+  ```
+
+  **Framework package moves:**
+
+  - All `errors.auth.*` keys (previously split between `stratal` core and `@stratal/framework`) now live in the auth module as `auth.errors.*`. `errors.auth.org.*` → `auth.org.*`. The `errors.auth.*` namespace has been removed from `stratal`'s core messages.
+  - `@stratal/framework`'s `DatabaseModule` now registers its `database.*` validation messages via `I18nModule.registerMessages` (previously the messages file existed but was never wired up).
+  - `@stratal/inertia-modal`'s `errors.modal.*` key moved to `modal.errors.*`.
+
+  **Callsite updates required in downstream apps:**
+
+  ```ts
+  // Before
+  new ApplicationError('errors.auth.invalidCredentials', ...)
+  i18n.t('errors.auth.org.organizationNotFound')
+
+  // After
+  new ApplicationError('auth.errors.invalidCredentials', ...)
+  i18n.t('auth.org.organizationNotFound')
+  ```
+
+  No runtime API change: `I18nModule.registerMessages(messages)` keeps its existing signature, and deep-merge behavior is unchanged. Locale-only contributions that override core's built-in `errors.*` / `common.*` / etc. continue to work.
+
+- Updated dependencies [3b16f5b]
+- Updated dependencies [5d26c24]
+- Updated dependencies [3b16f5b]
+- Updated dependencies [3b16f5b]
+- Updated dependencies [5d26c24]
+- Updated dependencies [5d26c24]
+- Updated dependencies [3b16f5b]
+  - stratal@0.0.19
+
 ## 0.0.18
 
 ### Patch Changes
