@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import type { Application } from '../../application'
 import type { Container } from '../../di/container'
 import { containerStorage } from '../../di/container-storage'
+import { DI_TOKENS } from '../../di/tokens'
 import { MissingRouteParamError, RouteNameNotFoundError } from '../errors'
 import type { RegisteredRoute } from '../route-registry'
 import { route } from '../route-url'
 import { ROUTER_TOKENS } from '../router.tokens'
+import type { TrailingSlashMode } from '../types'
 
 const createRoute = (overrides: Partial<RegisteredRoute> = {}): RegisteredRoute => ({
   method: 'get',
@@ -22,11 +25,17 @@ const createMockRegistry = (routes: Record<string, RegisteredRoute>) => ({
   get: (name: string) => routes[name],
 })
 
-const runWithRegistry = <T>(routes: Record<string, RegisteredRoute>, fn: () => T): T => {
+const runWithRegistry = <T>(
+  routes: Record<string, RegisteredRoute>,
+  fn: () => T,
+  trailingSlash?: TrailingSlashMode,
+): T => {
   const mockRegistry = createMockRegistry(routes)
+  const mockApplication = { config: { trailingSlash } } as unknown as Application
   const mockContainer = {
     resolve: (token: symbol) => {
       if (token === ROUTER_TOKENS.RouteRegistry) return mockRegistry
+      if (token === DI_TOKENS.Application) return mockApplication
       throw new Error(`Unexpected token: ${String(token)}`)
     },
   }
@@ -105,6 +114,44 @@ describe('route() URL generation', () => {
       }),
     }, () => {
       expect(route('users.index', { locale: 'fr' })).toBe('/fr/users')
+    })
+  })
+
+  describe("trailing-slash 'always'", () => {
+    it("appends trailing slash to generated URLs", () => {
+      runWithRegistry({ 'users.index': createRoute() }, () => {
+        expect(route('users.index')).toBe('/users/')
+      }, 'always')
+    })
+
+    it("keeps trailing slash before query string", () => {
+      runWithRegistry({
+        'users.show': createRoute({ path: '/users/:id', paramNames: ['id'] }),
+      }, () => {
+        expect(route('users.show', { id: '1', search: 'rocket' })).toBe('/users/1/?search=rocket')
+      }, 'always')
+    })
+
+    it("canonicalises absolute domain-route URLs", () => {
+      runWithRegistry({
+        'tenant.dashboard': createRoute({
+          path: '/dashboard',
+          domain: '{tenant}.myapp.com',
+          domainParamNames: ['tenant'],
+        }),
+      }, () => {
+        expect(route('tenant.dashboard', { tenant: 'acme' })).toBe('https://acme.myapp.com/dashboard/')
+      }, 'always')
+    })
+  })
+
+  describe("trailing-slash 'never'", () => {
+    it("strips trailing slashes from generated URLs", () => {
+      runWithRegistry({
+        'users.show': createRoute({ path: '/users/:id/', paramNames: ['id'] }),
+      }, () => {
+        expect(route('users.show', { id: '1' })).toBe('/users/1')
+      }, 'never')
     })
   })
 })

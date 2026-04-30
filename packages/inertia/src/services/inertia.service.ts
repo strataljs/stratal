@@ -1,5 +1,6 @@
 import type { Page } from '@inertiajs/core'
-import { Transient, inject } from 'stratal/di'
+import type { Application } from 'stratal'
+import { DI_TOKENS, Transient, inject } from 'stratal/di'
 import { I18N_TOKENS, type MessageLoaderService } from 'stratal/i18n'
 import { ROUTER_TOKENS, type RegisteredRoute, type RouteRegistry, type RouterContext, type SerializedRoutes } from 'stratal/router'
 import type { InertiaMergeOptions, InertiaOnceOptions } from '../augment/router-context'
@@ -179,8 +180,11 @@ export class InertiaService {
     }
 
     if (this.options.routes) {
-      const registry = ctx.getContainer().resolve<RouteRegistry>(ROUTER_TOKENS.RouteRegistry)
+      const container = ctx.getContainer()
+      const registry = container.resolve<RouteRegistry>(ROUTER_TOKENS.RouteRegistry)
+      const application = container.resolve<Application>(DI_TOKENS.Application)
       shared.routes = this.serializeRoutes(registry.named())
+      shared.trailingSlash = application.config.trailingSlash ?? 'ignore'
     }
 
     return { shared, sharedKeys: Object.keys(shared) }

@@ -1,6 +1,8 @@
 import type { Page } from '@inertiajs/core'
 import type { Context } from 'hono'
-import { RouterContext } from 'stratal/router'
+import type { Application } from 'stratal'
+import { DI_TOKENS } from 'stratal/di'
+import { ROUTER_CONTEXT_KEYS, ROUTER_TOKENS, RouterContext, type RegisteredRoute, type RouteRegistry, type TrailingSlashMode } from 'stratal/router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { InertiaService } from '../services/inertia.service'
@@ -16,10 +18,28 @@ function createMockContext(overrides: {
   headers?: Record<string, string>
   isInertia?: boolean
   withoutSsr?: boolean
+  routes?: RegisteredRoute[]
+  trailingSlash?: TrailingSlashMode
 } = {}): RouterContext {
   const headers = new Headers(overrides.headers ?? {})
   if (overrides.isInertia) {
     headers.set('x-inertia', 'true')
+  }
+
+  const mockRegistry = {
+    named: () => overrides.routes ?? [],
+  } as unknown as RouteRegistry
+
+  const mockApplication = {
+    config: { trailingSlash: overrides.trailingSlash },
+  } as unknown as Application
+
+  const mockContainer = {
+    resolve: (token: symbol) => {
+      if (token === ROUTER_TOKENS.RouteRegistry) return mockRegistry
+      if (token === DI_TOKENS.Application) return mockApplication
+      throw new Error(`Unexpected token: ${String(token)}`)
+    },
   }
 
   const variables: Record<string, unknown> = {
@@ -27,6 +47,7 @@ function createMockContext(overrides: {
     withoutSsr: overrides.withoutSsr ?? false,
     inertiaFlash: {},
     inertiaFlashOut: {},
+    [ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER]: mockContainer,
   }
 
   const c = {
@@ -449,6 +470,65 @@ describe('InertiaService', () => {
       await ssrService.render(ctx, 'Home', {})
 
       expect(mockSsr.render).toHaveBeenCalled()
+    })
+  })
+
+  describe('routes shared prop', () => {
+    const sampleRoute: RegisteredRoute = {
+      method: 'get',
+      path: '/users',
+      paramNames: [],
+      domainParamNames: [],
+      controller: 'UsersController',
+      action: 'index',
+      hidden: false,
+      middleware: [],
+      name: 'users.index',
+    }
+
+    it('does not inject routes when options.routes is unset', async () => {
+      const ctx = createMockContext({ isInertia: true })
+      const response = await service.render(ctx, 'Home', {})
+      const body = await parsePageJson(response)
+      expect(body.props).not.toHaveProperty('routes')
+      expect(body.props).not.toHaveProperty('trailingSlash')
+    })
+
+    it('injects routes and defaults trailingSlash to "ignore" when not configured', async () => {
+      const routesOptions: InertiaModuleOptions = {
+        rootView: '<html>@inertia</html>',
+        version: '1.0',
+        routes: true,
+      }
+      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr)
+      const ctx = createMockContext({ isInertia: true, routes: [sampleRoute] })
+
+      const response = await routesService.render(ctx, 'Home', {})
+      const body = await parsePageJson(response)
+
+      expect(body.props.routes).toEqual({
+        'users.index': { path: '/users', paramNames: [], domainParamNames: [] },
+      })
+      expect(body.props.trailingSlash).toBe('ignore')
+    })
+
+    it('forwards configured trailingSlash mode to shared props', async () => {
+      const routesOptions: InertiaModuleOptions = {
+        rootView: '<html>@inertia</html>',
+        version: '1.0',
+        routes: true,
+      }
+      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr)
+      const ctx = createMockContext({
+        isInertia: true,
+        routes: [sampleRoute],
+        trailingSlash: 'always',
+      })
+
+      const response = await routesService.render(ctx, 'Home', {})
+      const body = await parsePageJson(response)
+
+      expect(body.props.trailingSlash).toBe('always')
     })
   })
 })

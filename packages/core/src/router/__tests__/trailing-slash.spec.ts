@@ -105,7 +105,7 @@ describe('trailing-slash handling', () => {
     it('redirects non-trailing requests to the trailing form with 308', async () => {
       const res = await fetchPath(app, '/users')
       expect(res.status).toBe(308)
-      expect(res.headers.get('Location')).toBe('http://localhost/users/')
+      expect(res.headers.get('Location')).toBe('/users/')
       expect(handlerHits.index).toBe(0)
     })
 
@@ -118,7 +118,17 @@ describe('trailing-slash handling', () => {
     it('preserves query strings on redirect', async () => {
       const res = await fetchPath(app, '/users?page=2&sort=name')
       expect(res.status).toBe(308)
-      expect(res.headers.get('Location')).toBe('http://localhost/users/?page=2&sort=name')
+      expect(res.headers.get('Location')).toBe('/users/?page=2&sort=name')
+    })
+
+    it('uses a path-relative Location to avoid scheme mismatches behind proxies', async () => {
+      const res = await fetchPath(app, '/users')
+      const location = res.headers.get('Location')
+      expect(location).toBe('/users/')
+      // No absolute URL (no scheme) so the browser resolves against the
+      // current page URI — sidesteps mixed-content blocks when the worker
+      // is behind an HTTPS-terminating proxy serving HTTP internally.
+      expect(location?.startsWith('http')).toBe(false)
     })
 
     it('uses 308 so POST bodies survive the redirect', async () => {
@@ -128,7 +138,7 @@ describe('trailing-slash handling', () => {
         body: JSON.stringify({ name: 'jane' }),
       })
       expect(res.status).toBe(308)
-      expect(res.headers.get('Location')).toBe('http://localhost/users/')
+      expect(res.headers.get('Location')).toBe('/users/')
       expect(handlerHits.create).toBe(0)
     })
 
@@ -158,7 +168,7 @@ describe('trailing-slash handling', () => {
     it('redirects trailing requests to the non-trailing form with 308', async () => {
       const res = await fetchPath(app, '/users/')
       expect(res.status).toBe(308)
-      expect(res.headers.get('Location')).toBe('http://localhost/users')
+      expect(res.headers.get('Location')).toBe('/users')
       expect(handlerHits.index).toBe(0)
     })
 
@@ -171,7 +181,7 @@ describe('trailing-slash handling', () => {
     it('preserves query strings on redirect', async () => {
       const res = await fetchPath(app, '/users/?page=2')
       expect(res.status).toBe(308)
-      expect(res.headers.get('Location')).toBe('http://localhost/users?page=2')
+      expect(res.headers.get('Location')).toBe('/users?page=2')
     })
 
     it('does not redirect the root path', async () => {

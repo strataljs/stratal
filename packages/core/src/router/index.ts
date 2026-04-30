@@ -4,7 +4,7 @@
 // Core router types
 export type { IController } from './controller'
 export type { Middleware, Next } from './middleware.interface'
-export type { ControllerOptions, ConventionRouteMetadata, ExplicitRouteMetadata, LocalePathConfig, RouteBody, RouteBodyObject, RouteConfig, RouteMetadata, RouterEnv, RouteResponse, RouteResponseObject, RouterVariables, SecurityScheme, VersioningOptions } from './types'
+export type { ControllerOptions, ConventionRouteMetadata, ExplicitRouteMetadata, LocalePathConfig, RouteBody, RouteBodyObject, RouteConfig, RouteMetadata, RouterEnv, RouteResponse, RouteResponseObject, RouterVariables, SecurityScheme, TrailingSlashMode, VersioningOptions } from './types'
 
 // Router constants
 export { HTTP_METHODS, ROUTE_METADATA_KEYS, ROUTER_CONTEXT_KEYS, SECURITY_SCHEMES, VERSION_NEUTRAL } from './constants'

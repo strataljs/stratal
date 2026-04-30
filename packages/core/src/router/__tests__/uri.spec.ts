@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Application } from '../../application'
 import { MissingRouteParamError, RouteNameNotFoundError } from '../errors'
 import type { RegisteredRoute, RouteRegistry } from '../route-registry'
 import type { RouterContext } from '../router-context'
+import type { TrailingSlashMode } from '../types'
 import { Uri, buildRouteUrl } from '../uri'
+
+const createMockApplication = (trailingSlash?: TrailingSlashMode) => ({
+  config: { trailingSlash },
+}) as unknown as Application
 
 const createRoute = (overrides: Partial<RegisteredRoute> = {}): RegisteredRoute => ({
   method: 'get',
@@ -159,10 +165,11 @@ describe('Uri', () => {
   const setupUri = (
     routes: Record<string, RegisteredRoute> = {},
     contextOverrides: Parameters<typeof createMockRouterContext>[0] = {},
+    trailingSlash?: TrailingSlashMode,
   ) => {
     mockRegistry = createMockRegistry(routes)
     mockRouterContext = createMockRouterContext(contextOverrides)
-    uri = new Uri(mockRegistry, mockRouterContext)
+    uri = new Uri(mockRegistry, mockRouterContext, createMockApplication(trailingSlash))
   }
 
   beforeEach(() => {
@@ -428,6 +435,97 @@ describe('Uri', () => {
       })
       uri.defaults({ locale: 'en' })
       expect(uri.route('posts.index')).toBe('/en/posts')
+    })
+  })
+
+  describe('trailing-slash mode', () => {
+    describe("'always'", () => {
+      it('appends trailing slash to route() output', () => {
+        setupUri({ 'users.index': createRoute() }, {}, 'always')
+        expect(uri.route('users.index')).toBe('/users/')
+      })
+
+      it('keeps trailing slash before query string in route()', () => {
+        setupUri({ 'users.show': createRoute({ path: '/users/:id', paramNames: ['id'] }) }, {}, 'always')
+        expect(uri.route('users.show', { id: '1', search: 'rocket' })).toBe('/users/1/?search=rocket')
+      })
+
+      it('appends trailing slash to to()', () => {
+        setupUri({}, {}, 'always')
+        expect(uri.to('/users')).toBe('/users/')
+        expect(uri.to('/users', { page: '2' })).toBe('/users/?page=2')
+      })
+
+      it('appends trailing slash to query()', () => {
+        setupUri({}, {}, 'always')
+        expect(uri.query('/users', { page: '2' })).toBe('/users/?page=2')
+      })
+
+      it('appends trailing slash to current() and full()', () => {
+        setupUri({}, { url: 'https://example.com/users?page=1' }, 'always')
+        expect(uri.current()).toBe('/users/')
+        expect(uri.full()).toBe('/users/?page=1')
+      })
+
+      it('skips file-like paths (last segment with `.`)', () => {
+        setupUri({}, {}, 'always')
+        expect(uri.to('/file.json')).toBe('/file.json')
+      })
+
+      it('skips the root path', () => {
+        setupUri({}, { url: 'https://example.com/' }, 'always')
+        expect(uri.current()).toBe('/')
+      })
+
+      it('canonicalises absolute domain-route URLs', () => {
+        setupUri({
+          'tenant.dashboard': createRoute({
+            path: '/dashboard',
+            domain: '{tenant}.myapp.com',
+            domainParamNames: ['tenant'],
+          }),
+        }, {}, 'always')
+        expect(uri.route('tenant.dashboard', { tenant: 'acme' })).toBe('https://acme.myapp.com/dashboard/')
+      })
+    })
+
+    describe("'never'", () => {
+      it('strips trailing slash from to()', () => {
+        setupUri({}, {}, 'never')
+        expect(uri.to('/users/')).toBe('/users')
+        expect(uri.to('/users/', { page: '2' })).toBe('/users?page=2')
+      })
+
+      it('strips trailing slash from query()', () => {
+        setupUri({}, {}, 'never')
+        expect(uri.query('/users/', { page: '2' })).toBe('/users?page=2')
+      })
+
+      it('strips trailing slash from current() and full()', () => {
+        setupUri({}, { url: 'https://example.com/users/?page=1' }, 'never')
+        expect(uri.current()).toBe('/users')
+        expect(uri.full()).toBe('/users?page=1')
+      })
+
+      it('skips the root path', () => {
+        setupUri({}, { url: 'https://example.com/' }, 'never')
+        expect(uri.current()).toBe('/')
+      })
+    })
+
+    describe("'ignore' (default)", () => {
+      it('does not modify route() output', () => {
+        setupUri({ 'users.index': createRoute() })
+        expect(uri.route('users.index')).toBe('/users')
+      })
+
+      it('does not modify to() / query() / current() / full() output', () => {
+        setupUri({}, { url: 'https://example.com/users?page=1' })
+        expect(uri.to('/users')).toBe('/users')
+        expect(uri.query('/users', { page: '2' })).toBe('/users?page=2')
+        expect(uri.current()).toBe('/users')
+        expect(uri.full()).toBe('/users?page=1')
+      })
     })
   })
 })

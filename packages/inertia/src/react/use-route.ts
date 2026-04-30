@@ -11,10 +11,51 @@
 import type { PageProps } from '@inertiajs/core'
 import { usePage } from '@inertiajs/react'
 import { useMemo } from 'react'
-import type { RouteName, RouteParams, SerializedRoute, SerializedRoutes } from 'stratal/router'
+import type { RouteName, RouteParams, SerializedRoute, SerializedRoutes, TrailingSlashMode } from 'stratal/router'
 
 interface RoutesPageProps extends PageProps {
   routes: SerializedRoutes
+  trailingSlash?: TrailingSlashMode
+}
+
+/**
+ * Apply a trailing-slash mode to a URL or path.
+ *
+ * Pure reimplementation of `applyTrailingSlash()` from `stratal/router` —
+ * mirrored here to keep the React bundle decoupled from server-only deps.
+ *
+ * - `'ignore'` — return as-is.
+ * - `'always'` — append `/` unless path is root or last segment is file-like (`.json`, etc.).
+ * - `'never'`  — strip a single trailing `/` from the pathname (skip root).
+ *
+ * Preserves query string and hash. Handles relative paths and absolute URLs.
+ */
+export function applyTrailingSlash(url: string, mode: TrailingSlashMode): string {
+  if (mode === 'ignore') return url
+
+  const isAbsolute = /^https?:\/\//i.test(url)
+  const parsed = isAbsolute ? new URL(url) : new URL(url, 'http://placeholder.local')
+  const path = parsed.pathname
+  if (path === '/') return url
+  const hasTrailing = path.endsWith('/')
+
+  if (mode === 'always' && !hasTrailing) {
+    const lastSegment = path.slice(path.lastIndexOf('/') + 1)
+    if (lastSegment.includes('.')) return url
+    parsed.pathname = `${path}/`
+  } else if (mode === 'never' && hasTrailing) {
+    parsed.pathname = path.slice(0, -1)
+  } else {
+    return url
+  }
+
+  return isAbsolute
+    ? parsed.toString()
+    : `${parsed.pathname}${parsed.search}${parsed.hash}`
+}
+
+function stripTrailing(p: string): string {
+  return p !== '/' && p.endsWith('/') ? p.slice(0, -1) : p
 }
 
 /**
@@ -81,13 +122,17 @@ function buildUrl(route: SerializedRoute, name: string, params?: Record<string, 
 
 /**
  * Check if a route path pattern matches a given pathname.
+ *
  * Converts `:param{constraint}` and `:param` segments to regex wildcards.
+ * Tolerant of trailing-slash differences on either side: `/users/:id` matches
+ * both `/users/1` and `/users/1/` so active-link checks don't depend on the
+ * configured trailing-slash mode.
  */
-function matchPath(routePath: string, pathname: string): boolean {
-  const regexStr = routePath
+export function matchPath(routePath: string, pathname: string): boolean {
+  const regexStr = stripTrailing(routePath)
     .replace(/:[\w]+\{[^}]*\}/g, '[^/]+')
     .replace(/:[\w]+/g, '[^/]+')
-  return new RegExp(`^${regexStr}$`).test(pathname)
+  return new RegExp(`^${regexStr}$`).test(stripTrailing(pathname))
 }
 
 /**
@@ -127,7 +172,7 @@ function matchPath(routePath: string, pathname: string): boolean {
  */
 export function useRoute() {
   const page = usePage<RoutesPageProps>()
-  const { routes } = page.props
+  const { routes, trailingSlash = 'ignore' } = page.props
 
   const route = useMemo(
     () => <N extends RouteName>(name: N, params?: RouteParams<N>): string => {
@@ -135,9 +180,9 @@ export function useRoute() {
       if (!serializedRoute) {
         throw new Error(`Route "${name}" not found.`)
       }
-      return buildUrl(serializedRoute, name, params)
+      return applyTrailingSlash(buildUrl(serializedRoute, name, params), trailingSlash)
     },
-    [routes],
+    [routes, trailingSlash],
   )
 
   const current = useMemo(

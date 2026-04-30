@@ -1,4 +1,5 @@
 import type { MiddlewareHandler } from 'hono'
+import { applyTrailingSlash } from '../trailing-slash'
 import type { RouterEnv, TrailingSlashMode } from '../types'
 
 const REDIRECT_STATUS = 308
@@ -15,6 +16,11 @@ const REDIRECT_STATUS = 308
  * Root (`/`) is always passed through unchanged.
  *
  * 308 is used so that POST/PUT/PATCH bodies survive the redirect.
+ *
+ * Location headers are emitted as path-relative URIs so the user agent
+ * resolves them against the effective request URI — sidestepping scheme
+ * mismatches behind HTTPS-terminating proxies that proxy HTTPS pages to an
+ * HTTP-speaking backend (which would otherwise produce a mixed-content block).
  */
 export function createTrailingSlashRedirect(
   mode: TrailingSlashMode,
@@ -23,23 +29,8 @@ export function createTrailingSlashRedirect(
 
   return async (c, next) => {
     const url = new URL(c.req.url)
-    const path = url.pathname
-    if (path === '/') return next()
-
-    const hasTrailing = path.endsWith('/')
-
-    if (mode === 'always' && !hasTrailing) {
-      const lastSegment = path.slice(path.lastIndexOf('/') + 1)
-      if (lastSegment.includes('.')) return next()
-      url.pathname = `${path}/`
-      return c.redirect(url.toString(), REDIRECT_STATUS)
-    }
-
-    if (mode === 'never' && hasTrailing) {
-      url.pathname = path.slice(0, -1)
-      return c.redirect(url.toString(), REDIRECT_STATUS)
-    }
-
-    return next()
+    const canonicalPath = applyTrailingSlash(url.pathname, mode)
+    if (canonicalPath === url.pathname) return next()
+    return c.redirect(`${canonicalPath}${url.search}`, REDIRECT_STATUS)
   }
 }
