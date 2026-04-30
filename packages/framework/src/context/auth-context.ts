@@ -1,27 +1,68 @@
+import type { BaseUser } from '@better-auth/core/db'
 import { Transient, DI_TOKENS } from 'stratal/di'
 import {
   ContextNotInitializedError,
   UserNotAuthenticatedError
 } from './errors'
 
+/**
+ * Authenticated user shape stored in {@link AuthContext}.
+ *
+ * Inherits Better Auth's base user fields, with `name` made optional so apps
+ * that store `firstName`/`lastName` (or other name conventions) instead of
+ * `name` aren't forced to declare a phantom value.
+ *
+ * Augment via TypeScript module declaration to add app-specific fields. Match
+ * the augmentation to whatever your Better Auth `user.additionalFields` /
+ * plugins are configured to return:
+ *
+ * @example
+ * ```ts
+ * declare module '@stratal/framework/context' {
+ *   interface AuthUser {
+ *     firstName: string
+ *     lastName: string
+ *     role: string
+ *   }
+ * }
+ * ```
+ */
+export interface AuthUser extends Omit<BaseUser, 'name'> {
+  name?: string
+}
+
 export interface AuthInfo {
-  userId?: string
-  /** Comma-separated role string from the session (e.g. "admin" or "editor,reviewer") */
-  role?: string
+  user: AuthUser
 }
 
 @Transient(DI_TOKENS.AuthContext)
 export class AuthContext {
-  protected userId?: string
-  protected role?: string
+  protected user?: AuthUser
 
   /**
    * Set authentication context.
-   * This should be called once per request with user information.
+   * This should be called once per request with the authenticated user.
    */
   setAuthContext(info: AuthInfo): void {
-    this.userId = info.userId
-    this.role = info.role
+    this.user = info.user
+  }
+
+  /**
+   * Get the authenticated user if available.
+   * Returns undefined if no user is authenticated.
+   */
+  getUser(): AuthUser | undefined {
+    return this.user
+  }
+
+  /**
+   * Get the authenticated user or throw if not authenticated.
+   */
+  requireUser(): AuthUser {
+    if (!this.user) {
+      throw new UserNotAuthenticatedError()
+    }
+    return this.user
   }
 
   /**
@@ -29,7 +70,7 @@ export class AuthContext {
    * Returns undefined if no user is authenticated.
    */
   getUserId(): string | undefined {
-    return this.userId
+    return this.user?.id
   }
 
   /**
@@ -37,32 +78,27 @@ export class AuthContext {
    * Use this when authentication is required.
    */
   requireUserId(): string {
-    const userId = this.getUserId()
-    if (!userId) {
-      throw new UserNotAuthenticatedError()
-    }
-    return userId
+    return this.requireUser().id
   }
 
   /**
    * Get full authentication context or throw if not initialized.
    */
-  getAuthContext(): AuthInfo {
-    if (!this.userId) {
+  getAuthInfo(): AuthInfo {
+    if (!this.user) {
       throw new ContextNotInitializedError('Authentication')
     }
-    return {
-      userId: this.userId,
-      role: this.role,
-    }
+    return { user: this.user }
   }
 
   /**
-   * Get the raw comma-separated role string from the session.
-   * Returns undefined if no role is set or user is not authenticated.
+   * Get the raw role string from the authenticated user.
+   *
+   * Reads from `user.role` — apps that use roles should augment {@link AuthUser}
+   * with `role: string` (or similar) so this returns a typed value.
    */
   getRole(): string | undefined {
-    return this.role
+    return (this.user as { role?: string } | undefined)?.role
   }
 
   /**
@@ -70,15 +106,16 @@ export class AuthContext {
    * Returns an empty array if no role is set or user is not authenticated.
    */
   getRoles(): string[] {
-    if (!this.role) return []
-    return this.role.split(',').map(r => r.trim()).filter(Boolean)
+    const role = this.getRole()
+    if (!role) return []
+    return role.split(',').map(r => r.trim()).filter(Boolean)
   }
 
   /**
    * Check if user is authenticated.
    */
   isAuthenticated(): boolean {
-    return !!this.userId
+    return !!this.user
   }
 
   /**
@@ -86,7 +123,6 @@ export class AuthContext {
    * Useful for testing or cleanup.
    */
   clearAuthContext(): void {
-    this.userId = undefined
-    this.role = undefined
+    this.user = undefined
   }
 }
