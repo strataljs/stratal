@@ -43,7 +43,7 @@ import { ROUTER_TOKENS } from './router/router.tokens'
 import { LocalePathService } from './router/services/locale-path.service'
 import { RouteRegistrationService } from './router/services/route-registration.service'
 import { VersioningService } from './router/services/versioning.service'
-import type { VersioningOptions } from './router/types'
+import type { TrailingSlashMode, VersioningOptions } from './router/types'
 import { Uri } from './router/uri'
 import { DbSeedCommand, DbSeedListCommand, SEEDER_TOKENS, SeederRegistry, type Seeder } from './seeder'
 import type { Constructor } from './types'
@@ -61,6 +61,16 @@ export interface ApplicationConfig {
    * When provided, enables URI-based versioning for controllers.
    */
   versioning?: VersioningOptions
+  /**
+   * Trailing-slash handling for incoming requests.
+   *
+   * Defaults to `'ignore'` — both `/foo` and `/foo/` resolve to the same route.
+   *
+   * - `'ignore'` — match both, no redirect.
+   * - `'always'` — non-trailing requests redirect (308) to the trailing-slash form.
+   * - `'never'`  — trailing requests redirect (308) to the non-trailing form.
+   */
+  trailingSlash?: TrailingSlashMode
   /**
    * Custom exception handler class.
    *

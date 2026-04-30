@@ -242,6 +242,16 @@ export interface ControllerOptions {
 }
 
 /**
+ * Trailing-slash handling for incoming requests.
+ *
+ * - `'ignore'` (default) — match both `/foo` and `/foo/` for the same route, no redirect.
+ * - `'always'`  — non-trailing requests redirect (308) to the trailing-slash form.
+ *                 Paths whose last segment contains `.` (e.g. `/api/openapi.json`) are skipped.
+ * - `'never'`   — trailing requests redirect (308) to the non-trailing form.
+ */
+export type TrailingSlashMode = 'ignore' | 'always' | 'never'
+
+/**
  * Versioning configuration for the application.
  * Enables URI-based API versioning when provided to Stratal config.
  */
