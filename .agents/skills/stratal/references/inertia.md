@@ -54,7 +54,7 @@ InertiaModule.forRootAsync({
 - `sharedData?` — Static values or `(ctx: RouterContext) => any` resolver functions
 - `flash?` — `{ store: FlashStore }` — flash message storage (use `CookieFlashStore`)
 - `i18n?` — `{ only?: string[] }` — share backend translations with frontend
-- `routes?` — `boolean` — When `true`, serializes all named routes and injects them as a `routes` shared prop for client-side URL generation with `useRoute()`
+- `routes?` — `boolean` — When `true`, serializes all named routes and injects them as a `routes` shared prop for client-side URL generation with `useRoute()`. The configured `trailingSlash` mode (from the `Stratal` constructor) is also forwarded as a `trailingSlash` shared prop so `useRoute()` produces canonical URLs that match the server.
 - `manifest?` — Vite manifest object for asset resolution
 - `entryClientPath?` — Client entry point (default: `src/inertia/app.tsx`)
 
@@ -380,9 +380,25 @@ export default function UserProfile({ user }) {
 }
 ```
 
-`route(name, params?)` mirrors the server-side `route()` function. Route names and params are type-safe when `StratalRouteMap` is augmented via `npx quarry route:types`.
+`route(name, params?)` mirrors the server-side `route()` function and applies the server's configured `trailingSlash` mode (forwarded as a shared prop) so generated URLs match the canonical form. Route names and params are type-safe when `StratalRouteMap` is augmented via `npx quarry route:types`.
 
-`current(name?)` checks the current page URL against a route name. Without arguments, returns the current route name (or `undefined`).
+`current(name?)` checks the current page URL against a route name. It is tolerant of trailing-slash differences on either side, so active-link checks don't depend on the configured mode. Without arguments, returns the current route name (or `undefined`).
+
+### Standalone helpers
+
+For ad-hoc use, `@stratal/inertia/react` also re-exports two pure helpers that mirror server-side behaviour:
+
+```tsx
+import { applyTrailingSlash, matchPath } from '@stratal/inertia/react'
+
+applyTrailingSlash('/users', 'always')             // → '/users/'
+applyTrailingSlash('/users/?page=2', 'never')      // → '/users?page=2'
+applyTrailingSlash('/api/openapi.json', 'always')  // → '/api/openapi.json' (file-like, skipped)
+
+matchPath('/users/:id', '/users/42')               // → true
+matchPath('/users/:id', '/users/42/')              // → true (slash-tolerant)
+matchPath('/:locale{en|fr}/posts', '/fr/posts')    // → true (constraint matches)
+```
 
 ## SSR
 
@@ -428,19 +444,23 @@ With augmentation, `ctx.inertia('notes/Index', { notes })` is fully type-checked
 
 ## Inertia CLI Commands
 
+`@stratal/inertia` ships a standalone `inertia` bin (declared in its `package.json`). It runs in plain Node — no Quarry / DI bootstrap — so it works in projects that don't have a Stratal entry yet (e.g. during `install`).
+
 ```bash
-# Start development server with hot reload
-npx quarry inertia:dev
+# Scaffold Inertia project structure (run once after install)
+npx inertia install               # --skip-deps to skip the npm-install hint
+
+# Start Vite dev server
+npx inertia dev                   # --port=5173 --host --persist-to=.cf-state
 
 # Production build via Vite
-npx quarry inertia:build
+npx inertia build                 # --out-dir=dist --ssr
 
 # Generate TypeScript types for Inertia pages
-npx quarry inertia:types
-
-# Scaffold Inertia project structure
-npx quarry inertia:install
+npx inertia types                 # --watch
 ```
+
+Run `npx inertia --help` for the top-level command list.
 
 ## Vite Integration
 

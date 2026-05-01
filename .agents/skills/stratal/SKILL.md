@@ -5,7 +5,7 @@ license: MIT
 compatibility: Designed for AI Agents. Requires Node.js 22+, npm.
 metadata:
   author: Temitayo Fadojutimi
-  version: "1.0"
+  version: "1.1"
 ---
 
 # Stratal Framework
@@ -77,6 +77,7 @@ Constructor config:
 - `exceptionHandler?` — Custom `ExceptionHandler` subclass
 - `logging?` — `{ level?, formatter? }` (`'json'` | `'pretty'`)
 - `versioning?` — `{ prefix?, defaultVersion? }`
+- `trailingSlash?` — `'ignore'` (default) | `'always'` | `'never'`. Redirects non-canonical forms with 308 and applies the same canonicalisation to all URL helpers. See `references/routing.md`.
 
 ## Module System
 
@@ -223,7 +224,7 @@ See `references/errors-and-i18n.md` for the full ExceptionHandler API.
 3. Use `@InertiaGet('/')` / `@InertiaPost('/')` and `ctx.inertia('page/Name', props)` in controllers (or `@InertiaRoute()` for convention routing)
 4. For flash messages: add `flash: { store: new CookieFlashStore({ secret: env.FLASH_SECRET }) }` and use `ctx.flash(key, value)`
 5. For frontend i18n: add `i18n: { only: ['common', 'nav'] }` and use `useI18n()` from `@stratal/inertia/react`
-6. Run `npx quarry inertia:dev` for development
+6. Run `npx inertia dev` for development (standalone bin shipped by `@stratal/inertia`)
 
 See `references/inertia.md` for props, shared data, flash messages, i18n integration, type safety, and Vite setup.
 
@@ -262,6 +263,8 @@ See `references/quarry-cli.md` for all MCP flags and options.
 **User says "Set up signed URLs"** -> Read `references/routing.md`. Add `APP_SECRET` to `wrangler.jsonc` vars. Use `ctx.signedUrl('route.name', params, { expiresIn: 3600 })`. Verify with `ctx.hasValidSignature()`.
 
 **User says "Configure middleware for routes"** -> Read `references/middleware-and-guards.md`. Implement `RouteConfigurable` in module, use `router.middleware()` for scoped or `router.use()` for global middleware.
+
+**User says "Always trailing slash on URLs" / "Force no trailing slash"** -> Read `references/routing.md`. Set `trailingSlash: 'always'` or `'never'` in the `Stratal` constructor. Default `'ignore'` matches both forms with no redirect.
 
 **User says "I have an existing Hono app"** -> Read `references/incremental-adoption.md`. Mount Stratal as sub-app via `stratal.hono`.
 
@@ -317,3 +320,5 @@ Load these when the task needs deeper knowledge:
 **"APP_SECRET environment variable is required"** -> Add `APP_SECRET` to `wrangler.jsonc` `[vars]` for signed URL features.
 
 **"Domain mismatch" / 404 on domain routes** -> Request host doesn't match controller's domain pattern. Check `@Controller({ domain })` or `router.domain()` config.
+
+**Trailing slashes redirect unexpectedly (308)** -> `trailingSlash` is set to `'always'` or `'never'`. Default is `'ignore'`. Root `/` and file-like paths (last segment containing `.`, e.g. `/api/openapi.json`) are excluded from `'always'` redirects.

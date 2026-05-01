@@ -25,10 +25,10 @@ export class AppModule {}
 
 ### AuthContext (Request-Scoped)
 
-`AuthContext` is available in the request-scoped container. `SessionVerificationMiddleware` (auto-registered by AuthModule) populates it from session cookies/tokens on every request.
+`AuthContext` is available in the request-scoped container. `SessionVerificationMiddleware` (auto-registered by AuthModule) populates it with the full Better Auth user record on every request.
 
 ```typescript
-import type { AuthContext } from '@stratal/framework/context'
+import type { AuthContext, AuthUser } from '@stratal/framework/context'
 import { DI_TOKENS } from 'stratal/di'
 import { Transient, inject } from 'stratal/di'
 
@@ -40,14 +40,45 @@ export class ProfileService {
   ) {}
 
   async getProfile() {
-    const userId = this.authContext.requireUserId() // throws 401 if not authenticated
-    const roles  = this.authContext.getRoles()      // string[] — e.g. ['admin', 'editor']
-    const role   = this.authContext.getRole()       // raw comma-separated string from DB
+    const user: AuthUser = this.authContext.requireUser() // throws 401 if not authenticated
+    const userId = this.authContext.requireUserId()       // shorthand for requireUser().id
+    const maybeUser = this.authContext.getUser()          // AuthUser | undefined
+    const roles  = this.authContext.getRoles()            // string[] from user.role
+    const role   = this.authContext.getRole()             // raw string from user.role
   }
 }
 ```
 
 Prefer `@UseGuards(AuthGuard())` on controllers over manually checking `authContext.isAuthenticated()` — the guard throws proper 401 errors automatically.
+
+#### AuthContext API
+
+| Method | Returns | Notes |
+|--------|---------|-------|
+| `requireUser()` | `AuthUser` | Throws `UserNotAuthenticatedError` if not authenticated. |
+| `getUser()` | `AuthUser \| undefined` | Returns `undefined` when no session. |
+| `requireUserId()` / `getUserId()` | `string` / `string \| undefined` | Convenience accessors for `user.id`. |
+| `getRole()` | `string \| undefined` | Reads `user.role` (augment `AuthUser` to type it). |
+| `getRoles()` | `string[]` | Splits `user.role` on `,` (e.g. `"admin,editor"`). |
+| `getAuthInfo()` | `{ user: AuthUser }` | Throws if not authenticated. (Was `getAuthContext()`.) |
+| `isAuthenticated()` | `boolean` | True when a user is set. |
+| `setAuthContext({ user })` | `void` | Called by middleware; rarely called from app code. |
+| `clearAuthContext()` | `void` | Test/cleanup helper. |
+
+#### AuthUser augmentation
+
+`AuthUser` extends Better Auth's `BaseUser` with `name?` made optional (so apps using `firstName` / `lastName` aren't forced to declare a phantom `name`). Augment it via TypeScript module declaration to match whatever your Better Auth `additionalFields` / plugins return — typed access then flows through `requireUser()`, `getUser()`, and `getRole()`:
+
+```typescript
+// src/types/auth.d.ts
+declare module '@stratal/framework/context' {
+  interface AuthUser {
+    firstName: string
+    lastName: string
+    role: string
+  }
+}
+```
 
 ### AuthService
 
