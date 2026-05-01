@@ -139,6 +139,17 @@ export class Uri {
   }
 
   /**
+   * Read the currently configured default URL parameters.
+   *
+   * Used by frameworks that need to share these with the client (e.g. the
+   * Inertia adapter ships them as a shared prop so `route()` calls in the
+   * browser auto-fill the same sticky params as the server).
+   */
+  getDefaults(): Record<string, string> {
+    return { ...this._defaults }
+  }
+
+  /**
    * Generate a URL from a named route.
    *
    * Keys matching `:param` placeholders fill the path.

@@ -9,6 +9,8 @@ import type { HttpMethod } from './types'
 import { sortRoutesBySpecificity } from './utils/path'
 import { extractDomainParamNames, extractParamNames } from './utils/route-name'
 
+const CONCRETE_HTTP_METHODS = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options', 'trace'] as const
+
 /**
  * A single registered route in the application.
  * Tracks both named and unnamed routes, HTTP and WebSocket.
@@ -69,6 +71,7 @@ export class RouteRegistry {
   private readonly routes: RegisteredRoute[] = []
   private readonly namedRoutes = new Map<string, RegisteredRoute>()
   private _sortedCache: RegisteredRoute[] | null = null
+  private _routeToNameCache: Map<string, string> | null = null
 
   constructor(
     @inject(ROUTER_TOKENS.VersioningService) private readonly versioningService: VersioningService,
@@ -136,8 +139,9 @@ export class RouteRegistry {
       }
     }
 
-    // Invalidate sort cache once per register() call, not per route
+    // Invalidate caches once per register() call, not per route
     this._sortedCache = null
+    this._routeToNameCache = null
 
     return expandedRoutes
   }
@@ -150,6 +154,31 @@ export class RouteRegistry {
   /** Check if a named route exists */
   has(name: string): boolean {
     return this.namedRoutes.has(name)
+  }
+
+  /**
+   * Resolve a Hono-style route path pattern (e.g. as exposed by `c.req.routePath`)
+   * back to its registered name, scoped to the request's HTTP method. Locale variant
+   * paths resolve to the canonical primary route name. Method matching is
+   * case-insensitive; routes registered with `'all'` resolve under any verb.
+   */
+  findNameByRoute(method: string, path: string): string | undefined {
+    this._routeToNameCache ??= this.buildRouteToNameCache()
+    return this._routeToNameCache.get(`${method.toLowerCase()}:${path}`)
+  }
+
+  private buildRouteToNameCache(): Map<string, string> {
+    const cache = new Map<string, string>()
+    for (const route of this.namedRoutes.values()) {
+      const methods = route.method === 'all' ? CONCRETE_HTTP_METHODS : [route.method]
+      const paths = route.localePaths ? [route.path, ...route.localePaths] : [route.path]
+      for (const m of methods) {
+        for (const p of paths) {
+          cache.set(`${m}:${p}`, route.name!)
+        }
+      }
+    }
+    return cache
   }
 
   /** Get all routes sorted by specificity (static > param > wildcard, primary before locale) */

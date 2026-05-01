@@ -5,7 +5,7 @@ license: MIT
 compatibility: Designed for AI Agents. Requires Node.js 22+, npm.
 metadata:
   author: Temitayo Fadojutimi
-  version: "1.2"
+  version: "1.3"
 ---
 
 # Stratal Framework
@@ -25,23 +25,25 @@ Breaking any of these causes runtime failures.
 
 2. **Import `z` from `stratal/validation`, NOT `zod`** — Stratal wraps Zod with i18n. Direct `zod` imports bypass translation.
 
-3. **Never import from `tsyringe` directly** — Use `import { inject } from 'stratal/di'`. Stratal re-exports everything needed.
+3. **Use `cuid2` from `stratal/validation`, NOT `z.cuid2()`** — Zod 4.3.6's `cuid2()` regex is `/^[0-9a-z]+$/` and accepts any non-empty lowercase-alphanumeric string (`'sw'`, `'a'`, `'0'`). Stratal's `cuid2()` enforces real cuid2 shape and keeps `format: cuid2` in the OpenAPI spec.
 
-4. **`reflect-metadata` must be imported** — `Stratal` class does this automatically. Test setup files must add `import 'reflect-metadata'`.
+4. **Never import from `tsyringe` directly** — Use `import { inject } from 'stratal/di'`. Stratal re-exports everything needed.
 
-5. **`experimentalDecorators` and `emitDecoratorMetadata` must be `true`** in tsconfig.
+5. **`reflect-metadata` must be imported** — `Stratal` class does this automatically. Test setup files must add `import 'reflect-metadata'`.
 
-6. **Convention routing and explicit HTTP decorators cannot mix** — Per controller, use EITHER convention-based (`@Route()` / `@InertiaRoute()` + method names `index/show/create/update/patch/destroy`) OR explicit (`@Get()/@Post()` / `@InertiaGet()/@InertiaPost()`). Never both. You CAN mix regular decorators (`@Get`) with Inertia explicit decorators (`@InertiaGet`) in the same controller.
+6. **`experimentalDecorators` and `emitDecoratorMetadata` must be `true`** in tsconfig.
 
-7. **ESM-only** — `"type": "module"` in package.json.
+7. **Convention routing and explicit HTTP decorators cannot mix** — Per controller, use EITHER convention-based (`@Route()` / `@InertiaRoute()` + method names `index/show/create/update/patch/destroy`) OR explicit (`@Get()/@Post()` / `@InertiaGet()/@InertiaPost()`). Never both. You CAN mix regular decorators (`@Get`) with Inertia explicit decorators (`@InertiaGet`) in the same controller.
 
-8. **DI tokens** — Use class-as-token for simple cases. Use `Symbol.for()` for shareable modules, value providers, factory providers. Group symbols in a `tokens.ts` file.
+8. **ESM-only** — `"type": "module"` in package.json.
 
-9. **Cron schedules must match `wrangler.jsonc`** — `CronJob.schedule` string must exactly match a trigger in `[triggers]`.
+9. **DI tokens** — Use class-as-token for simple cases. Use `Symbol.for()` for shareable modules, value providers, factory providers. Group symbols in a `tokens.ts` file.
 
-10. **I18nModule must be configured for translations** — `I18nModule.forRoot()` for locale config with `detection` option (`'cookie'` default, `'header'`, `'querystring'`, `'path'`). Path detection supports `prefixDefaultLocale` (`false` default, `'redirect'`, `true`). `I18nModule.registerMessages()` to add messages. `I18nService.t()` for translation. `withI18n()` for Zod validation messages.
+10. **Cron schedules must match `wrangler.jsonc`** — `CronJob.schedule` string must exactly match a trigger in `[triggers]`.
 
-11. **Custom ExceptionHandler must extend `ExceptionHandler`** — Import from `stratal/errors`, implement `register()`, pass to `new Stratal({ exceptionHandler: AppExceptionHandler })`.
+11. **I18nModule must be configured for translations** — `I18nModule.forRoot()` for locale config with `detection` option (`'cookie'` default, `'header'`, `'querystring'`, `'path'`). Path detection supports `prefixDefaultLocale` (`false` default, `'redirect'`, `true`). `I18nModule.registerMessages()` to add messages. `I18nService.t()` for translation. `withI18n()` for Zod validation messages.
+
+12. **Custom ExceptionHandler must extend `ExceptionHandler`** — Import from `stratal/errors`, implement `register()`, pass to `new Stratal({ exceptionHandler: AppExceptionHandler })`.
 
 ## Quarry CLI
 
@@ -277,6 +279,10 @@ See `references/quarry-cli.md` for all MCP flags and options.
 
 **User says "Generate URLs for routes"** -> Read `references/routing.md`. Use `ctx.route('name', params)` in controllers. Use standalone `route()` from `stratal/router` outside controllers. Run `npx quarry route:types` for type safety.
 
+**User says "Build URLs in React" / "Active link" / "Get current tenantId from URL"** -> Read `references/inertia.md`. Use `useRoute()` from `@stratal/inertia/react`. `route('users.show', { id })` auto-fills sticky params; `current('users.*')` matches by wildcard; `currentRoute` (discriminated by `name`) gives type-safe `params`.
+
+**User says "Validate a tenant ID / cuid2"** -> Read `references/errors-and-i18n.md`. `import { cuid2 } from 'stratal/validation'` — never bare `z.cuid2()`.
+
 **User says "Add domain-based routing"** -> Read `references/routing.md`. Set `domain: '{tenant}.myapp.com'` on `@Controller()` or use `router.domain()` in `configureRoutes()`. Access with `ctx.domain('tenant')`.
 
 **User says "Set up signed URLs"** -> Read `references/routing.md`. Add `APP_SECRET` to `wrangler.jsonc` vars. Use `ctx.signedUrl('route.name', params, { expiresIn: 3600 })`. Verify with `ctx.hasValidSignature()`.
@@ -322,6 +328,8 @@ Load these when the task needs deeper knowledge:
 **"Cannot mix convention and HTTP decorators"** -> Pick one routing pattern per controller.
 
 **Zod validation errors not translated** -> Imported `z` from `zod` instead of `stratal/validation`.
+
+**`z.cuid2()` accepts `'sw'`, `'a'`, or any short lowercase string** -> Zod 4.3.6's regex is `/^[0-9a-z]+$/`. Use `cuid2()` from `stratal/validation` instead.
 
 **Cron job not firing** -> `schedule` string doesn't match `wrangler.jsonc` trigger.
 

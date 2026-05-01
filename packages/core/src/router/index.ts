@@ -32,7 +32,7 @@ export { ROUTER_TOKENS } from './router.tokens'
 export { RouteRegistry, type RegisteredRoute, type RouteRegistrationInput } from './route-registry'
 
 // Route Map (augmentable interface for type-safe URL generation)
-export type { RouteName, RouteParams, SerializedRoute, SerializedRoutes, StratalRouteMap } from './route-map'
+export type { CurrentRoute, RouteMatcher, RouteName, RouteParams, RoutePrefixes, SerializedRoute, SerializedRoutes, StratalRouteMap } from './route-map'
 
 // Route URL generation
 export { route } from './route-url'

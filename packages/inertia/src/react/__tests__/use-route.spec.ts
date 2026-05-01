@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { applyTrailingSlash, matchPath } from '../use-route'
+import type { CurrentRoute, SerializedRoutes } from 'stratal/router'
+import { applyTrailingSlash, matchCurrent, resolveUrl } from '../use-route'
 
 describe('applyTrailingSlash', () => {
   describe("'ignore'", () => {
@@ -66,32 +67,138 @@ describe('applyTrailingSlash', () => {
   })
 })
 
-describe('matchPath', () => {
-  it('matches a literal pathname', () => {
-    expect(matchPath('/users', '/users')).toBe(true)
+const routes: SerializedRoutes = {
+  'users.index': {
+    path: '/users',
+    paramNames: [],
+    domainParamNames: [],
+  },
+  'users.show': {
+    path: '/users/:id',
+    paramNames: ['id'],
+    domainParamNames: [],
+  },
+  'company.users.show': {
+    path: '/:companyId/users/:id',
+    paramNames: ['companyId', 'id'],
+    domainParamNames: [],
+  },
+  'billing': {
+    path: '/billing',
+    paramNames: [],
+    domainParamNames: [],
+  },
+  'localized.posts.show': {
+    path: '/posts/:id',
+    paramNames: ['id'],
+    domainParamNames: [],
+    localePaths: ['/:locale{en|de|fr}/posts/:id'],
+  },
+  'tenant.dashboard': {
+    path: '/dashboard',
+    paramNames: [],
+    domain: '{tenant}.app.com',
+    domainParamNames: ['tenant'],
+  },
+}
+
+const emptyCurrent: CurrentRoute = { name: null, params: {}, defaults: {} }
+
+describe('resolveUrl', () => {
+  it('builds a URL from a named route + explicit params', () => {
+    expect(resolveUrl('users.show', { id: '42' }, routes, emptyCurrent)).toBe('/users/42')
   })
 
-  it('matches `:param` placeholders', () => {
-    expect(matchPath('/users/:id', '/users/42')).toBe(true)
+  it('throws when the route name is not registered', () => {
+    expect(() => resolveUrl('nonexistent', undefined, routes, emptyCurrent))
+      .toThrow('Route "nonexistent" not found.')
   })
 
-  it('matches `:param{constraint}` placeholders', () => {
-    expect(matchPath('/:locale{en|fr}/posts', '/fr/posts')).toBe(true)
+  it('carries current-route params over to a target that declares them', () => {
+    const current: CurrentRoute = {
+      name: 'company.users.index',
+      params: { companyId: 'acme' },
+      defaults: {},
+    }
+    expect(resolveUrl('company.users.show', { id: '42' }, routes, current))
+      .toBe('/acme/users/42')
   })
 
-  it('returns false for a non-matching path', () => {
-    expect(matchPath('/users/:id', '/posts/42')).toBe(false)
+  it('does NOT leak carryover params into a target that does not declare them', () => {
+    const current: CurrentRoute = {
+      name: 'company.users.show',
+      params: { companyId: 'acme', id: '42' },
+      defaults: {},
+    }
+    expect(resolveUrl('billing', undefined, routes, current)).toBe('/billing')
   })
 
-  it('tolerates a trailing slash on the route side', () => {
-    expect(matchPath('/users/:id/', '/users/42')).toBe(true)
+  it('applies sticky defaults when the target declares them', () => {
+    const current: CurrentRoute = {
+      name: 'localized.home',
+      params: {},
+      defaults: { locale: 'fr' },
+    }
+    expect(resolveUrl('localized.posts.show', { id: '7' }, routes, current))
+      .toBe('/fr/posts/7')
   })
 
-  it('tolerates a trailing slash on the pathname side', () => {
-    expect(matchPath('/users/:id', '/users/42/')).toBe(true)
+  it('lets explicit params override defaults and carryover', () => {
+    const current: CurrentRoute = {
+      name: 'localized.posts.show',
+      params: { locale: 'fr', id: '1' },
+      defaults: { locale: 'de' },
+    }
+    expect(resolveUrl('localized.posts.show', { locale: 'en', id: '2' }, routes, current))
+      .toBe('/en/posts/2')
   })
 
-  it('still matches root', () => {
-    expect(matchPath('/', '/')).toBe(true)
+  it('carries domain params over when the target declares them', () => {
+    const current: CurrentRoute = {
+      name: 'tenant.dashboard',
+      params: { tenant: 'acme' },
+      defaults: {},
+    }
+    expect(resolveUrl('tenant.dashboard', undefined, routes, current))
+      .toBe('https://acme.app.com/dashboard')
+  })
+
+  it('respects the trailingSlash mode', () => {
+    expect(resolveUrl('users.show', { id: '42' }, routes, emptyCurrent, 'always'))
+      .toBe('/users/42/')
+    expect(resolveUrl('users.show', { id: '42' }, routes, emptyCurrent, 'never'))
+      .toBe('/users/42')
+  })
+
+  it('throws when a required path param is missing after merging', () => {
+    expect(() => resolveUrl('users.show', undefined, routes, emptyCurrent))
+      .toThrow(/Missing required parameter "id"/)
+  })
+})
+
+describe('matchCurrent', () => {
+  it('returns the current route name when called with no args', () => {
+    expect(matchCurrent({ name: 'users.show', params: {}, defaults: {} })).toBe('users.show')
+  })
+
+  it('returns null when no route is matched', () => {
+    expect(matchCurrent(emptyCurrent)).toBeNull()
+  })
+
+  it('strict-matches a specific name', () => {
+    const cur = { name: 'users.show', params: {}, defaults: {} }
+    expect(matchCurrent(cur, 'users.show')).toBe(true)
+    expect(matchCurrent(cur, 'users.index')).toBe(false)
+  })
+
+  it('supports trailing-`.*` wildcard prefix matching', () => {
+    const cur = { name: 'users.show', params: {}, defaults: {} }
+    expect(matchCurrent(cur, 'users.*')).toBe(true)
+    expect(matchCurrent(cur, 'posts.*')).toBe(false)
+  })
+
+  it('returns false for any name when current is null', () => {
+    expect(matchCurrent(emptyCurrent, 'users.show')).toBe(false)
+    expect(matchCurrent(emptyCurrent, 'users.*')).toBe(false)
   })
 })

@@ -54,7 +54,7 @@ InertiaModule.forRootAsync({
 - `sharedData?` — Static values or `(ctx: RouterContext) => any` resolver functions
 - `flash?` — `{ store: FlashStore }` — flash message storage (use `CookieFlashStore`)
 - `i18n?` — `{ only?: string[] }` — share backend translations with frontend
-- `routes?` — `boolean` — When `true`, serializes all named routes and injects them as a `routes` shared prop for client-side URL generation with `useRoute()`. The configured `trailingSlash` mode (from the `Stratal` constructor) is also forwarded as a `trailingSlash` shared prop so `useRoute()` produces canonical URLs that match the server.
+- `routes?` — `boolean` — When `true`, serializes all named routes and injects them as a `routes` shared prop for client-side URL generation with `useRoute()`. The configured `trailingSlash` mode (from the `Stratal` constructor) is also forwarded as a `trailingSlash` shared prop so `useRoute()` produces canonical URLs that match the server. Also injects a `route: { name, params, defaults }` shared prop so `useRoute()` knows the current match. Sticky params set on the server via `Uri.defaults()` come through as `defaults` and are auto-applied by `route(name, params?)` on the client.
 - `manifest?` — Vite manifest object for asset resolution
 - `entryClientPath?` — Client entry point (default: `src/inertia/app.tsx`)
 
@@ -365,39 +365,37 @@ Use the `useRoute()` hook from `@stratal/inertia/react`:
 ```tsx
 import { useRoute } from '@stratal/inertia/react'
 
-export default function UserProfile({ user }) {
-  const { route, current } = useRoute()
+export default function UserNav({ user }) {
+  const { route, current, currentRoute, params } = useRoute()
 
   return (
     <nav>
-      <a href={route('users.index')}>All Users</a>
-      <a href={route('users.show', { id: user.id })}>
-        {user.name}
-      </a>
-      {current('users.show') && <span>Currently viewing</span>}
+      <a href={route('users.show', { id: user.id })}>{user.name}</a>
+      {current('users.*') && <span>On a users page</span>}
+      {currentRoute.name === 'users.show' && <span>#{currentRoute.params.id}</span>}
     </nav>
   )
 }
 ```
 
-`route(name, params?)` mirrors the server-side `route()` function and applies the server's configured `trailingSlash` mode (forwarded as a shared prop) so generated URLs match the canonical form. Route names and params are type-safe when `StratalRouteMap` is augmented via `npx quarry route:types`.
-
-`current(name?)` checks the current page URL against a route name. It is tolerant of trailing-slash differences on either side, so active-link checks don't depend on the configured mode. Without arguments, returns the current route name (or `undefined`).
+- `route(name, params?)` — explicit params override carryover (filtered to params the target route declares) over sticky `defaults`. Sticky `defaults` come from `Uri.defaults()` set on the server (e.g. in middleware).
+- `current()` → `RouteName | null`. `current('users.show')` → `boolean`. `current('users.*')` → `boolean` (wildcard prefix match against the matched route name).
+- `currentRoute` is discriminated by `name`. Narrow on it for typed `params`. `params` is shorthand for `currentRoute.params`.
+- Argument types come from `StratalRouteMap`. Run `npx quarry route:types` to populate it.
 
 ### Standalone helpers
 
-For ad-hoc use, `@stratal/inertia/react` also re-exports two pure helpers that mirror server-side behaviour:
+For non-React callers (utility modules, framework code), `@stratal/inertia/react` exports pure helpers that mirror the hook's behaviour without React:
 
 ```tsx
-import { applyTrailingSlash, matchPath } from '@stratal/inertia/react'
+import { applyTrailingSlash, matchCurrent, resolveUrl } from '@stratal/inertia/react'
 
-applyTrailingSlash('/users', 'always')             // → '/users/'
-applyTrailingSlash('/users/?page=2', 'never')      // → '/users?page=2'
-applyTrailingSlash('/api/openapi.json', 'always')  // → '/api/openapi.json' (file-like, skipped)
+// Apply server's trailing-slash mode (also exposed via the shared prop).
+applyTrailingSlash('/users', 'always')               // → '/users/'
 
-matchPath('/users/:id', '/users/42')               // → true
-matchPath('/users/:id', '/users/42/')              // → true (slash-tolerant)
-matchPath('/:locale{en|fr}/posts', '/fr/posts')    // → true (constraint matches)
+// Pure forms of useRoute().current() / .route().
+matchCurrent(currentRoute, 'users.*')                 // → boolean
+resolveUrl('users.show', { id }, routes, currentRoute, trailingSlash)
 ```
 
 ## SSR

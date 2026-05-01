@@ -281,14 +281,24 @@ export class RouteRegistrationService {
       const resolved = this.resolveMethodAndPath(meta, methodName, basePath, className)
       if (!resolved) continue
 
-      const { httpMethod, fullPath, routeConfig, statusCodeOverride } = resolved
+      const { httpMethod, fullPath, routeConfig: rawRouteConfig, statusCodeOverride } = resolved
 
-      // Auto-inject prefix params from Router.prefix() into route params
+      // Compose prefix params with route-level params WITHOUT mutating the
+      // route's metadata — `meta.config` lives on the controller prototype
+      // and is shared across every Application/RouteRegistry instance that
+      // resolves this controller. Mutating it leaks state across test runs
+      // (and any other multi-app setup), causing later registrations to
+      // re-extend an already-injected prefix from a previous run.
+      let mergedParams = rawRouteConfig.params
       if (routerConfig.params) {
-        routeConfig.params = routeConfig.params
-          ? (routerConfig.params as z.ZodObject).extend((routeConfig.params as z.ZodObject).shape)
-          : routerConfig.params
+        const prefixShape = (routerConfig.params as z.ZodObject).shape
+        mergedParams = mergedParams
+          ? (mergedParams as z.ZodObject).extend(prefixShape)
+          : (routerConfig.params as z.ZodObject).extend({})
       }
+      const routeConfig: RouteConfig = mergedParams === rawRouteConfig.params
+        ? rawRouteConfig
+        : { ...rawRouteConfig, params: mergedParams }
 
       const hideFromDocs = routeConfig.hideFromDocs ?? (routerHidden ?? controllerHidden)
 

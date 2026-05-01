@@ -20,6 +20,9 @@ function createMockContext(overrides: {
   withoutSsr?: boolean
   routes?: RegisteredRoute[]
   trailingSlash?: TrailingSlashMode
+  routePath?: string
+  validatedParams?: Record<string, string>
+  defaults?: Record<string, string>
 } = {}): RouterContext {
   const headers = new Headers(overrides.headers ?? {})
   if (overrides.isInertia) {
@@ -28,16 +31,25 @@ function createMockContext(overrides: {
 
   const mockRegistry = {
     named: () => overrides.routes ?? [],
+    findNameByRoute: (method: string, path: string) => {
+      const m = method.toLowerCase()
+      return overrides.routes?.find(r => r.path === path && (r.method === m || r.method === 'all'))?.name
+    },
   } as unknown as RouteRegistry
 
   const mockApplication = {
     config: { trailingSlash: overrides.trailingSlash },
   } as unknown as Application
 
+  const mockUri = {
+    getDefaults: () => overrides.defaults ?? {},
+  }
+
   const mockContainer = {
     resolve: (token: symbol) => {
       if (token === ROUTER_TOKENS.RouteRegistry) return mockRegistry
       if (token === DI_TOKENS.Application) return mockApplication
+      if (token === ROUTER_TOKENS.Uri) return mockUri
       throw new Error(`Unexpected token: ${String(token)}`)
     },
   }
@@ -54,7 +66,9 @@ function createMockContext(overrides: {
     req: {
       url: overrides.url ?? 'http://localhost/',
       method: 'GET',
+      routePath: overrides.routePath ?? '/',
       header: (name: string) => headers.get(name) ?? undefined,
+      valid: (target: string) => target === 'param' ? (overrides.validatedParams ?? {}) : {},
     },
     get: (key: string) => variables[key],
     set: (key: string, value: unknown) => { variables[key] = value },
@@ -529,6 +543,80 @@ describe('InertiaService', () => {
       const body = await parsePageJson(response)
 
       expect(body.props.trailingSlash).toBe('always')
+    })
+
+    it('exposes the matched route name and validated params via the route shared prop', async () => {
+      const routesOptions: InertiaModuleOptions = {
+        rootView: '<html>@inertia</html>',
+        version: '1.0',
+        routes: true,
+      }
+      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr)
+      const tenantRoute: RegisteredRoute = {
+        name: 'dashboard.index',
+        method: 'get',
+        path: '/:tenantId/',
+        paramNames: ['tenantId'],
+        domainParamNames: [],
+        controller: 'DashboardController',
+        action: 'index',
+        hidden: false,
+        middleware: [],
+      }
+      const ctx = createMockContext({
+        isInertia: true,
+        routes: [tenantRoute],
+        routePath: '/:tenantId/',
+        validatedParams: { tenantId: 'cuid_real_tenant' },
+      })
+
+      const response = await routesService.render(ctx, 'Home', {})
+      const body = await parsePageJson(response)
+
+      expect(body.props.route).toEqual({
+        name: 'dashboard.index',
+        params: { tenantId: 'cuid_real_tenant' },
+        defaults: {},
+      })
+    })
+
+    it('forwards Uri.getDefaults() into the route shared prop', async () => {
+      const routesOptions: InertiaModuleOptions = {
+        rootView: '<html>@inertia</html>',
+        version: '1.0',
+        routes: true,
+      }
+      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr)
+      const ctx = createMockContext({
+        isInertia: true,
+        routes: [sampleRoute],
+        defaults: { locale: 'sw' },
+      })
+
+      const response = await routesService.render(ctx, 'Home', {})
+      const body = await parsePageJson(response)
+
+      expect((body.props.route as { defaults: Record<string, string> }).defaults).toEqual({ locale: 'sw' })
+    })
+
+    it('returns name=null and empty params for unnamed routes', async () => {
+      const routesOptions: InertiaModuleOptions = {
+        rootView: '<html>@inertia</html>',
+        version: '1.0',
+        routes: true,
+      }
+      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr)
+      const ctx = createMockContext({
+        isInertia: true,
+        routes: [sampleRoute],
+        routePath: '/some-unnamed-path',
+        validatedParams: {},
+      })
+
+      const response = await routesService.render(ctx, 'Home', {})
+      const body = await parsePageJson(response)
+
+      expect(body.props.route).toEqual({ name: null, params: {}, defaults: {} })
     })
   })
 })
