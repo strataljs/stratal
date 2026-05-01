@@ -1,207 +1,38 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Maintainer-facing instructions for working on the Stratal monorepo with Claude or other AI agents. Not for end-users of the published packages — consumer API guidance lives at `.agents/skills/stratal/SKILL.md` (+ 18 references under `.agents/skills/stratal/references/`).
 
-## Project Overview
+## Packages
 
-Stratal is a modular Cloudflare Workers framework with dependency injection (tsyringe), Hono-based routing with OpenAPI generation, queue consumers, cron jobs, i18n, caching, storage, and email. It's a yarn workspaces monorepo with three packages:
+| Path | npm | Scope |
+|---|---|---|
+| `packages/core` | `stratal` | Core framework: DI, modules, routing, queues, cron, events, seeders, Quarry CLI, i18n, cache, logger, errors, email, storage, OpenAPI |
+| `packages/testing` | `@stratal/testing` | Test utilities, mocks, MSW fetch, Vitest plugin |
+| `packages/framework` | `@stratal/framework` | Auth (Better Auth), Database (ZenStack), access control (Casbin), RBAC, factories, guards |
+| `packages/inertia` | `@stratal/inertia` | Inertia.js v3 server adapter for React SSR on CF Workers |
+| `packages/inertia-modal` | `@stratal/inertia-modal` | Backend-driven modal primitive built on `@stratal/inertia` |
 
-- `packages/core` (npm: `stratal`) — the core framework (includes seeders via `stratal/seeder`)
-- `packages/testing` (npm: `@stratal/testing`) — test utilities, mocks, factories
-- `packages/framework` (npm: `@stratal/framework`) — auth, database ORM (ZenStack), RBAC (Casbin), guards, and test data factories
+Per-package contributor rules: `packages/<name>/CLAUDE.md` — auto-load when working in that directory.
 
-## Common Commands
+## Workspace rules
 
-```bash
-# Lint (all packages)
-yarn lint
-yarn lint:fix
+- Yarn 4 workspaces. Node ≥22. ESM-only (`"type": "module"`).
+- Don't hand-edit `packages/*/package.json` `exports` — `tsdown` regenerates on build. Add new sub-paths via the package's `tsdown.config.ts` `entry` list. For an alias (path A exposed at name B) use `customExports`.
+- Keep `experimentalDecorators` + `emitDecoratorMetadata` on (tsyringe needs them).
+- DI tokens: `Symbol.for('stratal:...')` in each package's `tokens.ts`. Never strings.
+- Inline type imports enforced (`consistent-type-imports`). Leading-underscore for unused vars.
+- `oxlint` lints. Husky + lint-staged auto-fixes staged `.ts/.mts` on commit. Don't pass `--no-verify`.
+- Shared build helpers in `tsdown.base.ts` (`baseConfig`, `withTypesExports`). Touching this file affects every package — typecheck and build all on changes.
+- Build target tsconfig is `tsconfig.build.json` per package (separate from the editor `tsconfig.json`). Don't point `tsdown` at the editor config.
 
-# Type check
-yarn workspace stratal typecheck
-yarn workspace @stratal/testing typecheck
-yarn workspace @stratal/framework typecheck
+## Versioning & release
 
-# Tests — core
-yarn workspace stratal test
-yarn workspace stratal test:watch
-yarn workspace stratal test:coverage
+- Changesets with **fixed** versioning across all packages: `yarn changeset` before committing version-worthy changes. One bump bumps all packages together, so changes here are coupled.
+- Release runs on tag push via `.github/workflows/publish.yml`.
 
-# Tests — framework (requires pretest for ZenStack + Wrangler codegen)
-yarn workspace @stratal/framework pretest   # generate schema + types
-yarn workspace @stratal/framework test
-yarn workspace @stratal/framework test:watch
-yarn workspace @stratal/framework test:e2e
-yarn workspace @stratal/framework test:coverage
-yarn workspace @stratal/framework test:db   # start Docker Compose Postgres
+## CI
 
-# Run a single test file
-yarn workspace stratal test src/path/to/__tests__/file.spec.ts
-yarn workspace @stratal/framework test src/path/to/__tests__/file.spec.ts
-
-# Build
-yarn workspace stratal build
-yarn workspace @stratal/testing build
-yarn workspace @stratal/framework build
-
-# Benchmarks (core only)
-yarn workspace stratal bench
-yarn workspace stratal bench:json
-
-# Changesets (run before committing version-worthy changes)
-yarn changeset
-```
-
-## Build System
-
-[tsdown](https://tsdown.dev/) (powered by Rolldown/Oxc) handles both JS bundling and DTS generation (`dts: true`). Output goes to `dist/` with `.mjs` + `.mjs.map` + `.d.mts` + `.d.mts.map`. The project is ESM-only (`"type": "module"`). Both `experimentalDecorators` and `emitDecoratorMetadata` must stay enabled in tsconfig (required by tsyringe).
-
-Shared build config lives in `tsdown.base.ts` at the monorepo root — it exports `baseConfig` (common options) and `withTypesExports` (converts plain string exports to `{ types, import }` conditional export objects). Each package's `tsdown.config.ts` spreads `baseConfig` and uses `withTypesExports` via `customExports`. This is necessary because tsdown's ESM-only export generation produces plain strings and skips DTS files from the export map.
-
-Package.json `exports` are auto-generated by tsdown on each build. Do not manually edit exports — they will be overwritten. Core uses `customExports` to also create the `./validation` alias pointing to `./i18n/validation`.
-
-Hash-named files in `dist/` (e.g., `chunk-D1SwGrFN.mjs`) are shared code-splitting chunks extracted by Rolldown — they prevent duplication across entry points and are not exposed to consumers.
-
-**Framework package** has path aliases in its tsconfig (`@stratal/framework` → `./src/index.ts`, `@stratal/framework/*` → `./src/*/index.ts`).
-
-## Testing
-
-### Core (`packages/core`)
-
-- Framework: Vitest with `stratalTest()` plugin from `@stratal/testing/vitest-plugin` for workerd environment config
-- Test file convention: `src/**/__tests__/**/*.spec.ts`
-- Setup file (`vitest.setup.ts`) imports `reflect-metadata` — required for tsyringe decorator metadata
-- Coverage excludes: `__tests__/`, `*.spec.ts`, `index.ts`, `types.ts`, `tokens.ts`
-
-### Framework (`packages/framework`)
-
-- Framework: Vitest with two projects: **unit** (node environment) and **e2e** (Cloudflare Workers via `stratalTest()` plugin, which wraps `@cloudflare/vitest-pool-workers`)
-- Unit tests: `src/**/__tests__/**/*.spec.ts`; E2E tests: `test/e2e/**/*.spec.ts`
-- **Pretest required**: `yarn workspace @stratal/framework pretest` runs ZenStack schema generation + Wrangler type generation before tests
-- E2E tests require Docker Postgres on port 5438 (`yarn workspace @stratal/framework test:db`)
-- Coverage provider: `istanbul`
-- E2E pool options: Miniflare with Hyperdrive configured to PostgreSQL
-
-### Testing (`packages/testing`)
-
-- Provides `stratalTest()` Vite plugin (`@stratal/testing/vitest-plugin`) — wraps `cloudflareTest` with Stratal defaults (tslib alias, ZenStack mocks, SSR externals)
-- Fetch mocking uses MSW (Mock Service Worker) via `createMockFetch`/`MockFetch` — lifecycle: `listen()`, `reset()`, `close()`
-- Re-exports `http` and `HttpResponse` from `msw` for convenience
-- Vitest peer dependency: `^4.1.0`
-
-## Architecture
-
-### Application Initialization (6 phases)
-
-`packages/core/src/application.ts` — the `Application` class bootstraps in order:
-
-1. Register core infrastructure modules (I18n, OpenAPI, Queue, Cache)
-2. Register the user's root module (recursively traverses imports)
-3. Initialize all modules (calls `onInitialize` lifecycle hooks)
-4. Resolve managers (ConsumerRegistry, CronManager)
-5. Register RouterService
-6. Configure routes, queues, cron jobs, seeders, and commands
-
-### Dependency Injection (two-tier container)
-
-`packages/core/src/di/container.ts` — wraps tsyringe with:
-
-- **Global container**: singletons and base registrations
-- **Request container**: child container per HTTP request for `Scope.Request` services
-- Conditional registration: `when(predicate).use(token).give(impl).otherwise(fallback)`
-- Service decoration: `extend(token, decorator)` — wraps an existing registration with a decorator class
-- DI tokens defined in `packages/core/src/di/tokens.ts` (Symbol-based)
-
-### Events System
-
-`packages/core/src/events/` — type-safe event registry with decorator-driven wiring:
-
-- `@Listener()` marks a class as an event listener (auto-applies `@Transient()` for DI)
-- `@On(event, options?)` registers a method as a handler for a specific event (supports `priority` and `blocking` options)
-- `EventRegistry` manages handler registration and emission
-- Listeners are auto-discovered from module `providers` and wired at bootstrap time
-- `CustomEventRegistry` interface is augmentable for type-safe event names and contexts
-
-### Module System
-
-`packages/core/src/module/` — NestJS-style `@Module()` decorator pattern:
-
-- Modules declare `providers`, `controllers`, `consumers`, `jobs`, and `imports`
-- Dynamic modules via `forRoot()` (sync) and `forRootAsync()` (factory)
-- Lifecycle hooks: `OnInitialize`, `OnShutdown`
-- Middleware via `MiddlewareConfigurable.configure()`
-
-### Worker Entry Point
-
-`packages/core/src/stratal.ts` — `Stratal` is a Hono-style class that lazily initializes an `Application` on first handler call (fetch/queue/scheduled). Uses singleton pattern with concurrent initialization guard. `env` and `ctx` are provided per-invocation via Cloudflare Workers handler args.
-
-### Routing
-
-`packages/core/src/router/` — Hono-based with `@Controller(path)` and `@Route(metadata)` decorators. Controllers are auto-discovered from modules. OpenAPI schemas generated via `@hono/zod-openapi`.
-
-### Framework Modules (`packages/framework`)
-
-- **DatabaseModule** — ZenStack ORM with multiple named connections, plugin system (ErrorHandler, EventEmitter, SchemaSwitcher), and augmentable `DatabaseSchemaRegistry`/`DefaultDatabaseConnection` interfaces for type-safe access. Uses `@InjectDB(name)` decorator for named connection injection.
-- **AuthModule** — Better Auth integration with session verification middleware pipeline. Provides `AuthContext` (request-scoped) and `AuthService`. Configured via `AuthModule.forRootAsync()`.
-- **RbacModule** — Casbin-based RBAC with ZenStack database adapter. Provides `CasbinService` (request-scoped) for permission checks, role management, and `getPermissionsForUserAsCasbinJs()` for frontend.
-- **AuthGuard** — Guard factory for authentication and scoped authorization. Checks `AuthContext.isAuthenticated()` and optionally `CasbinService.hasAnyPermission()`.
-- **Factory** — Abstract base class for test data factories with `@faker-js/faker` integration and `Sequence` generator.
-
-### Database Events (Framework)
-
-The framework extends core's event system for database operations:
-
-- Events follow the pattern `{phase}.{Model}.{operation}` (e.g., `after.User.create`)
-- Supports wildcard patterns: `after.User` (model wildcard), `after.create` (operation wildcard)
-- Type-safe contexts via discriminated unions and `DatabaseSchemaRegistry` augmentation
-- Emitted by `EventEmitterPlugin` (ZenStack runtime plugin) before/after each database operation
-- Augment `CustomEventRegistry` with `DatabaseEvents<ConnectionName>` for full type safety
-
-### Seeders (`packages/core/src/seeder/`)
-
-- `Seeder` abstract base class — extend and implement `run()` for seeding logic
-- `SeederRegistry` manages seeder registration and execution
-- Seeders are auto-discovered from module `providers` (any class extending `Seeder`)
-- Built-in Quarry commands: `db:seed {name?} {--all}`, `db:seed:list`
-- Seeders can call other seeders via `this.call(OtherSeeder)` (like Laravel)
-- Seeders execute within request-scoped DI containers (full access to injected services)
-- CLI: use `QuarryRunner.run(AppModule)` entry point, then `quarry db:seed NotesSeeder`, `quarry db:seed --all`, `quarry db:seed:list`
-
-### Quarry CLI (`packages/core`)
-
-- `Command` abstract base class with Laravel-style signature parsing (arguments, options, flags)
-- `QuarryRegistry` manages command registration, auto-discovery from modules, and execution
-- CLI entry: `npx quarry` imports the app's default `Stratal` export from `src/index.ts` — no separate entry file needed
-- Override entry path: `npx quarry ./custom/entry.ts <command>`
-- Virtual `cloudflare:workers` ESM loader hook (`src/bin/cloudflare-workers-loader.ts`) enables `Stratal.prepareApp()` in Node
-- CLI bin files are TypeScript in `src/bin/`, built to `dist/` (no separate `bin/` directory)
-- Built-in commands: `list`, `help <command>`
-- Auto-discovers commands from module `providers` via `isCommand()` utility
-- Commands execute within request-scoped DI containers
-
-### Sub-path Exports
-
-**Core (`stratal`)**: Exports are auto-generated by tsdown on each build with `.mjs`/`.d.mts` extensions. Explicit per-subpath exports include `stratal/cache`, `stratal/config`, `stratal/consumer`, `stratal/cron`, `stratal/di`, `stratal/email`, `stratal/errors`, `stratal/events`, `stratal/i18n`, `stratal/i18n/messages/en`, `stratal/logger`, `stratal/module`, `stratal/openapi`, `stratal/quarry`, `stratal/queue`, `stratal/router`, `stratal/seeder`, `stratal/storage`, `stratal/validation`. No wildcard export — all sub-paths are listed explicitly.
-
-**Testing (`@stratal/testing`)**: `@stratal/testing` (main), `@stratal/testing/mocks`, `@stratal/testing/mocks/nodemailer`, `@stratal/testing/mocks/zenstack-language`, `@stratal/testing/vitest-plugin`
-
-**Framework (`@stratal/framework`)**: `@stratal/framework/auth`, `@stratal/framework/context`, `@stratal/framework/database`, `@stratal/framework/factory`, `@stratal/framework/guards`, `@stratal/framework/rbac`
-
-## Code Conventions
-
-- Symbol-based DI tokens (not string tokens)
-- Constructor injection with `@inject(TOKEN)` decorators
-- Inline type imports enforced (`consistent-type-imports` ESLint rule)
-- Leading-underscore allowed for unused variables
-- Heavy dependencies (AWS SDK, React, nodemailer, resend) are optional peerDependencies
-- Pre-commit hook: husky + lint-staged runs `oxlint --fix` on staged `.ts/.mts` files
-
-## CI/CD
-
-- **CI** (`.github/workflows/ci.yml`): lint, typecheck, test, build for core, testing, and framework packages. Framework tests run with a PostgreSQL service container and require `pretest` for schema generation. Runs on push to main and PRs.
-- **Publish** (`.github/workflows/publish.yml`): changesets-based — publishes `stratal` and `@stratal/testing` to npm on tag push. Creates GitHub Release with auto-generated notes.
-- **Benchmark** (`.github/workflows/benchmark.yml`): runs `yarn workspace stratal bench:json`, stores results in `strataljs/benchmarks` repo with GitHub Pages, compares on PRs with 150% alert threshold.
-- **Docs** (`.github/workflows/docs.yml`): builds core + testing, runs `yarn docs`, deploys to GitHub Pages.
-- **CodeQL** (`.github/workflows/codeql.yml`): TypeScript security analysis on push to main, PRs, and weekly schedule.
-- **Dependency Review** (`.github/workflows/dependency-review.yml`): scans dependency changes on PRs for known vulnerabilities.
-- **Scorecard** (`.github/workflows/scorecard.yml`): OSSF supply-chain security analysis.
+- `.github/workflows/ci.yml` — lint, typecheck, test, build per package on every PR.
+- Framework CI starts a Postgres service container and runs `pretest` for ZenStack/Wrangler codegen.
+- Benchmark workflow compares core perf on PRs with a 150% alert threshold.
+- Also active: CodeQL, dependency-review, OSSF Scorecard, docs (typedoc to GitHub Pages).
