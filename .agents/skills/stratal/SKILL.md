@@ -1,20 +1,21 @@
 ---
 name: stratal
-description: "Build Cloudflare Workers applications with the Stratal framework. Use when code imports from 'stratal', '@stratal/framework', '@stratal/testing', or '@stratal/inertia', when creating modules, controllers, services, routes, queue consumers, cron jobs, seeders, or CLI commands, or when user mentions Stratal, asks to 'create a module', 'add an endpoint', 'set up auth', 'configure database', 'add error handling', 'set up Inertia', 'write tests', or 'run quarry'. Covers DI, routing with OpenAPI, error handling, i18n, testing, auth, RBAC, Inertia.js SSR, WebSocket, and MCP server. Do NOT use for generic Hono apps, plain Cloudflare Workers, or NestJS."
+description: "Build Cloudflare Workers applications with the Stratal framework. Use when code imports from 'stratal', '@stratal/framework', '@stratal/testing', '@stratal/inertia', or '@stratal/inertia-modal', when creating modules, controllers, services, routes, queue consumers, cron jobs, seeders, gateways, Durable Objects, Workflows, or CLI commands, or when user mentions Stratal, asks to 'create a module', 'add an endpoint', 'set up auth', 'configure database', 'set up Inertia', 'add a modal route', 'add a WebSocket gateway', 'use Durable Objects', 'use Cloudflare Workflows', 'configure storage', 'write tests', or 'run quarry'. Covers DI, routing with OpenAPI, error handling, i18n, testing, auth, RBAC, Inertia.js SSR, backend-driven modals, WebSocket gateways, Durable Object / Workflow / RPC base classes, R2 storage, and MCP server. Do NOT use for generic Hono apps, plain Cloudflare Workers, or NestJS."
 license: MIT
 compatibility: Designed for AI Agents. Requires Node.js 22+, npm.
 metadata:
   author: Temitayo Fadojutimi
-  version: "1.1"
+  version: "1.2"
 ---
 
 # Stratal Framework
 
-Stratal is a modular Cloudflare Workers framework. ESM-only. Three packages:
-- `stratal` — core (modules, DI, routing, queues, cron, events, seeders, CLI)
+Stratal is a modular Cloudflare Workers framework. ESM-only. Packages:
+- `stratal` — core (modules, DI, routing, queues, cron, events, seeders, storage, websocket, workers, CLI)
 - `@stratal/framework` — auth (Better Auth), database (ZenStack), access control, guards
 - `@stratal/testing` — test utilities, mocks, HTTP client
 - `@stratal/inertia` — Inertia.js server adapter for React SSR
+- `@stratal/inertia-modal` — backend-driven modal pages for Inertia
 
 ## Critical Rules
 
@@ -185,7 +186,7 @@ Framework: `@stratal/framework/access-control`, `@stratal/framework/auth`, `@str
 
 Testing: `@stratal/testing`, `@stratal/testing/mocks`, `@stratal/testing/mocks/nodemailer`, `@stratal/testing/mocks/zenstack-language`, `@stratal/testing/storage`, `@stratal/testing/vitest-plugin`
 
-Inertia: `@stratal/inertia`, `@stratal/inertia/react`, `@stratal/inertia/testing`, `@stratal/inertia/vite`
+Inertia: `@stratal/inertia`, `@stratal/inertia/react`, `@stratal/inertia/testing`, `@stratal/inertia/vite`, `@stratal/inertia-modal`, `@stratal/inertia-modal/react`
 
 ## Workflows
 
@@ -228,6 +229,16 @@ See `references/errors-and-i18n.md` for the full ExceptionHandler API.
 
 See `references/inertia.md` for props, shared data, flash messages, i18n integration, type safety, and Vite setup.
 
+### Set Up Backend Modals
+
+1. Install: `npm install @stratal/inertia-modal`
+2. Add `ModalModule` to root module imports (after `InertiaModule`)
+3. In a controller, return `ctx.inertiaModal('Page/Component', props, { baseURL: '/parent' })`
+4. In `src/inertia/app.tsx`, call `resolver.set(name => pages['./pages/' + name + '.tsx']?.())` before `createInertiaApp`, and pass `resolve: resolver.resolve`
+5. Place `<Modal />` once in your layout
+
+See `references/inertia-modal.md` for the full backend + frontend setup, `useModal()`, and partial reloads.
+
 ### Expose API as MCP Server
 
 1. Run `npx quarry mcp:serve` to start the stdio MCP server
@@ -249,6 +260,14 @@ See `references/quarry-cli.md` for all MCP flags and options.
 **User says "Add custom error handling"** -> Read `references/errors-and-i18n.md`. Create `ExceptionHandler` subclass, implement `register()`, pass to `Stratal` constructor.
 
 **User says "Set up Inertia.js"** -> Read `references/inertia.md`. Install `@stratal/inertia`, configure `InertiaModule.forRoot()`, use `@InertiaRoute()` + `ctx.inertia()`.
+
+**User says "Add a modal route" / "Open a modal page"** -> Read `references/inertia-modal.md`. Install `@stratal/inertia-modal`, add `ModalModule`, use `ctx.inertiaModal('Component', props, { baseURL })` in controllers, place `<Modal />` in the layout.
+
+**User says "Add a WebSocket gateway" / "Real-time endpoint"** -> Read `references/websocket.md`. Use `@Gateway('/ws/path')` + `@OnMessage()/@OnClose()/@OnError()`. Register in module `controllers` array.
+
+**User says "Use Durable Objects" / "Cloudflare Workflows" / "Service binding RPC"** -> Read `references/workers.md`. Extend `StratalDurableObject` / `StratalWorkflow` / `StratalWorkerEntrypoint` and call `this.runInScope(container => …)` to access DI services.
+
+**User says "Configure storage" / "Upload files to R2"** -> Read `references/infrastructure.md` Storage section. Configure `StorageModule.forRoot()` with R2 bindings, use `StorageService` for upload/download/presigned URLs.
 
 **User says "Expose my API as MCP tools"** -> Run `npx quarry mcp:serve`. Use `--tag` or `--path` flags to filter. Preview with `npx quarry mcp:tools`.
 
@@ -279,6 +298,9 @@ Load these when the task needs deeper knowledge:
 | `references/routing.md` | RouteConfig, RouterContext API, named routes, URL generation, signed URLs, domain routing, Router fluent API, OpenAPI, versioning |
 | `references/errors-and-i18n.md` | ExceptionHandler, ApplicationError, error codes, i18n, withI18n() |
 | `references/inertia.md` | Inertia.js setup, rendering, props, SSR, type safety, Vite |
+| `references/inertia-modal.md` | Backend-driven modal pages: `ModalModule`, `ctx.inertiaModal()`, `<Modal>`, `useModal()` |
+| `references/websocket.md` | WebSocket gateways: `@Gateway`, `@OnMessage`, `GatewayContext` |
+| `references/workers.md` | Durable Objects, Workflows, Service Bindings — DI-aware base classes |
 | `references/database.md` | DatabaseModule, ZenStack, connections, plugins, transactions |
 | `references/auth-and-rbac.md` | Better Auth, AuthContext, access control, AuthGuard |
 | `references/events.md` | Event listeners, @On/@Listener, database events, wildcards |
@@ -286,7 +308,7 @@ Load these when the task needs deeper knowledge:
 | `references/seeders.md` | Database seeders, calling other seeders |
 | `references/middleware-and-guards.md` | RouteConfigurable, middleware registration with Router, guards, @UseGuards |
 | `references/testing.md` | TestingModule, TestHttpClient, mocks, factories |
-| `references/infrastructure.md` | Cache (KV), Logger, Email (Resend/SMTP), Storage (R2/S3), OpenAPI |
+| `references/infrastructure.md` | Cache (KV), Logger, Email (Resend/SMTP), Storage (R2 — multi-disk, presigned URLs), OpenAPI |
 | `references/config.md` | ConfigService, registerAs(), namespaces |
 | `references/incremental-adoption.md` | Mounting Stratal into existing Hono app |
 | `assets/project-scaffold.md` | New project template (only when scaffolding from scratch) |
