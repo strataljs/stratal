@@ -55,6 +55,14 @@ export class RouterContext<T extends RouterEnv = RouterEnv> extends Macroable {
   }
 
   /**
+   * Cloudflare-provided request properties (geo, TLS, bot management, etc.).
+   * Available on Cloudflare Workers requests via `c.req.raw.cf`.
+   */
+  get cf(): IncomingRequestCfProperties {
+    return this.c.req.raw.cf as IncomingRequestCfProperties
+  }
+
+  /**
    * Get request-scoped DI container
    * Contains request-specific services and context (AuthContext)
    *
