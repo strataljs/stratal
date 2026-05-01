@@ -24,48 +24,49 @@ describe('KvRateLimiterStore', () => {
     mockResolvedValue: (v: unknown) => void
   }
 
-  it('writes count=1 and a future resetAt on first hit', async () => {
+  it('get() returns null for a missing key', async () => {
     mockGet().mockResolvedValue(null)
+    expect(await store.get('rl:test')).toBeNull()
+    expect(cache.get).toHaveBeenCalledWith('rl:test', 'json')
+  })
 
-    const result = await store.hit('rl:test:60:user', 60)
+  it('get<T>() returns the parsed value', async () => {
+    const stored = { count: 5, resetAt: Date.now() + 30_000 }
+    mockGet().mockResolvedValue(stored)
+    expect(await store.get<typeof stored>('rl:test')).toEqual(stored)
+  })
 
-    expect(result.count).toBe(1)
-    expect(result.resetAt).toBe(Date.now() + 60_000)
+  it('set() JSON-stringifies the value and forwards expirationTtl', async () => {
+    const value = { count: 1, resetAt: Date.now() + 60_000 }
+    await store.set('rl:test', value, 60)
+
     expect(cache.put).toHaveBeenCalledWith(
-      'rl:test:60:user',
-      JSON.stringify({ count: 1, resetAt: result.resetAt }),
+      'rl:test',
+      JSON.stringify(value),
       { expirationTtl: 60 },
     )
   })
 
-  it('increments an existing entry without changing its resetAt', async () => {
-    const existing = { count: 4, resetAt: Date.now() + 30_000 }
-    mockGet().mockResolvedValue(existing)
-
-    const result = await store.hit('rl:test:60:user', 60)
-
-    expect(result.count).toBe(5)
-    expect(result.resetAt).toBe(existing.resetAt)
+  it('set() clamps TTL to KV minimum of 60 seconds', async () => {
+    await store.set('rl:test', { count: 1, resetAt: Date.now() + 5_000 }, 5)
     expect(cache.put).toHaveBeenCalledWith(
-      'rl:test:60:user',
-      JSON.stringify({ count: 5, resetAt: existing.resetAt }),
-      // Remaining window is 30s but KV minimum is 60s.
+      'rl:test',
+      expect.any(String),
       { expirationTtl: 60 },
     )
   })
 
-  it('starts a fresh window when the previous one has elapsed', async () => {
-    const expired = { count: 99, resetAt: Date.now() - 1 }
-    mockGet().mockResolvedValue(expired)
-
-    const result = await store.hit('rl:test:60:user', 60)
-
-    expect(result.count).toBe(1)
-    expect(result.resetAt).toBe(Date.now() + 60_000)
+  it('set() rounds fractional TTL up before clamping', async () => {
+    await store.set('rl:test', 'v', 90.2)
+    expect(cache.put).toHaveBeenCalledWith(
+      'rl:test',
+      expect.any(String),
+      { expirationTtl: 91 },
+    )
   })
 
-  it('reset() delegates to cache.delete', async () => {
-    await store.reset('rl:test:60:user')
-    expect(cache.delete).toHaveBeenCalledWith('rl:test:60:user')
+  it('delete() delegates to cache.delete', async () => {
+    await store.delete('rl:test')
+    expect(cache.delete).toHaveBeenCalledWith('rl:test')
   })
 })

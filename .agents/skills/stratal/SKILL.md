@@ -5,7 +5,7 @@ license: MIT
 compatibility: Designed for AI Agents. Requires Node.js 22+, npm.
 metadata:
   author: Temitayo Fadojutimi
-  version: "1.4"
+  version: "1.5"
 ---
 
 # Stratal Framework
@@ -293,7 +293,7 @@ See `references/quarry-cli.md` for all MCP flags and options.
 
 **User says "I have an existing Hono app"** -> Read `references/incremental-adoption.md`. Mount Stratal as sub-app via `stratal.hono`.
 
-**User says "Add rate limiting" / "Throttle this endpoint" / "429 too many requests"** -> Read `references/rate-limiter.md`. Import `RateLimiterModule.forRoot({ store: 'kv', binding: 'RATE_LIMITS' })` in AppModule. Define limiters in a module's `OnInitialize` via `registry.for('name', ctx => Limit.perMinute(60).by(...))`. Attach with `router.throttle('name')` or `@RateLimit('name')`.
+**User says "Add rate limiting" / "Throttle this endpoint" / "429 too many requests"** -> Read `references/rate-limiter.md`. Import `RateLimiterModule.forRoot({ store: 'kv', binding: 'RATE_LIMITS' })`. Define limiters in `OnInitialize` via `registry.for('name', ctx => Limit.perMinute(60).by(...))`. Attach with `router.throttle('name')` or `@RateLimit('name')`. For better-auth path rules → `references/auth-and-rbac.md` "Rate-limit interop".
 
 ## Reference Loading Guide
 
@@ -310,12 +310,12 @@ Load these when the task needs deeper knowledge:
 | `references/websocket.md` | WebSocket gateways: `@Gateway`, `@OnMessage`, `GatewayContext` |
 | `references/workers.md` | Durable Objects, Workflows, Service Bindings — DI-aware base classes |
 | `references/database.md` | DatabaseModule, ZenStack, connections, plugins, transactions |
-| `references/auth-and-rbac.md` | Better Auth, AuthContext, access control, AuthGuard |
+| `references/auth-and-rbac.md` | Better Auth, AuthContext, access control, AuthGuard, rate-limit interop (`registry.forPath()` + auto-wired `customStorage` / `customRules`) |
 | `references/events.md` | Event listeners, @On/@Listener, database events, wildcards |
 | `references/queues-and-cron.md` | Queue consumers, senders, cron jobs, wrangler config |
 | `references/seeders.md` | Database seeders, calling other seeders |
 | `references/middleware-and-guards.md` | RouteConfigurable, middleware registration with Router, guards, @UseGuards |
-| `references/rate-limiter.md` | Named rate limiters, `RateLimiterModule.forRoot()`, `Limit` value class, `router.throttle()`, `@RateLimit` decorator, KV / memory / custom stores, 429 headers |
+| `references/rate-limiter.md` | Named rate limiters, `RateLimiterModule.forRoot()`, `Limit` value class (incl. `perSeconds`), `router.throttle()`, `@RateLimit` decorator, typed-KV custom stores, 429 headers |
 | `references/testing.md` | TestingModule, TestHttpClient, mocks, factories |
 | `references/infrastructure.md` | Cache (KV), Logger, Email (Resend/SMTP), Storage (R2 — multi-disk, presigned URLs), OpenAPI |
 | `references/config.md` | ConfigService, registerAs(), namespaces |

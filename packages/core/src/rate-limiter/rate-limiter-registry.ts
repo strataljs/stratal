@@ -1,11 +1,12 @@
 import { inject } from 'tsyringe'
 import { Transient } from '../di/decorators'
+import { Macroable } from '../macroable'
 import type { Next } from '../router/middleware.interface'
 import type { RouterContext } from '../router/router-context'
 import { RateLimiterNotDefinedError, TooManyRequestsError } from './errors'
 import type { Limit, RateLimitHeaders } from './limit'
 import { RATE_LIMITER_TOKENS } from './rate-limiter.tokens'
-import type { IRateLimiterStore } from './stores/rate-limiter-store.interface'
+import type { IRateLimiterStore, RateLimitHit } from './stores/rate-limiter-store.interface'
 
 /**
  * Resolver function registered via {@link RateLimiterRegistry.for}. Receives
@@ -15,6 +16,11 @@ import type { IRateLimiterStore } from './stores/rate-limiter-store.interface'
 export type LimitResolver = (
   ctx: RouterContext,
 ) => Limit | Limit[] | Promise<Limit | Limit[]>
+
+interface StoredHit {
+  count: number
+  resetAt: number
+}
 
 /**
  * Central registry of named rate limiters and the request-time enforcement
@@ -30,6 +36,10 @@ export type LimitResolver = (
  *   }
  * }
  * ```
+ *
+ * Extensible via `Macroable`: adapter packages (e.g. `@stratal/framework/auth`)
+ * can attach extra registration methods such as `forPath()` for better-auth
+ * `customRules` interop.
  */
 // IMPORTANT: do not pass a token to @Transient — that would self-register
 // the class globally at module-load time, making the Registry resolvable
@@ -38,12 +48,14 @@ export type LimitResolver = (
 // `{ isOptional: true }` in ThrottleMiddleware correctly returns undefined
 // when the module is missing.
 @Transient()
-export class RateLimiterRegistry {
+export class RateLimiterRegistry extends Macroable {
   private readonly resolvers = new Map<string, LimitResolver>()
 
   constructor(
     @inject(RATE_LIMITER_TOKENS.Store) private readonly store: IRateLimiterStore,
-  ) {}
+  ) {
+    super()
+  }
 
   /**
    * Register a named limiter. Names must be unique; calling `for()` again
@@ -61,8 +73,8 @@ export class RateLimiterRegistry {
   /**
    * Enforce the named limiter for the current request. Called by
    * `ThrottleMiddleware` (the per-name class produced by
-   * `createThrottleMiddleware`). Resolves the limiter, hits the store for
-   * each non-bypassed limit, sets `X-RateLimit-*` headers on success, and
+   * `createThrottleMiddleware`). Resolves the limiter, increments the store
+   * for each non-bypassed limit, sets `X-RateLimit-*` headers on success, and
    * either invokes the limit's custom `.response()` or throws
    * {@link TooManyRequestsError} when a limit is exceeded.
    */
@@ -85,7 +97,7 @@ export class RateLimiterRegistry {
 
     for (const limit of active) {
       const key = this.makeKey(name, limit.windowSeconds, limit.key)
-      const hit = await this.store.hit(key, limit.windowSeconds)
+      const hit = await this.hit(key, limit.windowSeconds)
 
       if (hit.count > limit.max) {
         if (!exceeded || hit.resetAt > exceeded.resetAt) {
@@ -126,6 +138,26 @@ export class RateLimiterRegistry {
       downstream.headers.set('X-RateLimit-Remaining', headers['X-RateLimit-Remaining'])
       downstream.headers.set('X-RateLimit-Reset', headers['X-RateLimit-Reset'])
     }
+  }
+
+  /**
+   * Get-modify-set increment over the typed KV store. Not atomic across
+   * concurrent edge requests on KV — see `KvRateLimiterStore`'s caveat.
+   */
+  private async hit(key: string, windowSeconds: number): Promise<RateLimitHit> {
+    const now = Date.now()
+    const existing = await this.store.get<StoredHit>(key)
+
+    let next: StoredHit
+    if (!existing || existing.resetAt <= now) {
+      next = { count: 1, resetAt: now + windowSeconds * 1000 }
+    } else {
+      next = { count: existing.count + 1, resetAt: existing.resetAt }
+    }
+
+    const ttlSeconds = Math.max(1, Math.ceil((next.resetAt - now) / 1000))
+    await this.store.set(key, next, ttlSeconds)
+    return next
   }
 
   private makeKey(name: string, windowSeconds: number, by: string | undefined): string {

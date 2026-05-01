@@ -106,6 +106,71 @@ export class SessionService {
 }
 ```
 
+## Rate-limit interop
+
+Import `RateLimiterModule` alongside `AuthModule`. `AuthModule.forRootAsync` auto-attaches `customStorage` (Stratal's store, namespaced under `ba-rl:`) and `customRules` (projected from every `RateLimiterRegistry.forPath(...)` entry), and sets `rateLimit.enabled: true`. `forPath` is added to `RateLimiterRegistry` as a `Macroable` macro on framework load — only available when `@stratal/framework/auth` is imported.
+
+```typescript
+import { Module } from 'stratal/module'
+import type { ModuleContext, OnInitialize } from 'stratal/module'
+import { Limit, RateLimiterModule, RATE_LIMITER_TOKENS, type RateLimiterRegistry } from 'stratal/rate-limiter'
+import { AuthModule } from '@stratal/framework/auth'
+import { DI_TOKENS } from 'stratal/di'
+
+@Module({})
+export class AuthRateLimitsModule implements OnInitialize {
+  onInitialize({ container }: ModuleContext): void {
+    const limiter = container.resolve<RateLimiterRegistry>(RATE_LIMITER_TOKENS.Registry)
+
+    limiter.forPath('/sign-in/email', () => Limit.perSeconds(10, 3))
+    limiter.forPath('/two-factor/*', async (req) =>
+      req.headers.get('x-tier') === 'pro' ? Limit.perSeconds(10, 10) : Limit.perSeconds(10, 3),
+    )
+    limiter.forPath('/forget-password', () => Limit.none())   // disable for path
+  }
+}
+
+@Module({
+  imports: [
+    RateLimiterModule.forRoot({ store: 'kv', binding: 'RATE_LIMITS' }),
+    AuthModule.forRootAsync({
+      inject: [DI_TOKENS.Database],
+      useFactory: (db) => ({ database: db, secret: '...', baseURL: '...' }),
+    }),
+    AuthRateLimitsModule,
+  ],
+})
+export class AppModule {}
+```
+
+`forPath` resolvers receive the native `Request` (not `RouterContext`).
+
+Path-rule rules:
+- `Limit.by(...)` ignored. Better-auth scopes per-IP+path.
+- Multiple `Limit`s reduce to the most restrictive (smallest `max / windowSeconds`).
+- `Limit.none()` → `false` (better-auth disable sentinel).
+- `.response(...)` ignored. Better-auth renders its own 429.
+- Register all `forPath` entries inside `OnInitialize`. `customRules` snapshots once at AuthService construction.
+
+Override per-path via the auth `useFactory` — user-supplied keys win:
+
+```typescript
+AuthModule.forRootAsync({
+  inject: [DI_TOKENS.Database],
+  useFactory: (db) => ({
+    database: db,
+    rateLimit: {
+      customRules: {
+        '/sign-in/email': false,                  // override projected entry
+        '/special': { window: 5, max: 1 },        // add a path not on the registry
+      },
+    },
+  }),
+})
+```
+
+Without `RateLimiterModule`, better-auth falls back to its own in-memory limiter.
+
 ## Access Control
 
 Stratal's access control is built on Better Auth's `access` plugin. Define resources and roles once, then use `AuthGuard` for declarative enforcement or `AccessService` for runtime checks.

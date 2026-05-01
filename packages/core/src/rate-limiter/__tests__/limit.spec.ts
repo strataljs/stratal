@@ -10,6 +10,12 @@ describe('Limit', () => {
       expect(limit.disabled).toBe(false)
     })
 
+    it('perSeconds(10, 3) → 10-second window', () => {
+      const limit = Limit.perSeconds(10, 3)
+      expect(limit.windowSeconds).toBe(10)
+      expect(limit.max).toBe(3)
+    })
+
     it('perMinute produces a 60-second window', () => {
       const limit = Limit.perMinute(60)
       expect(limit.windowSeconds).toBe(60)

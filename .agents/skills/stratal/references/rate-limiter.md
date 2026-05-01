@@ -101,8 +101,9 @@ Add `RateLimitsModule` to your AppModule's `imports`. Calling `for(name, ...)` t
 import { Limit } from 'stratal/rate-limiter'
 
 Limit.perSecond(10)
+Limit.perSeconds(10, 3)           // 3 requests per 10 seconds
 Limit.perMinute(60)
-Limit.perMinutes(15, 200)        // 200 requests per 15 minutes
+Limit.perMinutes(15, 200)         // 200 requests per 15 minutes
 Limit.perHour(1000)
 Limit.perDay(10_000)
 Limit.none()                      // bypass for this request
@@ -191,29 +192,30 @@ When multiple limits apply, headers reflect the most restrictive on success and 
 
 ## Custom store
 
-Implement `IRateLimiterStore`:
+`IRateLimiterStore` is a typed key-value store with TTL — the registry handles increment math itself, so a custom store only needs to persist arbitrary values.
 
 ```typescript
 import { Transient } from 'stratal/di'
-import type { IRateLimiterStore, RateLimitHit } from 'stratal/rate-limiter'
+import type { IRateLimiterStore } from 'stratal/rate-limiter'
 
 @Transient()
-export class DurableObjectRateLimiterStore implements IRateLimiterStore {
-  async hit(key: string, windowSeconds: number): Promise<RateLimitHit> {
-    // Forward to a Durable Object that does atomic increments.
-    // Return { count, resetAt } — count is post-increment, resetAt is ms epoch.
-  }
-
-  async reset(key: string): Promise<void> { ... }
+export class RedisRateLimiterStore implements IRateLimiterStore {
+  async get<T>(key: string): Promise<T | null> { ... }
+  async set<T>(key: string, value: T, ttlSeconds: number): Promise<void> { ... }
+  async delete(key: string): Promise<void> { ... }
 }
 
 // Wire it up:
-RateLimiterModule.forRoot({ store: { useClass: DurableObjectRateLimiterStore } })
+RateLimiterModule.forRoot({ store: { useClass: RedisRateLimiterStore } })
 ```
 
 The class is resolved from the DI container, so it can `@inject` other services.
 
-> **KV caveat**: The built-in KV store does get-modify-put without atomic increment — concurrent edge requests against the same key may undercount. Use a Durable Object store for strict accuracy. KV's minimum `expirationTtl` is 60s; sub-60s windows still enforce correctly via `resetAt`.
+> **KV caveat**: The built-in KV store does get-modify-set without atomic increment — concurrent edge requests against the same key may undercount. Use a Durable Object store for strict accuracy. KV's minimum `expirationTtl` is 60s; sub-60s windows still enforce correctly via the persisted `resetAt`.
+
+## Better-auth interop
+
+`@stratal/framework/auth` augments `RateLimiterRegistry` with `forPath()` and auto-wires better-auth's `rateLimit` block when both modules are imported. See `references/auth-and-rbac.md` "Rate-limit interop".
 
 ## Errors
 

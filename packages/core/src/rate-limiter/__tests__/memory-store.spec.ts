@@ -14,46 +14,43 @@ describe('InMemoryRateLimiterStore', () => {
     vi.useRealTimers()
   })
 
-  it('hit() returns count=1 and a future resetAt on first hit', async () => {
-    const result = await store.hit('rl:test:60:user', 60)
-    expect(result.count).toBe(1)
-    expect(result.resetAt).toBe(Date.now() + 60_000)
+  it('returns null for missing keys', async () => {
+    expect(await store.get('missing')).toBeNull()
   })
 
-  it('hit() increments without resetting the window on subsequent hits', async () => {
-    const first = await store.hit('rl:test:60:user', 60)
-    vi.advanceTimersByTime(10_000)
-    const second = await store.hit('rl:test:60:user', 60)
-    const third = await store.hit('rl:test:60:user', 60)
-
-    expect(second.count).toBe(2)
-    expect(third.count).toBe(3)
-    expect(second.resetAt).toBe(first.resetAt)
-    expect(third.resetAt).toBe(first.resetAt)
+  it('round-trips a typed value with TTL', async () => {
+    await store.set('k', { count: 3, resetAt: Date.now() + 60_000 }, 60)
+    const value = await store.get<{ count: number; resetAt: number }>('k')
+    expect(value).toEqual({ count: 3, resetAt: Date.now() + 60_000 })
   })
 
-  it('hit() starts a fresh window after the previous one expires', async () => {
-    const first = await store.hit('rl:test:60:user', 60)
-    vi.advanceTimersByTime(60_001)
-    const fresh = await store.hit('rl:test:60:user', 60)
+  it('expires entries lazily on get after the TTL elapses', async () => {
+    await store.set('k', 'hello', 30)
+    expect(await store.get('k')).toBe('hello')
 
-    expect(fresh.count).toBe(1)
-    expect(fresh.resetAt).toBeGreaterThan(first.resetAt)
+    vi.advanceTimersByTime(30_001)
+    expect(await store.get('k')).toBeNull()
   })
 
-  it('reset() clears the bucket so the next hit starts fresh', async () => {
-    await store.hit('rl:test:60:user', 60)
-    await store.hit('rl:test:60:user', 60)
-    await store.reset('rl:test:60:user')
+  it('overwrites the value and resets the TTL on subsequent set()', async () => {
+    await store.set('k', 'a', 30)
+    vi.advanceTimersByTime(20_000)
+    await store.set('k', 'b', 30)
 
-    const next = await store.hit('rl:test:60:user', 60)
-    expect(next.count).toBe(1)
+    vi.advanceTimersByTime(20_000)
+    expect(await store.get('k')).toBe('b')
   })
 
-  it('keeps separate counters per key', async () => {
-    await store.hit('rl:test:60:alice', 60)
-    await store.hit('rl:test:60:alice', 60)
-    const bob = await store.hit('rl:test:60:bob', 60)
-    expect(bob.count).toBe(1)
+  it('delete() drops the entry immediately', async () => {
+    await store.set('k', 'v', 60)
+    await store.delete('k')
+    expect(await store.get('k')).toBeNull()
+  })
+
+  it('keeps separate values per key', async () => {
+    await store.set('a', 1, 60)
+    await store.set('b', 2, 60)
+    expect(await store.get('a')).toBe(1)
+    expect(await store.get('b')).toBe(2)
   })
 })

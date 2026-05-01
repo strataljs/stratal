@@ -1,45 +1,31 @@
 import type { CacheService } from '../../cache/services/cache.service'
-import type { IRateLimiterStore, RateLimitHit } from './rate-limiter-store.interface'
-
-interface KvEntry {
-  count: number
-  resetAt: number
-}
+import type { IRateLimiterStore } from './rate-limiter-store.interface'
 
 /**
- * Cloudflare KV-backed rate-limit store.
+ * Cloudflare KV-backed typed KV store.
  *
- * Implements `hit()` as a get-modify-put cycle. KV has no native atomic
- * increment, so highly concurrent requests against the same key from
- * different edge locations may undercount. That's an inherent KV
- * tradeoff — pick `{ useClass: MyDurableObjectStore }` for strict
+ * KV's minimum `expirationTtl` is 60 seconds; sub-60s windows are still
+ * enforced by the registry's algorithm via the persisted `resetAt`, but
+ * the key itself may live in KV longer than the logical window.
+ *
+ * KV has no native atomic increment, so concurrent writes from different
+ * edge locations may undercount under high contention. That's an inherent
+ * KV tradeoff — pick `{ useClass: MyDurableObjectStore }` for strict
  * accuracy across edges.
- *
- * KV's minimum `expirationTtl` is 60 seconds; sub-60s windows are
- * still enforced by the algorithm via `resetAt`, but the key may live
- * in KV longer than the window.
  */
 export class KvRateLimiterStore implements IRateLimiterStore {
   constructor(private readonly cache: CacheService) {}
 
-  async hit(key: string, windowSeconds: number): Promise<RateLimitHit> {
-    const now = Date.now()
-    const existing = await this.cache.get<KvEntry>(key, 'json')
-
-    let next: KvEntry
-    if (!existing || existing.resetAt <= now) {
-      next = { count: 1, resetAt: now + windowSeconds * 1000 }
-    } else {
-      next = { count: existing.count + 1, resetAt: existing.resetAt }
-    }
-
-    const ttlSeconds = Math.max(60, Math.ceil((next.resetAt - now) / 1000))
-    await this.cache.put(key, JSON.stringify(next), { expirationTtl: ttlSeconds })
-
-    return next
+  async get<T>(key: string): Promise<T | null> {
+    return (await this.cache.get<T>(key, 'json')) ?? null
   }
 
-  async reset(key: string): Promise<void> {
+  async set<T>(key: string, value: T, ttlSeconds: number): Promise<void> {
+    const ttl = Math.max(60, Math.ceil(ttlSeconds))
+    await this.cache.put(key, JSON.stringify(value), { expirationTtl: ttl })
+  }
+
+  async delete(key: string): Promise<void> {
     await this.cache.delete(key)
   }
 }

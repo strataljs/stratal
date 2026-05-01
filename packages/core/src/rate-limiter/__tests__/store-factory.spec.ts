@@ -63,8 +63,9 @@ describe('RateLimiterStoreFactory', () => {
 
   it('resolves a custom store class from the container for { store: { useClass } }', () => {
     class CustomStore implements IRateLimiterStore {
-      hit() { return Promise.resolve({ count: 1, resetAt: 0 }) }
-      reset() { return Promise.resolve() }
+      get<T>() { return Promise.resolve(null as T | null) }
+      set() { return Promise.resolve() }
+      delete() { return Promise.resolve() }
     }
     const customInstance = new CustomStore()
     const { factory, container } = buildFactory({ store: { useClass: CustomStore } })

@@ -49,6 +49,25 @@ describe('RateLimiterRegistry', () => {
     })
   })
 
+  describe('Macroable', () => {
+    afterEach(() => {
+      RateLimiterRegistry.flushMacros()
+    })
+
+    it('exposes the macro() static so adapters can extend it', () => {
+      expect(typeof RateLimiterRegistry.macro).toBe('function')
+    })
+
+    it('macro() adds a method usable on instances', () => {
+      RateLimiterRegistry.macro('extraMethod', function (this: RateLimiterRegistry) {
+        return this.has('api')
+      })
+      registry.for('api', () => Limit.perMinute(60))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect((registry as any).extraMethod()).toBe(true)
+    })
+  })
+
   describe('handle()', () => {
     it('throws RateLimiterNotDefinedError for an unknown name', async () => {
       const next: Next = vi.fn((): Promise<void> => Promise.resolve())

@@ -53,6 +53,10 @@ export class Limit {
     return new Limit(1, max)
   }
 
+  static perSeconds(seconds: number, max: number): Limit {
+    return new Limit(seconds, max)
+  }
+
   static perMinute(max: number): Limit {
     return new Limit(60, max)
   }
