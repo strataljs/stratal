@@ -14,6 +14,7 @@ const HTTP_STATUS_TO_ERROR_CODE: Partial<Record<number, ErrorCode>> = {
   404: ERROR_CODES.RESOURCE.NOT_FOUND,
   409: ERROR_CODES.RESOURCE.CONFLICT,
   422: ERROR_CODES.VALIDATION.GENERIC,
+  429: ERROR_CODES.RESOURCE.TOO_MANY_REQUESTS,
   500: ERROR_CODES.SYSTEM.INTERNAL_ERROR,
 }
 
@@ -28,6 +29,7 @@ const HTTP_STATUS_MESSAGES: Partial<Record<number, string>> = {
   404: 'Not Found',
   409: 'Conflict',
   422: 'Unprocessable Entity',
+  429: 'Too Many Requests',
   500: 'Internal Server Error',
 }
 

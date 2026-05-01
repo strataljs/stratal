@@ -32,6 +32,8 @@ import {
   ResponseValidationError,
 } from '../errors'
 import type { HonoApp } from '../hono-app'
+import { getRateLimits } from '../../rate-limiter/decorators/rate-limit.decorator'
+import { createThrottleMiddleware } from '../../rate-limiter/throttle.middleware'
 import type { Middleware } from '../middleware.interface'
 import { createDomainMiddleware } from '../middleware/domain.middleware'
 import { createMiddlewareChain } from '../middleware/middleware-chain'
@@ -155,6 +157,13 @@ export class RouteRegistrationService {
     // Resolve Router config for this controller (prefix, domain, name, middleware, version, hideFromDocs)
     const routerConfig = this.routerResolver?.resolveForController(ControllerClass) ?? { middleware: [] }
 
+    // Class-level @RateLimit decorators — same for every method on this controller.
+    // Throttle middleware classes are memoized by name in createThrottleMiddleware,
+    // so two `@RateLimit('a')` decorators yield the same class — Set dedupes them.
+    const classThrottleMiddleware = Array.from(
+      new Set(getRateLimits(ControllerClass).map(createThrottleMiddleware)),
+    )
+
     // Apply Router prefix to controller base path
     const basePath = routerConfig.prefix
       ? this.joinPaths(routerConfig.prefix, controllerRoute)
@@ -168,6 +177,8 @@ export class RouteRegistrationService {
 
     // WebSocket gateway
     if (isWsGateway) {
+      // Class-level @RateLimit applies; methods on a gateway aren't decorated routes.
+      const wsMiddleware = [...routerConfig.middleware, ...classThrottleMiddleware]
       const expandedRoutes = this.registry.register({
         method: 'ws',
         basePath,
@@ -176,7 +187,7 @@ export class RouteRegistrationService {
         controller: ControllerClass.name,
         action: 'ws',
         hidden: routerConfig.hideFromDocs ?? false,
-        middleware: routerConfig.middleware.map(m => m.name),
+        middleware: wsMiddleware.map(m => m.name),
       })
 
       for (const route of expandedRoutes) {
@@ -185,8 +196,8 @@ export class RouteRegistrationService {
           // for this specific route (including the root of the group) —
           // not via a `/*` sub-path wildcard, which would miss the exact
           // path match.
-          if (routerConfig.middleware.length > 0) {
-            this.app.use(route.path, createMiddlewareChain(routerConfig.middleware))
+          if (wsMiddleware.length > 0) {
+            this.app.use(route.path, createMiddlewareChain(wsMiddleware))
           }
           // Apply domain middleware
           if (effectiveDomain) {
@@ -207,6 +218,8 @@ export class RouteRegistrationService {
 
     // Wildcard routes (non-RESTful controllers with handle())
     if (prototype.handle) {
+      // No method-level @RateLimit on wildcard handle() — only class-level applies.
+      const wildcardMiddleware = [...routerConfig.middleware, ...classThrottleMiddleware]
       const expandedRoutes = this.registry.register({
         method: 'all',
         basePath,
@@ -215,13 +228,13 @@ export class RouteRegistrationService {
         controller: className,
         action: 'handle',
         hidden: routerConfig.hideFromDocs ?? false,
-        middleware: routerConfig.middleware.map(m => m.name),
+        middleware: wildcardMiddleware.map(m => m.name),
       })
 
       for (const route of expandedRoutes) {
         actions.set(route, () => {
-          if (routerConfig.middleware.length > 0) {
-            this.app.use(route.path, createMiddlewareChain(routerConfig.middleware))
+          if (wildcardMiddleware.length > 0) {
+            this.app.use(route.path, createMiddlewareChain(wildcardMiddleware))
           }
           this.registerWildcardRoute(ControllerClass, route.path)
         })
@@ -274,12 +287,19 @@ export class RouteRegistrationService {
         ? `${routerName}${controllerName}`
         : (routerName ?? controllerName)
 
-    // Hoist middleware name computation (same for all methods in this controller)
-    const middlewareNames = routerConfig.middleware.map(m => m.name)
-
     for (const { method: methodName, meta } of methodMetadata) {
       const resolved = this.resolveMethodAndPath(meta, methodName, basePath, className)
       if (!resolved) continue
+
+      // Compose per-method middleware: scope (router.throttle/.middleware)
+      // → class-level @RateLimit → method-level @RateLimit. Throttle classes
+      // are memoized by name, so duplicates across class + method (e.g.
+      // `@RateLimit('api')` on both) collapse to a single middleware.
+      const methodThrottleMiddleware = getRateLimits(prototype, methodName).map(createThrottleMiddleware)
+      const effectiveMiddleware = Array.from(
+        new Set([...routerConfig.middleware, ...classThrottleMiddleware, ...methodThrottleMiddleware]),
+      )
+      const middlewareNames = effectiveMiddleware.map(m => m.name)
 
       const { httpMethod, fullPath, routeConfig: rawRouteConfig, statusCodeOverride } = resolved
 
@@ -364,8 +384,8 @@ export class RouteRegistrationService {
               methodName,
             })
 
-            if (routerConfig.middleware.length > 0) {
-              this.app.use(route.path, createMiddlewareChain(routerConfig.middleware))
+            if (effectiveMiddleware.length > 0) {
+              this.app.use(route.path, createMiddlewareChain(effectiveMiddleware))
             }
             if (allGuards.length > 0) {
               this.app.use(route.path, this.createGuardMiddleware(allGuards))
@@ -406,7 +426,7 @@ export class RouteRegistrationService {
           //
           // Final order: global app.use → request validators → scoped
           // middleware → guards → controller handler.
-          const wrappedHandler = this.wrapHandlerWithChain(handler, routerConfig.middleware, allGuards)
+          const wrappedHandler = this.wrapHandlerWithChain(handler, effectiveMiddleware, allGuards)
           this.app.openapi(openApiRoute, wrappedHandler)
 
           // Register clean path in OpenAPI spec (strips regex constraints from params)

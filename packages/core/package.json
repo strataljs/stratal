@@ -114,6 +114,10 @@
       "types": "./dist/queue/index.d.mts",
       "import": "./dist/queue/index.mjs"
     },
+    "./rate-limiter": {
+      "types": "./dist/rate-limiter/index.d.mts",
+      "import": "./dist/rate-limiter/index.mjs"
+    },
     "./router": {
       "types": "./dist/router/index.d.mts",
       "import": "./dist/router/index.mjs"

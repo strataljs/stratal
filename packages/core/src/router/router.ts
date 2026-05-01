@@ -1,4 +1,5 @@
 import type { ZodObject } from '../i18n/validation'
+import { createThrottleMiddleware } from '../rate-limiter/throttle.middleware'
 import type { Constructor } from '../types'
 import { RouterUseScopeError } from './errors'
 import type { Middleware } from './middleware.interface'
@@ -101,6 +102,24 @@ export class Router {
   /** Middleware applied to controllers in this scope */
   middleware(...middlewares: Constructor<Middleware>[]): this {
     this._defaultEntry.middleware.push(...middlewares)
+    return this
+  }
+
+  /**
+   * Apply a named rate limiter to controllers in this scope.
+   *
+   * The named limiter must be registered via `RateLimiterRegistry.for(name, ...)`
+   * (typically inside a module's `onInitialize` hook), and the user must
+   * import `RateLimiterModule.forRoot({ store: ... })` in their AppModule.
+   *
+   * @example
+   * ```typescript
+   * router.prefix('/uploads').throttle('uploads')
+   * router.group([AdminController], (admin) => admin.throttle('admin'))
+   * ```
+   */
+  throttle(name: string): this {
+    this._defaultEntry.middleware.push(createThrottleMiddleware(name))
     return this
   }
 
