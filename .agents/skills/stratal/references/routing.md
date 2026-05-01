@@ -408,6 +408,7 @@ export class ApiModule implements RouteConfigurable {
 | `.middleware(...classes)` | Middleware for controllers in scope |
 | `.version(v)` | API version (string or array) |
 | `.hideFromDocs(hide?)` | Hide routes from OpenAPI docs |
+| `.throttle(name)` | Apply a named rate limiter to controllers in scope (see `references/rate-limiter.md`) |
 | `.use(...classes)` | **Global middleware** — all routes in entire app (root Router only) |
 | `.group(controllers, callback)` | Sub-group with its own config |
 
