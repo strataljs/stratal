@@ -227,7 +227,7 @@ See `references/errors-and-i18n.md` for the full ExceptionHandler API.
 3. Use `@InertiaGet('/')` / `@InertiaPost('/')` and `ctx.inertia('page/Name', props)` in controllers (or `@InertiaRoute()` for convention routing)
 4. For flash messages: add `flash: { store: new CookieFlashStore({ secret: env.FLASH_SECRET }) }` and use `ctx.flash(key, value)`
 5. For frontend i18n: add `i18n: { only: ['common', 'nav'] }` and use `useI18n()` from `@stratal/inertia/react`
-6. Run `npx inertia dev` for development (standalone bin shipped by `@stratal/inertia`)
+6. Run `npx quarry inertia:dev` for development (standalone bin shipped by `@stratal/inertia`)
 
 See `references/inertia.md` for props, shared data, flash messages, i18n integration, type safety, and Vite setup.
 

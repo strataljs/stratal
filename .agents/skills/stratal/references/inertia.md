@@ -446,19 +446,19 @@ With augmentation, `ctx.inertia('notes/Index', { notes })` is fully type-checked
 
 ```bash
 # Scaffold Inertia project structure (run once after install)
-npx inertia install               # --skip-deps to skip the npm-install hint
+npx quarry inertia:install               # --skip-deps to skip the npm-install hint
 
 # Start Vite dev server
-npx inertia dev                   # --port=5173 --host --persist-to=.cf-state
+npx quarry inertia:dev                   # --port=5173 --host --persist-to=.cf-state
 
 # Production build via Vite
-npx inertia build                 # --out-dir=dist --ssr
+npx quarry inertia:build                 # --out-dir=dist --ssr
 
 # Generate TypeScript types for Inertia pages
-npx inertia types                 # --watch
+npx quarry inertia:types                 # --watch
 ```
 
-Run `npx inertia --help` for the top-level command list.
+Run `npx quarry help` for the top-level command list.
 
 ## Vite Integration
 
