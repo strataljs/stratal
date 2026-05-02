@@ -66,16 +66,16 @@
     "lint:fix": "npx oxlint --fix ."
   },
   "dependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.15.0",
+    "@cloudflare/vitest-pool-workers": "^0.15.2",
     "@golevelup/ts-vitest": "^4.0.0",
-    "msw": "^2.13.6"
+    "msw": "^2.14.2"
   },
   "peerDependencies": {
-    "@stratal/framework": "^0.0.19",
-    "better-auth": "^1.4.9",
-    "reflect-metadata": "^0.2.2",
-    "stratal": "^0.0.19",
-    "vitest": "^4.1.0"
+    "@stratal/framework": ">=0.0.18",
+    "better-auth": ">=1.4",
+    "reflect-metadata": ">=0.2",
+    "stratal": ">=0.0.18",
+    "vitest": ">=4"
   },
   "peerDependenciesMeta": {
     "@stratal/framework": {
@@ -86,7 +86,7 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "4.20260426.1",
+    "@cloudflare/workers-types": "4.20260502.1",
     "@stratal/framework": "workspace:*",
     "@types/node": "^25.6.0",
     "@vitest/runner": "~4.1.5",

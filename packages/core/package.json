@@ -169,12 +169,12 @@
     "@intlify/message-compiler": "^11.4.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@swc-node/register": "^1.11.1",
-    "@swc/core": "^1.15.32",
+    "@swc/core": "^1.15.33",
     "@swc/helpers": "^0.5.21",
     "clipanion": "^4.0.0-rc.4",
-    "hono": "^4.12.15",
+    "hono": "^4.12.16",
     "tsyringe": "^4.10.0",
-    "zod": "^4.3.6"
+    "zod": "^4.4.2"
   },
   "peerDependencies": {
     "@react-email/components": ">=1",
@@ -202,8 +202,8 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.15.0",
-    "@cloudflare/workers-types": "4.20260426.1",
+    "@cloudflare/vitest-pool-workers": "^0.15.2",
+    "@cloudflare/workers-types": "4.20260502.1",
     "@react-email/components": "^1.0.12",
     "@stratal/testing": "workspace:*",
     "@types/node": "^25.6.0",
