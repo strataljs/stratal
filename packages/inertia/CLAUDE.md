@@ -8,7 +8,7 @@ Maintainer rules for `@stratal/inertia`.
 - Vite plugin entry: `src/vite.ts` → `dist/vite.mjs` (`./vite` export). Runs in **Node**, not workerd.
 - React entry: `src/react.ts` → `dist/react.mjs` (`./react` export).
 - Testing helpers entry: `src/testing.ts` → `dist/testing.mjs` (`./testing` export).
-- CLI bin: `src/bin/inertia.ts` → `dist/bin/inertia.mjs` (subcommands: build, dev, install, types).
+- Quarry commands: `src/commands/inertia-{build,dev,install,types}.command.ts` — registered as providers in `InertiaModule` and invoked via `quarry inertia:*`.
 - Type augmentation: `src/augment/{router-context,router-variables,test-response}.ts` — extends Stratal's types. Re-exported from package root via the `global.d.ts` reference (see Build hook).
 - Decorators: `src/decorators/`. Flash store: `src/flash/`. Services: `src/services/`. Templates: `src/templates/`.
 
