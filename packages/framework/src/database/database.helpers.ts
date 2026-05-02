@@ -10,6 +10,7 @@ const databaseConnectionSchema = z.object({
   schema: z.object({}).loose(),
   dialect: z.function(),
   plugins: z.array(z.object({}).loose()).optional(),
+  computedFields: z.object({}).loose().optional(),
 })
 
 export const databaseModuleConfigSchema = z.object({
@@ -42,7 +43,14 @@ export function createDatabaseService(
   class DatabaseClient extends ZenStackClient<typeof conn.schema> {
     constructor() {
       const dialect = conn.dialect()
-      super(conn.schema, { dialect, plugins })
+      // ZenStack 3+ requires `computedFields` whenever the schema declares any
+      // `@computed` fields, so pass them through when the consumer provides them.
+      super(conn.schema, {
+        dialect,
+        plugins,
+        // @ts-expect-error - ZenStack 3+ requires `computedFields` whenever the schema declares any `@computed` fields, so pass them through when the consumer provides them.
+        computedFields: conn.computedFields
+      })
     }
   }
 
