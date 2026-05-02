@@ -25,6 +25,18 @@ export interface UriOptions {
 export interface SignedUriOptions extends UriOptions, SignedUrlOptions { }
 
 /**
+ * Encode a value for use as a path parameter.
+ *
+ * Splits on `/` and encodes each segment with `encodeURIComponent`, so callers
+ * can pass slash-containing values for catch-all params (e.g. `:slug{.+}`) and
+ * still get a usable URL — `'auth/login'` becomes `'auth/login'`, not
+ * `'auth%2Flogin'`. Single segments behave exactly like `encodeURIComponent`.
+ */
+function encodePathParam(value: string): string {
+  return value.split('/').map(encodeURIComponent).join('/')
+}
+
+/**
  * Build a URL from a registered route, filling path/domain params and appending extras as query string.
  *
  * Pure function — no request context needed. Used by both the `Uri` class and the standalone `route()` function.
@@ -59,7 +71,7 @@ export function buildRouteUrl(
     }
     url = url.replace(
       new RegExp(`:${paramName}(\\{[^}]*\\})?`),
-      encodeURIComponent(value),
+      encodePathParam(value),
     )
     consumedKeys.add(paramName)
   }

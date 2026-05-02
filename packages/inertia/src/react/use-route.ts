@@ -58,6 +58,15 @@ export function applyTrailingSlash(url: string, mode: TrailingSlashMode): string
 }
 
 /**
+ * Encode a path-param value while preserving forward slashes so catch-all
+ * params (`:slug{.+}`) round-trip cleanly. Mirrors the server-side
+ * `encodePathParam()` in `stratal/router`.
+ */
+function encodePathParam(value: string): string {
+  return value.split('/').map(encodeURIComponent).join('/')
+}
+
+/**
  * Build a URL from a serialized route definition.
  *
  * Mirrors `buildRouteUrl()` from `stratal/router` (pure reimplementation to
@@ -80,7 +89,7 @@ function buildUrl(route: SerializedRoute, name: string, params?: Record<string, 
     }
     url = url.replace(
       new RegExp(`:${paramName}(\\{[^}]*\\})?`),
-      encodeURIComponent(value),
+      encodePathParam(value),
     )
     consumedKeys.add(paramName)
   }
