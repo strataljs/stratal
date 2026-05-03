@@ -82,7 +82,7 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.15.2",
-    "@cloudflare/workers-types": "4.20260502.1",
+    "@cloudflare/workers-types": "4.20260503.1",
     "@stratal/testing": "workspace:^",
     "@types/node": "^25.6.0",
     "@types/pg": "^8.20.0",
@@ -91,7 +91,7 @@
     "@vitest/snapshot": "~4.1.5",
     "@zenstackhq/better-auth": "^3.6.4",
     "dotenv-cli": "^11.0.0",
-    "kysely": "0.28.16",
+    "kysely": "0.28.17",
     "pg": "^8.20.0",
     "reflect-metadata": "^0.2.2",
     "stratal": "workspace:*",

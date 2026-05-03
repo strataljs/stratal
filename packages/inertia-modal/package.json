@@ -60,7 +60,7 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "4.20260502.1",
+    "@cloudflare/workers-types": "4.20260503.1",
     "@inertiajs/core": "^3.0.3",
     "@inertiajs/react": "^3.0.3",
     "@stratal/inertia": "workspace:*",
