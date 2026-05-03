@@ -1,5 +1,21 @@
 # @stratal/testing
 
+## 0.0.20
+
+### Patch Changes
+
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+  - @stratal/framework@0.0.20
+  - stratal@0.0.20
+
 ## 0.0.19
 
 ### Patch Changes

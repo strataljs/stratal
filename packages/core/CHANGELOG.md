@@ -1,5 +1,49 @@
 # stratal
 
+## 0.0.20
+
+### Patch Changes
+
+- f8c61e1: Preserve forward slashes when encoding catch-all path parameters
+
+  URL generation previously percent-encoded `/` inside path-param values, so a value like `'auth/login'` for a catch-all route (`:slug{.+}`) became `'auth%2Flogin'`. Each segment is now encoded individually, so slash-containing values round-trip cleanly while single segments still behave like `encodeURIComponent`.
+
+- f8c61e1: Add stricter `cuid2()` validator as a drop-in for `z.cuid2()`
+
+  Zod's built-in `z.cuid2()` accepts any non-empty lowercase-alphanumeric string, which makes it ineffective as a tenant-id or external-id validator. The new `cuid2()` helper from `stratal/validation` enforces the actual cuid2 shape (24-32 chars, leading letter) while preserving the OpenAPI `format: 'cuid2'` metadata. Custom regex and i18n-aware error messages are supported.
+
+  ```ts
+  import { cuid2 } from "stratal/validation";
+
+  z.object({ tenantId: cuid2() });
+  z.object({ tenantId: cuid2({ pattern: /^[a-z][0-9a-z]{23}$/ }) });
+  ```
+
+  Also exports `CUID2_REGEX` for callers composing the pattern into custom schemas.
+
+- f8c61e1: Add `RateLimiterModule` for request throttling with KV and in-memory stores
+
+  - New opt-in `RateLimiterModule` configurable with `forRoot({ store: 'kv', binding })` or `forRoot({ store: 'memory' })` (or a custom `IRateLimiterStore`).
+  - `Limit` builder API with `perSecond`, `perSeconds`, `perMinute`, `perMinutes`, `perHour`, `perDay`, and `none()` helpers; `.by(key)` scopes per-actor and `.response(handler)` overrides the default 429.
+  - `RateLimiterRegistry.for(name, resolver)` defines named limiters; apply them with `router.throttle(name)` or the `@RateLimit(name)` decorator on controllers and route methods.
+  - `TooManyRequestsError` returns HTTP 429 with `Retry-After` and `X-RateLimit-*` headers automatically; the body honors content negotiation (JSON, HTML, Inertia).
+  - Misconfiguration surfaces at boot (missing `forRoot`) rather than on the first throttled request.
+
+- f8c61e1: Add Cloudflare request properties and full-record access on `RouterContext`
+
+  - New `ctx.cf` getter exposes Cloudflare-provided request properties (geo, TLS, bot management, etc.) as `CfProperties`.
+  - `ctx.param()` (no args) now returns the full validated param record as `Record<string, string>`. The single-key overload (`ctx.param('id')`) is unchanged. The same overload is available on `GatewayContext` for WebSocket gateways.
+
+- f8c61e1: Add `trailingSlash` application option for canonical URL handling
+
+  A new `trailingSlash` field on `ApplicationConfig` controls how incoming paths and generated URLs handle a trailing `/`:
+
+  - `'ignore'` (default) — both `/foo` and `/foo/` resolve to the same route; URL helpers leave paths unchanged.
+  - `'always'` — non-trailing requests are 308-redirected to the trailing-slash form; URL helpers append `/`. Paths whose last segment looks file-like (e.g. `/api/openapi.json`) are skipped.
+  - `'never'` — trailing requests are 308-redirected to the non-trailing form; URL helpers strip a single trailing `/`.
+
+  `Uri.to()`, `Uri.url()`, `Uri.current()`, `Uri.full()`, and the global `route()` helper all apply the configured mode. 308 preserves request method and body, and `Location` headers are emitted as path-relative URIs to avoid mixed-content issues behind HTTPS-terminating proxies.
+
 ## 0.0.19
 
 ### Patch Changes

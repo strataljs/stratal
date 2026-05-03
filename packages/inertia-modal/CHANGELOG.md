@@ -1,5 +1,25 @@
 # @stratal/inertia-modal
 
+## 0.0.20
+
+### Patch Changes
+
+- f8c61e1: Loosen peer dependency ranges for broader compatibility
+
+  Peer dependencies (`@inertiajs/core`, `@inertiajs/react`, `hono`, `react`, `reflect-metadata`, `stratal`) now use `>=` ranges instead of pinned `^` ranges, so apps can adopt newer majors of these packages without waiting for a coordinated bump.
+
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+  - stratal@0.0.20
+  - @stratal/inertia@0.0.20
+
 ## 0.0.19
 
 ### Patch Changes

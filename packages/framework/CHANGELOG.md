@@ -1,5 +1,70 @@
 # @stratal/framework
 
+## 0.0.20
+
+### Patch Changes
+
+- f8c61e1: Auto-wire Better Auth's rate limiting through Stratal's `RateLimiterModule`
+
+  When `RateLimiterModule` is imported alongside `AuthModule`, Better Auth's `rateLimit` block is configured automatically:
+
+  - `customStorage` is backed by Stratal's shared `IRateLimiterStore`, so HTTP throttling and Better Auth share one store.
+  - `customRules` is populated from a new `RateLimiterRegistry.forPath(path, resolver)` API, letting apps declare path-keyed limits (e.g. `/sign-in/email`, `/two-factor/*`) using the same `Limit` builder used elsewhere.
+  - User-supplied `rateLimit.customStorage` and `rateLimit.customRules` keys take precedence on a per-key basis.
+
+  ```ts
+  limiter.forPath("/sign-in/email", () => Limit.perSeconds(10, 3));
+  limiter.forPath("/forget-password", () => Limit.none()); // disabled
+  ```
+
+  Path-keyed entries are scoped per-IP+path by Better Auth (`Limit.by(...)` is ignored), and multiple `Limit`s reduce to the most restrictive (smallest `max / windowSeconds`).
+
+- f8c61e1: Store the full authenticated user on `AuthContext`
+
+  `AuthContext` now holds the full user record returned by Better Auth's `getSession()` instead of just `userId`/`role`, so controllers and services can read profile fields without re-querying the database.
+
+  ### Breaking Changes
+
+  - `AuthInfo` shape changed from `{ userId?, role? }` to `{ user: AuthUser }`. `setAuthContext({ userId, role })` callers must pass `setAuthContext({ user })` instead.
+  - `getAuthContext()` was renamed to `getAuthInfo()` and now returns `{ user }`.
+  - `AuthContext.getRole()` reads from `user.role`. Apps that use roles should augment the new `AuthUser` interface with `role: string` (or your app's role field) so it stays typed.
+
+  ### New API
+
+  - `AuthUser` interface (extends Better Auth's `BaseUser` with optional `name`) is augmentable via `declare module '@stratal/framework/context'` for app-specific fields.
+  - `AuthContext.getUser()` returns the user or `undefined`.
+  - `AuthContext.requireUser()` returns the user or throws `UserNotAuthenticatedError`.
+
+  ### Migration
+
+  ```ts
+  // Before
+  const userId = authContext.getAuthContext().userId;
+  authContext.setAuthContext({
+    userId: session.user.id,
+    role: session.user.role,
+  });
+
+  // After
+  const user = authContext.requireUser();
+  authContext.setAuthContext({ user: session.user });
+  ```
+
+- f8c61e1: Add `better-call@1.3.5` as a direct dependency
+
+  `@better-auth/core@1.6.9` declares `better-call` as a peer dependency but does not install it itself, so the framework — its direct consumer — is responsible for providing it. Without it, stricter resolvers (e.g. Cloudflare's workerd vitest pool) fail to resolve `better-call/error` from `@better-auth/core`.
+
+- f8c61e1: Support `@computed` fields in `DatabaseModule` connection config
+
+  `DatabaseConnectionConfig` accepts a new optional `computedFields` map that is forwarded to the underlying ZenStack client. ZenStack 3+ requires this whenever the schema declares any `@computed` fields; previously the connection failed to construct.
+
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+  - stratal@0.0.20
+
 ## 0.0.19
 
 ### Patch Changes
