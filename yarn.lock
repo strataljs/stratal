@@ -2770,6 +2770,7 @@ __metadata:
     "@zenstackhq/cli": "npm:^3.6.4"
     "@zenstackhq/orm": "npm:^3.6.4"
     better-auth: "npm:^1.6.9"
+    better-call: "npm:1.3.5"
     dotenv-cli: "npm:^11.0.0"
     kysely: "npm:0.28.16"
     pg: "npm:^8.20.0"
