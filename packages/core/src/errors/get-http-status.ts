@@ -48,6 +48,11 @@ export function getHttpStatus(code: number): ContentfulStatusCode {
     return 409
   }
 
+  // Rate-limit / throttling errors (4290-4299) → 429 Too Many Requests
+  if (code >= 4290 && code < 4300) {
+    return 429
+  }
+
   // Business logic errors (5000-5999)
   if (code >= 5000 && code < 6000) {
     // Domain-specific NOT_FOUND errors → 404
@@ -82,6 +87,14 @@ export function getHttpStatus(code: number): ContentfulStatusCode {
 export function resolveHttpStatus(error: ApplicationError): ContentfulStatusCode {
   if (error instanceof HttpException) {
     return error.httpStatus
+  }
+  // Structural fallback for cross-module-boundary cases (e.g. workerd test
+  // environment where the source `HttpException` and the dist `HttpException`
+  // are distinct class objects, breaking `instanceof`). Mirrors the same
+  // defensive pattern in `isApplicationError`.
+  const httpStatus = (error as { httpStatus?: number }).httpStatus
+  if (typeof httpStatus === 'number') {
+    return httpStatus as ContentfulStatusCode
   }
   return getHttpStatus(error.code)
 }

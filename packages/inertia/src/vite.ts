@@ -12,7 +12,21 @@ export interface StratalInertiaPluginOptions {
 export function stratalInertia(options?: StratalInertiaPluginOptions): Plugin[] {
   const entries = options?.entries ?? ['/src/inertia/app.tsx']
 
-  const optimizeDepsExclude = ['@cloudflare/vite-plugin', 'wrangler', 'blake3-wasm', '@stratal/inertia']
+  // Hono and stratal must NOT be pre-bundled by Vite's optimizeDeps. When they are,
+  // a duplicate copy ends up in `.vite/deps_<env>/` while the worker bundle imports
+  // another copy from node_modules — Response objects from one instance flow into
+  // a Context class from the other, and Hono's `set res` setter crashes inside
+  // `this.#res.headers.entries()` because the prototype chain doesn't match.
+  const optimizeDepsExclude = [
+    '@cloudflare/vite-plugin',
+    'wrangler',
+    'blake3-wasm',
+    '@stratal/inertia',
+    'stratal',
+    'hono',
+    '@hono/zod-openapi',
+    '@hono/swagger-ui',
+  ]
   const optimizeDepsInclude = ['buffer', 'buffer/', 'base64-js', 'ieee754']
   const devOnlyExternals = ['ts-morph']
 

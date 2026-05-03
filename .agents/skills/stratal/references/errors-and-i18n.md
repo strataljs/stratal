@@ -160,9 +160,10 @@ Access built-in codes via `ERROR_CODES`:
 ```typescript
 import { ERROR_CODES } from 'stratal/errors'
 
-ERROR_CODES.DATABASE.RECORD_NOT_FOUND  // 2001
-ERROR_CODES.AUTH.INVALID_CREDENTIALS   // 3000
-ERROR_CODES.VALIDATION.GENERIC         // 1000
+ERROR_CODES.DATABASE.RECORD_NOT_FOUND   // 2001
+ERROR_CODES.AUTH.INVALID_CREDENTIALS    // 3000
+ERROR_CODES.VALIDATION.GENERIC          // 1000
+ERROR_CODES.RESOURCE.TOO_MANY_REQUESTS  // 4290 → HTTP 429 (see references/rate-limiter.md)
 ```
 
 ## I18nModule
@@ -291,6 +292,32 @@ export const createNoteSchema = z.object({
 ```
 
 `withI18n(key, params?)` returns `{ error: () => string }` — a Zod error config that resolves the i18n message at validation time using `AsyncLocalStorage` to read the current locale context.
+
+## cuid2() — Use Instead of z.cuid2()
+
+Zod 4.3.6's `z.cuid2()` regex is `/^[0-9a-z]+$/`, which accepts any non-empty lowercase-alphanumeric string (including 2-letter locale codes like `'sw'`). Always use Stratal's `cuid2()` for real cuid2 validation:
+
+```ts
+import { z, cuid2, withI18n } from 'stratal/validation'
+
+// Default — 24-32 lowercase alphanumeric chars, must start with a letter
+const tenantSchema = z.object({ tenantId: cuid2() })
+
+// Custom pattern (e.g. fixed-length 24)
+cuid2({ pattern: /^[a-z][0-9a-z]{23}$/ })
+
+// Plain-string error
+cuid2({ error: 'Invalid tenant ID' })
+
+// Translatable error — pass a withI18n() result.
+// NEVER pass an i18n key string directly to `error`.
+cuid2(withI18n('tenants.errors.invalidId'))
+
+// Compose with anything Zod string accepts
+cuid2().describe('Tenant ID')
+```
+
+`CUID2_REGEX` is also exported for callers who want to reuse the pattern in other shapes.
 
 ## Type-Safe Message Keys
 

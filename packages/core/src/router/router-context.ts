@@ -55,6 +55,14 @@ export class RouterContext<T extends RouterEnv = RouterEnv> extends Macroable {
   }
 
   /**
+   * Cloudflare-provided request properties (geo, TLS, bot management, etc.).
+   * Always available on Cloudflare Workers requests via `c.req.raw.cf`.
+   */
+  get cf(): CfProperties {
+    return this.c.req.raw.cf!
+  }
+
+  /**
    * Get request-scoped DI container
    * Contains request-specific services and context (AuthContext)
    *
@@ -103,12 +111,24 @@ export class RouterContext<T extends RouterEnv = RouterEnv> extends Macroable {
   }
 
   /**
-   * Get route parameter value
+   * Get route parameter value(s).
+   *
+   * Reads the validated, Zod-coerced param record from `c.req.valid('param')`,
+   * which is what `@hono/zod-openapi` populates for every route registered
+   * via `app.openapi(...)`. Bare `c.req.param()` returns `undefined` for those
+   * routes — always go through the validated record.
+   *
+   * - With a key → returns the single string value.
+   * - With no args → returns the full `Record<string, string>` (or `{}` when
+   *   the matched route has no path params).
    *
    * @param key - Parameter name (e.g., 'id' for /users/:id)
    */
-  param(key: string): string {
-    return (this.c.req as unknown as { valid(target: 'param'): Record<string, string> }).valid('param')[key]
+  param(): Record<string, string>
+  param(key: string): string
+  param(key?: string): string | Record<string, string> {
+    const all = (this.c.req as unknown as { valid(target: 'param'): Record<string, string> | undefined }).valid('param') ?? {}
+    return key === undefined ? all : all[key]
   }
 
   /**

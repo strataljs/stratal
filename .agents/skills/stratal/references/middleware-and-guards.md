@@ -44,7 +44,7 @@ configureRoutes(router: Router): void {
 }
 ```
 
-For the full Router fluent API (`.prefix()`, `.domain()`, `.name()`, `.version()`, `.group()`), see `references/routing.md`.
+For the full Router fluent API (`.prefix()`, `.domain()`, `.name()`, `.version()`, `.group()`, `.throttle()`), see `references/routing.md`. For named rate limiters, see `references/rate-limiter.md`.
 
 ### Middleware Interface
 
@@ -69,14 +69,14 @@ Middleware can inject services via the constructor:
 
 ```typescript
 @Transient()
-export class RateLimitMiddleware implements Middleware {
+export class IpAllowlistMiddleware implements Middleware {
   constructor(
-    @inject(RATE_LIMIT_TOKEN) private limiter: RateLimitService,
+    @inject(ALLOWLIST_TOKEN) private allowlist: IpAllowlistService,
   ) {}
 
   async handle(ctx: RouterContext, next: Next): Promise<Response | void> {
-    if (await this.limiter.isExceeded(ctx.c.req.url)) {
-      return ctx.json({ error: 'Too many requests' }, 429)
+    if (!this.allowlist.contains(ctx.header('cf-connecting-ip'))) {
+      return ctx.json({ error: 'Forbidden' }, 403)
     }
     await next()
   }
@@ -84,6 +84,8 @@ export class RateLimitMiddleware implements Middleware {
 ```
 
 Returning a `Response` from `handle()` short-circuits the chain — the route handler is not called.
+
+For request throttling, prefer the framework's built-in named rate limiters (`router.throttle('name')` / `@RateLimit('name')`) instead of hand-rolling middleware — see `references/rate-limiter.md`.
 
 ## Guards
 

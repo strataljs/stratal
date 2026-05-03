@@ -46,9 +46,12 @@
  */
 
 import type { BetterAuthOptions } from 'better-auth'
+import { CONTAINER_TOKEN, type Container } from 'stratal/di'
 import { I18nModule } from 'stratal/i18n'
 import type { AsyncModuleOptions, DynamicModule } from 'stratal/module'
 import { Module } from 'stratal/module'
+import type { IRateLimiterStore, RateLimiterRegistry } from 'stratal/rate-limiter'
+import { RATE_LIMITER_TOKENS } from 'stratal/rate-limiter'
 import type { RouteConfigurable, Router } from 'stratal/router'
 import { createStratalAcPlugin } from '../access-control/plugin'
 import { AccessService } from '../access-control/services/access.service'
@@ -58,6 +61,13 @@ import { AUTH_OPTIONS, AUTH_SERVICE } from './auth.tokens'
 import { authMessages } from './i18n'
 import { AuthContextMiddleware } from './middleware/auth-context.middleware'
 import { SessionVerificationMiddleware } from './middleware/session-verification.middleware'
+// Side-effect import: registers `forPath`/`pathEntries` macros on
+// `RateLimiterRegistry` and the `declare module` augmentation that exposes
+// them at the type level. Must run before any consumer calls `forPath()`.
+import {
+  createBetterAuthRateLimitStorage,
+  projectCustomRules,
+} from './rate-limit-bridge'
 import { AuthService } from './services/auth.service'
 
 export interface AuthModuleAsyncOptions<TOptions extends BetterAuthOptions = BetterAuthOptions>
@@ -90,29 +100,60 @@ export class AuthModule implements RouteConfigurable {
   /**
    * Configure AuthModule with async options factory.
    * Optionally provide `accessControl` to enable permission-based authorization.
+   *
+   * When `RateLimiterModule` is also imported, better-auth's `rateLimit`
+   * block is auto-wired: `customStorage` shares Stratal's backing store, and
+   * any `RateLimiterRegistry.forPath(...)` entries are projected into
+   * `customRules`. User-supplied `rateLimit.{customStorage, customRules}` keys
+   * take precedence on a per-key basis.
    */
   static forRootAsync<TOptions extends BetterAuthOptions>(
     options: AuthModuleAsyncOptions<TOptions>
   ): DynamicModule {
     const { accessControl } = options
+    const userInject = options.inject ?? []
+    const userFactory = options.useFactory as (...args: unknown[]) => TOptions
 
-    const authOptionsProvider = accessControl
-      ? {
-        provide: AUTH_OPTIONS,
-        useFactory: (...deps: unknown[]) => {
-          const raw = (options.useFactory as (...args: unknown[]) => TOptions)(...deps) as BetterAuthOptions
-          return {
+    const authOptionsProvider = {
+      provide: AUTH_OPTIONS,
+      useFactory: (container: Container, ...userDeps: unknown[]): BetterAuthOptions => {
+        let raw = userFactory(...userDeps) as BetterAuthOptions
+
+        if (accessControl) {
+          raw = {
             ...raw,
             plugins: [createStratalAcPlugin(accessControl), ...(raw.plugins ?? [])],
           }
-        },
-        inject: options.inject,
-      }
-      : {
-        provide: AUTH_OPTIONS,
-        useFactory: options.useFactory,
-        inject: options.inject,
-      }
+        }
+
+        const tsyringe = container.getTsyringeContainer()
+        const rateLimiterPresent = tsyringe.isRegistered(
+          RATE_LIMITER_TOKENS.ModuleMarker,
+          true,
+        )
+
+        if (rateLimiterPresent) {
+          const store = container.resolve<IRateLimiterStore>(RATE_LIMITER_TOKENS.Store)
+          const registry = container.resolve<RateLimiterRegistry>(RATE_LIMITER_TOKENS.Registry)
+
+          raw = {
+            ...raw,
+            rateLimit: {
+              enabled: true,
+              ...raw.rateLimit,
+              customStorage: raw.rateLimit?.customStorage ?? createBetterAuthRateLimitStorage(store),
+              customRules: {
+                ...projectCustomRules(registry),
+                ...(raw.rateLimit?.customRules ?? {}),
+              },
+            },
+          }
+        }
+
+        return raw
+      },
+      inject: [CONTAINER_TOKEN, ...userInject],
+    }
 
     return {
       module: AuthModule,

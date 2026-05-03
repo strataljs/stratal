@@ -128,4 +128,72 @@ describe('RouteRegistry', () => {
     })
   })
 
+  describe('findNameByRoute', () => {
+    it('resolves the primary path back to the route name', () => {
+      registry.register(createInput({ name: 'users.show', basePath: '/users/:id' }))
+      expect(registry.findNameByRoute('get', '/users/:id')).toBe('users.show')
+    })
+
+    it('matches the request method case-insensitively', () => {
+      registry.register(createInput({ name: 'users.show', basePath: '/users/:id' }))
+      expect(registry.findNameByRoute('GET', '/users/:id')).toBe('users.show')
+    })
+
+    it('disambiguates routes that share a path but differ by method', () => {
+      registry.register(createInput({ name: 'school.show', basePath: '/dashboard/settings/school' }))
+      registry.register(createInput({
+        name: 'school.delete',
+        method: 'delete',
+        basePath: '/dashboard/settings/school',
+        controller: 'SchoolController',
+        action: 'destroy',
+      }))
+
+      expect(registry.findNameByRoute('GET', '/dashboard/settings/school')).toBe('school.show')
+      expect(registry.findNameByRoute('DELETE', '/dashboard/settings/school')).toBe('school.delete')
+    })
+
+    it('resolves a route registered with method "all" under any concrete verb', () => {
+      registry.register(createInput({ name: 'health', method: 'all', basePath: '/health' }))
+
+      expect(registry.findNameByRoute('GET', '/health')).toBe('health')
+      expect(registry.findNameByRoute('POST', '/health')).toBe('health')
+      expect(registry.findNameByRoute('DELETE', '/health')).toBe('health')
+    })
+
+    it('resolves locale variant paths to the canonical primary name', () => {
+      const localeAware = {
+        enabled: true,
+        localePathConfig: null,
+        resolve: (path: string) => [
+          { path, isLocaleVariant: false },
+          { path: `/:locale{en|de|fr}${path}`, isLocaleVariant: true },
+        ],
+      } as unknown as LocalePathService
+      const r = new RouteRegistry(mockVersioningService, localeAware)
+      r.register(createInput({ name: 'users.show', basePath: '/users/:id' }))
+
+      expect(r.findNameByRoute('get', '/users/:id')).toBe('users.show')
+      expect(r.findNameByRoute('get', '/:locale{en|de|fr}/users/:id')).toBe('users.show')
+    })
+
+    it('returns undefined for unknown paths', () => {
+      registry.register(createInput({ name: 'users.index' }))
+      expect(registry.findNameByRoute('get', '/posts')).toBeUndefined()
+    })
+
+    it('returns undefined when the path is registered under a different method', () => {
+      registry.register(createInput({ name: 'users.index' }))
+      expect(registry.findNameByRoute('post', '/users')).toBeUndefined()
+    })
+
+    it('invalidates the cache when new routes are registered', () => {
+      registry.register(createInput({ name: 'users.index' }))
+      expect(registry.findNameByRoute('get', '/users')).toBe('users.index')
+
+      registry.register(createInput({ name: 'posts.index', basePath: '/posts' }))
+      expect(registry.findNameByRoute('get', '/posts')).toBe('posts.index')
+    })
+  })
+
 })

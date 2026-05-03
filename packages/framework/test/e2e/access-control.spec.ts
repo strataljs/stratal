@@ -3,9 +3,9 @@ import { DI_TOKENS } from 'stratal/di'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { type AccessService } from '../../src/access-control/services/access.service'
 import { AC_TOKENS } from '../../src/access-control/tokens'
-import { AuthContext } from '../../src/context/auth-context'
+import { type AuthUser, AuthContext } from '../../src/context/auth-context'
 import { TestAppModule } from '../fixtures/app.module'
-import { ADMIN_USER_ID, REGULAR_USER_ID, UserSeeder } from '../seeders/user.seeder'
+import { ADMIN_USER_ID, REGULAR_USER_ID, UNVERIFIED_USER_ID, UserSeeder } from '../seeders/user.seeder'
 
 describe('AccessControl Module', () => {
   let module: TestingModule
@@ -28,7 +28,17 @@ describe('AccessControl Module', () => {
   function getService(userId?: string, role?: string): AccessService {
     const authContext = new AuthContext()
     if (userId) {
-      authContext.setAuthContext({ userId, role })
+      const now = new Date()
+      authContext.setAuthContext({
+        user: {
+          id: userId,
+          email: `${userId}@test.com`,
+          emailVerified: userId !== UNVERIFIED_USER_ID,
+          ...(role ? { role } : {}),
+          createdAt: now,
+          updatedAt: now,
+        } as AuthUser,
+      })
     }
     module.container.registerValue(DI_TOKENS.AuthContext, authContext)
     return module.get<AccessService>(AC_TOKENS.AccessService)

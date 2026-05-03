@@ -1,4 +1,4 @@
-import type { AnyPlugin, ClientOptions } from '@zenstackhq/orm'
+import type { AnyPlugin, ClientOptions, ComputedFieldsOptions } from '@zenstackhq/orm'
 import type { SchemaDef } from '@zenstackhq/schema'
 import { delay, DI_TOKENS, Scope } from 'stratal/di'
 import type { IEventRegistry } from 'stratal/events'
@@ -32,6 +32,12 @@ export interface DatabaseConnectionConfig<
   schema: Schema
   dialect: () => ClientOptions<SchemaDef>['dialect']
   plugins?: AnyPlugin[]
+  /**
+   * Schema-level @computed field implementations. Required when the schema
+   * declares any `@computed` fields. Keyed by uncapitalized model name; values
+   * map field name to a Kysely-expression compute callback.
+   */
+  computedFields?: ComputedFieldsOptions<Schema>
 }
 
 export interface DatabaseModuleConfig {

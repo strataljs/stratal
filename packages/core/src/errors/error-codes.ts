@@ -117,6 +117,8 @@ export const ERROR_CODES = {
     CONFLICT: 4100,
     /** Resource already exists */
     ALREADY_EXISTS: 4101,
+    /** Rate limit exceeded */
+    TOO_MANY_REQUESTS: 4290,
   },
 
   /**

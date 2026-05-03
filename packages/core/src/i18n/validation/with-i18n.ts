@@ -1,3 +1,4 @@
+import { type $ZodRawIssue } from 'zod/v4/core'
 import type { MessageKeys } from '../i18n.types'
 import { errorMapContextStorage } from './validation.context'
 
@@ -18,9 +19,6 @@ import { errorMapContextStorage } from './validation.context'
  * const schema = z.string().email(withI18n('validation.email'))
  * ```
  *
- * Note: This is the backend version using AsyncLocalStorage.
- * For frontend, use withI18nFrontend from the frontend validation module
- *
  * @param key - Message key from shared i18n messages (type-safe via MessageKeys)
  * @param params - Optional interpolation parameters for the message
  * @returns Zod error configuration object with translated message
@@ -28,9 +26,9 @@ import { errorMapContextStorage } from './validation.context'
 export function withI18n(
   key: MessageKeys,
   params?: Record<string, unknown>
-): { error: () => string } {
+): { error: (_issue: $ZodRawIssue) => string } {
   return {
-    error: () => {
+    error: (_issue: $ZodRawIssue) => {
       // Get i18n context from AsyncLocalStorage (backend)
       // This is set by the router middleware before validation
       const context = errorMapContextStorage.getStore()

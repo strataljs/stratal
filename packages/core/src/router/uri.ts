@@ -1,11 +1,15 @@
 import { inject } from 'tsyringe'
+import type { Application } from '../application'
 import { Transient } from '../di/decorators'
+import { DI_TOKENS } from '../di/tokens'
 import { MissingRouteParamError, RouteNameNotFoundError } from './errors'
 import type { RouteName, RouteParams } from './route-map'
 import type { RegisteredRoute, RouteRegistry } from './route-registry'
 import type { RouterContext } from './router-context'
 import { ROUTER_TOKENS } from './router.tokens'
 import { signUrl, verifySignedUrl, type SignedUrlOptions } from './signed-url'
+import { applyTrailingSlash } from './trailing-slash'
+import type { TrailingSlashMode } from './types'
 
 /**
  * Options for URL generation methods.
@@ -19,6 +23,18 @@ export interface UriOptions {
  * Options for signed URL generation methods.
  */
 export interface SignedUriOptions extends UriOptions, SignedUrlOptions { }
+
+/**
+ * Encode a value for use as a path parameter.
+ *
+ * Splits on `/` and encodes each segment with `encodeURIComponent`, so callers
+ * can pass slash-containing values for catch-all params (e.g. `:slug{.+}`) and
+ * still get a usable URL — `'auth/login'` becomes `'auth/login'`, not
+ * `'auth%2Flogin'`. Single segments behave exactly like `encodeURIComponent`.
+ */
+function encodePathParam(value: string): string {
+  return value.split('/').map(encodeURIComponent).join('/')
+}
 
 /**
  * Build a URL from a registered route, filling path/domain params and appending extras as query string.
@@ -55,7 +71,7 @@ export function buildRouteUrl(
     }
     url = url.replace(
       new RegExp(`:${paramName}(\\{[^}]*\\})?`),
-      encodeURIComponent(value),
+      encodePathParam(value),
     )
     consumedKeys.add(paramName)
   }
@@ -114,11 +130,15 @@ export function buildRouteUrl(
 @Transient()
 export class Uri {
   private _defaults: Record<string, string> = {}
+  private readonly trailingSlash: TrailingSlashMode
 
   constructor(
     @inject(ROUTER_TOKENS.RouteRegistry) private readonly registry: RouteRegistry,
     @inject(ROUTER_TOKENS.RouterContext) private readonly routerContext: RouterContext,
-  ) { }
+    @inject(DI_TOKENS.Application) application: Application,
+  ) {
+    this.trailingSlash = application.config.trailingSlash ?? 'ignore'
+  }
 
   /**
    * Set default URL parameters for this request.
@@ -128,6 +148,17 @@ export class Uri {
    */
   defaults(params: Record<string, string>): void {
     this._defaults = { ...this._defaults, ...params }
+  }
+
+  /**
+   * Read the currently configured default URL parameters.
+   *
+   * Used by frameworks that need to share these with the client (e.g. the
+   * Inertia adapter ships them as a shared prop so `route()` calls in the
+   * browser auto-fill the same sticky params as the server).
+   */
+  getDefaults(): Record<string, string> {
+    return { ...this._defaults }
   }
 
   /**
@@ -153,7 +184,7 @@ export class Uri {
     }
 
     const mergedParams = { ...this._defaults, ...params } as Record<string, string>
-    let url = buildRouteUrl(registeredRoute, name, mergedParams)
+    let url = applyTrailingSlash(buildRouteUrl(registeredRoute, name, mergedParams), this.trailingSlash)
 
     if (options?.absolute && !url.startsWith('http')) {
       const origin = new URL(this.routerContext.c.req.url).origin
@@ -210,7 +241,7 @@ export class Uri {
    */
   current(): string {
     const parsed = new URL(this.routerContext.c.req.url)
-    return parsed.pathname
+    return applyTrailingSlash(parsed.pathname, this.trailingSlash)
   }
 
   /**
@@ -218,7 +249,7 @@ export class Uri {
    */
   full(): string {
     const parsed = new URL(this.routerContext.c.req.url)
-    return `${parsed.pathname}${parsed.search}`
+    return applyTrailingSlash(`${parsed.pathname}${parsed.search}`, this.trailingSlash)
   }
 
   /**
@@ -255,7 +286,7 @@ export class Uri {
    * @param options - URL generation options
    */
   to(path: string, queryParams?: Record<string, string>, options?: UriOptions): string {
-    let url = path
+    let url = applyTrailingSlash(path, this.trailingSlash)
 
     if (queryParams) {
       const entries = Object.entries(queryParams)
@@ -286,7 +317,7 @@ export class Uri {
     for (const [key, value] of Object.entries(queryParams)) {
       parsed.searchParams.set(key, value)
     }
-    return `${parsed.pathname}${parsed.search}`
+    return applyTrailingSlash(`${parsed.pathname}${parsed.search}`, this.trailingSlash)
   }
 
   private getAppSecret(): string {

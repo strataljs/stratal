@@ -1,7 +1,8 @@
 import type { Page } from '@inertiajs/core'
-import { Transient, inject } from 'stratal/di'
+import type { Application } from 'stratal'
+import { DI_TOKENS, Transient, inject } from 'stratal/di'
 import { I18N_TOKENS, type MessageLoaderService } from 'stratal/i18n'
-import { ROUTER_TOKENS, type RegisteredRoute, type RouteRegistry, type RouterContext, type SerializedRoutes } from 'stratal/router'
+import { ROUTER_TOKENS, type CurrentRoute, type RegisteredRoute, type RouteRegistry, type RouterContext, type SerializedRoutes, type Uri } from 'stratal/router'
 import type { InertiaMergeOptions, InertiaOnceOptions } from '../augment/router-context'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { INERTIA_TOKENS } from '../inertia.tokens'
@@ -179,8 +180,17 @@ export class InertiaService {
     }
 
     if (this.options.routes) {
-      const registry = ctx.getContainer().resolve<RouteRegistry>(ROUTER_TOKENS.RouteRegistry)
+      const container = ctx.getContainer()
+      const registry = container.resolve<RouteRegistry>(ROUTER_TOKENS.RouteRegistry)
+      const application = container.resolve<Application>(DI_TOKENS.Application)
+      const uri = container.resolve<Uri>(ROUTER_TOKENS.Uri)
+
+      const name = registry.findNameByRoute(ctx.c.req.method, ctx.c.req.routePath) ?? null
+      const params = { ...ctx.param() }
+
       shared.routes = this.serializeRoutes(registry.named())
+      shared.trailingSlash = application.config.trailingSlash ?? 'ignore'
+      shared.route = { name, params, defaults: uri.getDefaults() } satisfies CurrentRoute
     }
 
     return { shared, sharedKeys: Object.keys(shared) }
