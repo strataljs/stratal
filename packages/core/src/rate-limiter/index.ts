@@ -13,7 +13,7 @@ export { Limit, type RateLimitHeaders, type RateLimitResponseHandler } from './l
 export { RateLimiterRegistry, type LimitResolver } from './rate-limiter-registry'
 export { RateLimiterModule } from './rate-limiter.module'
 export { RATE_LIMITER_TOKENS, type RateLimiterToken } from './rate-limiter.tokens'
-export { _resetThrottleMiddlewareCache, createThrottleMiddleware } from './throttle.middleware'
+export { createThrottleMiddleware } from './throttle.middleware'
 
 // Decorators
 export { getRateLimits, RateLimit } from './decorators'

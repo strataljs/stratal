@@ -20,12 +20,15 @@ Maintainer rules for the `stratal` package. Consumer API depth lives in `.agents
 
 ## Testing
 
-- Vitest with `stratalTest()` plugin from `@stratal/testing/vitest-plugin` (workerd env).
-- File pattern: `src/**/__tests__/**/*.spec.ts`.
+Two Vitest projects (`vitest.config.ts`):
+
+- **unit** — node env, `src/**/__tests__/**/*.spec.ts`. No `stratalTest()` plugin here.
+- **e2e / workerd integration** — `test/vitest.config.ts`, `test/integration/**/*.spec.ts`, uses `stratalTest()` from `@stratal/testing/vitest-plugin`. Run via `yarn workspace stratal test:integration`.
+
+Other rules:
 - `vitest.setup.ts` imports `reflect-metadata` — required for tsyringe metadata, don't remove.
 - Coverage excludes by convention: `__tests__/`, `*.spec.ts`, `index.ts`, `types.ts`, `tokens.ts`. Match this when adding new excluded shapes.
 - Single-file run: `yarn workspace stratal test src/path/__tests__/file.spec.ts`.
-- Workerd integration project: `yarn workspace stratal test:integration` (separate Vitest project).
 
 ## Benchmarks
 

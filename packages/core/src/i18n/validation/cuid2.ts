@@ -47,7 +47,7 @@ export const CUID2_REGEX = /^[a-z][0-9a-z]{23,31}$/
  * @param options.pattern - Override the shape regex. Defaults to {@link CUID2_REGEX}.
  * @param options.error - Custom error message (string or i18n key) for the regex check.
  */
-export function cuid2(options?: { pattern?: RegExp; error?: string | { error: (_issue: $ZodRawIssue) => string } }) {
+export function cuid2(options?: { pattern?: RegExp; error?: string | ((_issue: $ZodRawIssue) => string) }) {
   const pattern = options?.pattern ?? CUID2_REGEX
   return z.cuid2({
     pattern: pattern,

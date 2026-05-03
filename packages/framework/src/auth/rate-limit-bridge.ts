@@ -24,9 +24,7 @@
  *  - Snapshot caveat: `customRules` is built once at AuthService construction,
  *    so register all `forPath()` entries inside `OnInitialize` hooks.
  */
-import type { Limit } from 'stratal/rate-limiter'
-import { RateLimiterRegistry } from 'stratal/rate-limiter'
-import type { IRateLimiterStore } from 'stratal/rate-limiter'
+import { type IRateLimiterStore, type Limit, RateLimiterRegistry } from 'stratal/rate-limiter'
 
 /**
  * Resolver attached to a path-keyed limiter entry. Receives the native

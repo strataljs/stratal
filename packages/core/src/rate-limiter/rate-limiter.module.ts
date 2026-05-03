@@ -40,6 +40,7 @@ import type { IRateLimiterStore } from './stores/rate-limiter-store.interface'
       provide: RATE_LIMITER_TOKENS.Store,
       useFactory: (factory: RateLimiterStoreFactory) => factory.create(),
       inject: [RATE_LIMITER_TOKENS.StoreFactory],
+      scope: Scope.Singleton,
     },
   ],
 })

@@ -75,7 +75,7 @@
     "better-auth": ">=1.4",
     "reflect-metadata": ">=0.2",
     "stratal": ">=0.0.18",
-    "vitest": ">=4"
+    "vitest": "^4.1.0"
   },
   "peerDependenciesMeta": {
     "@stratal/framework": {

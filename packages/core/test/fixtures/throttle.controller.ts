@@ -1,15 +1,15 @@
 import { z } from '../../src/i18n/validation'
 import { Module } from '../../src/module/module.decorator'
-import type { ModuleClass, ModuleContext, OnInitialize } from '../../src/module/types'
+import { type ModuleClass, type ModuleContext, type OnInitialize } from '../../src/module/types'
 import { RateLimit } from '../../src/rate-limiter/decorators/rate-limit.decorator'
 import { Limit } from '../../src/rate-limiter/limit'
-import type { RateLimiterRegistry } from '../../src/rate-limiter/rate-limiter-registry'
+import { type RateLimiterRegistry } from '../../src/rate-limiter/rate-limiter-registry'
 import { RateLimiterModule } from '../../src/rate-limiter/rate-limiter.module'
 import { RATE_LIMITER_TOKENS } from '../../src/rate-limiter/rate-limiter.tokens'
 import { Controller } from '../../src/router/decorators/controller.decorator'
 import { Route } from '../../src/router/decorators/route.decorator'
 import { type RouteConfigurable, type Router } from '../../src/router/router'
-import type { RouterContext } from '../../src/router/router-context'
+import { type RouterContext } from '../../src/router/router-context'
 
 @Controller('/throttled')
 export class ScopeThrottledController {
