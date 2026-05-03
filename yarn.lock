@@ -2880,8 +2880,6 @@ __metadata:
       optional: true
     vitest:
       optional: true
-  bin:
-    inertia: ./dist/bin/inertia.mjs
   languageName: unknown
   linkType: soft
 
