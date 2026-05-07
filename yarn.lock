@@ -2798,7 +2798,7 @@ __metadata:
     "@stratal/inertia": "workspace:*"
     "@types/node": "npm:^25.6.0"
     "@types/react": "npm:^19.2.14"
-    hono: "npm:^4.12.16"
+    hono: "npm:^4.12.17"
     react: "npm:^19.2.5"
     reflect-metadata: "npm:^0.2.2"
     stratal: "workspace:*"
@@ -2838,7 +2838,7 @@ __metadata:
     "@types/react-dom": "npm:^19.2.3"
     "@vitest/runner": "npm:~4.1.5"
     "@vitest/snapshot": "npm:~4.1.5"
-    hono: "npm:^4.12.16"
+    hono: "npm:^4.12.17"
     react: "npm:^19.2.5"
     react-dom: "npm:^19.2.5"
     reflect-metadata: "npm:^0.2.2"
@@ -5427,10 +5427,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"hono@npm:^4.12.16":
-  version: 4.12.16
-  resolution: "hono@npm:4.12.16"
-  checksum: 10c0/3afee13722bf574780a641bd6d8812663c650fb7ac86df390f2d90293e1a6e2413aa9c45e4bc5b626a29c1b534fdb8353dd2151aab09bc4a95cd277aad4bd5c7
+"hono@npm:^4.12.17":
+  version: 4.12.18
+  resolution: "hono@npm:4.12.18"
+  checksum: 10c0/b0b9688fd9e41a1847b077d579dc0e92a28b67c247c6ee7d1e751c0bae269824c30c7773feff1a2874e40ea36a3d2f9d1fc5ba618a28ecdf2ca1b33ed2473864
   languageName: node
   linkType: hard
 
@@ -8198,7 +8198,7 @@ __metadata:
     "@vitest/runner": "npm:~4.1.5"
     "@vitest/snapshot": "npm:~4.1.5"
     clipanion: "npm:^4.0.0-rc.4"
-    hono: "npm:^4.12.16"
+    hono: "npm:^4.12.17"
     jsonc-parser: "npm:^3.3.1"
     nodemailer: "npm:^8.0.7"
     react: "npm:^19.2.5"
