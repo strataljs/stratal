@@ -181,7 +181,7 @@ export class RouteRegistry {
     return cache
   }
 
-  /** Get all routes sorted by specificity (static > param > wildcard, primary before locale) */
+  /** Get all routes sorted by specificity (static > param > wildcard, locale variant before its primary) */
   all(): RegisteredRoute[] {
     this._sortedCache ??= sortRoutesBySpecificity(this.routes);
     return this._sortedCache
