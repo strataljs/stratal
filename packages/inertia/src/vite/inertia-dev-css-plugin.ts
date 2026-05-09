@@ -76,6 +76,26 @@ async function collectStyle(server: ViteDevServer, entries: string[]): Promise<s
 
 export function stratalInertiaDevCss(options: InertiaDevCssOptions): Plugin {
   let server: ViteDevServer
+  let cachedCss: string | null = null
+  let inflight: Promise<string> | null = null
+
+  function invalidate(): void {
+    cachedCss = null
+  }
+
+  async function getCss(): Promise<string> {
+    if (cachedCss !== null) return cachedCss
+    if (inflight) return inflight
+    inflight = collectStyle(server, options.entries)
+      .then((css) => {
+        cachedCss = css
+        return css
+      })
+      .finally(() => {
+        inflight = null
+      })
+    return inflight
+  }
 
   return {
     name: 'stratal:inertia-dev-css',
@@ -89,7 +109,24 @@ export function stratalInertiaDevCss(options: InertiaDevCssOptions): Plugin {
 
     async load(id) {
       if (id === RESOLVED_VIRTUAL_MODULE_ID) {
-        return await collectStyle(server, options.entries)
+        return await getCss()
+      }
+    },
+
+    handleHotUpdate({ file, modules }) {
+      if (CSS_LANGS_RE.test(file)) {
+        invalidate()
+        return
+      }
+      for (const mod of modules) {
+        if (mod.url && CSS_LANGS_RE.test(mod.url)) {
+          invalidate()
+          return
+        }
+        if (mod.id && CSS_LANGS_RE.test(mod.id)) {
+          invalidate()
+          return
+        }
       }
     },
 
@@ -100,7 +137,7 @@ export function stratalInertiaDevCss(options: InertiaDevCssOptions): Plugin {
         const pathname = new URL(req.url ?? '', 'http://localhost').pathname
         if (pathname !== '/__inertia/ssr-css') { next(); return; }
 
-        collectStyle(server, options.entries).then((css) => {
+        getCss().then((css) => {
           res.setHeader('Content-Type', 'text/css')
           res.setHeader('Cache-Control', 'no-store')
           res.end(css)

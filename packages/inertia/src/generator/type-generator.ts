@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 export interface PageTypeInfo {
@@ -649,9 +649,19 @@ function expandTypeToInline(
 
 // --- File path helpers ---
 
-export function writeInertiaTypes(outputPath: string, content: string): void {
+export function writeInertiaTypes(outputPath: string, content: string): boolean {
+  if (existsSync(outputPath)) {
+    try {
+      if (readFileSync(outputPath, 'utf-8') === content) return false
+    } catch {
+      // fall through and write
+    }
+  }
   mkdirSync(dirname(outputPath), { recursive: true })
-  writeFileSync(outputPath, content, 'utf-8')
+  const tmpPath = `${outputPath}.tmp-${process.pid}-${Date.now()}`
+  writeFileSync(tmpPath, content, 'utf-8')
+  renameSync(tmpPath, outputPath)
+  return true
 }
 
 export function findAppModulePath(cwd: string): string | undefined {
