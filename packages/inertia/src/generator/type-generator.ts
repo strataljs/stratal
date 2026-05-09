@@ -406,7 +406,15 @@ export interface GenerateTypesInput {
 function componentNameToPropsTypeName(componentName: string, segmentCount = 2): string {
   const segments = componentName.split('/')
   const used = segments.slice(-segmentCount)
-  return used.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('') + 'PageProps'
+  return used.map(toPascalCase).join('') + 'PageProps'
+}
+
+function toPascalCase(segment: string): string {
+  return segment
+    .split(/[-_\s]+/)
+    .filter((part) => part.length > 0)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join('')
 }
 
 function resolvePagePropsTypeNames(pages: PageTypeInfo[]): Map<string, string> {
