@@ -47,6 +47,12 @@ export type { InertiaRouteConfig } from './decorators/inertia.decorators'
 export { HandlePrecognitiveRequests } from './middleware/handle-precognitive-requests.middleware'
 export { InertiaMiddleware } from './middleware/inertia.middleware'
 
+// Commands
+export { InertiaBuildCommand } from './commands/inertia-build.command'
+export { InertiaDevCommand } from './commands/inertia-dev.command'
+export { InertiaInstallCommand } from './commands/inertia-install.command'
+export { InertiaTypesCommand } from './commands/inertia-types.command'
+
 // Generator
 export { runTypeGeneration } from './generator/type-generator'
 

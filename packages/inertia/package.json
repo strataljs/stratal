@@ -30,7 +30,6 @@
     "access": "public",
     "provenance": true
   },
-  "bin": "./dist/bin/inertia.mjs",
   "files": [
     "dist",
     "global.d.ts",
