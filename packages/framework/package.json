@@ -67,11 +67,11 @@
     "lint:fix": "npx oxlint --fix ."
   },
   "dependencies": {
-    "@better-auth/core": "^1.6.9",
+    "@better-auth/core": "^1.6.10",
     "@faker-js/faker": "^10.4.0",
     "@zenstackhq/cli": "^3.6.4",
     "@zenstackhq/orm": "^3.6.4",
-    "better-auth": "^1.6.9",
+    "better-auth": "^1.6.10",
     "better-call": "2.0.3",
     "postgres-array": "^3.0.4"
   },
@@ -82,7 +82,7 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.16.3",
-    "@cloudflare/workers-types": "4.20260507.1",
+    "@cloudflare/workers-types": "4.20260510.1",
     "@stratal/testing": "workspace:^",
     "@types/node": "^25.6.2",
     "@types/pg": "^8.20.0",
@@ -91,7 +91,6 @@
     "@vitest/snapshot": "~4.1.5",
     "@zenstackhq/better-auth": "^3.6.4",
     "dotenv-cli": "^11.0.0",
-    "kysely": "0.28.17",
     "pg": "^8.20.0",
     "reflect-metadata": "^0.2.2",
     "stratal": "workspace:*",

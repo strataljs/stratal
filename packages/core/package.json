@@ -164,7 +164,7 @@
   },
   "dependencies": {
     "@hono/swagger-ui": "^0.6.1",
-    "@hono/zod-openapi": "^1.3.0",
+    "@hono/zod-openapi": "^1.4.0",
     "@intlify/core-base": "^11.4.2",
     "@intlify/message-compiler": "^11.4.2",
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -203,7 +203,7 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.16.3",
-    "@cloudflare/workers-types": "4.20260507.1",
+    "@cloudflare/workers-types": "4.20260510.1",
     "@react-email/components": "^1.0.12",
     "@stratal/testing": "workspace:*",
     "@types/node": "^25.6.2",
