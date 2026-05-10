@@ -151,24 +151,44 @@ export class ModalService {
     const currentURL = new URL(ctx.c.req.url)
     const bgURL = new URL(url, currentURL.origin)
 
-    const bgRequest = new Request(bgURL.toString(), {
-      method: 'GET',
-      headers: {
-        // Always request JSON — we run SSR ourselves with the combined page object
-        'x-inertia': 'true',
-        // Deliberately omit x-inertia-version: the InertiaMiddleware version check
-        // returns a 409 with no body when versions don't match, which would make
-        // JSON.parse fail. Internal sub-requests don't need cache-bust checks.
-        'accept': 'application/json',
-        // Forward auth/session cookies so the background request is authenticated
-        'cookie': ctx.c.req.header('cookie') ?? '',
-        // Forward the host header so domain-pattern middleware can match the
-        // request against the configured domain pattern. Without this, the host
-        // resolves to the URL's origin (e.g., localhost:1234) which won't match
-        // patterns like '{tenant}.admsn.test', causing a DomainMismatchError.
-        'host': ctx.c.req.header('host') ?? '',
-      },
-    })
+    const headers: Record<string, string> = {
+      // Always request JSON — we run SSR ourselves with the combined page object
+      'x-inertia': 'true',
+      // Deliberately omit x-inertia-version: the InertiaMiddleware version check
+      // returns a 409 with no body when versions don't match, which would make
+      // JSON.parse fail. Internal sub-requests don't need cache-bust checks.
+      'accept': 'application/json',
+      // Forward auth/session cookies so the background request is authenticated
+      'cookie': ctx.c.req.header('cookie') ?? '',
+      // Forward the host header so domain-pattern middleware can match the
+      // request against the configured domain pattern. Without this, the host
+      // resolves to the URL's origin (e.g., localhost:1234) which won't match
+      // patterns like '{tenant}.admsn.test', causing a DomainMismatchError.
+      'host': ctx.c.req.header('host') ?? '',
+    }
+
+    // Forward proxy/forwarded-for headers when present so middleware that
+    // reconstructs the canonical request URL (e.g. setting `appUrl` to
+    // `https://...`) sees the same protocol/host the original request had.
+    // Without this, downstream auth (better-auth's secure-cookie prefix is
+    // derived from `baseURL`'s protocol) would look up the wrong cookie name
+    // and the bg fetch would be unauthenticated — even though the cookie is
+    // forwarded above.
+    const passthrough = [
+      'x-forwarded-proto',
+      'x-forwarded-host',
+      'x-forwarded-for',
+      'x-forwarded-port',
+      'x-real-ip',
+      'accept-language',
+      'user-agent',
+    ] as const
+    for (const name of passthrough) {
+      const value = ctx.c.req.header(name)
+      if (value) headers[name] = value
+    }
+
+    const bgRequest = new Request(bgURL.toString(), { method: 'GET', headers })
 
     return this.app.fetch(bgRequest, ctx.c.env, ctx.c.executionCtx)
   }
