@@ -136,7 +136,11 @@ export class ModalService {
         const refererURL = new URL(referer)
         const currentURL = new URL(ctx.c.req.url)
         if (refererURL.pathname !== currentURL.pathname) {
-          return refererURL.pathname
+          // Preserve the query string so the background page (and the
+          // post-close redirect) keeps the filter/pagination state the
+          // user had on the list view — without this, opening a modal
+          // resets the parent page to defaults.
+          return refererURL.pathname + refererURL.search
         }
       }
       catch {
