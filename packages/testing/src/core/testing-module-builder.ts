@@ -5,6 +5,7 @@ import {
   type StratalEnv,
   type StratalExecutionContext,
 } from 'stratal'
+import type { ExceptionHandler } from 'stratal/errors'
 import { type Container } from 'stratal/di'
 import { LogLevel } from 'stratal/logger'
 import { type InjectionToken, Module, type ModuleClass, type ModuleOptions } from 'stratal/module'
@@ -33,6 +34,13 @@ export interface TestingModuleConfig extends ModuleOptions {
   env?: Partial<StratalEnv>
   /** Logging configuration. Defaults: level=ERROR, formatter='json' */
   logging?: ApplicationConfig['logging']
+  /**
+   * Custom exception handler. Mirrors `ApplicationConfig.exceptionHandler`.
+   * Must be passed at compile time — `overrideProvider(DI_TOKENS.ExceptionHandler)`
+   * cannot replace it because the framework resolves the handler during
+   * `initialize()` (before overrides apply).
+   */
+  exceptionHandler?: Constructor<ExceptionHandler>
 }
 
 /**
@@ -113,6 +121,7 @@ export class TestingModuleBuilder {
       },
       env,
       ctx,
+      exceptionHandler: this.config.exceptionHandler,
     })
 
     await app.initialize()
