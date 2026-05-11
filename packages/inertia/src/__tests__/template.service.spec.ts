@@ -16,6 +16,7 @@ function createPage(overrides: Partial<Page> = {}): Page {
     version: '1.0',
     flash: {},
     rememberedState: {},
+    rescuedProps: [],
     ...overrides,
   }
 }

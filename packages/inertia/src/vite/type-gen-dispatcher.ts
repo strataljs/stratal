@@ -65,12 +65,8 @@ export function createTypeGenDispatcher(options: TypeGenDispatcherOptions): Type
     }
 
     worker.on('message', (msg) => {
-      try {
-        options.onResult?.(msg)
-      } finally {
-        // exit will follow; finish there to ensure terminate() resolved
-      }
-      void msg
+      // `exit` will follow; finish() runs there so terminate() has settled before the next spawn.
+      options.onResult?.(msg)
     })
 
     worker.on('error', (err) => {

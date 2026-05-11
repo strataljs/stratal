@@ -8,7 +8,6 @@ import {
 
 interface FakeWorker extends TypeGenWorkerHandle {
   emit(event: 'message' | 'error' | 'exit', payload?: unknown): void
-  terminateMock: ReturnType<typeof vi.fn>
 }
 
 function createFakeWorker(): FakeWorker {
@@ -27,9 +26,7 @@ function createFakeWorker(): FakeWorker {
       for (const cb of listeners[event]) cb(payload)
     },
     terminate: vi.fn(() => Promise.resolve(0)),
-    terminateMock: vi.fn(),
   }
-  worker.terminateMock = worker.terminate as ReturnType<typeof vi.fn>
   return worker
 }
 
