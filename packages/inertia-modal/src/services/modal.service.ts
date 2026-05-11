@@ -70,6 +70,7 @@ export class ModalService {
           version: null,
           flash: {},
           rememberedState: {},
+          rescuedProps: [],
         }
         return new Response(JSON.stringify(page), {
           status: 200,
