@@ -9,10 +9,14 @@ export default defineConfig({
     'src/vite.ts',
     'src/react.ts',
     'src/testing.ts',
+    'src/generator/type-generator.worker.ts',
   ],
   tsconfig: './tsconfig.build.json',
   exports: {
-    customExports: withTypesExports,
+    customExports: (exports) => {
+      delete exports['./generator/type-generator.worker']
+      return withTypesExports(exports)
+    },
   },
   deps: {
     skipNodeModulesBundle: true,

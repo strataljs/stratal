@@ -1,5 +1,7 @@
 import type { Container } from '../di/container'
 import { Transient } from '../di/decorators'
+import { LOGGER_TOKENS } from '../logger/logger.tokens'
+import type { LoggerService } from '../logger/services/logger.service'
 import type { CronJob, RegisteredJob } from './cron-job'
 import { CronExecutionError } from './errors/cron-execution.error'
 
@@ -57,6 +59,11 @@ export class CronManager {
 		const matchingJobs = this.jobs.get(cron) ?? []
 
 		if (matchingJobs.length === 0) {
+			const logger = container.resolve<LoggerService>(LOGGER_TOKENS.LoggerService)
+			logger.warn('No cron jobs matched scheduled trigger', {
+				incomingCron: cron,
+				registeredSchedules: Array.from(this.jobs.keys()),
+			})
 			return
 		}
 

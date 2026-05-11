@@ -112,6 +112,7 @@ export class InertiaService {
       version: this.options.version ?? null,
       flash,
       rememberedState: {},
+      rescuedProps: [],
       ...(result.mergeProps.length > 0 ? { mergeProps: result.mergeProps } : {}),
       ...(result.prependProps.length > 0 ? { prependProps: result.prependProps } : {}),
       ...(result.deepMergeProps.length > 0 ? { deepMergeProps: result.deepMergeProps } : {}),

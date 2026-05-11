@@ -76,6 +76,30 @@ async function collectStyle(server: ViteDevServer, entries: string[]): Promise<s
 
 export function stratalInertiaDevCss(options: InertiaDevCssOptions): Plugin {
   let server: ViteDevServer
+  let cachedCss: string | null = null
+  let inflight: Promise<string> | null = null
+  let cacheEpoch = 0
+
+  function invalidate(): void {
+    cachedCss = null
+    cacheEpoch++
+  }
+
+  async function getCss(): Promise<string> {
+    if (cachedCss !== null) return cachedCss
+    if (inflight) return inflight
+    const epoch = cacheEpoch
+    inflight = collectStyle(server, options.entries)
+      .then((css) => {
+        // Drop stale result if invalidated mid-flight, so the next caller re-collects.
+        if (epoch === cacheEpoch) cachedCss = css
+        return css
+      })
+      .finally(() => {
+        inflight = null
+      })
+    return inflight
+  }
 
   return {
     name: 'stratal:inertia-dev-css',
@@ -89,8 +113,15 @@ export function stratalInertiaDevCss(options: InertiaDevCssOptions): Plugin {
 
     async load(id) {
       if (id === RESOLVED_VIRTUAL_MODULE_ID) {
-        return await collectStyle(server, options.entries)
+        return await getCss()
       }
+    },
+
+    handleHotUpdate() {
+      // JS/TS edits can add or remove CSS imports, which changes the SSR CSS graph
+      // without the changed file itself matching CSS_LANGS_RE. Invalidate on every
+      // HMR tick — collectStyle() is fast and dev-only.
+      invalidate()
     },
 
     configureServer(devServer) {
@@ -100,7 +131,7 @@ export function stratalInertiaDevCss(options: InertiaDevCssOptions): Plugin {
         const pathname = new URL(req.url ?? '', 'http://localhost').pathname
         if (pathname !== '/__inertia/ssr-css') { next(); return; }
 
-        collectStyle(server, options.entries).then((css) => {
+        getCss().then((css) => {
           res.setHeader('Content-Type', 'text/css')
           res.setHeader('Cache-Control', 'no-store')
           res.end(css)

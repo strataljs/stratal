@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import type { Plugin } from 'vite'
 import { findPagesDir, runTypeGeneration } from '../generator/type-generator'
+import { createTypeGenDispatcher, type TypeGenDispatcher } from './type-gen-dispatcher'
 
 const INERTIA_CALL_PATTERN = /ctx\.inertia\(|\.share\(|ctx\.flash\(|ctx\.defer\(|ctx\.optional\(|ctx\.merge\(|ctx\.once\(|ctx\.always\(/
 
@@ -9,6 +10,7 @@ export function stratalInertiaTypes(): Plugin {
   let cwd: string
   let pagesDir: string
   let srcDir: string
+  let dispatcher: TypeGenDispatcher | null = null
 
   return {
     name: 'stratal:inertia-types',
@@ -17,6 +19,17 @@ export function stratalInertiaTypes(): Plugin {
       cwd = config.root
       pagesDir = findPagesDir(cwd) + '/'
       srcDir = join(cwd, 'src') + '/'
+      dispatcher = createTypeGenDispatcher({
+        cwd,
+        onError(err) {
+          console.warn('[stratal:inertia-types] Type generation worker errored:', err.message)
+        },
+        onResult(result) {
+          if (!result.ok && result.error) {
+            console.warn('[stratal:inertia-types] Type generation failed:', result.error)
+          }
+        },
+      })
     },
 
     async buildStart() {
@@ -28,7 +41,8 @@ export function stratalInertiaTypes(): Plugin {
       }
     },
 
-    async handleHotUpdate({ file }) {
+    handleHotUpdate({ file }) {
+      if (!dispatcher) return
       if (!/\.(tsx|ts)$/.test(file)) return
 
       const relToSrc = relative(srcDir, file)
@@ -50,10 +64,13 @@ export function stratalInertiaTypes(): Plugin {
         }
       }
 
-      try {
-        await runTypeGeneration(cwd)
-      } catch (error) {
-        console.warn('[stratal:inertia-types] Type generation failed during HMR:', error)
+      dispatcher.schedule()
+    },
+
+    async closeBundle() {
+      if (dispatcher) {
+        await dispatcher.dispose()
+        dispatcher = null
       }
     },
   }

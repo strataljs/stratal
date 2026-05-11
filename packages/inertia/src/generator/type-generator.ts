@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 export interface PageTypeInfo {
@@ -406,7 +406,15 @@ export interface GenerateTypesInput {
 function componentNameToPropsTypeName(componentName: string, segmentCount = 2): string {
   const segments = componentName.split('/')
   const used = segments.slice(-segmentCount)
-  return used.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join('') + 'PageProps'
+  return used.map(toPascalCase).join('') + 'PageProps'
+}
+
+function toPascalCase(segment: string): string {
+  return segment
+    .split(/[-_\s]+/)
+    .filter((part) => part.length > 0)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join('')
 }
 
 function resolvePagePropsTypeNames(pages: PageTypeInfo[]): Map<string, string> {
@@ -641,9 +649,19 @@ function expandTypeToInline(
 
 // --- File path helpers ---
 
-export function writeInertiaTypes(outputPath: string, content: string): void {
+export function writeInertiaTypes(outputPath: string, content: string): boolean {
+  if (existsSync(outputPath)) {
+    try {
+      if (readFileSync(outputPath, 'utf-8') === content) return false
+    } catch {
+      // fall through and write
+    }
+  }
   mkdirSync(dirname(outputPath), { recursive: true })
-  writeFileSync(outputPath, content, 'utf-8')
+  const tmpPath = `${outputPath}.tmp-${process.pid}-${Date.now()}`
+  writeFileSync(tmpPath, content, 'utf-8')
+  renameSync(tmpPath, outputPath)
+  return true
 }
 
 export function findAppModulePath(cwd: string): string | undefined {
