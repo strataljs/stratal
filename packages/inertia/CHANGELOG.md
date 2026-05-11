@@ -1,5 +1,26 @@
 # @stratal/inertia
 
+## 0.0.21
+
+### Patch Changes
+
+- 3489cfd: Dedupe React and Inertia in the Vite resolver to prevent duplicate-copy bugs
+
+  `stratalInertia()` now adds the React ecosystem (`react`, `react-dom`, `react-is`, `scheduler`, `use-sync-external-store`) and `@inertiajs/core` / `@inertiajs/react` to `resolve.dedupe` and `resolve.noExternal`. React 19's main entry is CJS and must run through the optimizer, but when Vite re-runs optimization after auto-discovering a new dep it would mint a second `?v=<hash>` copy, breaking React identity (`Invalid hook call`, dispatcher mismatch). Forcing a single physical copy through `dedupe`/`noExternal` keeps hooks, contexts, and Inertia internals working across re-optimizations.
+
+- 3489cfd: Run Inertia type generation in a worker thread and cache dev CSS per HMR cycle
+
+  - The Vite types plugin now offloads `runTypeGeneration` to a debounced (250ms) worker via `node:worker_threads`, so HMR no longer blocks on ts-morph parsing. A second edit while a worker is in flight queues exactly one follow-up run, and the dispatcher is torn down on `closeBundle`.
+  - `writeInertiaTypes` skips the write when the on-disk content already matches and otherwise writes via a temp-file rename, so the file is never observed half-written.
+  - `stratalInertiaDevCss` caches the collected SSR CSS and invalidates it on CSS-module HMR, eliminating duplicate scans when the SSR endpoint and the virtual module are both requested.
+  - Component names with `-`, `_`, or whitespace now PascalCase correctly when forming `<Name>PageProps` (e.g. `user-profile/edit` → `UserProfileEditPageProps`).
+
+- Updated dependencies [3489cfd]
+- Updated dependencies [3489cfd]
+- Updated dependencies [3489cfd]
+  - stratal@0.0.21
+  - @stratal/testing@0.0.21
+
 ## 0.0.20
 
 ### Patch Changes

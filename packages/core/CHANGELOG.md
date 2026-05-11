@@ -1,5 +1,17 @@
 # stratal
 
+## 0.0.21
+
+### Patch Changes
+
+- 3489cfd: Warn when a scheduled cron trigger doesn't match any registered job
+
+  `CronManager` now logs a warning (with the incoming cron expression and the list of registered schedules) when Cloudflare invokes a `scheduled()` trigger that no `@Cron` job is registered for. Previously the call returned silently, making misconfigured cron triggers in `wrangler.toml` invisible.
+
+- 3489cfd: Match locale-prefixed routes ahead of their primary so catch-alls don't swallow the locale segment
+
+  Routes registered with `Router.locales(...)` previously sorted **after** their primary, so a request like `/sw/applications/123` against a primary catch-all (`/:slug{.+}`) was matched as `slug='sw/applications/123'` instead of `locale='sw' + slug='applications/123'`. Locale variants now sort just ahead of their primary using the path-with-locale-stripped score plus their extra segment count as the tie-breaker, restoring the expected priority for both static and catch-all routes.
+
 ## 0.0.20
 
 ### Patch Changes
