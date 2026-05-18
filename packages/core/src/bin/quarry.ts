@@ -8,6 +8,7 @@ import { URL, pathToFileURL } from 'node:url'
 import type { QuarryRegistry } from 'stratal/quarry'
 import { type Application } from '../application'
 import { errors as errorMessages } from '../i18n/messages/en/errors'
+import { extractEnvFlag } from './argv'
 import { createDynamicCommands } from './commands/dynamic-command'
 
 const require = createRequire(import.meta.url)
@@ -20,6 +21,16 @@ register(pathToFileURL(swcRegisterPath), pathToFileURL('./'))
 register(new URL('./cloudflare-workers-loader.mjs', import.meta.url), pathToFileURL('./'))
 
 const DEFAULT_ENTRY = './src/index.ts'
+
+let environment: string | undefined
+try {
+  const parsed = extractEnvFlag(process.argv.slice(2))
+  environment = parsed.env
+  process.argv.splice(2, process.argv.length - 2, ...parsed.rest)
+} catch (e) {
+  console.error(`Error: ${(e as Error).message}`)
+  process.exit(1)
+}
 
 // Determine entry file: if first arg looks like a file path, use it; otherwise use default
 const firstArg = process.argv[2]
@@ -122,7 +133,7 @@ async function main(): Promise<void> {
 
   const envFiles = discoverEnvFiles()
   const { env, ctx, dispose } = await getPlatformProxy({
-    envFiles, configPath: strippedConfigPath,
+    environment, envFiles, configPath: strippedConfigPath,
   })
 
   // Track waitUntil promises so we can drain them before shutdown.

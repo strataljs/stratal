@@ -11,6 +11,22 @@ npx quarry <command> [arguments] [--options]
 npx quarry ./custom/entry.ts <command>
 ```
 
+## Wrangler Environment
+
+Use `--env <name>` / `-e <name>` to target a `wrangler.jsonc` environment (`env.staging`, `env.production`, …). Loads that environment's bindings and vars.
+
+```bash
+npx quarry --env staging route:list
+npx quarry -e staging db:seed
+npx quarry --env=production route:list
+npx quarry ./custom/entry.ts --env staging route:list
+```
+
+- Reserved at the CLI level — commands cannot define their own `--env` option.
+- Position-tolerant: works before or after the entry path.
+- Omit the flag to use the top-level (default) wrangler config.
+- Unknown env name: wrangler prints the available keys and exits.
+
 ## Built-in Commands
 
 | Command | Purpose |

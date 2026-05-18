@@ -15,6 +15,7 @@ Maintainer rules for the `stratal` package. Consumer API depth lives in `.agents
 - Request-scoped services must use `Scope.Request` — they break in singleton scope (no per-request data).
 - Adding a new core infrastructure module: register it in phase 1 of `Application` and add its tokens to `src/di/tokens.ts`.
 - `npx quarry` resolves the consumer's app via the default `Stratal` export from their `src/index.ts`. The virtual `cloudflare:workers` ESM loader (`src/bin/cloudflare-workers-loader.ts`) lets `Stratal.prepareApp()` run in Node — don't break this loader when changing entry resolution.
+- Quarry-level `--env <name>` / `-e <name>` flag (parser at `src/bin/argv.ts`) is stripped from argv before the entry-path check and passed into `getPlatformProxy({ environment })`. Commands cannot redefine `--env` — the parser consumes it regardless of position.
 - Adding a new sub-path export: add the entry to `tsdown.config.ts` `entry` array; tsdown rewrites `package.json` exports on next build. For aliases use the `customExports` callback (current alias: `./validation` → `./i18n/validation`).
 - `dist/chunk-*.mjs` are Rolldown shared chunks. Don't reference them from code or list in exports.
 
