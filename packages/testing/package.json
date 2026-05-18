@@ -86,7 +86,7 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "4.20260510.1",
+    "@cloudflare/workers-types": "4.20260518.1",
     "@stratal/framework": "workspace:*",
     "@types/node": "^25.6.2",
     "@vitest/runner": "~4.1.5",
