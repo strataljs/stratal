@@ -2927,6 +2927,7 @@ __metadata:
     "@zenstackhq/better-auth": "npm:^3.6.4"
     "@zenstackhq/cli": "npm:^3.6.4"
     "@zenstackhq/orm": "npm:^3.6.4"
+    "@zenstackhq/schema": "npm:^3.6.4"
     better-auth: "npm:^1.6.11"
     better-call: "npm:1.3.5"
     dotenv-cli: "npm:^11.0.0"
@@ -2939,6 +2940,10 @@ __metadata:
     vitest: "npm:~4.1.5"
     wrangler: "npm:^4.90.0"
   peerDependencies:
+    "@better-auth/core": ">=1.6"
+    "@zenstackhq/orm": ">=3.6"
+    "@zenstackhq/schema": ">=3.6"
+    better-auth: ">=1.6"
     pg: ^8.0.0
     reflect-metadata: ^0.2.2
     stratal: ^0.0.21
@@ -3668,6 +3673,15 @@ __metadata:
   dependencies:
     decimal.js: "npm:^10.4.3"
   checksum: 10c0/e4c990e49c32dd010c3d43a47b2dfa540e8d1586553ae89576fd465a6ce361ca5091f0b2e35d661f79c61dfefc1f05353d7df37d9b78578b1c8e36bcf91291f2
+  languageName: node
+  linkType: hard
+
+"@zenstackhq/schema@npm:^3.6.4":
+  version: 3.7.0
+  resolution: "@zenstackhq/schema@npm:3.7.0"
+  dependencies:
+    decimal.js: "npm:^10.4.3"
+  checksum: 10c0/0a0c290ca64a62277ce4697e64ddc916a4406d701b611790d772d56d049c104a9d94a4f884633363e283969de2ea1401c0b35394e3ed5a479be49a175b92ab58
   languageName: node
   linkType: hard
 
