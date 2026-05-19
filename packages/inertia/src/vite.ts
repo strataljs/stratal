@@ -7,10 +7,23 @@ export { stratalInertiaDevCss, stratalInertiaTypes };
 export interface StratalInertiaPluginOptions {
   /** Client entry path(s) for CSS collection (default: ['/src/inertia/app.tsx']) */
   entries?: string[]
+  /**
+   * Whether to emit sourcemaps in `vite build`. Default: `'dev-and-staging'`
+   * — sourcemaps in development and staging deploys for debugging, but never
+   * in production (which would inflate the worker upload).
+   *
+   * - `true` / `false` — force on / off
+   * - `'dev-and-staging'` — on unless `CLOUDFLARE_ENV === 'prod'`
+   */
+  sourcemap?: boolean | 'dev-and-staging'
 }
 
 export function stratalInertia(options?: StratalInertiaPluginOptions): Plugin[] {
   const entries = options?.entries ?? ['/src/inertia/app.tsx']
+  const sourcemapOption = options?.sourcemap ?? 'dev-and-staging'
+  const sourcemap = sourcemapOption === 'dev-and-staging'
+    ? process.env.CLOUDFLARE_ENV !== 'prod' && process.env.CLOUDFLARE_ENV! !== 'production'
+    : sourcemapOption
 
   // Hono and stratal must NOT be pre-bundled by Vite's optimizeDeps. When they are,
   // a duplicate copy ends up in `.vite/deps_<env>/` while the worker bundle imports
@@ -52,7 +65,20 @@ export function stratalInertia(options?: StratalInertiaPluginOptions): Plugin[] 
     '@inertiajs/react',
   ]
   const optimizeDepsInclude = ['buffer', 'buffer/', 'base64-js', 'ieee754']
-  const devOnlyExternals = ['ts-morph']
+  // Dev/build-time-only packages that must never reach the worker or browser
+  // bundle. `ts-morph` is used by the type generator. The langium / zenstack
+  // CLI/SDK group is dragged in transitively by ZenStack's runtime barrel
+  // (e.g. `@zenstackhq/better-auth` imports a `schema-generator` that
+  // references `@zenstackhq/language` which depends on `langium`); no actual
+  // runtime code path executes any of it. If a future refactor genuinely
+  // needs one of these at runtime, this list should be revisited explicitly.
+  const devOnlyExternals: (string | RegExp)[] = [
+    'ts-morph',
+    /^langium($|\/)/,
+    /^@zenstackhq\/cli($|\/)/,
+    /^@zenstackhq\/language($|\/)/,
+    /^@zenstackhq\/sdk($|\/)/,
+  ]
 
   return [
     stratalInertiaDevCss({ entries }),
@@ -84,12 +110,20 @@ export function stratalInertia(options?: StratalInertiaPluginOptions): Plugin[] 
           noExternal: existingNoExternal === true ? true : mergedNoExternal,
         }
 
-        const existingExternal = (env.build?.rolldownOptions?.external as string[]) ?? []
+        const existingExternal = env.build?.rolldownOptions?.external
+        const existingExternalArray: (string | RegExp)[] = Array.isArray(existingExternal)
+          ? (existingExternal as (string | RegExp)[])
+          : existingExternal != null
+            ? [existingExternal as string | RegExp]
+            : []
         env.build = {
           ...env.build,
+          // Only override sourcemap when the user hasn't set it explicitly,
+          // so a per-app `build.sourcemap` in vite.config.ts still wins.
+          sourcemap: env.build?.sourcemap ?? sourcemap,
           rolldownOptions: {
             ...env.build?.rolldownOptions,
-            external: [...existingExternal, ...devOnlyExternals],
+            external: [...existingExternalArray, ...devOnlyExternals],
           },
         }
       },
