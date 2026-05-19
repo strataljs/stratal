@@ -121,10 +121,10 @@ import { EmailModule } from 'stratal/email'
         provider: 'resend',              // 'resend' | 'smtp'
         from: { name: 'My App', email: 'noreply@example.com' },
         apiKey: env.RESEND_API_KEY,      // required for resend provider
-        queue: 'email-queue',            // queue name for async sending
+        queue: 'NOTIFICATIONS_QUEUE',    // queue binding registered via QueueModule
       }),
     }),
-    QueueModule.registerQueue('email-queue'),
+    QueueModule.registerQueue('NOTIFICATIONS_QUEUE'),
   ],
 })
 export class AppModule {}

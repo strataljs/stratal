@@ -77,28 +77,7 @@ declare module 'stratal' {
 }
 ```
 
-This tells Stratal about your Cloudflare env bindings. Run `wrangler types` to generate `Cloudflare.Env` from `wrangler.jsonc`.
-
-If you use queues, add queue name augmentation here too:
-
-```typescript
-// Auto-derive queue names from Cloudflare.Env bindings
-type QueueBindingKeys = {
-  [K in keyof Cloudflare.Env]: Cloudflare.Env[K] extends Queue ? K : never
-}[keyof Cloudflare.Env]
-
-type BindingToQueueName<T extends string> =
-  T extends `${infer Part}_${infer Rest}`
-  ? `${Lowercase<Part>}-${BindingToQueueName<Rest>}`
-  : Lowercase<T>
-
-type DerivedQueueNames = BindingToQueueName<QueueBindingKeys>
-
-declare module 'stratal' {
-  interface StratalEnv extends Cloudflare.Env {}
-  interface QueueNames extends Record<DerivedQueueNames, true> {}
-}
-```
+This tells Stratal about your Cloudflare env bindings. Run `wrangler types` to generate `Cloudflare.Env` from `wrangler.jsonc`. Queue binding names autocomplete from `StratalEnv` automatically — no extra type augmentation needed.
 
 ### tsconfig.json
 
