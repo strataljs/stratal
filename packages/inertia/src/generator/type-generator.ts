@@ -179,12 +179,12 @@ function unwrapWrapperType(type: Type, tsObj: TsObj, fallbackLocation?: Node): s
 }
 
 function unwrapPromise(type: Type, tsObj: TsObj, fallbackLocation?: Node): string {
-  const text = type.getText(undefined, tsObj.TypeFormatFlags.NoTruncation)
-  if (text.startsWith('Promise<')) {
-    const typeArgs = type.getTypeArguments()
-    if (typeArgs.length > 0) {
-      return stripReadonly(typeArgs[0], tsObj, fallbackLocation)
-    }
+  // `getAwaitedType()` resolves the `Awaited<T>` of any thenable — covers
+  // `Promise<T>`, `PromiseLike<T>`, and branded thenables (e.g. ZenStack's
+  // `ZenStackPromise<T>`) whose text doesn't start with `Promise<`.
+  const awaited = type.getAwaitedType?.()
+  if (awaited && awaited !== type) {
+    return stripReadonly(awaited, tsObj, fallbackLocation)
   }
   return stripReadonly(type, tsObj, fallbackLocation)
 }
