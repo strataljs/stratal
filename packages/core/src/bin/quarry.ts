@@ -20,7 +20,7 @@ register(pathToFileURL(swcRegisterPath), pathToFileURL('./'))
 // Register cloudflare:workers virtual module loader
 register(new URL('./cloudflare-workers-loader.mjs', import.meta.url), pathToFileURL('./'))
 
-const DEFAULT_ENTRY = './src/index.ts'
+const DEFAULT_ENTRY = './src/quarry.ts'
 
 let environment: string | undefined
 try {
@@ -48,7 +48,7 @@ const entryPath = resolve(process.cwd(), entryFile)
 if (!existsSync(entryPath)) {
   console.error(`Error: Entry file not found: ${entryFile}`)
   console.error('')
-  console.error('Create src/index.ts with a default Stratal export, or specify a custom path:')
+  console.error('Create src/quarry.ts that exports `QuarryRunner.run({ module, seeders })`, or specify a custom path:')
   console.error('  npx quarry ./path/to/entry.ts <command> [options]')
   process.exit(1)
 }
