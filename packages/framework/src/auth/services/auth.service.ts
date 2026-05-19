@@ -1,9 +1,9 @@
-import type { Auth, BetterAuthOptions } from 'better-auth'
-import { betterAuth } from 'better-auth'
-import { inject } from 'tsyringe'
-import { Transient } from 'stratal/di'
-import { AUTH_OPTIONS, AUTH_SERVICE } from '../auth.tokens'
-import { getErrorHandlerConfig } from '../utils'
+import type { Auth, BetterAuthOptions } from 'better-auth';
+import { betterAuth } from 'better-auth/minimal';
+import { Transient } from 'stratal/di';
+import { inject } from 'tsyringe';
+import { AUTH_OPTIONS, AUTH_SERVICE } from '../auth.tokens';
+import { getErrorHandlerConfig } from '../utils';
 
 /**
  * AuthService
