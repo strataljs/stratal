@@ -9,17 +9,14 @@ import type { IQueueProvider } from './queue-provider.interface'
 /**
  * Cloudflare Queue Provider
  *
- * Sends messages to Cloudflare Queues by resolving bindings from the environment.
- * Used in production environments where Cloudflare Workers handle queue processing.
- *
- * **Binding Resolution:**
- * Queue names are converted to binding names:
- * - `notifications-queue` → `NOTIFICATIONS_QUEUE`
+ * Sends messages to Cloudflare Queues by resolving the binding directly on
+ * the worker's `env`. Used in production environments where Cloudflare Workers
+ * handle queue processing.
  *
  * @example
  * ```typescript
  * const provider = new CloudflareQueueProvider(env)
- * await provider.send('notifications-queue', message)
+ * await provider.send('NOTIFICATIONS_QUEUE', message)
  * ```
  */
 @Transient()
@@ -31,32 +28,17 @@ export class CloudflareQueueProvider implements IQueueProvider {
   /**
    * Send a message to a Cloudflare Queue
    *
-   * @param queueName - Queue name (e.g., 'notifications-queue')
+   * @param binding - Queue binding identifier (e.g., 'NOTIFICATIONS_QUEUE')
    * @param message - Complete message with id, timestamp, and payload
-   * @throws {QueueBindingNotFoundError} If queue binding is not configured
+   * @throws {QueueBindingNotFoundError} If the binding is not configured on env
    */
-  async send<T>(queueName: string, message: QueueMessage<T>): Promise<void> {
-    const queue = this.getQueue(queueName)
-    await queue.send(message)
-  }
-
-  /**
-   * Resolve queue binding from Cloudflare environment
-   *
-   * Converts kebab-case queue name to UPPER_SNAKE_CASE binding name.
-   *
-   * @param queueName - Queue name (e.g., 'notifications-queue')
-   * @returns Cloudflare Queue binding
-   * @throws {QueueBindingNotFoundError} If binding not found in env
-   */
-  private getQueue(queueName: string): Queue {
-    const bindingName = queueName.toUpperCase().replace(/-/g, '_')
-    const queue = (this.env as unknown as Record<string, unknown>)[bindingName] as Queue | undefined
+  async send<T>(binding: string, message: QueueMessage<T>): Promise<void> {
+    const queue = (this.env as unknown as Record<string, unknown>)[binding] as Queue | undefined
 
     if (!queue) {
-      throw new QueueBindingNotFoundError(queueName, bindingName)
+      throw new QueueBindingNotFoundError(binding)
     }
 
-    return queue
+    await queue.send(message)
   }
 }

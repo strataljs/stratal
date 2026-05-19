@@ -12,7 +12,7 @@
  *   provider: 'resend',
  *   apiKey: 'your-api-key',
  *   from: { name: 'App', email: 'noreply@example.com' },
- *   queue: 'notifications-queue',
+ *   queue: 'NOTIFICATIONS_QUEUE',
  * })
  *
  * // Or with async options from config namespaces
@@ -40,7 +40,7 @@
 
 import { Module } from '../module'
 import type { AsyncModuleOptions, DynamicModule } from '../module/types'
-import type { QueueName } from '../queue'
+import type { QueueBinding } from '../queue'
 import { QUEUE_TOKENS, type QueueRegistry } from '../queue'
 import { EmailConsumer } from './consumers/email.consumer'
 import { EMAIL_TOKENS } from './email.tokens'
@@ -82,10 +82,10 @@ export interface EmailModuleOptions {
   replyTo?: string
 
   /**
-   * Queue name for email dispatch.
-   * The queue must be registered via QueueModule.registerQueue(name).
+   * Queue binding for email dispatch.
+   * The binding must be registered via QueueModule.registerQueue(binding).
    */
-  queue: QueueName
+  queue: QueueBinding
 }
 
 @Module({
@@ -108,7 +108,7 @@ export class EmailModule {
    *   provider: 'resend',
    *   apiKey: env.RESEND_API_KEY,
    *   from: { name: 'App', email: 'noreply@example.com' },
-   *   queue: 'notifications-queue',
+   *   queue: 'NOTIFICATIONS_QUEUE',
    * })
    * ```
    */
@@ -153,7 +153,7 @@ export class EmailModule {
           useFactory: options.useFactory,
           inject: options.inject,
         },
-        // Resolve queue from QueueRegistry using the queue name from options
+        // Resolve queue from QueueRegistry using the binding from options
         {
           provide: EMAIL_TOKENS.EmailQueue,
           useFactory: (emailOptions: EmailModuleOptions, registry: QueueRegistry) =>

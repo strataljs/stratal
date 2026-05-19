@@ -16,13 +16,18 @@ import type { QueueMessage } from './queue-consumer'
  * - A consumer can handle messages from ANY queue (routing is by type, not queue)
  *
  * **Note:** For sending messages to queues, use IQueueSender instances
- * obtained via @InjectQueue('queue-name') or module bindings.
+ * obtained via @InjectQueue('QUEUE_BINDING') or module bindings.
  *
  * @example Processing a queue batch
  * ```typescript
  * // In Cloudflare Worker queue handler
  * await queueManager.processBatch('notifications-queue', batch)
  * ```
+ *
+ * Note: the queue identifier passed here is the underlying Cloudflare queue
+ * name (whatever wrangler routes to this worker), not a Stratal binding name.
+ * It is informational only — Stratal routes messages to consumers by
+ * `message.type`, not by the queue they arrived on.
  */
 @Transient(DI_TOKENS.Queue)
 export class QueueManager {
@@ -36,7 +41,7 @@ export class QueueManager {
    * Routes messages to registered consumers based on message type.
    * Uses ConsumerRegistry to find matching consumers.
    *
-   * @param _queueName - Name of the queue (for logging, not used for routing)
+   * @param _queueName - Underlying Cloudflare queue name (for logging only)
    * @param batch - Batch of messages from Cloudflare Queue
    */
   async processBatch(_queueName: string, batch: MessageBatch): Promise<void> {

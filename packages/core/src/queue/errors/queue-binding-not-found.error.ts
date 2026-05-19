@@ -3,16 +3,16 @@ import { ApplicationError, ERROR_CODES } from '../../errors'
 /**
  * QueueBindingNotFoundError
  *
- * Thrown when attempting to access a Cloudflare Queue binding that hasn't been configured.
- * This typically indicates that the queue binding is missing from wrangler.jsonc
- * or the environment variables are not properly set.
+ * Thrown when attempting to access a Cloudflare Queue binding that isn't
+ * configured on the worker's `env`. Typically indicates the binding is missing
+ * from `wrangler.jsonc` under `queues.producers[].binding`.
  */
 export class QueueBindingNotFoundError extends ApplicationError {
-  constructor(queueName: string, bindingName: string) {
+  constructor(binding: string) {
     super(
       'errors.queueBindingNotFound',
       ERROR_CODES.SYSTEM.QUEUE_BINDING_NOT_FOUND,
-      { queueName, bindingName }
+      { binding }
     )
   }
 }

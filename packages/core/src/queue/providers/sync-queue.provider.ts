@@ -25,7 +25,7 @@ import type { IQueueProvider } from './queue-provider.interface'
  * @example Testing with sync provider
  * ```typescript
  * const provider = new SyncQueueProvider(registry)
- * await provider.send('notifications-queue', {
+ * await provider.send('NOTIFICATIONS_QUEUE', {
  *   id: '123',
  *   timestamp: Date.now(),
  *   type: 'email.send',
@@ -46,11 +46,11 @@ export class SyncQueueProvider implements IQueueProvider {
    * Finds all matching consumers by message type and calls their handle() method.
    * If any consumer throws, onError() is called and the error is re-thrown.
    *
-   * @param _queueName - Queue name (not used for routing, consumers match by message type)
+   * @param _binding - Queue binding (not used for routing, consumers match by message type)
    * @param message - Complete message with id, timestamp, and payload
    * @throws Re-throws any error from consumer.handle() after calling onError()
    */
-  async send<T>(_queueName: string, message: QueueMessage<T>): Promise<void> {
+  async send<T>(_binding: string, message: QueueMessage<T>): Promise<void> {
     // Consumers are matched by message type, not queue name
     const consumers = this.registry.getConsumers(message.type)
 

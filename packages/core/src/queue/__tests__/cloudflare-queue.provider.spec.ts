@@ -48,10 +48,10 @@ describe('CloudflareQueueProvider', () => {
   })
 
   describe('send', () => {
-    it('should resolve queue binding and send message', async () => {
+    it('should resolve binding directly on env and send message', async () => {
       const message = createMessage('email.send', { to: 'test@example.com' })
 
-      await provider.send('notifications-queue', message)
+      await provider.send('NOTIFICATIONS_QUEUE', message)
 
       expect(mockQueue.send).toHaveBeenCalledTimes(1)
       expect(mockQueue.send).toHaveBeenCalledWith(message)
@@ -61,17 +61,21 @@ describe('CloudflareQueueProvider', () => {
       const message = createMessage('email.send', { to: 'test@example.com' })
 
       await expect(
-        provider.send('non-existent-queue', message)
+        provider.send('NON_EXISTENT_BINDING', message)
       ).rejects.toThrow(QueueBindingNotFoundError)
     })
 
-    it('should convert queue name to binding name correctly', async () => {
+    it('should look up the binding verbatim without case or character transformation', async () => {
       const message = createMessage('email.send', { to: 'test@example.com' })
 
-      // notifications-queue -> NOTIFICATIONS_QUEUE
-      await provider.send('notifications-queue', message)
+      // kebab-case input would have matched in the old kebab→UPPER_SNAKE world,
+      // but the new API requires the exact binding key on env. env has
+      // NOTIFICATIONS_QUEUE, not notifications-queue → must throw.
+      await expect(
+        provider.send('notifications-queue', message)
+      ).rejects.toThrow(QueueBindingNotFoundError)
 
-      expect(mockQueue.send).toHaveBeenCalled()
+      expect(mockQueue.send).not.toHaveBeenCalled()
     })
 
     it('should propagate queue.send errors', async () => {
@@ -81,7 +85,7 @@ describe('CloudflareQueueProvider', () => {
       const message = createMessage('email.send', { to: 'test@example.com' })
 
       await expect(
-        provider.send('notifications-queue', message)
+        provider.send('NOTIFICATIONS_QUEUE', message)
       ).rejects.toThrow('Queue send failed')
     })
 
@@ -97,7 +101,7 @@ describe('CloudflareQueueProvider', () => {
         },
       }
 
-      await provider.send('notifications-queue', message)
+      await provider.send('NOTIFICATIONS_QUEUE', message)
 
       expect(mockQueue.send).toHaveBeenCalledWith(message)
     })

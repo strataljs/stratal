@@ -65,7 +65,7 @@ export const errors = {
   invalidErrorCodeRange: 'Invalid error code range: {code}',
 
   // Queue errors
-  queueBindingNotFound: 'Queue binding {queueName} not found in environment',
+  queueBindingNotFound: 'Queue binding {binding} not found in environment',
   queueProviderNotSupported: 'Queue provider "{provider}" is not supported. Valid providers: cloudflare, sync',
 
   // Cron errors
