@@ -122,6 +122,25 @@ export const ERROR_CODES = {
   },
 
   /**
+   * Business Logic Errors (5000-5999)
+   *
+   * Generic, app-agnostic business-logic conditions. Apps may layer their own
+   * domain-specific codes in this range as well; the codes defined here are
+   * the common ones the framework recognises (e.g. for status-code derivation
+   * and default log severity).
+   */
+  BUSINESS: {
+    /** Payment required to complete the requested action */
+    PAYMENT_REQUIRED: 5001,
+    /** Feature/usage quota exhausted for the current billing period */
+    QUOTA_EXCEEDED: 5002,
+    /** Resource is locked / a conflicting operation is already in progress */
+    LOCKED: 5003,
+    /** Action requires an active subscription */
+    SUBSCRIPTION_REQUIRED: 5004,
+  },
+
+  /**
    * Validation Errors (1000-1999)
    * Input validation failures
    */

@@ -10,10 +10,12 @@ import { ERROR_CODES, type ErrorCode } from './error-codes'
 const HTTP_STATUS_TO_ERROR_CODE: Partial<Record<number, ErrorCode>> = {
   400: ERROR_CODES.VALIDATION.GENERIC,
   401: ERROR_CODES.AUTH.USER_NOT_AUTHENTICATED,
+  402: ERROR_CODES.BUSINESS.PAYMENT_REQUIRED,
   403: ERROR_CODES.AUTHZ.FORBIDDEN,
   404: ERROR_CODES.RESOURCE.NOT_FOUND,
   409: ERROR_CODES.RESOURCE.CONFLICT,
   422: ERROR_CODES.VALIDATION.GENERIC,
+  423: ERROR_CODES.BUSINESS.LOCKED,
   429: ERROR_CODES.RESOURCE.TOO_MANY_REQUESTS,
   500: ERROR_CODES.SYSTEM.INTERNAL_ERROR,
 }
@@ -25,10 +27,12 @@ const HTTP_STATUS_TO_ERROR_CODE: Partial<Record<number, ErrorCode>> = {
 const HTTP_STATUS_MESSAGES: Partial<Record<number, string>> = {
   400: 'Bad Request',
   401: 'Unauthorized',
+  402: 'Payment Required',
   403: 'Forbidden',
   404: 'Not Found',
   409: 'Conflict',
   422: 'Unprocessable Entity',
+  423: 'Locked',
   429: 'Too Many Requests',
   500: 'Internal Server Error',
 }
@@ -54,6 +58,9 @@ const HTTP_STATUS_MESSAGES: Partial<Record<number, string>> = {
  * // With i18n key (auto-translated if key exists)
  * throw new HttpException(422, 'errors.invalidInput')
  *
+ * // With metadata for i18n interpolation
+ * throw new HttpException(402, 'errors.quotaExceeded', { feature: 'notes' })
+ *
  * // Default message for status code
  * throw new HttpException(500)
  *
@@ -76,13 +83,18 @@ export class HttpException extends ApplicationError {
    * @param httpStatus - HTTP status code (e.g., 404, 422, 500)
    * @param message - Optional message string or i18n key. Defaults to the
    *   standard HTTP status message (e.g., "Not Found" for 404).
+   * @param metadata - Optional data for logging and i18n interpolation
    */
-  constructor(httpStatus: ContentfulStatusCode, message?: string) {
+  constructor(
+    httpStatus: ContentfulStatusCode,
+    message?: string,
+    metadata?: Record<string, unknown>,
+  ) {
     const code = HTTP_STATUS_TO_ERROR_CODE[httpStatus] ?? ERROR_CODES.SYSTEM.INTERNAL_ERROR
     const messageStr = message ?? HTTP_STATUS_MESSAGES[httpStatus] ?? 'Internal Server Error'
     // Cast to MessageKeys for ApplicationError compat — ExceptionHandler will
     // attempt i18n.t() translation and fall back to the raw string
-    super(messageStr as MessageKeys, code)
+    super(messageStr as MessageKeys, code, metadata)
     this.httpStatus = httpStatus
   }
 }
