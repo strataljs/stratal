@@ -3,6 +3,7 @@ import { LogLevel } from '../logger/contracts/log-level'
 import { Module } from '../module/module.decorator'
 import { Stratal } from '../stratal'
 import type { Constructor } from '../types'
+import { BuiltinQuarryModule } from './builtin-quarry.module'
 
 export interface QuarryRunOptions {
   /**
@@ -44,8 +45,12 @@ export interface QuarryRunOptions {
  */
 export class QuarryRunner {
   static run(options: QuarryRunOptions): Stratal {
+    // `BuiltinQuarryModule` carries the framework's built-in CLI commands
+    // (help, db:seed, route:list, mcp:serve, etc.). It's auto-included here
+    // — and ONLY here — so the static graph that reaches `@modelcontextprotocol/sdk`
+    // and friends never touches the worker entry's module graph.
     @Module({
-      imports: options.imports,
+      imports: [BuiltinQuarryModule, ...options.imports],
       providers: options.providers ?? [],
     })
     class QuarryEntryModule {}

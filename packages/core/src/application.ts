@@ -1,4 +1,4 @@
-import { injectable, container as tsyringeRootContainer } from 'tsyringe'
+import { container as tsyringeRootContainer } from 'tsyringe'
 import { CacheModule } from './cache'
 import type { CronJob } from './cron/cron-job'
 import { CronManager } from './cron/cron-manager'
@@ -20,15 +20,6 @@ import { ModuleRegistry } from './module/module-registry'
 import type { DynamicModule, ModuleClass } from './module/types'
 import { OpenAPIModule } from './openapi'
 import type { Command } from './quarry/command'
-import { ApiCommand } from './quarry/commands/api.command'
-import { EventListCommand } from './quarry/commands/event-list.command'
-import { HelpCommand } from './quarry/commands/help.command'
-import { McpServeCommand } from './quarry/commands/mcp-serve.command'
-import { McpToolsCommand } from './quarry/commands/mcp-tools.command'
-import { QueueListCommand } from './quarry/commands/queue-list.command'
-import { RouteListCommand } from './quarry/commands/route-list.command'
-import { RouteTypesCommand } from './quarry/commands/route-types.command'
-import { ScheduleListCommand } from './quarry/commands/schedule-list.command'
 import { QuarryRegistry } from './quarry/quarry-registry'
 import type { CommandInput, CommandResult } from './quarry/types'
 import { type ConsumerRegistry } from './queue/consumer-registry'
@@ -45,7 +36,7 @@ import { RouteRegistrationService } from './router/services/route-registration.s
 import { VersioningService } from './router/services/versioning.service'
 import type { TrailingSlashMode, VersioningOptions } from './router/types'
 import { Uri } from './router/uri'
-import { DbSeedCommand, DbSeedListCommand, SEEDER_TOKENS, SeederRegistry, type Seeder } from './seeder'
+import { SEEDER_TOKENS, SeederRegistry, type Seeder } from './seeder'
 import type { Constructor } from './types'
 
 export interface ApplicationConfig {
@@ -376,26 +367,12 @@ export class Application {
   }
 
   private registerCommands(): void {
-    // Built-in commands (always available)
-    const builtinCommands: Constructor<Command>[] = [
-      HelpCommand,
-      DbSeedCommand, DbSeedListCommand,
-      RouteListCommand, RouteTypesCommand, EventListCommand,
-      ScheduleListCommand, QueueListCommand,
-      McpServeCommand, McpToolsCommand, ApiCommand,
-    ]
-    for (const Cmd of builtinCommands) {
-      injectable()(Cmd)
-      this._container.register(Cmd, Cmd, Scope.Singleton)
-      this.quarry.register(Cmd)
-    }
-
-    // User commands from modules
+    // Commands come from modules — including framework built-ins, which
+    // `QuarryRunner` registers via `BuiltinQuarryModule`. The worker entry
+    // (`new Stratal({ module: AppModule })`) doesn't go through QuarryRunner
+    // so it stays free of CLI-only command classes and their transitive
+    // dev deps (`@modelcontextprotocol/sdk`, `ts-morph`, etc.).
     const commands = this.moduleRegistry.getAllCommands()
-    if (commands.length === 0) {
-      return
-    }
-
     for (const CommandClass of commands) {
       this.quarry.register(CommandClass as Constructor<Command>)
     }

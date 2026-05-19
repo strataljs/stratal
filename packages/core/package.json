@@ -110,6 +110,10 @@
       "types": "./dist/quarry/index.d.mts",
       "import": "./dist/quarry/index.mjs"
     },
+    "./quarry/runner": {
+      "types": "./dist/quarry/runner.d.mts",
+      "import": "./dist/quarry/runner.mjs"
+    },
     "./queue": {
       "types": "./dist/queue/index.d.mts",
       "import": "./dist/queue/index.mjs"
