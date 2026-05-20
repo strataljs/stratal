@@ -1,7 +1,6 @@
 import type { InertiaAppSSRResponse, Page } from '@inertiajs/core'
 import type { MessageKeyPrefix } from 'stratal/i18n'
 import type { FlashStore } from './flash/flash-store'
-import type { ViteManifest } from './types'
 
 interface SsrBundleModule {
   render(page: Page): Promise<InertiaAppSSRResponse>
@@ -92,11 +91,6 @@ export interface InertiaModuleOptions {
    * ```
    */
   routes?: boolean
-  /**
-   * Vite manifest for production builds. When omitted, dev mode is assumed
-   * and Vite client + entry scripts are injected with same-origin paths.
-   */
-  manifest?: ViteManifest
   /**
    * Client entry path relative to project root (default: `src/inertia/app.tsx`).
    * Used in dev mode to inject the entry script tag.

@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { isAbsolute, join } from 'node:path';
 import type { EnvironmentOptions, Plugin } from 'vite';
 import { stratalInertiaDevCss } from './vite/inertia-dev-css-plugin';
 import { stratalInertiaTypes } from './vite/inertia-types-plugin';
@@ -16,6 +18,16 @@ export interface StratalInertiaPluginOptions {
    * - `'dev-and-staging'` — on unless `CLOUDFLARE_ENV === 'prod'`
    */
   sourcemap?: boolean | 'dev-and-staging'
+  /**
+   * Path (relative to project root) to the Vite client manifest emitted by
+   * the standalone browser-bundle build phase. The injector plugin reads it
+   * during the worker build and inlines it onto the worker entry chunk so
+   * `ManifestService` can resolve hashed asset URLs at runtime.
+   *
+   * Default: `'dist/client/.vite/manifest.json'` — matches the layout
+   * `quarry inertia:build` produces.
+   */
+  clientManifestPath?: string
 }
 
 export function stratalInertia(options?: StratalInertiaPluginOptions): Plugin[] {
@@ -80,12 +92,14 @@ export function stratalInertia(options?: StratalInertiaPluginOptions): Plugin[] 
     /^@zenstackhq\/sdk($|\/)/,
   ]
 
+  const clientManifestPath = options?.clientManifestPath ?? 'dist/client/.vite/manifest.json'
+
   return [
     stratalInertiaDevCss({ entries }),
     stratalInertiaTypes(),
     {
       name: 'stratal:optimize-deps-fix',
-      configEnvironment(_name: string, env: EnvironmentOptions) {
+      configEnvironment(name: string, env: EnvironmentOptions) {
         const existing = env.optimizeDeps?.exclude ?? []
         const existingInclude = env.optimizeDeps?.include ?? []
         env.optimizeDeps = {
@@ -126,10 +140,72 @@ export function stratalInertia(options?: StratalInertiaPluginOptions): Plugin[] 
             external: [...existingExternalArray, ...devOnlyExternals],
           },
         }
+
+        // `quarry inertia:build` runs a standalone client build (phase 1) that
+        // emits the browser bundle + manifest to dist/client/ before invoking
+        // this worker build (phase 2). `@cloudflare/vite-plugin`'s `buildApp`
+        // then runs a "fallback" build for its own `client` env (because no
+        // input is set on it here) which, with Vite's default
+        // `build.emptyOutDir = true` for in-root outDirs, would wipe phase 1's
+        // chunks. Pinning `emptyOutDir = false` for the client env preserves
+        // the browser bundle so CF's asset binding can serve `/assets/app-<hash>.js`.
+        if (name === 'client') {
+          env.build.emptyOutDir = false
+        }
       },
     },
     invokeReflectMetadataBeforeTsyringeCheck(),
+    injectClientManifestIntoWorker({ clientManifestPath }),
   ]
+}
+
+// Reads the manifest produced by the standalone browser-bundle build (run
+// before this build by `quarry inertia:build`) and inlines it onto the worker
+// entry chunk as `globalThis.__STRATAL_INERTIA_MANIFEST__`. The manifest must
+// be inlined in the bundle itself — Cloudflare Workers have no filesystem at
+// runtime — so `ManifestService` can resolve hashed asset URLs without any
+// consumer-side wiring.
+function injectClientManifestIntoWorker(args: { clientManifestPath: string }): Plugin {
+  let projectRoot = process.cwd()
+
+  return {
+    name: 'stratal:inertia-inject-manifest',
+    apply: 'build',
+    configResolved(config) {
+      projectRoot = config.root
+    },
+    generateBundle(_options, bundle) {
+      // Only inject into worker / SSR bundles. The browser-bundle build runs
+      // in a separate `vite build` invocation and never reaches this plugin.
+      if (this.environment.name === 'client') return
+
+      const manifestPath = isAbsolute(args.clientManifestPath)
+        ? args.clientManifestPath
+        : join(projectRoot, args.clientManifestPath)
+
+      if (!existsSync(manifestPath)) {
+        this.error(
+          '@stratal/inertia: client manifest not found at ' + manifestPath
+          + '. Run `quarry inertia:build` to build the browser bundle before deploying.',
+        )
+      }
+
+      const manifestJson = readFileSync(manifestPath, 'utf-8')
+      // Parse + re-stringify so a malformed manifest fails loudly here rather
+      // than at worker boot, and so the inlined value is normalized.
+      const manifest = JSON.parse(manifestJson) as unknown
+      const inlined = JSON.stringify(manifest)
+      const sentinel = 'globalThis.__STRATAL_INERTIA_MANIFEST__'
+
+      for (const fileName of Object.keys(bundle)) {
+        const chunk = bundle[fileName]
+        if (chunk.type !== 'chunk') continue
+        if (!chunk.isEntry) continue
+        if (chunk.code.startsWith(sentinel)) continue
+        chunk.code = `${sentinel} = ${inlined};\n${chunk.code}`
+      }
+    },
+  }
 }
 
 // Stratal relies on tsyringe for dependency injection. Rolldown wraps

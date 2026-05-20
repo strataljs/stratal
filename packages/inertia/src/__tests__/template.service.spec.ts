@@ -1,12 +1,26 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Page } from '@inertiajs/core'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { ManifestService } from '../services/manifest.service'
 import { TemplateService } from '../services/template.service'
+import type { ViteManifest } from '../types'
+
+interface ManifestGlobal {
+  __STRATAL_INERTIA_MANIFEST__?: ViteManifest
+}
 
 function createManifest(options: Partial<InertiaModuleOptions> = {}): ManifestService {
   return new (ManifestService as any)({ rootView: '', ...options })
 }
+
+beforeEach(() => {
+  vi.stubEnv('DEV', true)
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
+  delete (globalThis as ManifestGlobal).__STRATAL_INERTIA_MANIFEST__
+})
 
 function createPage(overrides: Partial<Page> = {}): Page {
   return {
@@ -72,15 +86,15 @@ describe('TemplateService', () => {
   })
 
   it('should replace @viteHead and @viteScripts with manifest tags', () => {
-    const manifest = createManifest({
-      manifest: {
-        'src/inertia/app.tsx': {
-          file: 'assets/app-abc.js',
-          css: ['assets/app-abc.css'],
-          isEntry: true,
-        },
+    vi.stubEnv('DEV', false)
+    ;(globalThis as ManifestGlobal).__STRATAL_INERTIA_MANIFEST__ = {
+      'src/inertia/app.tsx': {
+        file: 'assets/app-abc.js',
+        css: ['assets/app-abc.css'],
+        isEntry: true,
       },
-    })
+    }
+    const manifest = createManifest()
     const service = new (TemplateService as any)(options, manifest)
 
     const html = service.render(page, [], '')

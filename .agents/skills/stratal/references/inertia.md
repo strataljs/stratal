@@ -55,7 +55,6 @@ InertiaModule.forRootAsync({
 - `flash?` — `{ store: FlashStore }` — flash message storage (use `CookieFlashStore`)
 - `i18n?` — `{ only?: string[] }` — share backend translations with frontend
 - `routes?` — `boolean` — When `true`, serializes all named routes and injects them as a `routes` shared prop for client-side URL generation with `useRoute()`. The configured `trailingSlash` mode (from the `Stratal` constructor) is also forwarded as a `trailingSlash` shared prop so `useRoute()` produces canonical URLs that match the server. Also injects a `route: { name, params, defaults }` shared prop so `useRoute()` knows the current match. Sticky params set on the server via `Uri.defaults()` come through as `defaults` and are auto-applied by `route(name, params?)` on the client.
-- `manifest?` — Vite manifest object for asset resolution
 - `entryClientPath?` — Client entry point (default: `src/inertia/app.tsx`)
 
 ## Rendering Pages
