@@ -1,157 +1,46 @@
-import { describe, expect, it } from 'vitest'
-import type { Application } from '../../application'
+import { describe, expect, it, vi } from 'vitest'
 import type { Container } from '../../di/container'
 import { containerStorage } from '../../di/container-storage'
-import { DI_TOKENS } from '../../di/tokens'
-import { MissingRouteParamError, RouteNameNotFoundError } from '../errors'
-import type { RegisteredRoute } from '../route-registry'
+import { RouteNameNotFoundError } from '../errors'
 import { route } from '../route-url'
 import { ROUTER_TOKENS } from '../router.tokens'
-import type { TrailingSlashMode } from '../types'
+import type { Uri } from '../uri'
 
-const createRoute = (overrides: Partial<RegisteredRoute> = {}): RegisteredRoute => ({
-  method: 'get',
-  path: '/users',
-  paramNames: [],
-  domainParamNames: [],
-  controller: 'UsersController',
-  action: 'index',
-  hidden: false,
-  middleware: [],
-  ...overrides,
-})
-
-const createMockRegistry = (routes: Record<string, RegisteredRoute>) => ({
-  get: (name: string) => routes[name],
-})
-
-const runWithRegistry = <T>(
-  routes: Record<string, RegisteredRoute>,
-  fn: () => T,
-  trailingSlash?: TrailingSlashMode,
-): T => {
-  const mockRegistry = createMockRegistry(routes)
-  const mockApplication = { config: { trailingSlash } } as unknown as Application
-  const mockContainer = {
-    resolve: (token: symbol) => {
-      if (token === ROUTER_TOKENS.RouteRegistry) return mockRegistry
-      if (token === DI_TOKENS.Application) return mockApplication
-      throw new Error(`Unexpected token: ${String(token)}`)
-    },
-  }
-  return containerStorage.run(mockContainer as unknown as Container, fn)
+const runWithUri = <T>(uri: Pick<Uri, 'route'>, fn: (resolveSpy: ReturnType<typeof vi.fn>) => T): T => {
+  const resolveSpy = vi.fn((token: symbol) => {
+    if (token === ROUTER_TOKENS.Uri) return uri
+    throw new Error(`Unexpected token: ${String(token)}`)
+  })
+  const mockContainer = { resolve: resolveSpy }
+  return containerStorage.run(mockContainer as unknown as Container, () => fn(resolveSpy))
 }
 
 describe('route() URL generation', () => {
-  it('should generate URL for a simple route', () => {
-    runWithRegistry({ 'users.index': createRoute() }, () => {
-      expect(route('users.index')).toBe('/users')
+  it('resolves Uri via ROUTER_TOKENS.Uri from the active container', () => {
+    const uri = { route: vi.fn().mockReturnValue('/users') } satisfies Pick<Uri, 'route'>
+    runWithUri(uri, (resolveSpy) => {
+      route('users.index')
+      expect(resolveSpy).toHaveBeenCalledWith(ROUTER_TOKENS.Uri)
     })
   })
 
-  it('should fill path params', () => {
-    runWithRegistry({
-      'users.show': createRoute({ path: '/users/:id', paramNames: ['id'] }),
-    }, () => {
-      expect(route('users.show', { id: '42' })).toBe('/users/42')
+  it('forwards name, params, and options to Uri.route and returns its result', () => {
+    const uri = { route: vi.fn().mockReturnValue('https://example.com/users/1') } satisfies Pick<Uri, 'route'>
+    runWithUri(uri, () => {
+      const result = route('users.show', { id: '1' }, { absolute: true })
+      expect(uri.route).toHaveBeenCalledWith('users.show', { id: '1' }, { absolute: true })
+      expect(result).toBe('https://example.com/users/1')
     })
   })
 
-  it('should append extra params as query string', () => {
-    runWithRegistry({
-      'users.show': createRoute({ path: '/users/:id', paramNames: ['id'] }),
-    }, () => {
-      const url = route('users.show', { id: '1', search: 'rocket' })
-      expect(url).toBe('/users/1?search=rocket')
-    })
-  })
-
-  it('should generate domain-prefixed URL', () => {
-    runWithRegistry({
-      'tenant.dashboard': createRoute({
-        path: '/dashboard',
-        domain: '{tenant}.myapp.com',
-        domainParamNames: ['tenant'],
+  it('propagates errors thrown by Uri.route', () => {
+    const uri = {
+      route: vi.fn(() => {
+        throw new RouteNameNotFoundError('nonexistent')
       }),
-    }, () => {
-      expect(route('tenant.dashboard', { tenant: 'acme' })).toBe('https://acme.myapp.com/dashboard')
-    })
-  })
-
-  it('should consume both domain and path params from same object', () => {
-    runWithRegistry({
-      'tenant.users.show': createRoute({
-        path: '/users/:id',
-        paramNames: ['id'],
-        domain: '{tenant}.myapp.com',
-        domainParamNames: ['tenant'],
-      }),
-    }, () => {
-      expect(route('tenant.users.show', { tenant: 'acme', id: '5' }))
-        .toBe('https://acme.myapp.com/users/5')
-    })
-  })
-
-  it('should throw RouteNameNotFoundError for unknown route name', () => {
-    runWithRegistry({}, () => {
+    } satisfies Pick<Uri, 'route'>
+    runWithUri(uri, () => {
       expect(() => route('nonexistent')).toThrow(RouteNameNotFoundError)
-    })
-  })
-
-  it('should throw MissingRouteParamError for missing required params', () => {
-    runWithRegistry({
-      'users.show': createRoute({ path: '/users/:id', paramNames: ['id'] }),
-    }, () => {
-      expect(() => route('users.show')).toThrow(MissingRouteParamError)
-    })
-  })
-
-  it('should prepend locale segment when locale param and localePaths present', () => {
-    runWithRegistry({
-      'users.index': createRoute({
-        path: '/users',
-        localePaths: ['/:locale{en|fr}/users'],
-      }),
-    }, () => {
-      expect(route('users.index', { locale: 'fr' })).toBe('/fr/users')
-    })
-  })
-
-  describe("trailing-slash 'always'", () => {
-    it("appends trailing slash to generated URLs", () => {
-      runWithRegistry({ 'users.index': createRoute() }, () => {
-        expect(route('users.index')).toBe('/users/')
-      }, 'always')
-    })
-
-    it("keeps trailing slash before query string", () => {
-      runWithRegistry({
-        'users.show': createRoute({ path: '/users/:id', paramNames: ['id'] }),
-      }, () => {
-        expect(route('users.show', { id: '1', search: 'rocket' })).toBe('/users/1/?search=rocket')
-      }, 'always')
-    })
-
-    it("canonicalises absolute domain-route URLs", () => {
-      runWithRegistry({
-        'tenant.dashboard': createRoute({
-          path: '/dashboard',
-          domain: '{tenant}.myapp.com',
-          domainParamNames: ['tenant'],
-        }),
-      }, () => {
-        expect(route('tenant.dashboard', { tenant: 'acme' })).toBe('https://acme.myapp.com/dashboard/')
-      }, 'always')
-    })
-  })
-
-  describe("trailing-slash 'never'", () => {
-    it("strips trailing slashes from generated URLs", () => {
-      runWithRegistry({
-        'users.show': createRoute({ path: '/users/:id/', paramNames: ['id'] }),
-      }, () => {
-        expect(route('users.show', { id: '1' })).toBe('/users/1')
-      }, 'never')
     })
   })
 })

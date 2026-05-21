@@ -1,15 +1,15 @@
-import { inject } from 'tsyringe'
-import type { Application } from '../application'
-import { Transient } from '../di/decorators'
-import { DI_TOKENS } from '../di/tokens'
-import { MissingRouteParamError, RouteNameNotFoundError } from './errors'
-import type { RouteName, RouteParams } from './route-map'
-import type { RegisteredRoute, RouteRegistry } from './route-registry'
-import type { RouterContext } from './router-context'
-import { ROUTER_TOKENS } from './router.tokens'
-import { signUrl, verifySignedUrl, type SignedUrlOptions } from './signed-url'
-import { applyTrailingSlash } from './trailing-slash'
-import type { TrailingSlashMode } from './types'
+import { inject } from 'tsyringe';
+import type { Application } from '../application';
+import { Transient } from '../di/decorators';
+import { DI_TOKENS } from '../di/tokens';
+import { MissingRouteParamError, RouteNameNotFoundError } from './errors';
+import type { RouteName, RouteParams } from './route-map';
+import type { RegisteredRoute, RouteRegistry } from './route-registry';
+import type { RouterContext } from './router-context';
+import { ROUTER_TOKENS } from './router.tokens';
+import { signUrl, verifySignedUrl, type SignedUrlOptions } from './signed-url';
+import { applyTrailingSlash } from './trailing-slash';
+import type { TrailingSlashMode } from './types';
 
 /**
  * Options for URL generation methods.
@@ -321,7 +321,7 @@ export class Uri {
   }
 
   private getAppSecret(): string {
-    const secret = (this.routerContext.c.env as unknown as Record<string, string>).APP_SECRET
+    const secret = this.routerContext.c.env.APP_SECRET
     if (!secret) {
       throw new Error('APP_SECRET environment variable is required for signed URLs')
     }
