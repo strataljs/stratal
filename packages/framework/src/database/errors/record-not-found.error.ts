@@ -12,9 +12,9 @@ import { DatabaseError } from './database-error'
  * domain error (e.g., NoteNotFoundError, UserNotFoundError).
  */
 export class RecordNotFoundError extends DatabaseError {
-  constructor(details?: string) {
+  constructor(details?: string, cause?: unknown) {
     super('errors.databaseRecordNotFound', ERROR_CODES.DATABASE.RECORD_NOT_FOUND, {
       details,
-    })
+    }, cause)
   }
 }

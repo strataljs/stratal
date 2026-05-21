@@ -422,6 +422,11 @@ export abstract class ExceptionHandler {
 
   /**
    * Default reporting — log with appropriate severity and i18n translation.
+   *
+   * For errors with a `cause` chain (ES2022) or an `AggregateError.errors[]`
+   * payload, the originating message/code/metadata/stack are walked into a
+   * `cause` field on the log so the underlying DB/RPC error surfaces in the
+   * console — instead of the outermost wrapper's i18n key alone.
    */
   private defaultReport(error: ApplicationError, context: ExceptionContext): void {
     const translatedMessage = this.translateError(error, context)
@@ -429,13 +434,18 @@ export abstract class ExceptionHandler {
 
     const globalContext = this.gatherContext()
 
-    const logData = {
+    const logData: Record<string, unknown> = {
       code: error.code,
       message: translatedMessage,
       timestamp: error.timestamp,
       metadata: error.metadata,
       name: error.name,
       ...globalContext,
+    }
+
+    const chain = serializeErrorChain(error)
+    if (chain) {
+      logData.cause = chain
     }
 
     switch (severity) {
@@ -590,4 +600,75 @@ export abstract class ExceptionHandler {
     }
     return merged
   }
+}
+
+interface SerializedErrorNode {
+  name: string
+  message: string
+  stack?: string
+  code?: number | string
+  metadata?: Record<string, unknown>
+  cause?: SerializedErrorNode | { value: unknown }
+  errors?: SerializedErrorNode[]
+}
+
+const MAX_CAUSE_DEPTH = 5
+
+/**
+ * Walk an error's `cause` chain (ES2022) and `AggregateError.errors[]` into a
+ * structured tree so the originating error reaches the log. Returns `undefined`
+ * when there's nothing to surface.
+ */
+function serializeErrorChain(error: Error): SerializedErrorNode | undefined {
+  const cause = (error as { cause?: unknown }).cause
+  const aggregated = error instanceof AggregateError && Array.isArray(error.errors) && error.errors.length > 0
+  if (cause === undefined && !aggregated) {
+    return undefined
+  }
+  if (cause !== undefined) {
+    return cause instanceof Error
+      ? serializeErrorNode(cause, 0)
+      : ({ value: cause } as unknown as SerializedErrorNode)
+  }
+  // AggregateError-only case: surface .errors directly.
+  return {
+    name: error.name,
+    message: error.message,
+    errors: (error as AggregateError).errors.map((inner) =>
+      inner instanceof Error
+        ? serializeErrorNode(inner, 0)
+        : { name: 'Unknown', message: String(inner) },
+    ),
+  }
+}
+
+function serializeErrorNode(error: Error, depth: number): SerializedErrorNode {
+  const out: SerializedErrorNode = {
+    name: error.name,
+    message: error.message,
+    stack: error.stack,
+  }
+
+  const coded = error as { code?: number | string; metadata?: Record<string, unknown> }
+  if (coded.code !== undefined) out.code = coded.code
+  if (coded.metadata && Object.keys(coded.metadata).length > 0) out.metadata = coded.metadata
+
+  if (depth >= MAX_CAUSE_DEPTH) return out
+
+  if (error instanceof AggregateError && Array.isArray(error.errors) && error.errors.length > 0) {
+    out.errors = error.errors.map((inner) =>
+      inner instanceof Error
+        ? serializeErrorNode(inner, depth + 1)
+        : { name: 'Unknown', message: String(inner) },
+    )
+  }
+
+  const cause = (error as { cause?: unknown }).cause
+  if (cause !== undefined) {
+    out.cause = cause instanceof Error
+      ? serializeErrorNode(cause, depth + 1)
+      : { value: cause }
+  }
+
+  return out
 }

@@ -12,9 +12,9 @@ import { DatabaseError } from './database-error'
  * domain error (e.g., UserEmailAlreadyExistsError).
  */
 export class UniqueConstraintError extends DatabaseError {
-  constructor(fields?: string[]) {
+  constructor(fields?: string[], cause?: unknown) {
     super('errors.databaseUniqueConstraint', ERROR_CODES.DATABASE.UNIQUE_CONSTRAINT, {
       fields,
-    })
+    }, cause)
   }
 }

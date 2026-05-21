@@ -6,8 +6,13 @@ import { ERROR_CODES } from '../error-codes'
 
 // Concrete subclass for testing since ApplicationError is abstract
 class TestError extends ApplicationError {
-  constructor(messageKey: string, code: number, metadata?: Record<string, unknown>) {
-    super(messageKey as MessageKeys, code as ErrorCode, metadata)
+  constructor(
+    messageKey: string,
+    code: number,
+    metadata?: Record<string, unknown>,
+    cause?: unknown,
+  ) {
+    super(messageKey as MessageKeys, code as ErrorCode, metadata, cause)
   }
 }
 
@@ -48,6 +53,31 @@ describe('ApplicationError', () => {
     it('should be instanceof ApplicationError', () => {
       const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC)
       expect(error instanceof ApplicationError).toBe(true)
+    })
+  })
+
+  describe('cause chain', () => {
+    it('should leave cause undefined when no cause is provided', () => {
+      const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC)
+      expect(error.cause).toBeUndefined()
+    })
+
+    it('should preserve a native Error as Error.cause', () => {
+      const original = new Error('boom')
+      const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC, undefined, original)
+      expect(error.cause).toBe(original)
+    })
+
+    it('should preserve nested ApplicationError causes through Error.cause', () => {
+      const inner = new TestError('errors.inner', ERROR_CODES.VALIDATION.GENERIC)
+      const outer = new TestError('errors.outer', ERROR_CODES.VALIDATION.GENERIC, undefined, inner)
+      expect(outer.cause).toBe(inner)
+      expect((outer.cause as TestError).message).toBe('errors.inner')
+    })
+
+    it('should preserve non-Error causes verbatim', () => {
+      const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC, undefined, { reason: 'config' })
+      expect(error.cause).toEqual({ reason: 'config' })
     })
   })
 

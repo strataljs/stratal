@@ -14,13 +14,14 @@ export class DatabaseError extends ApplicationError {
   constructor(
     messageKey: MessageKeys = 'errors.databaseGeneric',
     code: ErrorCode = ERROR_CODES.DATABASE.GENERIC,
-    metadata?: Record<string, unknown>
+    metadata?: Record<string, unknown>,
+    cause?: unknown,
   ) {
     // Validate that code is in the database error range
     if (code < 2000 || code >= 3000) {
       throw new InvalidErrorCodeRangeError(code, '2000-2999')
     }
 
-    super(messageKey, code, metadata)
+    super(messageKey, code, metadata, cause)
   }
 }

@@ -11,9 +11,9 @@ import { DatabaseError } from './database-error'
  * - Trying to update a foreign key to a non-existent value
  */
 export class ForeignKeyConstraintError extends DatabaseError {
-  constructor(field?: string) {
+  constructor(field?: string, cause?: unknown) {
     super('errors.databaseForeignKeyConstraint', ERROR_CODES.DATABASE.FOREIGN_KEY_CONSTRAINT, {
       field,
-    })
+    }, cause)
   }
 }

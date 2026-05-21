@@ -61,14 +61,19 @@ export abstract class ApplicationError extends Error {
    * @param i18nKey - Type-safe i18n message key (e.g., 'errors.userNotFound')
    * @param code - Type-safe error code from ERROR_CODES registry
    * @param metadata - Optional data for logging and interpolation
+   * @param cause - Optional underlying error preserved as native `Error.cause`.
+   *   When set, the original error (message, stack, code, metadata) survives
+   *   through wrappers and is walked by `LoggerService.serializeError`.
    */
   constructor(
     i18nKey: MessageKeys,
     code: ErrorCode,
-    metadata?: Record<string, unknown>
+    metadata?: Record<string, unknown>,
+    cause?: unknown,
   ) {
-    // Pass i18nKey to Error.message for useful stack traces (e.g., "InternalError: errors.internalError")
-    super(i18nKey)
+    // Pass i18nKey to Error.message for useful stack traces (e.g., "InternalError: errors.internalError").
+    // Forward `cause` via the ES2022 Error options bag so `error.cause` is populated natively.
+    super(i18nKey, cause !== undefined ? { cause } : undefined)
 
     // Maintains proper prototype chain for instanceof checks
     Object.setPrototypeOf(this, new.target.prototype)

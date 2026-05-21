@@ -31,7 +31,7 @@ export function fromZenStackError(error: unknown): DatabaseError {
 
     switch (ormError.reason) {
       case ORMErrorReason.NOT_FOUND:
-        return new RecordNotFoundError(ormError.model)
+        return new RecordNotFoundError(ormError.model, ormError)
 
       case ORMErrorReason.DB_QUERY_ERROR:
         // Parse database-specific error codes
@@ -41,35 +41,40 @@ export function fromZenStackError(error: unknown): DatabaseError {
         return new DatabaseError(
           'errors.databaseInvalidQuery',
           ERROR_CODES.DATABASE.GENERIC,
-          { message: ormError.message }
+          { message: ormError.message },
+          ormError,
         )
 
       case ORMErrorReason.CONFIG_ERROR:
         return new DatabaseError(
           'errors.databaseConnectionFailed',
           ERROR_CODES.DATABASE.CONNECTION_FAILED,
-          { message: ormError.message }
+          { message: ormError.message },
+          ormError,
         )
 
       case ORMErrorReason.NOT_SUPPORTED:
         return new DatabaseError(
           'errors.databaseGeneric',
           ERROR_CODES.DATABASE.GENERIC,
-          { message: ormError.message, reason: 'Operation not supported' }
+          { message: ormError.message, reason: 'Operation not supported' },
+          ormError,
         )
 
       case ORMErrorReason.INTERNAL_ERROR:
         return new DatabaseError(
           'errors.databaseGeneric',
           ERROR_CODES.DATABASE.GENERIC,
-          { message: ormError.message }
+          { message: ormError.message },
+          ormError,
         )
 
       default:
         return new DatabaseError(
           'errors.databaseGeneric',
           ERROR_CODES.DATABASE.GENERIC,
-          { message: ormError.message, reason: ormError.reason }
+          { message: ormError.message, reason: ormError.reason },
+          ormError,
         )
     }
   }
@@ -78,7 +83,8 @@ export function fromZenStackError(error: unknown): DatabaseError {
   return new DatabaseError(
     'errors.databaseGeneric',
     ERROR_CODES.DATABASE.GENERIC,
-    { originalError: String(error) }
+    { originalError: String(error) },
+    error,
   )
 }
 
@@ -95,12 +101,12 @@ function parseDatabaseError(error: ORMError): DatabaseError {
     // Class 23 - Integrity Constraint Violation
     if (dbErrorCode === '23505') {
       // Unique violation
-      return new UniqueConstraintError([error.model ?? 'unknown'])
+      return new UniqueConstraintError([error.model ?? 'unknown'], error)
     }
 
     if (dbErrorCode === '23503') {
       // Foreign key violation
-      return new ForeignKeyConstraintError(error.model ?? 'unknown')
+      return new ForeignKeyConstraintError(error.model ?? 'unknown', error)
     }
 
     if (dbErrorCode === '23502') {
@@ -108,7 +114,8 @@ function parseDatabaseError(error: ORMError): DatabaseError {
       return new DatabaseError(
         'errors.databaseNullConstraint',
         ERROR_CODES.DATABASE.NULL_CONSTRAINT,
-        { dbErrorCode, message: error.dbErrorMessage }
+        { dbErrorCode, message: error.dbErrorMessage },
+        error,
       )
     }
 
@@ -117,7 +124,8 @@ function parseDatabaseError(error: ORMError): DatabaseError {
       return new DatabaseError(
         'errors.databaseConstraintFailed',
         ERROR_CODES.DATABASE.GENERIC,
-        { dbErrorCode, message: error.dbErrorMessage }
+        { dbErrorCode, message: error.dbErrorMessage },
+        error,
       )
     }
 
@@ -128,7 +136,8 @@ function parseDatabaseError(error: ORMError): DatabaseError {
         return new DatabaseError(
           'errors.databaseTableNotFound',
           ERROR_CODES.DATABASE.GENERIC,
-          { dbErrorCode, message: error.dbErrorMessage }
+          { dbErrorCode, message: error.dbErrorMessage },
+          error,
         )
       }
 
@@ -137,7 +146,8 @@ function parseDatabaseError(error: ORMError): DatabaseError {
         return new DatabaseError(
           'errors.databaseColumnNotFound',
           ERROR_CODES.DATABASE.GENERIC,
-          { dbErrorCode, message: error.dbErrorMessage }
+          { dbErrorCode, message: error.dbErrorMessage },
+          error,
         )
       }
     }
@@ -147,7 +157,8 @@ function parseDatabaseError(error: ORMError): DatabaseError {
       return new DatabaseError(
         'errors.databaseConnectionFailed',
         ERROR_CODES.DATABASE.CONNECTION_FAILED,
-        { dbErrorCode, message: error.dbErrorMessage }
+        { dbErrorCode, message: error.dbErrorMessage },
+        error,
       )
     }
 
@@ -157,7 +168,8 @@ function parseDatabaseError(error: ORMError): DatabaseError {
       return new DatabaseError(
         'errors.databaseTimeout',
         ERROR_CODES.DATABASE.TIMEOUT,
-        { dbErrorCode, message: error.dbErrorMessage }
+        { dbErrorCode, message: error.dbErrorMessage },
+        error,
       )
     }
 
@@ -166,7 +178,8 @@ function parseDatabaseError(error: ORMError): DatabaseError {
       return new DatabaseError(
         'errors.databaseTransactionConflict',
         ERROR_CODES.DATABASE.TRANSACTION_CONFLICT,
-        { dbErrorCode, message: error.dbErrorMessage }
+        { dbErrorCode, message: error.dbErrorMessage },
+        error,
       )
     }
 
@@ -176,7 +189,8 @@ function parseDatabaseError(error: ORMError): DatabaseError {
       return new DatabaseError(
         'errors.databaseTooManyConnections',
         ERROR_CODES.DATABASE.TOO_MANY_CONNECTIONS,
-        { dbErrorCode, message: error.dbErrorMessage }
+        { dbErrorCode, message: error.dbErrorMessage },
+        error,
       )
     }
   }
@@ -189,6 +203,7 @@ function parseDatabaseError(error: ORMError): DatabaseError {
       dbErrorCode,
       dbErrorMessage: error.dbErrorMessage,
       sql: error.sql,
-    }
+    },
+    error,
   )
 }

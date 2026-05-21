@@ -697,4 +697,87 @@ describe('ExceptionHandler', () => {
       expect(response.status).toBe(422)
     })
   })
+
+  // ── Cause chain logging ─────────────────────────────────────────
+
+  describe('cause chain logging', () => {
+    class CausalError extends ApplicationError {
+      constructor(messageKey: string, code: number, metadata?: Record<string, unknown>, cause?: unknown) {
+        super(messageKey as MessageKeys, code as ErrorCode, metadata, cause)
+      }
+    }
+
+    it('walks Error.cause and includes it in the logged cause field', async () => {
+      const handler = createHandler()
+      const inner = Object.assign(new Error('underlying db boom'), {
+        code: 2000,
+        metadata: { dbErrorCode: '42P01', sql: 'SELECT 1' },
+      })
+      const outer = new CausalError('errors.databaseGeneric', 2000, { reason: 'wrap' }, inner)
+
+      await handler.handle(outer, cliCtx)
+
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        '[ApplicationError]',
+        expect.objectContaining({
+          cause: expect.objectContaining({
+            name: 'Error',
+            message: 'underlying db boom',
+            code: 2000,
+            metadata: { dbErrorCode: '42P01', sql: 'SELECT 1' },
+          }),
+        }),
+      )
+    })
+
+    it('walks AggregateError.errors[] and surfaces each inner error', async () => {
+      const handler = createHandler()
+      const a = new Error('a failed')
+      const b = new Error('b failed')
+      const aggregate = new AggregateError([a, b], '2 failed')
+      const outer = new CausalError('errors.cronExecutionFailed', 9204, undefined, aggregate)
+
+      await handler.handle(outer, cliCtx)
+
+      const logData = (mockLogger.error as ReturnType<typeof vi.fn>).mock.calls[0][1] as Record<string, unknown>
+      const cause = logData.cause as { errors?: { message: string }[] }
+      expect(cause.errors).toHaveLength(2)
+      expect(cause.errors?.[0]?.message).toBe('a failed')
+      expect(cause.errors?.[1]?.message).toBe('b failed')
+    })
+
+    it('omits the cause field entirely when neither cause nor AggregateError is present', async () => {
+      const handler = createHandler()
+      // Use 9000+ code so severity is 'error' and we can inspect mockLogger.error.
+      const error = new CausalError('errors.plain', 9999)
+
+      await handler.handle(error, cliCtx)
+
+      const logData = (mockLogger.error as ReturnType<typeof vi.fn>).mock.calls[0][1] as Record<string, unknown>
+      expect(logData.cause).toBeUndefined()
+    })
+
+    it('caps recursion to avoid infinite loops in pathological cause chains', async () => {
+      const handler = createHandler()
+      // Build a 10-deep chain (deeper than the MAX_CAUSE_DEPTH=5 cap).
+      let inner: Error = new Error('depth-0')
+      for (let i = 1; i <= 10; i++) {
+        inner = Object.assign(new Error(`depth-${i}`), { cause: inner })
+      }
+      const outer = new CausalError('errors.deep', 9999, undefined, inner)
+
+      await handler.handle(outer, cliCtx)
+
+      const logData = (mockLogger.error as ReturnType<typeof vi.fn>).mock.calls[0][1] as Record<string, unknown>
+      // Walk the chain and ensure it terminates within reasonable depth.
+      let depth = 0
+      let node: { cause?: unknown } | undefined = logData.cause as { cause?: unknown }
+      while (node && node.cause) {
+        depth++
+        node = node.cause as { cause?: unknown }
+        if (depth > 20) throw new Error('cause walk did not terminate')
+      }
+      expect(depth).toBeLessThanOrEqual(6)
+    })
+  })
 })
