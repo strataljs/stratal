@@ -85,6 +85,18 @@ export class InertiaModule implements RouteConfigurable, OnInitialize, OnExcepti
       context.ctx.flash('errors', { _form: message } as const)
       return this.redirectBack(context)
     })
+
+    // Render full Inertia error pages for HTTP HTML requests. Convention:
+    // consumers ship `pages/Errors/${status}.tsx` (e.g. Errors/404, Errors/500).
+    handler.errorPage(async (errorResponse, status, context) => {
+      const inertia = context.ctx.getContainer().resolve<InertiaService>(INERTIA_TOKENS.InertiaService)
+      return inertia.render(
+        context.ctx,
+        `Errors/${status}`,
+        { status, message: errorResponse.message, code: errorResponse.code },
+        { status },
+      )
+    })
   }
 
   onInitialize(): void {

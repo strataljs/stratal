@@ -42,6 +42,17 @@ export class AppExceptionHandler extends ExceptionHandler {
       response.headers.set('X-Error-Code', String(error.code))
       return response
     })
+
+    // Render a custom HTML page per status (browser/Inertia first-loads)
+    this.errorPage((errorResponse, status, context) => {
+      if (status === 503) {
+        return new Response(myMaintenanceHtml(), {
+          status,
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        })
+      }
+      // Return undefined to defer to the next callback / built-in fallback
+    })
   }
 }
 ```
@@ -61,6 +72,7 @@ export default new Stratal({
 
 - `reportable(ErrorClass, callback)` — Custom reporting. Returns `Reportable` — chain `.stop()` to prevent default logging.
 - `renderable(ErrorClass, callback)` — Custom rendering. Callback is async, returns `Response | ErrorResponse | undefined`. Return `undefined` to fall through to default.
+- `errorPage(callback)` — Render the HTML error page for HTTP requests that accept `text/html`. Callback signature: `(errorResponse, status, context, error) => Response | Promise<Response | undefined> | undefined`. Walked in registration order (first non-undefined wins). Return `undefined` to defer to the next callback or to the built-in minimal page. Only fires when `wantsHtml(context)` is true.
 - `dontReport([...classes])` — Suppress logging for these error types.
 - `level(ErrorClass, severity)` — Override log level (`'debug' | 'info' | 'warn' | 'error'`).
 - `context(callback)` — Add key-value pairs to all error log entries.
@@ -91,11 +103,30 @@ this.renderable(AppError, (error, context) => {
 ### Content Negotiation
 
 The default handler automatically negotiates response format:
-- **HTML accepted + production** — Renders a minimal branded HTML error page
-- **HTML accepted + development** — Re-throws for runtime error UI
-- **Otherwise** — Returns JSON `ErrorResponse`
+- **HTML accepted** — Walks registered `errorPage` callbacks (first non-undefined wins); if none match, renders a minimal branded HTML error page via `renderDefaultHtml`.
+- **HTML accepted + development** — Re-throws for runtime error UI.
+- **Otherwise** — Returns JSON `ErrorResponse`.
 
-Override with `renderable()` or override `wantsHtml(context)` in your subclass.
+Three ways to customize HTML output (each more specific than the last):
+
+- **`errorPage(cb)`** — Dynamic per-request rendering. The right choice when integrating with a UI framework (e.g. `@stratal/inertia` auto-registers one for `Errors/${status}` pages).
+- **Override `protected renderDefaultHtml(errorResponse, status)`** — Replace the absolute fallback HTML page. Use this for a branded static page when no `errorPage` callback matches.
+- **Override `protected wantsHtml(context)`** — Change content negotiation logic.
+
+```typescript
+export class AppExceptionHandler extends ExceptionHandler {
+  register(): void { /* ... */ }
+
+  protected renderDefaultHtml(errorResponse: ErrorResponse, status: ContentfulStatusCode): Response {
+    return new Response(myBrandedHtml(status, errorResponse.message), {
+      status,
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+    })
+  }
+}
+```
+
+Resolution order for HTML requests: registered `errorPage` callbacks (in registration order) → `renderDefaultHtml`. The consumer's `register()` runs before module `onException()` hooks, so user `errorPage` callbacks take precedence over module-supplied defaults.
 
 ### Reportable with Stop
 

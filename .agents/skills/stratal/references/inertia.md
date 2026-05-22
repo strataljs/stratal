@@ -100,7 +100,48 @@ export class NotesController {
 `ctx.inertia(component, props?, options?)`:
 - First request: returns full HTML page with SSR
 - Subsequent Inertia requests (`X-Inertia` header): returns JSON page object
-- `options`: `{ encryptHistory?, clearHistory?, preserveFragment? }` (all optional)
+- `options`: `{ encryptHistory?, clearHistory?, preserveFragment?, status? }` (all optional). `status` defaults to `200`; set it to return a non-200 response (useful for hand-rendered error pages).
+
+## Error Pages
+
+`InertiaModule` auto-registers an `errorPage` callback on the `ExceptionHandler`. Any thrown error whose HTTP status is `S` renders the Inertia page `Errors/${S}` (e.g. `Errors/404`, `Errors/500`, `Errors/503`) with the response status set to `S`.
+
+Convention: ship error components under your pages directory:
+
+```
+pages/Errors/404.tsx
+pages/Errors/500.tsx
+pages/Errors/503.tsx
+```
+
+The page receives `{ status, message, code }` as props:
+
+```tsx
+// pages/Errors/404.tsx
+export default function NotFound({ status, message, code }: { status: number; message: string; code: number }) {
+  return (
+    <div>
+      <h1>{status}</h1>
+      <p>{message}</p>
+    </div>
+  )
+}
+```
+
+Override per-status from `AppExceptionHandler.register()` — user `errorPage` callbacks run before the Inertia-supplied one and win:
+
+```typescript
+import { ExceptionHandler } from 'stratal/errors'
+
+export class AppExceptionHandler extends ExceptionHandler {
+  register(): void {
+    this.errorPage((errorResponse, status, context) => {
+      if (status === 503) return new Response(maintenanceHtml(), { status, headers: { 'content-type': 'text/html' } })
+      // Return undefined to defer to Inertia's `Errors/${status}` renderer
+    })
+  }
+}
+```
 
 ## Inertia Decorators
 

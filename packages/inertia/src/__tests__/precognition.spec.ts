@@ -101,6 +101,7 @@ describe('Precognition', () => {
         renderable: vi.fn((errorClass: unknown, handler: (error: unknown, context: unknown) => Response | undefined) => {
           capturedHandlers.set(errorClass, handler)
         }),
+        errorPage: vi.fn(),
       }
       module.onException(mockHandler as never)
     })

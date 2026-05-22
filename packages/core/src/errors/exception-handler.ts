@@ -14,6 +14,7 @@ import type { ExceptionContext, HttpExceptionContext } from './exception-context
 import type {
   ApplicationErrorConstructor,
   ContextCallback,
+  ErrorPageCallback,
   LogSeverity,
   RenderableCallback,
   Reportable,
@@ -83,6 +84,7 @@ export abstract class ExceptionHandler {
   private readonly levelOverrides = new Map<ApplicationErrorConstructor, LogSeverity>()
   private readonly contextCallbacks: ContextCallback[] = []
   private readonly respondCallbacks: RespondCallback[] = []
+  private readonly errorPages: ErrorPageCallback[] = []
   private readonly environment: Environment
 
   constructor(
@@ -238,6 +240,36 @@ export abstract class ExceptionHandler {
   }
 
   /**
+   * Register a callback to render the HTML error page for HTTP requests that
+   * accept `text/html` (e.g. browser navigations, Inertia first-loads).
+   *
+   * Runs after content negotiation, after translation, after status resolution
+   * — the callback receives everything it needs to render. Return `undefined`
+   * to defer to the next registered callback, or — if none match — to the
+   * built-in minimal HTML page (`renderDefaultHtml`).
+   *
+   * Callbacks fire in registration order (first non-undefined wins). The
+   * consumer's `register()` runs before module `onException()` hooks, so user
+   * overrides take precedence over module-supplied defaults (e.g. Inertia's).
+   *
+   * Only fires for HTTP contexts where {@link wantsHtml} is true; JSON
+   * requests bypass it entirely.
+   *
+   * @param callback - Function receiving (errorResponse, status, context, error)
+   *
+   * @example
+   * ```typescript
+   * this.errorPage((errorResponse, status, context) => {
+   *   const inertia = context.ctx.getContainer().resolve(InertiaService)
+   *   return inertia.render(context.ctx, `Errors/${status}`, errorResponse, { status })
+   * })
+   * ```
+   */
+  errorPage(callback: ErrorPageCallback): void {
+    this.errorPages.push(callback)
+  }
+
+  /**
    * Resolve a service from the DI container.
    *
    * Useful inside `register()` callbacks for accessing injected services
@@ -360,7 +392,7 @@ export abstract class ExceptionHandler {
     }
 
     // 3. Default rendering (content-negotiated)
-    return this.defaultRender(error, context)
+    return await this.defaultRender(error, context)
   }
 
   /**
@@ -467,18 +499,24 @@ export abstract class ExceptionHandler {
   /**
    * Default rendering — content-negotiated.
    *
-   * For HTTP requests that accept HTML: renders a minimal branded HTML page.
+   * For HTTP requests that accept HTML: walks registered {@link errorPage}
+   * callbacks (first non-undefined wins), then falls back to a minimal branded
+   * HTML page via {@link renderDefaultHtml} when none match.
    * For everything else (API, queue, cron, CLI): returns JSON.
    *
    * Errors are always logged via `performReport` (non-blocking waitUntil),
    * so they appear in the console regardless of the rendered response format.
    */
-  private defaultRender(error: ApplicationError, context: ExceptionContext): Response {
+  private async defaultRender(error: ApplicationError, context: ExceptionContext): Promise<Response> {
     const translatedMessage = this.translateError(error, context)
     const errorResponse = error.toErrorResponse(this.environment, translatedMessage)
     const status = resolveHttpStatus(error)
 
     if (context.type === 'http' && this.wantsHtml(context)) {
+      for (const callback of this.errorPages) {
+        const result = await callback(errorResponse, status, context, error)
+        if (result !== undefined) return result
+      }
       return this.renderDefaultHtml(errorResponse, status)
     }
 
@@ -503,8 +541,13 @@ export abstract class ExceptionHandler {
 
   /**
    * Minimal production HTML error page with inline styles.
+   *
+   * Override in a subclass to replace the absolute fallback HTML (used when
+   * no {@link errorPage} callback matches). Prefer registering an `errorPage`
+   * callback for per-status pages — override this method only when you want
+   * a single branded fallback for every HTML error.
    */
-  private renderDefaultHtml(
+  protected renderDefaultHtml(
     errorResponse: ErrorResponse,
     status: ContentfulStatusCode,
   ): Response {

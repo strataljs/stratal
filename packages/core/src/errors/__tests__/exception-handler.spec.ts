@@ -10,6 +10,7 @@ import { LOGGER_TOKENS } from '../../logger'
 import { ApplicationError } from '../application-error'
 import { DefaultExceptionHandler } from '../default-exception-handler'
 import { ERROR_CODES, type ErrorCode } from '../error-codes'
+import type { ErrorResponse } from '../error-response'
 import type { ExceptionContext } from '../exception-context'
 import { createCliExceptionContext, createCronExceptionContext, createHttpExceptionContext, createQueueExceptionContext } from '../exception-context'
 import { ExceptionHandler } from '../exception-handler'
@@ -695,6 +696,161 @@ describe('ExceptionHandler', () => {
 
       expect(await response.text()).toBe('custom')
       expect(response.status).toBe(422)
+    })
+  })
+
+  // ── errorPage() ───────────────────────────────────────────────
+
+  describe('errorPage', () => {
+    it('receives translated errorResponse, status, context, and error', async () => {
+      const spy = vi.fn(
+        (_errorResponse: ErrorResponse, _status: number, _context: ExceptionContext, _err: ApplicationError) =>
+          new Response('rendered', { status: 404 }),
+      )
+
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.errorPage(spy)
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      const httpCtx = createHttpExceptionContext(createMockHonoCtx({ accept: 'text/html' }))
+      const error = new HttpException(404, 'errors.notFound')
+
+      const response = await handler.handle(error, httpCtx)
+
+      expect(spy).toHaveBeenCalledOnce()
+      const [errorResponse, status, context, errArg] = spy.mock.calls[0]
+      expect(errorResponse.code).toBe(error.code)
+      // The mock RouterContext has no real container, so translation falls back
+      // to the raw message key — same fallback as the rest of the HTTP suite.
+      expect(errorResponse.message).toBe('errors.notFound')
+      expect(status).toBe(404)
+      expect(context).toBe(httpCtx)
+      expect(errArg).toBe(error)
+      expect(await response.text()).toBe('rendered')
+    })
+
+    it('first non-undefined callback wins (registration order)', async () => {
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.errorPage(() => new Response('first', { status: 500 }))
+          this.errorPage(() => new Response('second', { status: 500 }))
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      const httpCtx = createHttpExceptionContext(createMockHonoCtx({ accept: 'text/html' }))
+      const response = await handler.handle(new HttpException(500), httpCtx)
+
+      expect(await response.text()).toBe('first')
+    })
+
+    it('returning undefined defers to the next callback', async () => {
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.errorPage(() => undefined)
+          this.errorPage(() => new Response('fallback', { status: 500 }))
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      const httpCtx = createHttpExceptionContext(createMockHonoCtx({ accept: 'text/html' }))
+      const response = await handler.handle(new HttpException(500), httpCtx)
+
+      expect(await response.text()).toBe('fallback')
+    })
+
+    it('falls back to the built-in minimal HTML page when all callbacks return undefined', async () => {
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.errorPage(() => undefined)
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      const httpCtx = createHttpExceptionContext(createMockHonoCtx({ accept: 'text/html' }))
+      const response = await handler.handle(new HttpException(500), httpCtx)
+
+      expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8')
+      const html = await response.text()
+      expect(html).toContain('<!DOCTYPE html>')
+      expect(html).toContain('#13c397')
+    })
+
+    it('supports async callbacks', async () => {
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.errorPage(async () => {
+            await Promise.resolve()
+            return new Response('async-rendered', { status: 404 })
+          })
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      const httpCtx = createHttpExceptionContext(createMockHonoCtx({ accept: 'text/html' }))
+      const response = await handler.handle(new HttpException(404), httpCtx)
+
+      expect(await response.text()).toBe('async-rendered')
+    })
+
+    it('does not fire for JSON requests', async () => {
+      const spy = vi.fn(() => new Response('html', { status: 500 }))
+
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.errorPage(spy)
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      const httpCtx = createHttpExceptionContext(createMockHonoCtx({ accept: 'application/json' }))
+      const response = await handler.handle(new HttpException(500), httpCtx)
+
+      expect(spy).not.toHaveBeenCalled()
+      expect(response.headers.get('content-type')).toContain('application/json')
+    })
+
+    it('does not fire for non-HTTP contexts (queue, cron, cli)', async () => {
+      const spy = vi.fn(() => new Response('html'))
+
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.errorPage(spy)
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      await handler.handle(new TestError(), cliCtx)
+      await handler.handle(new TestError(), createQueueExceptionContext('q'))
+      await handler.handle(new TestError(), createCronExceptionContext())
+
+      expect(spy).not.toHaveBeenCalled()
+    })
+
+    it('subclass overriding renderDefaultHtml replaces the built-in page', async () => {
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          // no errorPage callbacks → fall through to renderDefaultHtml
+        }
+
+        protected renderDefaultHtml(errorResponse: ErrorResponse, status: number): Response {
+          return new Response(`<custom>${status}-${errorResponse.message}</custom>`, {
+            status,
+            headers: { 'content-type': 'text/html; charset=utf-8' },
+          })
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      const httpCtx = createHttpExceptionContext(createMockHonoCtx({ accept: 'text/html' }))
+      const response = await handler.handle(new HttpException(404, 'errors.notFound'), httpCtx)
+
+      expect(response.status).toBe(404)
+      const html = await response.text()
+      expect(html).toBe('<custom>404-errors.notFound</custom>')
     })
   })
 

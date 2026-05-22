@@ -5,7 +5,7 @@ license: MIT
 compatibility: Designed for AI Agents. Requires Node.js 22+, npm.
 metadata:
   author: Temitayo Fadojutimi
-  version: "1.5"
+  version: "1.6"
 ---
 
 # Stratal Framework
@@ -260,6 +260,8 @@ See `references/quarry-cli.md` for all MCP flags and options.
 **User says "Set up the database"** -> Read `references/database.md`. Configure `DatabaseModule.forRootAsync()` with ZenStack.
 
 **User says "Add custom error handling"** -> Read `references/errors-and-i18n.md`. Create `ExceptionHandler` subclass, implement `register()`, pass to `Stratal` constructor.
+
+**User says "Customize the 404 page" / "Custom error pages"** -> Read `references/errors-and-i18n.md` (and `references/inertia.md` if using Inertia). For Inertia apps, ship `pages/Errors/${status}.tsx` — `InertiaModule` auto-renders them. Otherwise use `this.errorPage(cb)` inside `AppExceptionHandler.register()`, or override `protected renderDefaultHtml()` for a static branded fallback.
 
 **User says "Set up Inertia.js"** -> Read `references/inertia.md`. Install `@stratal/inertia`, configure `InertiaModule.forRoot()`, use `@InertiaRoute()` + `ctx.inertia()`.
 
