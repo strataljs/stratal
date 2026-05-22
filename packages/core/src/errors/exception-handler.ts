@@ -1,29 +1,29 @@
-import type { ContentfulStatusCode } from 'hono/utils/http-status'
-import { inject } from 'tsyringe'
-import { CONTAINER_TOKEN, type Container } from '../di'
-import { Transient } from '../di/decorators'
-import { DI_TOKENS } from '../di/tokens'
-import { type StratalEnv } from '../env'
-import type { StratalExecutionContext } from '../execution-context'
-import { I18N_TOKENS } from '../i18n/i18n.tokens'
-import type { II18nService, MessageKeys } from '../i18n/i18n.types'
-import { LOGGER_TOKENS, type LoggerService } from '../logger'
-import type { ApplicationError } from './application-error'
-import type { Environment, ErrorResponse } from './error-response'
-import type { ExceptionContext, HttpExceptionContext } from './exception-context'
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import { inject } from 'tsyringe';
+import { CONTAINER_TOKEN, type Container } from '../di';
+import { Transient } from '../di/decorators';
+import { DI_TOKENS } from '../di/tokens';
+import { type StratalEnv } from '../env';
+import type { StratalExecutionContext } from '../execution-context';
+import { I18N_TOKENS } from '../i18n/i18n.tokens';
+import type { II18nService, MessageKeys } from '../i18n/i18n.types';
+import { LOGGER_TOKENS, type LoggerService } from '../logger';
+import type { ApplicationError } from './application-error';
+import type { Environment, ErrorResponse } from './error-response';
+import type { ExceptionContext, HttpExceptionContext } from './exception-context';
 import type {
-  ApplicationErrorConstructor,
-  ContextCallback,
-  ErrorPageCallback,
-  LogSeverity,
-  RenderableCallback,
-  Reportable,
-  ReportableCallback,
-  RespondCallback,
-} from './exception-handler.types'
-import { resolveHttpStatus } from './get-http-status'
-import { InternalError } from './internal-error'
-import { isApplicationError } from './is-application-error'
+    ApplicationErrorConstructor,
+    ContextCallback,
+    ErrorPageCallback,
+    LogSeverity,
+    RenderableCallback,
+    Reportable,
+    ReportableCallback,
+    RespondCallback,
+} from './exception-handler.types';
+import { resolveHttpStatus } from './get-http-status';
+import { InternalError } from './internal-error';
+import { isApplicationError } from './is-application-error';
 
 interface ReportableEntry {
   errorClass: ApplicationErrorConstructor
@@ -555,6 +555,7 @@ export abstract class ExceptionHandler {
     const html = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${status} - ${title}</title>
+<link rel="icon" type="image/x-icon" href="/favicon.svg">
 <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,-apple-system,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f8fafc;color:#334155}.container{text-align:center;padding:2rem}.status{font-size:6rem;font-weight:800;color:#13c397;line-height:1}.message{font-size:1.25rem;color:#64748b;margin-top:1rem}</style>
 </head><body><div class="container"><div class="status">${status}</div><div class="message">${title}</div></div></body></html>`
     return new Response(html, {
