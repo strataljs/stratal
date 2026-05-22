@@ -20,15 +20,16 @@
  *   RouterContext registered per request
  * ```
  */
-import { type DependencyContainer, type Lifecycle } from 'tsyringe'
-import type InjectionToken from 'tsyringe/dist/typings/providers/injection-token'
-import type { RouterContext } from '../router/router-context'
-import { ROUTER_TOKENS } from '../router/router.tokens'
-import type { Constructor } from '../types'
-import { ConditionalBindingBuilderImpl, type ConditionalBindingBuilder, type PredicateContainer } from './conditional-binding-builder'
-import { RequestScopeOperationNotAllowedError } from './errors/request-scope-operation-not-allowed.error'
-import { CONTAINER_TOKEN } from './tokens'
-import type { ExtensionDecorator, Scope, WhenOptions } from './types'
+import { type DependencyContainer, type Lifecycle } from 'tsyringe';
+import type InjectionToken from 'tsyringe/dist/typings/providers/injection-token';
+import type { RouterContext } from '../router/router-context';
+import { ROUTER_TOKENS } from '../router/router.tokens';
+import type { Constructor } from '../types';
+import { ConditionalBindingBuilderImpl, type ConditionalBindingBuilder, type PredicateContainer } from './conditional-binding-builder';
+import { containerStorage } from './container-storage';
+import { RequestScopeOperationNotAllowedError } from './errors/request-scope-operation-not-allowed.error';
+import { CONTAINER_TOKEN } from './tokens';
+import type { ExtensionDecorator, Scope, WhenOptions } from './types';
 
 /**
  * Options for creating a Container instance
@@ -227,11 +228,13 @@ export class Container {
     }
 
     const requestContainer = this.createRequestScope(routerContext)
-    try {
-      return await callback(requestContainer)
-    } finally {
-      await requestContainer.dispose()
-    }
+      // Pin the request-scoped Container into AsyncLocalStorage for the
+      // duration of the callback so `getContainer()` (and anything reading
+      // `containerStorage.getStore()`) resolves the per-request container
+      // instead of the global one — e.g. ConfigService.set branches on
+      // `isRequestScoped` to decide between request overrides and the
+      // shared ConfigStore.
+      return await containerStorage.run(requestContainer, () => callback(requestContainer))
   }
 
   /**
@@ -267,6 +270,6 @@ export class Container {
 }
 
 // Re-export tsyringe utilities for convenience
-export { container, delay, inject, injectable, instancePerContainerCachingFactory, singleton } from 'tsyringe'
-export type { DependencyContainer } from 'tsyringe'
+export { container, delay, inject, injectable, instancePerContainerCachingFactory, singleton } from 'tsyringe';
+export type { DependencyContainer } from 'tsyringe';
 

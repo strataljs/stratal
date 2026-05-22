@@ -28,21 +28,21 @@ import { getErrorHandlerConfig } from '../utils';
  */
 @Transient(AUTH_SERVICE)
 export class AuthService<TOptions extends BetterAuthOptions = BetterAuthOptions> {
-  private authInstance: Auth<TOptions>
+  private _authInstance?: Auth<TOptions>
 
   constructor(
     @inject(AUTH_OPTIONS) protected readonly options: TOptions
-  ) {
-    this.authInstance = betterAuth({
-      ...this.options,
-      onAPIError: getErrorHandlerConfig()
-    }) as Auth<TOptions>
-  }
+  ) {}
 
   /**
-   * Get the Better Auth instance
+   * Get the Better Auth instance.
    */
   get auth(): Auth<TOptions> {
-    return this.authInstance
+    this._authInstance ??= betterAuth({
+        ...this.options,
+        onAPIError: getErrorHandlerConfig()
+    }) as Auth<TOptions>;
+      
+    return this._authInstance
   }
 }
