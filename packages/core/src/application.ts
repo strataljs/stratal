@@ -249,9 +249,15 @@ export class Application {
 
   /**
    * Wire up queue consumers and event listeners.
-   * Called lazily on first fetch/queue — not during scheduled handling.
+   *
+   * Idempotent — the first call does the work; subsequent calls await the
+   * cached promise. Every entry path that opens a request scope
+   * (`handleFetch`, `handleQueue`, `handleScheduled`, and `runInScope` for
+   * RPC / Durable Objects / Workflows) must call this before resolving
+   * services that emit events, or the EventRegistry will silently drop
+   * events for handlers that have not been registered yet.
    */
-  private initializeHandlers(): Promise<void> {
+  async initializeHandlers(): Promise<void> {
     this.handlerInitPromise ??= runWithContainer(this._container, () => {
       this.registerQueueConsumers()
       this.registerEventListeners()
@@ -316,6 +322,8 @@ export class Application {
    * Handle scheduled cron trigger
    */
   async handleScheduled(controller: ScheduledController): Promise<void> {
+    await this.initializeHandlers()
+
     const mockRouterContext = this.createMockRouterContext('en')
 
     await this._container.runInRequestScope(mockRouterContext, async (requestContainer) => {
