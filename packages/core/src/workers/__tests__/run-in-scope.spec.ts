@@ -7,6 +7,7 @@ import { LogLevel } from '../../logger'
 import { Module } from '../../module/module.decorator'
 import { Stratal } from '../../stratal'
 import { runInScope } from '../run-in-scope'
+import { forceGc } from './__helpers__/force-gc'
 
 const TOKEN = Symbol('TestSvc')
 
@@ -56,14 +57,15 @@ describe('runInScope', () => {
     expect(Stratal.resolveApplication).toHaveBeenCalledOnce()
   })
 
-  it('should dispose the request container after callback completes', async () => {
-    let capturedContainer: Container | undefined
+  it('should release the request container for garbage collection after callback completes', async () => {
+    let weakRef: WeakRef<Container> | undefined
     await runInScope((container) => {
-      capturedContainer = container
+      weakRef = new WeakRef(container)
     })
 
-    // After callback, trying to resolve should throw because the container is disposed
-    expect(() => capturedContainer!.resolve(TOKEN)).toThrow()
+    await forceGc()
+
+    expect(weakRef!.deref()).toBeUndefined()
   })
 
   it('should propagate errors from the callback', async () => {
