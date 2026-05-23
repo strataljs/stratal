@@ -43,9 +43,9 @@ providers: [
 ```typescript
 providers: [
   {
-    provide: LOGGER_TOKENS.Transports,
-    useFactory: (console) => [console],
-    inject: [LOGGER_TOKENS.ConsoleTransport],
+    provide: MY_TOKENS.Service,
+    useFactory: (logger) => new MyService(logger),
+    inject: [LOGGER_TOKENS.LoggerService],
   },
 ]
 ```

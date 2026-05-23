@@ -7,7 +7,6 @@ import { runWithContainer } from './di/container-storage'
 import { DI_TOKENS } from './di/tokens'
 import { Scope } from './di/types'
 import { type StratalEnv } from './env'
-import { ApplicationError } from './errors'
 import { DefaultExceptionHandler } from './errors/default-exception-handler'
 import { createCliExceptionContext, createCronExceptionContext, createQueueExceptionContext } from './errors/exception-context'
 import type { ExceptionHandler } from './errors/exception-handler'
@@ -15,7 +14,7 @@ import type { EventHandler } from './events'
 import { EventRegistry, getListenerHandlers } from './events'
 import type { StratalExecutionContext } from './execution-context'
 import { I18nModule } from './i18n/i18n.module'
-import { ConsoleTransport, JsonFormatter, LOGGER_TOKENS, LoggerService, LogLevel, PrettyFormatter } from './logger'
+import { JsonFormatter, LOGGER_TOKENS, LoggerService, LogLevel, PrettyFormatter } from './logger'
 import { ModuleRegistry } from './module/module-registry'
 import type { DynamicModule, ModuleClass } from './module/types'
 import { OpenAPIModule } from './openapi'
@@ -128,8 +127,6 @@ export class Application {
   constructor({ env, ctx, ...config }: ApplicationOptions) {
     this.env = env
     this.appConfig = config
-
-    ApplicationError.captureStackTraces = env.ENVIRONMENT !== 'production'
 
     // Create unified Container with explicit child container
     this._container = new Container({
@@ -440,8 +437,6 @@ export class Application {
       .give(PrettyFormatter)
       .otherwise(JsonFormatter)
 
-    this._container.registerSingleton(LOGGER_TOKENS.ConsoleTransport, ConsoleTransport)
-    this._container.registerFactory(LOGGER_TOKENS.Transports, (c) => [c.resolve(LOGGER_TOKENS.ConsoleTransport)])
     this._container.registerSingleton(LOGGER_TOKENS.LoggerService, LoggerService)
   }
 

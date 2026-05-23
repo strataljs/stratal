@@ -1,10 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { MessageKeys } from '../../i18n/i18n.types'
 import type { ErrorCode } from '../error-codes'
 import { ApplicationError } from '../application-error'
 import { ERROR_CODES } from '../error-codes'
 
-// Concrete subclass for testing since ApplicationError is abstract
 class TestError extends ApplicationError {
   constructor(
     messageKey: string,
@@ -17,14 +16,6 @@ class TestError extends ApplicationError {
 }
 
 describe('ApplicationError', () => {
-  beforeEach(() => {
-    ApplicationError.captureStackTraces = true
-  })
-
-  afterEach(() => {
-    ApplicationError.captureStackTraces = true
-  })
-
   describe('constructor', () => {
     it('should set code, message, timestamp, metadata, and name', () => {
       const metadata = { userId: '123' }
@@ -41,6 +32,12 @@ describe('ApplicationError', () => {
       const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC)
       const parsed = new Date(error.timestamp)
       expect(parsed.getTime()).not.toBeNaN()
+    })
+
+    it('should always capture stack trace', () => {
+      const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC)
+      expect(error.stack).toBeDefined()
+      expect(error.stack).toContain('TestError')
     })
   })
 
@@ -78,132 +75,6 @@ describe('ApplicationError', () => {
     it('should preserve non-Error causes verbatim', () => {
       const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC, undefined, { reason: 'config' })
       expect(error.cause).toEqual({ reason: 'config' })
-    })
-  })
-
-  describe('toErrorResponse()', () => {
-    it('should exclude stack in production and include code/message/timestamp', () => {
-      const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC)
-      const response = error.toErrorResponse('production')
-
-      expect(response.code).toBe(ERROR_CODES.VALIDATION.GENERIC)
-      expect(response.message).toBe('errors.test') // falls back to message when no translatedMessage
-      expect(response.timestamp).toBe(error.timestamp)
-      expect(response.stack).toBeUndefined()
-    })
-
-    it('should include stack in development', () => {
-      const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC)
-      const response = error.toErrorResponse('development')
-
-      expect(response.stack).toBeDefined()
-      expect(typeof response.stack).toBe('string')
-    })
-
-    it('should use translatedMessage when provided', () => {
-      const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC)
-      const response = error.toErrorResponse('production', 'Translated message')
-
-      expect(response.message).toBe('Translated message')
-    })
-
-    it('should fall back to message when no translatedMessage', () => {
-      const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC)
-      const response = error.toErrorResponse('production')
-
-      expect(response.message).toBe('errors.test')
-    })
-
-    it('should rewrite stack trace first line with translated message in development', () => {
-      const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC)
-      const response = error.toErrorResponse('development', 'A test error occurred')
-
-      expect(response.stack).toBeDefined()
-      expect(response.stack).toContain('A test error occurred')
-      expect(response.stack).not.toContain('errors.test')
-    })
-
-    it('should keep i18n key in stack when no translatedMessage in development', () => {
-      const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC)
-      const response = error.toErrorResponse('development')
-
-      expect(response.stack).toBeDefined()
-      expect(response.stack).toContain('errors.test')
-    })
-  })
-
-  describe('metadata filtering', () => {
-    it('should pass through issues, fields, and field to response', () => {
-      const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC, {
-        issues: [{ field: 'email', message: 'required' }],
-        fields: ['email', 'name'],
-        field: 'email',
-      })
-      const response = error.toErrorResponse('production')
-
-      expect(response.metadata).toEqual({
-        issues: [{ field: 'email', message: 'required' }],
-        fields: ['email', 'name'],
-        field: 'email',
-      })
-    })
-
-    it('should exclude internal properties like path and method', () => {
-      const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC, {
-        path: '/api/users',
-        method: 'POST',
-        controllerName: 'UsersController',
-        reason: 'internal debug info',
-      })
-      const response = error.toErrorResponse('production')
-
-      expect(response.metadata).toBeUndefined()
-    })
-
-    it('should return undefined metadata when no whitelisted properties', () => {
-      const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC, {
-        internalOnly: 'data',
-      })
-      const response = error.toErrorResponse('production')
-
-      expect(response.metadata).toBeUndefined()
-    })
-
-    it('should return undefined metadata when no metadata provided', () => {
-      const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC)
-      const response = error.toErrorResponse('production')
-
-      expect(response.metadata).toBeUndefined()
-    })
-  })
-
-  describe('captureStackTraces', () => {
-    it('should capture stack trace when captureStackTraces is true', () => {
-      ApplicationError.captureStackTraces = true
-      const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC)
-
-      expect(error.stack).toBeDefined()
-    })
-
-    it('should skip stack trace capture when captureStackTraces is false', () => {
-      ApplicationError.captureStackTraces = false
-      const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC)
-
-      // V8 still sets a basic stack via Error constructor, but captureStackTrace is skipped
-      // The key assertion is that it doesn't throw and the error is still functional
-      expect(error.code).toBe(ERROR_CODES.VALIDATION.GENERIC)
-      expect(error.message).toBe('errors.test')
-    })
-  })
-
-  describe('toJSON()', () => {
-    it('should return development-mode response', () => {
-      const error = new TestError('errors.test', ERROR_CODES.VALIDATION.GENERIC)
-      const json = error.toJSON()
-
-      expect(json.code).toBe(ERROR_CODES.VALIDATION.GENERIC)
-      expect(json.message).toBe('errors.test') // falls back to message
-      expect(json.stack).toBeDefined()
     })
   })
 })

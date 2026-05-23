@@ -32,10 +32,9 @@ export function createMiddlewareChain(
         let called = false
         const guardedNext: Next = () => {
           if (called) {
-            const err = new MiddlewareNextCalledMultipleTimesError(middlewareClass.name ?? 'anonymous')
-            console.error('[STRATAL DEBUG] next() called multiple times for ' + middlewareClass.name)
-            console.error('[STRATAL DEBUG] Stack trace:', new Error().stack)
-            return Promise.reject(err)
+            return Promise.reject(
+              new MiddlewareNextCalledMultipleTimesError(middlewareClass.name ?? 'anonymous')
+            )
           }
           called = true
           return prevNext() as Promise<void>

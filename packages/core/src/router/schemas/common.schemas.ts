@@ -12,7 +12,7 @@ import { z } from '../../i18n/validation'
 /**
  * Generic error response schema
  * Used for all error responses (4xx, 5xx)
- * Matches ApplicationError.toErrorResponse() structure
+ * Matches the ErrorResponse shape produced by ExceptionHandler
  */
 export const errorResponseSchema = z.object({
   code: z.number().int().describe('Application error code'),
@@ -25,7 +25,7 @@ export const errorResponseSchema = z.object({
 /**
  * Validation error response schema
  * Used for 400 Bad Request with validation failures
- * Matches ApplicationError.toErrorResponse() structure with validation-specific metadata
+ * Matches the ErrorResponse shape produced by ExceptionHandler with validation-specific metadata
  */
 export const validationErrorResponseSchema = z.object({
   code: z.number().int().describe('Application error code'),

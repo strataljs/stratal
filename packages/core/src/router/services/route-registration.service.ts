@@ -1,61 +1,61 @@
-import type { Context, MiddlewareHandler } from 'hono'
-import type { UpgradeWebSocket, WSContext, WSEvents } from 'hono/ws'
-import { inject } from 'tsyringe'
-import { type Container, getMethodInjections } from '../../di'
-import { Transient } from '../../di/decorators'
-import { DI_TOKENS } from '../../di/tokens'
+import type { Context, MiddlewareHandler } from 'hono';
+import type { UpgradeWebSocket, WSContext, WSEvents } from 'hono/ws';
+import { inject } from 'tsyringe';
+import { type Container, getMethodInjections } from '../../di';
+import { Transient } from '../../di/decorators';
+import { DI_TOKENS } from '../../di/tokens';
 import {
-  type Guard,
-  GuardExecutionService,
-  getControllerGuards,
-  getMethodGuards,
-} from '../../guards'
-import type { ZodType } from '../../i18n/validation'
-import { createRoute, z } from '../../i18n/validation'
-import { LOGGER_TOKENS, type LoggerService } from '../../logger'
-import type { ModuleRegistry } from '../../module/module-registry'
-import type { Constructor } from '../../types'
-import { getWsOnCloseMethod, getWsOnErrorMethod, getWsOnMessageMethod, isGateway } from '../../websocket/decorators'
-import { GatewayContext } from '../../websocket/gateway-context'
-import { DEFAULT_CONTENT_TYPE, HTTP_METHODS, METHOD_STATUS_CODES, SECURITY_SCHEMES } from '../constants'
-import type { IController } from '../controller'
+    type Guard,
+    GuardExecutionService,
+    getControllerGuards,
+    getMethodGuards,
+} from '../../guards';
+import type { ZodType } from '../../i18n/validation';
+import { createRoute, z } from '../../i18n/validation';
+import { LOGGER_TOKENS, type LoggerService } from '../../logger';
+import type { ModuleRegistry } from '../../module/module-registry';
+import { getRateLimits } from '../../rate-limiter/decorators/rate-limit.decorator';
+import { createThrottleMiddleware } from '../../rate-limiter/throttle.middleware';
+import type { Constructor } from '../../types';
+import { getWsOnCloseMethod, getWsOnErrorMethod, getWsOnMessageMethod, isGateway } from '../../websocket/decorators';
+import { GatewayContext } from '../../websocket/gateway-context';
+import { DEFAULT_CONTENT_TYPE, HTTP_METHODS, METHOD_STATUS_CODES, SECURITY_SCHEMES } from '../constants';
+import type { IController } from '../controller';
 import {
-  getControllerOptions,
-  getControllerRoute,
-  getRouteDecoratedMethods,
-  getRouteMetadata,
-} from '../decorators'
+    getControllerOptions,
+    getControllerRoute,
+    getRouteDecoratedMethods,
+    getRouteMetadata,
+} from '../decorators';
 import {
-  ControllerMethodNotFoundError,
-  ControllerRegistrationError,
-  OpenAPIRouteRegistrationError,
-  ResponseValidationError,
-} from '../errors'
-import type { HonoApp } from '../hono-app'
-import { getRateLimits } from '../../rate-limiter/decorators/rate-limit.decorator'
-import { createThrottleMiddleware } from '../../rate-limiter/throttle.middleware'
-import type { Middleware } from '../middleware.interface'
-import { createDomainMiddleware } from '../middleware/domain.middleware'
-import { createMiddlewareChain } from '../middleware/middleware-chain'
-import { type RegisteredRoute, type RouteRegistry } from '../route-registry'
-import { RouterContext } from '../router-context'
-import type { RouterResolver } from '../router-resolver'
-import { ROUTER_TOKENS } from '../router.tokens'
-import { commonErrorSchemas } from '../schemas/common.schemas'
+    ControllerMethodNotFoundError,
+    ControllerRegistrationError,
+    OpenAPIRouteRegistrationError,
+    ResponseValidationError,
+} from '../errors';
+import type { HonoApp } from '../hono-app';
+import type { Middleware } from '../middleware.interface';
+import { createDomainMiddleware } from '../middleware/domain.middleware';
+import { createMiddlewareChain } from '../middleware/middleware-chain';
+import { type RegisteredRoute, type RouteRegistry } from '../route-registry';
+import { RouterContext } from '../router-context';
+import type { RouterResolver } from '../router-resolver';
+import { ROUTER_TOKENS } from '../router.tokens';
+import { commonErrorSchemas } from '../schemas/common.schemas';
 import type {
-  ControllerOptions,
-  HttpMethod,
-  OpenAPIRouteConfig,
-  RouteBodyObject,
-  RouteConfig,
-  RouteMetadata,
-  RouteResponseObject,
-  RouterEnv,
-  SecuritySchemeRecord,
-} from '../types'
-import { toOpenAPIPath, toRoutingOpenAPIPath } from '../utils/path'
-import { generateConventionRouteName } from '../utils/route-name'
-import type { LocalePathService } from './locale-path.service'
+    ControllerOptions,
+    HttpMethod,
+    OpenAPIRouteConfig,
+    RouteBodyObject,
+    RouteConfig,
+    RouteMetadata,
+    RouteResponseObject,
+    RouterEnv,
+    SecuritySchemeRecord,
+} from '../types';
+import { toOpenAPIPath, toRoutingOpenAPIPath } from '../utils/path';
+import { generateConventionRouteName } from '../utils/route-name';
+import type { LocalePathService } from './locale-path.service';
 
 const invokeHandler = (instance: Record<string, (...args: unknown[]) => unknown>, method: string, ...args: unknown[]): Promise<unknown> => {
   try {
@@ -473,7 +473,9 @@ export class RouteRegistrationService {
         return (evt: MessageEvent | CloseEvent | Event, ws: WSContext) => {
           const ctx = new GatewayContext(c as Context<RouterEnv>, ws)
           invokeHandler(gateway as Record<string, (...args: unknown[]) => unknown>, method, evt, ctx).catch((err: unknown) => {
-            this.logger.error(`WebSocket ${method} handler error`, { gateway: GatewayClass.name, error: err instanceof Error ? err.message : String(err) })
+            this.logger.error(`WebSocket ${method} handler error`, err as Error, {
+              gateway: GatewayClass.name,
+            })
             onCatch?.(err, ws)
           })
         }

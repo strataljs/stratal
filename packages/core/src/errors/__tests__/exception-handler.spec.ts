@@ -31,40 +31,6 @@ class ChildTestError extends TestError {
   }
 }
 
-class SelfReportingError extends HttpException {
-  reportCalled = false
-
-  constructor() {
-    super(422, 'errors.selfReporting')
-  }
-
-  report(): void {
-    this.reportCalled = true
-  }
-}
-
-class SelfReportingWithFallback extends HttpException {
-  constructor() {
-    super(422, 'errors.selfReportingFallback')
-  }
-
-  report(): false {
-    return false
-  }
-}
-
-class SelfRenderingError extends HttpException {
-  constructor() {
-    super(503, 'errors.selfRendering')
-  }
-
-  render(ctx: ExceptionContext): Response | undefined {
-    if (ctx.type === 'http') {
-      return new Response('custom render', { status: 503 })
-    }
-    return undefined
-  }
-}
 
 // ── Test Setup ──────────────────────────────────────────────────────
 
@@ -408,88 +374,6 @@ describe('ExceptionHandler', () => {
 
       expect(response.headers.get('X-First')).toBe('true')
       expect(response.headers.get('X-Second')).toBe('true')
-    })
-  })
-
-  // ── Self-reporting / Self-rendering ───────────────────────────
-
-  describe('self-reporting', () => {
-    it('should call error.report() and skip default logging', async () => {
-      const handler = createHandler()
-      const error = new SelfReportingError()
-      await handler.handle(error, cliCtx)
-
-      await mockWaitUntil.mock.calls[0][0]
-      expect(error.reportCalled).toBe(true)
-      expect(mockLogger.info).not.toHaveBeenCalled()
-      expect(mockLogger.warn).not.toHaveBeenCalled()
-      expect(mockLogger.error).not.toHaveBeenCalled()
-    })
-
-    it('should also run default logging when report() returns false', async () => {
-      const handler = createHandler()
-      await handler.handle(new SelfReportingWithFallback(), cliCtx)
-
-      await mockWaitUntil.mock.calls[0][0]
-      // Returns false → default reporting also runs
-      expect(mockLogger.info).toHaveBeenCalled()
-    })
-  })
-
-  describe('self-rendering', () => {
-    it('should use error.render() when it returns a Response', async () => {
-      const handler = createHandler()
-      const httpCtx = createHttpExceptionContext(createMockHonoCtx())
-
-      const response = await handler.handle(new SelfRenderingError(), httpCtx)
-
-      expect(response.status).toBe(503)
-      expect(await response.text()).toBe('custom render')
-    })
-
-    it('should fall back to default when render() returns undefined (non-HTTP)', async () => {
-      const handler = createHandler()
-      const response = await handler.handle(new SelfRenderingError(), cliCtx)
-
-      // In CLI context, render() returns undefined → default rendering
-      const body: Record<string, unknown> = await response.json()
-      expect(body.code).toBe(ERROR_CODES.SYSTEM.INTERNAL_ERROR)
-    })
-  })
-
-  // ── Priority ──────────────────────────────────────────────────
-
-  describe('priority', () => {
-    it('self-report takes precedence over registered reportable', async () => {
-      const spy = vi.fn()
-
-      class CustomHandler extends ExceptionHandler {
-        register(): void {
-          this.reportable(SelfReportingError, spy)
-        }
-      }
-
-      const handler = createHandler(CustomHandler)
-      const error = new SelfReportingError()
-      await handler.handle(error, cliCtx)
-
-      await mockWaitUntil.mock.calls[0][0]
-      expect(error.reportCalled).toBe(true)
-      expect(spy).not.toHaveBeenCalled()
-    })
-
-    it('self-render takes precedence over registered renderable', async () => {
-      class CustomHandler extends ExceptionHandler {
-        register(): void {
-          this.renderable(SelfRenderingError, () => new Response('from-renderable', { status: 500 }))
-        }
-      }
-
-      const handler = createHandler(CustomHandler)
-      const httpCtx = createHttpExceptionContext(createMockHonoCtx())
-
-      const response = await handler.handle(new SelfRenderingError(), httpCtx)
-      expect(await response.text()).toBe('custom render')
     })
   })
 

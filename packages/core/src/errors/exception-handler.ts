@@ -330,16 +330,11 @@ export abstract class ExceptionHandler {
     const originalMessage = error instanceof Error ? error.message : String(error)
     const internalError = new InternalError({
       originalError: originalMessage,
-      stack: error instanceof Error ? error.stack : undefined,
     })
 
-    // In development, preserve the original error message and stack
-    // so the dev error overlay shows what actually went wrong
-    if (this.environment === 'development') {
-      internalError.message = originalMessage
-      if (error instanceof Error && error.stack) {
-        internalError.stack = error.stack
-      }
+    internalError.message = originalMessage
+    if (error instanceof Error && error.stack) {
+      internalError.stack = error.stack
     }
 
     return internalError
@@ -349,24 +344,14 @@ export abstract class ExceptionHandler {
    * Run the reporting pipeline for an error.
    */
   private async performReport(error: ApplicationError, context: ExceptionContext): Promise<void> {
-    // 1. Self-report
-    if (typeof error.report === 'function') {
-      const result = error.report()
-      // void (undefined) = skip default; false = also run default
-      if (result !== false) return
-    }
-
-    // 2. Check dontReport
     if (this.shouldNotReport(error)) return
 
-    // 3. Registered reportable callbacks (most-specific wins)
     const entry = this.findReportable(error)
     if (entry) {
       await entry.callback(error, context)
       if (entry.shouldStop) return
     }
 
-    // 4. Default reporting
     this.defaultReport(error, context)
   }
 
@@ -374,15 +359,6 @@ export abstract class ExceptionHandler {
    * Run the rendering pipeline for an error, producing a Response.
    */
   private async performRender(error: ApplicationError, context: ExceptionContext): Promise<Response> {
-    // 1. Self-render
-    if (typeof error.render === 'function') {
-      const result = error.render(context)
-      if (result !== undefined) {
-        return this.toResponse(result, error)
-      }
-    }
-
-    // 2. Registered renderable callbacks (most-specific wins)
     const entry = this.findRenderable(error)
     if (entry) {
       const result = entry.callback(error, context)
@@ -391,7 +367,6 @@ export abstract class ExceptionHandler {
       }
     }
 
-    // 3. Default rendering (content-negotiated)
     return await this.defaultRender(error, context)
   }
 
@@ -472,6 +447,7 @@ export abstract class ExceptionHandler {
       timestamp: error.timestamp,
       metadata: error.metadata,
       name: error.name,
+      stack: error.stack,
       ...globalContext,
     }
 
@@ -509,7 +485,7 @@ export abstract class ExceptionHandler {
    */
   private async defaultRender(error: ApplicationError, context: ExceptionContext): Promise<Response> {
     const translatedMessage = this.translateError(error, context)
-    const errorResponse = error.toErrorResponse(this.environment, translatedMessage)
+    const errorResponse = this.buildErrorResponse(error, translatedMessage)
     const status = resolveHttpStatus(error)
 
     if (context.type === 'http' && this.wantsHtml(context)) {
@@ -562,6 +538,37 @@ export abstract class ExceptionHandler {
       status,
       headers: { 'content-type': 'text/html; charset=utf-8' },
     })
+  }
+
+  private buildErrorResponse(error: ApplicationError, translatedMessage: string): ErrorResponse {
+    return {
+      code: error.code,
+      message: translatedMessage,
+      timestamp: error.timestamp,
+      metadata: this.filterMetadata(error.metadata),
+      stack: this.environment === 'development'
+        ? error.stack?.replace(error.message, translatedMessage)
+        : undefined,
+    }
+  }
+
+  private filterMetadata(
+    metadata?: Record<string, unknown>
+  ): Record<string, unknown> | undefined {
+    if (!metadata) return undefined
+
+    const whitelist = ['issues', 'fields', 'field']
+    const filtered: Record<string, unknown> = {}
+    let hasUserFacingData = false
+
+    for (const key of whitelist) {
+      if (key in metadata && metadata[key] !== undefined) {
+        filtered[key] = metadata[key]
+        hasUserFacingData = true
+      }
+    }
+
+    return hasUserFacingData ? filtered : undefined
   }
 
   private escapeHtml(str: string): string {

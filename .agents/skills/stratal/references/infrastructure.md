@@ -89,7 +89,11 @@ export class MyService {
     this.logger.debug('Debug message', { key: 'value' })
     this.logger.info('Info message')
     this.logger.warn('Warning message')
-    this.logger.error('Error message', { error })
+
+    // error() accepts Error object, context, or both
+    this.logger.error('Something failed', new Error('boom'))
+    this.logger.error('Something failed', { code: 500 })
+    this.logger.error('Something failed', new Error('boom'), { userId: '123' })
   }
 }
 ```

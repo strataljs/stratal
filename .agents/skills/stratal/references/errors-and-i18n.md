@@ -159,18 +159,19 @@ export class NoteNotFoundError extends ApplicationError {
 
 ### ApplicationError Shape
 
+Pure data carrier — response shaping, reporting, and rendering are handled by `ExceptionHandler`.
+
 ```typescript
 abstract class ApplicationError extends Error {
   public readonly code: ErrorCode
   public readonly timestamp: string           // ISO string
   public readonly metadata?: Record<string, unknown>
 
-  constructor(i18nKey: MessageKeys, code: ErrorCode, metadata?: Record<string, unknown>)
-  toErrorResponse(env: 'development' | 'production', translatedMessage?: string): ErrorResponse
+  constructor(i18nKey: MessageKeys, code: ErrorCode, metadata?: Record<string, unknown>, cause?: unknown)
 }
 ```
 
-`Error.message` holds the i18n key. The `toErrorResponse()` method returns a structured JSON response (stack trace only included in development mode).
+`Error.message` holds the i18n key. Stack traces are always captured (in all environments). The `ExceptionHandler` translates the message, builds the response shape, and strips stack traces from production responses.
 
 ## Error Code Ranges
 
