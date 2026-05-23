@@ -5,7 +5,6 @@ import { Module } from '../module'
 import type { DynamicModule, ModuleContext, OnInitialize, Provider } from '../module/types'
 import { CONFIG_TOKENS } from './config.tokens'
 import { ConfigValidationError, type ModuleConfig } from './config.types'
-import { ConfigModuleNotInitializedError } from './errors'
 import type { ConfigNamespace } from './register-as'
 import { ConfigService } from './services/config.service'
 import { ConfigStore } from './services/config.store'
@@ -119,12 +118,15 @@ export class ConfigModule implements OnInitialize {
   }
 
   /**
-   * Initialize config service with merged namespaces
-   * Called after all providers are registered
+   * Initialize config service with merged namespaces.
+   * Called after all providers are registered. No-op when the module
+   * was imported without `forRoot()` — the store stays empty and
+   * `ConfigService.get()` will throw `ConfigKeyNotFoundError` only if
+   * someone actually asks for a key.
    */
   onInitialize(context: ModuleContext): void {
     if (!moduleOptions) {
-      throw new ConfigModuleNotInitializedError()
+      return
     }
 
     const env = context.container.resolve<unknown>(DI_TOKENS.CloudflareEnv)

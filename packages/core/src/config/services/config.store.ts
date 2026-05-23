@@ -1,7 +1,7 @@
 import { Transient } from '../../di/decorators'
 import { CONFIG_TOKENS } from '../config.tokens'
 import type { ConfigPath, ConfigPathValue, ModuleConfig } from '../config.types'
-import { ConfigNotInitializedError } from '../errors'
+import { ConfigKeyNotFoundError } from '../errors'
 
 /**
  * ConfigStore
@@ -14,6 +14,12 @@ import { ConfigNotInitializedError } from '../errors'
  *
  * Per-request overrides live on {@link ConfigService}, which reads
  * through to this store for any key not explicitly overridden.
+ *
+ * If the store is never initialized (no `ConfigModule.forRoot()`), it
+ * behaves like an empty config: `has()` returns `false`, `all()` returns
+ * `{}`, and `get()` throws {@link ConfigKeyNotFoundError} for any path —
+ * the same error you'd get for a missing key on an initialized store.
+ * Resolving the store via DI never throws on its own.
  */
 @Transient(CONFIG_TOKENS.ConfigStore)
 export class ConfigStore<T extends object = ModuleConfig> {
@@ -28,27 +34,31 @@ export class ConfigStore<T extends object = ModuleConfig> {
   }
 
   /**
-   * Get config value using dot notation.
+   * Get config value using dot notation. Throws
+   * {@link ConfigKeyNotFoundError} if the path is absent.
    */
   get<P extends ConfigPath<T>>(path: P): ConfigPathValue<T, P> {
-    this.ensureInitialized()
-    return this.getByPath(this.data, path) as ConfigPathValue<T, P>
+    const value = this.getByPath(this.data ?? {}, path)
+    if (value === undefined) {
+      throw new ConfigKeyNotFoundError(path)
+    }
+    return value as ConfigPathValue<T, P>
   }
 
   /**
-   * Check if a config path exists.
+   * Check if a config path exists. Returns `false` when the store has
+   * not been initialized.
    */
   has(path: ConfigPath<T>): boolean {
-    this.ensureInitialized()
-    return this.getByPath(this.data, path) !== undefined
+    return this.getByPath(this.data ?? {}, path) !== undefined
   }
 
   /**
-   * Get the entire config object (readonly snapshot).
+   * Get the entire config object (readonly snapshot). Returns an empty
+   * object when the store has not been initialized.
    */
   all(): Readonly<T> {
-    this.ensureInitialized()
-    return this.data as Readonly<T>
+    return (this.data ?? ({} as T)) as Readonly<T>
   }
 
   /**
@@ -71,12 +81,6 @@ export class ConfigStore<T extends object = ModuleConfig> {
 
   private isDangerousKey(key: string): boolean {
     return key === '__proto__' || key === 'constructor' || key === 'prototype'
-  }
-
-  private ensureInitialized(): void {
-    if (this.data === undefined) {
-      throw new ConfigNotInitializedError()
-    }
   }
 
   private deepClone<V>(obj: V): V {

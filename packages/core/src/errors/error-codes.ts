@@ -204,8 +204,8 @@ export const ERROR_CODES = {
     // Configuration Errors (9100-9199)
     /** Generic configuration error */
     CONFIGURATION_ERROR: 9100,
-    /** ConfigService not initialized */
-    CONFIG_NOT_INITIALIZED: 9101,
+    /** Requested configuration key was not found */
+    CONFIG_KEY_NOT_FOUND: 9101,
     /** Module already registered */
     MODULE_ALREADY_REGISTERED: 9102,
     /** Circular module dependency detected */
@@ -216,8 +216,6 @@ export const ERROR_CODES = {
     INVALID_ERROR_CODE_RANGE: 9105,
     /** Invalid module provider configuration */
     INVALID_MODULE_PROVIDER: 9106,
-    /** ConfigModule.forRoot() was not called */
-    CONFIG_MODULE_NOT_INITIALIZED: 9107,
 
     // Infrastructure Errors (9200-9299)
     /** Generic infrastructure error */

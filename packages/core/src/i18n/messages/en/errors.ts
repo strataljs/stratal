@@ -38,8 +38,7 @@ export const errors = {
   conditionalBindingFallback: 'Conditional binding predicate returned false for token "{token}" but no fallback was provided and no existing registration exists.',
 
   // Configuration errors
-  configNotInitialized: 'Configuration service has not been initialized',
-  configModuleNotInitialized: 'ConfigModule.forRoot() was not called before module initialization',
+  configKeyNotFound: 'Configuration key "{path}" was not found',
   stratalNotInitialized: 'Stratal has not been instantiated. Ensure you export a Stratal instance as the default export.',
 
   // Module errors
