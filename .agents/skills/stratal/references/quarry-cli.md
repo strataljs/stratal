@@ -1,14 +1,40 @@
 # Quarry CLI
 
-Quarry is Stratal's built-in CLI. It imports your app's default `Stratal` export from `src/index.ts` — no separate entry file needed.
+Quarry is Stratal's built-in CLI. It imports your app's default `Stratal` export from `src/quarry.ts`.
 
 ## Running Commands
 
 ```bash
 npx quarry <command> [arguments] [--options]
 
-# Custom entry path (if not src/index.ts)
+# Custom entry path (if not src/quarry.ts)
 npx quarry ./custom/entry.ts <command>
+```
+
+### CLI Entry File
+
+Create `src/quarry.ts` using `QuarryRunner`:
+
+```typescript
+import { QuarryRunner } from 'stratal/quarry/runner'
+import { AppModule } from './app.module'
+
+export default QuarryRunner.run({
+  imports: [AppModule],
+  providers: [/* seeders */],
+})
+```
+
+For Inertia apps, add `InertiaQuarryModule`:
+
+```typescript
+import { QuarryRunner } from 'stratal/quarry/runner'
+import { InertiaQuarryModule } from '@stratal/inertia/quarry'
+import { AppModule } from './app.module'
+
+export default QuarryRunner.run({
+  imports: [AppModule, InertiaQuarryModule],
+})
 ```
 
 ## Wrangler Environment

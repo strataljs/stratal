@@ -147,11 +147,12 @@ import { ApplicationError } from 'stratal/errors'
 import type { ErrorCode, MessageKeys } from 'stratal/errors'
 
 export class NoteNotFoundError extends ApplicationError {
-  constructor(noteId: string) {
+  constructor(noteId: string, cause?: unknown) {
     super(
       'notes.errors.notFound',  // i18n key (used as message)
-      5000 as ErrorCode,                         // Custom error code
+      6000 as ErrorCode,                         // Custom error code (6000-8999)
       { noteId },                                // Optional metadata
+      cause,                                     // Optional cause (ES2022 Error.cause)
     )
   }
 }
@@ -173,9 +174,33 @@ abstract class ApplicationError extends Error {
 
 `Error.message` holds the i18n key. Stack traces are always captured (in all environments). The `ExceptionHandler` translates the message, builds the response shape, and strips stack traces from production responses.
 
+Pass `cause` (4th arg) to chain errors. The default reporter logs the full cause chain — each error's name, code, message, and stack appear in a single structured log entry.
+
+## HttpException
+
+Simpler alternative to `ApplicationError` — takes an HTTP status code and auto-derives the error code.
+
+```typescript
+import { HttpException } from 'stratal/errors'
+
+// Basic
+throw new HttpException(404)              // "Not Found", code 4001
+throw new HttpException(422, 'errors.invalidInput')  // i18n key
+
+// With metadata for i18n interpolation
+throw new HttpException(402, 'errors.quotaExceeded', { feature: 'notes' })
+
+// Status codes with auto-mapped error codes:
+// 400 → VALIDATION.GENERIC, 401 → AUTH.USER_NOT_AUTHENTICATED
+// 402 → BUSINESS.PAYMENT_REQUIRED, 403 → AUTHZ.FORBIDDEN
+// 404 → RESOURCE.NOT_FOUND, 409 → RESOURCE.CONFLICT
+// 422 → VALIDATION.GENERIC, 423 → BUSINESS.LOCKED
+// 429 → RESOURCE.TOO_MANY_REQUESTS, 500 → SYSTEM.INTERNAL_ERROR
+```
+
 ## Error Code Ranges
 
-Built-in error code ranges (your custom errors should use 5000-8999):
+Built-in error code ranges (your custom errors should use 6000-8999):
 
 | Range | Category |
 |-------|----------|
@@ -184,7 +209,8 @@ Built-in error code ranges (your custom errors should use 5000-8999):
 | 3000-3099 | Authentication |
 | 3100-3199 | Authorization |
 | 4000-4199 | Resource |
-| 5000-8999 | **Available for app-specific errors** |
+| 5000-5999 | Business Logic (framework-defined) |
+| 6000-8999 | **Available for app-specific errors** |
 | 9000-9999 | System/Infrastructure |
 
 Access built-in codes via `ERROR_CODES`:
@@ -196,6 +222,10 @@ ERROR_CODES.DATABASE.RECORD_NOT_FOUND   // 2001
 ERROR_CODES.AUTH.INVALID_CREDENTIALS    // 3000
 ERROR_CODES.VALIDATION.GENERIC          // 1000
 ERROR_CODES.RESOURCE.TOO_MANY_REQUESTS  // 4290 → HTTP 429 (see references/rate-limiter.md)
+ERROR_CODES.BUSINESS.PAYMENT_REQUIRED   // 5001 → HTTP 402
+ERROR_CODES.BUSINESS.QUOTA_EXCEEDED     // 5002
+ERROR_CODES.BUSINESS.LOCKED            // 5003 → HTTP 423
+ERROR_CODES.BUSINESS.SUBSCRIPTION_REQUIRED // 5004
 ```
 
 ## I18nModule

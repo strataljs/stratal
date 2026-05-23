@@ -116,6 +116,9 @@ class RouterContext {
   param(key: string): string             // URL param (e.g., :id)
   query(key?: string): Record | string   // Query params
   header(name: string): string | undefined
+  getCookie(name: string): string | undefined       // Read cookie
+  setCookie(name: string, value: string, options?: CookieOptions): void  // Set cookie
+  deleteCookie(name: string, options?: CookieOptions): string | undefined // Delete cookie
   text(text: string, status?: number): Response
   html(html: string, status?: number): Response
   redirect(url: string, status?: number): Response
@@ -549,7 +552,7 @@ Redirects use **308 Permanent Redirect** so POST/PUT/PATCH bodies survive. The `
 
 The configured mode is also applied to URL-generation helpers so generated links match incoming-request canonical form:
 
-- `route(name, params?)` (standalone, from `stratal/router`)
+- `route(name, params?, options?)` (standalone, from `stratal/router`)
 - `ctx.route(name, params?, options?)` (RouterContext)
 - `Uri.route()`, `Uri.to()`, `Uri.query()`, `Uri.current()`, `Uri.full()`
 

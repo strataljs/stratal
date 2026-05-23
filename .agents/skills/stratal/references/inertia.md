@@ -482,7 +482,17 @@ With augmentation, `ctx.inertia('notes/Index', { notes })` is fully type-checked
 
 ## Inertia CLI Commands
 
-`@stratal/inertia` ships a standalone `inertia` bin (declared in its `package.json`). It runs in plain Node — no Quarry / DI bootstrap — so it works in projects that don't have a Stratal entry yet (e.g. during `install`).
+Inertia CLI commands live in `InertiaQuarryModule` — import it from `@stratal/inertia/quarry` in your `src/quarry.ts`:
+
+```typescript
+import { QuarryRunner } from 'stratal/quarry/runner'
+import { InertiaQuarryModule } from '@stratal/inertia/quarry'
+import { AppModule } from './app.module'
+
+export default QuarryRunner.run({
+  imports: [AppModule, InertiaQuarryModule],
+})
+```
 
 ```bash
 # Scaffold Inertia project structure (run once after install)
@@ -491,7 +501,7 @@ npx quarry inertia:install               # --skip-deps to skip the npm-install h
 # Start Vite dev server
 npx quarry inertia:dev                   # --port=5173 --host --persist-to=.cf-state
 
-# Production build via Vite
+# Production build via Vite (2-phase: browser bundle → worker bundle)
 npx quarry inertia:build                 # --out-dir=dist --ssr
 
 # Generate TypeScript types for Inertia pages
@@ -512,9 +522,18 @@ export default createViteConfig({
 })
 ```
 
+### `stratalInertia()` Plugin Options
+
+The `stratalInertia()` Vite plugin (included in `createViteConfig`) accepts:
+
+- `entries?` — Client entry paths for CSS collection (default: `['/src/inertia/app.tsx']`)
+- `sourcemap?` — `boolean | 'dev-and-staging'` (default: `'dev-and-staging'`). When `'dev-and-staging'`, sourcemaps are emitted unless `CLOUDFLARE_ENV` is `'prod'` or `'production'`.
+- `clientManifestPath?` — Path to the Vite client manifest from the browser-bundle build (default: `'dist/client/.vite/manifest.json'`)
+
 ## Sub-Path Imports
 
 - `@stratal/inertia` — Main module, service, decorators, flash stores, types
+- `@stratal/inertia/quarry` — CLI-only: `InertiaQuarryModule`, build/dev/types/install commands, `runTypeGeneration`
 - `@stratal/inertia/vite` — Vite configuration and plugins
 - `@stratal/inertia/react` — React hooks (`useI18n`, `useRoute`)
 - `@stratal/inertia/testing` — Test response assertions for Inertia pages

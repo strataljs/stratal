@@ -90,10 +90,10 @@ export class MyService {
     this.logger.info('Info message')
     this.logger.warn('Warning message')
 
-    // error() accepts Error object, context, or both
-    this.logger.error('Something failed', new Error('boom'))
-    this.logger.error('Something failed', { code: 500 })
-    this.logger.error('Something failed', new Error('boom'), { userId: '123' })
+    // error() overloads:
+    this.logger.error('Something failed', new Error('boom'))                    // (message, Error)
+    this.logger.error('Something failed', new Error('boom'), { userId: '123' }) // (message, Error, context)
+    this.logger.error('Something failed', { code: 500 })                        // (message, context)
   }
 }
 ```
@@ -105,7 +105,7 @@ export default new Stratal({
   module: AppModule,
   logging: {
     level: LogLevel.INFO,    // DEBUG, INFO, WARN, ERROR
-    formatter: 'json',       // 'json' or 'text'
+    formatter: 'json',       // 'json' or 'pretty'
   },
 })
 ```

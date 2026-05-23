@@ -5,7 +5,8 @@
 ```
 {{app-name}}/
   src/
-    index.ts                    # Entry point
+    index.ts                    # Worker entry point
+    quarry.ts                   # CLI entry point (QuarryRunner)
     app.module.ts               # Root module
     types/
       env.ts                    # StratalEnv module augmentation
@@ -37,6 +38,17 @@ import { Stratal } from 'stratal'
 import { AppModule } from './app.module'
 
 export default new Stratal({ module: AppModule })
+```
+
+### src/quarry.ts
+
+```typescript
+import { QuarryRunner } from 'stratal/quarry/runner'
+import { AppModule } from './app.module'
+
+export default QuarryRunner.run({
+  imports: [AppModule],
+})
 ```
 
 ### src/app.module.ts
