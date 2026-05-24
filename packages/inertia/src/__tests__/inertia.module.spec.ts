@@ -91,4 +91,17 @@ describe('InertiaModule onException — errorPage', () => {
     await captured!(errorResponse, 503, { type: 'http', ctx }, new Error())
     expect(renderSpy.mock.calls[0][1]).toBe('Errors/503')
   })
+
+  it('returns undefined when InertiaService.render() throws (missing error page)', async () => {
+    const renderSpy = vi.fn().mockRejectedValue(new Error('Page not found: Errors/500'))
+    const inertia = { render: renderSpy }
+    const container = { resolve: vi.fn().mockReturnValue(inertia) }
+    const ctx = new RouterContext(createMockHonoContext() as unknown as Context)
+    ;(ctx as unknown as { getContainer: () => unknown }).getContainer = () => container
+
+    const errorResponse = { code: 9000, message: 'errors.internal', timestamp: '' } as ErrorResponse
+
+    const result = await captured!(errorResponse, 500, { type: 'http', ctx }, new Error())
+    expect(result).toBeUndefined()
+  })
 })

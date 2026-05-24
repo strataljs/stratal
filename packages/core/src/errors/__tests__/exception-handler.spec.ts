@@ -714,6 +714,41 @@ describe('ExceptionHandler', () => {
       expect(spy).not.toHaveBeenCalled()
     })
 
+    it('falls back to renderDefaultHtml when an errorPage callback throws', async () => {
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.errorPage(() => { throw new Error('Page not found: Errors/500') })
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      const httpCtx = createHttpExceptionContext(createMockHonoCtx({ accept: 'text/html' }))
+      const response = await handler.handle(new HttpException(500), httpCtx)
+
+      expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8')
+      const html = await response.text()
+      expect(html).toContain('<!DOCTYPE html>')
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        'errorPage callback failed, falling back to next handler',
+        { error: 'Page not found: Errors/500' },
+      )
+    })
+
+    it('skips a throwing callback and uses the next successful one', async () => {
+      class CustomHandler extends ExceptionHandler {
+        register(): void {
+          this.errorPage(() => { throw new Error('missing page') })
+          this.errorPage(() => new Response('fallback-page', { status: 500 }))
+        }
+      }
+
+      const handler = createHandler(CustomHandler)
+      const httpCtx = createHttpExceptionContext(createMockHonoCtx({ accept: 'text/html' }))
+      const response = await handler.handle(new HttpException(500), httpCtx)
+
+      expect(await response.text()).toBe('fallback-page')
+    })
+
     it('subclass overriding renderDefaultHtml replaces the built-in page', async () => {
       class CustomHandler extends ExceptionHandler {
         register(): void {

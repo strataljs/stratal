@@ -490,8 +490,14 @@ export abstract class ExceptionHandler {
 
     if (context.type === 'http' && this.wantsHtml(context)) {
       for (const callback of this.errorPages) {
-        const result = await callback(errorResponse, status, context, error)
-        if (result !== undefined) return result
+        try {
+          const result = await callback(errorResponse, status, context, error)
+          if (result !== undefined) return result
+        } catch (callbackError) {
+          this.logger.warn('errorPage callback failed, falling back to next handler', {
+            error: callbackError instanceof Error ? callbackError.message : String(callbackError),
+          })
+        }
       }
       return this.renderDefaultHtml(errorResponse, status)
     }
