@@ -486,6 +486,15 @@ export class RouteRegistrationService {
       }
       if (onCloseMethod) {
         events.onClose = bindWsHandler(onCloseMethod)
+      } else {
+        // Cloudflare Workers (pre-2026-04-07 compat date) requires the server
+        // to complete the WebSocket close handshake explicitly. Without a close
+        // listener, Hono never calls server.addEventListener('close', ...),
+        // leaving the Worker alive until the runtime kills it with
+        // "script will never generate a response".
+        events.onClose = (_evt: CloseEvent, ws: WSContext) => {
+          ws.close()
+        }
       }
       if (onErrMethod) {
         events.onError = bindWsHandler(onErrMethod)

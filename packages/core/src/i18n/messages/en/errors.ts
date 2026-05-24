@@ -126,8 +126,8 @@ export const errors = {
   rateLimit: {
     tooManyRequests: 'Too Many Requests',
     notDefined: 'Rate limiter "{name}" is not defined. Register it via RateLimiterRegistry.for("{name}", ...) inside a module\'s onInitialize hook.',
-    notConfigured: 'RateLimiterModule.forRoot() was not called. Pass { store: "kv" | "memory" | { useClass } } to enable rate limiting.',
-    moduleNotImported: 'Rate limiter "{name}" was used (router.throttle / @RateLimit) but RateLimiterModule is not imported in your AppModule. Add RateLimiterModule.forRoot({ store: ... }) to imports.',
+    notConfigured: 'RateLimiterModule.forRoot() was not called. Pass a store option ("kv", "memory", or a custom class) to enable rate limiting.',
+    moduleNotImported: 'Rate limiter "{name}" was used (router.throttle / @RateLimit) but RateLimiterModule is not imported in your AppModule. Add RateLimiterModule.forRoot() to imports.',
   },
 
   // Seeder errors
