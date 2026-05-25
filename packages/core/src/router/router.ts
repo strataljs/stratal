@@ -1,4 +1,4 @@
-import type { ZodObject } from '../i18n/validation'
+import type { ZodObject } from '../i18n/validation/zod'
 import { createThrottleMiddleware } from '../rate-limiter/throttle.middleware'
 import type { Constructor } from '../types'
 import { RouterError } from './router.error'

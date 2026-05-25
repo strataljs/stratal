@@ -41,7 +41,7 @@ Breaking any of these causes runtime failures.
 
 10. **Cron schedules must match `wrangler.jsonc`** — `CronJob.schedule` string must exactly match a trigger in `[triggers]`.
 
-11. **I18nModule must be configured for translations** — `I18nModule.forRoot()` for locale config with `detection` option (`'cookie'` default, `'header'`, `'querystring'`, `'path'`). Path detection supports `prefixDefaultLocale` (`false` default, `'redirect'`, `true`). `I18nModule.registerMessages()` to add messages. `I18nService.t()` for translation. `withI18n()` for Zod validation messages.
+11. **I18nModule must be configured for translations** — `I18nModule.forRoot()` for locale config with `detection` option (`'cookie'` default, `'header'`, `'querystring'`, `'path'`). Path detection supports `prefixDefaultLocale` (`false` default, `'redirect'`, `true`). `I18nModule.registerMessages()` to add messages. `I18nService.t()` for translation. `withZodI18n()` (from `stratal/validation`) for Zod validation messages. `withI18n()` (from `stratal/i18n`) for general translations.
 
 12. **Custom ExceptionHandler must extend `ExceptionHandler`** — Import from `stratal/errors`, implement `register()`, pass to `new Stratal({ exceptionHandler: AppExceptionHandler })`.
 
@@ -328,7 +328,7 @@ Load these when the task needs deeper knowledge:
 | `references/quarry-cli.md` | CLI commands, MCP server setup, custom command creation, debugging |
 | `references/modules-and-di.md` | Provider types, scopes, container API, dynamic modules |
 | `references/routing.md` | RouteConfig, RouterContext API, named routes, URL generation, signed URLs, domain routing, Router fluent API, OpenAPI, versioning |
-| `references/errors-and-i18n.md` | ExceptionHandler, ApplicationError, HttpException, domain error classes, i18n, withI18n() |
+| `references/errors-and-i18n.md` | ExceptionHandler, ApplicationError, HttpException, domain error classes, i18n, withZodI18n(), withI18n() |
 | `references/inertia.md` | Inertia.js setup, rendering, props, SSR, type safety, Vite |
 | `references/inertia-modal.md` | Backend-driven modal pages: `ModalModule`, `ctx.inertiaModal()`, `<Modal>`, `useModal()` |
 | `references/websocket.md` | WebSocket gateways: `@Gateway`, `@OnMessage`, `GatewayContext` |

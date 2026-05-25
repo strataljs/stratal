@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { z } from '../../i18n/validation'
+import { z } from '../../i18n/validation/zod'
 import type { Constructor } from '../../types'
 import { RouterError } from '../router.error'
 import type { Middleware } from '../middleware.interface'

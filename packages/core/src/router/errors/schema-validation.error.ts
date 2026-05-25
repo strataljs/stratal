@@ -1,6 +1,5 @@
 import { HttpException } from '../../errors'
-import type { ZodError } from '../../i18n/validation'
-import { type z } from '../../i18n/validation'
+import type { ZodError, z } from '../../i18n/validation/zod'
 
 export class SchemaValidationError extends HttpException {
   public readonly issues: { path: string; message: string; code: string }[]

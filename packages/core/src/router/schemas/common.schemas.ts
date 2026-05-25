@@ -1,4 +1,4 @@
-import { z } from '../../i18n/validation'
+import { z } from '../../i18n/validation/zod'
 
 /**
  * Common OpenAPI Schemas

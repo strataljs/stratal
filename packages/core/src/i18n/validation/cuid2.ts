@@ -26,7 +26,7 @@ export const CUID2_REGEX = /^[a-z][0-9a-z]{23,31}$/
  *
  * @example
  * ```ts
- * import { z, withI18n } from 'stratal/validation'
+ * import { z, withZodI18n } from 'stratal/validation'
  * import { cuid2 } from 'stratal/validation'
  *
  * // Default 24-32 char cuid2:
@@ -38,7 +38,7 @@ export const CUID2_REGEX = /^[a-z][0-9a-z]{23,31}$/
  * }))
  *
  * // Custom error message:
- * cuid2(withI18n('tenants.errors.invalidId'))
+ * cuid2(withZodI18n('tenants.errors.invalidId'))
  *
  * // Compose: chain anything Zod string accepts
  * cuid2().describe('Tenant ID')

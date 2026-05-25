@@ -305,4 +305,4 @@ Custom schemes can be passed via `securitySchemes` option.
 
 ## I18n
 
-See `references/errors-and-i18n.md` for I18nModule configuration, I18nService usage, and `withI18n()` for Zod validation messages.
+See `references/errors-and-i18n.md` for I18nModule configuration, I18nService usage, `withZodI18n()` for Zod validation messages, and `withI18n()` from `stratal/i18n` for general translations.

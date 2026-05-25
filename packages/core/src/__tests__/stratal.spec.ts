@@ -8,7 +8,7 @@ import { Scope } from '../di/types';
 import type { StratalEnv } from '../env';
 import type { EventContext, IEventRegistry } from '../events';
 import { Listener, On } from '../events';
-import { z } from '../i18n/validation';
+import { z } from '../i18n/validation/zod';
 import { LogLevel } from '../logger';
 import { Module } from '../module/module.decorator';
 import { Controller } from '../router/decorators/controller.decorator';

@@ -482,15 +482,15 @@ export const noteSchema = z.object({
 
 ### i18n Validation Messages
 
-Use `withI18n()` for translatable validation messages:
+Use `withZodI18n()` for translatable validation messages:
 
 ```typescript
-import { z, withI18n } from 'stratal/validation'
+import { z, withZodI18n } from 'stratal/validation'
 
 export const createNoteSchema = z.object({
   title: z.string()
-    .min(1, withI18n('validation.notes.title.required'))
-    .max(255, withI18n('validation.notes.title.max', { max: 255 })),
+    .min(1, withZodI18n('validation.notes.title.required'))
+    .max(255, withZodI18n('validation.notes.title.max', { max: 255 })),
   content: z.string().optional(),
 }).openapi('CreateNote')
 ```

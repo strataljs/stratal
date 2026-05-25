@@ -9,7 +9,7 @@ export * from './i18n.options'
 export { I18N_TOKENS } from './i18n.tokens'
 export * from './i18n.types'
 export { getLocales, getMessages, messages, type Messages } from './messages'
-export * from './middleware'
 export { MessageLoaderService } from './services/message-loader.service'
 export { MessageRegistry } from './services/message-registry'
+export { withI18n } from './with-i18n'
 

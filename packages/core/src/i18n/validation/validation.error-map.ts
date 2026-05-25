@@ -10,8 +10,9 @@ import type {
   $ZodIssueUnrecognizedKeys,
   $ZodRawIssue,
 } from 'zod/v4/core'
-import type { MessageKeys } from '../i18n.types'
-import type { ErrorMapContext } from './validation.types'
+import { getContainer } from '../../di/container-storage'
+import { I18N_TOKENS } from '../i18n.tokens'
+import type { II18nService, MessageKeys } from '../i18n.types'
 
 /**
  * Type guards for narrowing Zod v4 issue types
@@ -180,24 +181,17 @@ function getMessageParams(issue: $ZodRawIssue): Record<string, unknown> {
  * Creates a Zod error map that uses i18n for translation
  * Uses Zod v4 native $ZodErrorMap signature (no ctx parameter)
  */
-export function createI18nErrorMap(getContext: () => ErrorMapContext | undefined): $ZodErrorMap {
+export function createI18nErrorMap(): $ZodErrorMap {
   return (issue: $ZodRawIssue): { message: string } => {
-    // Get message key and params for this issue
     const messageKey = getMessageKey(issue)
     const messageParams = getMessageParams(issue)
 
-    // Get translation context
-    const context = getContext()
-
-    if (!context) {
-      // Fallback: Use English messages directly
-      // This handles config validation at startup, tests, etc.
+    try {
+      const container = getContainer()
+      const i18n = container.resolve<II18nService>(I18N_TOKENS.I18nService)
+      return { message: i18n.t(messageKey, messageParams) }
+    } catch {
       return { message: 'Invalid input' }
-    }
-
-    // Normal flow: Use context-aware i18n (respects user locale)
-    return {
-      message: context.t(messageKey, messageParams),
     }
   }
 }

@@ -238,10 +238,11 @@ export class Application {
     // Uri — URL generation service (request-scoped for access to RouterContext)
     this._container.register(ROUTER_TOKENS.Uri, Uri, Scope.Request)
 
-    // RouterResolver — merges Router configs from modules
+    // RouterResolver — merges Router configs from modules (only registered when modules define routes)
     const routerConfigs = this.moduleRegistry.getAllRouterConfigs()
-    const routerResolver = routerConfigs.length > 0 ? new RouterResolver(routerConfigs) : null
-    this._container.registerValue(ROUTER_TOKENS.RouterResolver, routerResolver)
+    if (routerConfigs.length > 0) {
+      this._container.registerValue(ROUTER_TOKENS.RouterResolver, new RouterResolver(routerConfigs))
+    }
 
     // RouteRegistrationService — transient, resolved in HonoApp.configure()
     this._container.register(RouteRegistrationService, RouteRegistrationService)

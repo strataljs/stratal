@@ -1,5 +1,5 @@
 import { HttpException } from '../../errors';
-import { type z, type ZodError } from '../../i18n/validation';
+import type { z, ZodError } from '../../i18n/validation/zod';
 
 /**
  * Error thrown when a signed URL has an invalid or expired signature.

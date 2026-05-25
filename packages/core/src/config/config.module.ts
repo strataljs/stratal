@@ -1,6 +1,6 @@
 import { DI_TOKENS } from '../di/tokens'
 import { Scope } from '../di/types'
-import type { z } from '../i18n/validation'
+import type { z } from '../i18n/validation/zod'
 import { Module } from '../module'
 import type { DynamicModule, ModuleContext, OnInitialize, Provider } from '../module/types'
 import { CONFIG_TOKENS } from './config.tokens'

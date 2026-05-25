@@ -30,24 +30,22 @@
  */
 
 import { Scope } from '../di'
-import type { RouteConfigurable } from '../router/router'
-import type { Router } from '../router/router'
 import { Module } from '../module'
 import type { DynamicModule } from '../module/types'
 import type { I18nModuleOptions } from './i18n.options'
 import { I18N_TOKENS } from './i18n.tokens'
-import { I18nContextMiddleware } from './middleware/i18n-context.middleware'
 import { I18nService } from './services/i18n.service'
 import { MessageLoaderService } from './services/message-loader.service'
 import { MessageRegistry } from './services/message-registry'
 import { setupI18nCompiler } from './utils/setup'
-import { backendErrorMap, z } from './validation'
+import { zodErrorMap } from './validation/validation.context'
+import { z } from './validation/zod'
 
 // Setup i18n JIT compiler once at module load time
 setupI18nCompiler()
 
 // Set global Zod error map for i18n support
-z.config({ customError: backendErrorMap })
+z.config({ customError: zodErrorMap })
 
 @Module({
   providers: [
@@ -59,7 +57,7 @@ z.config({ customError: backendErrorMap })
     { provide: I18N_TOKENS.I18nService, useClass: I18nService },
   ],
 })
-export class I18nModule implements RouteConfigurable {
+export class I18nModule {
   /**
    * Configure I18n locale settings
    *
@@ -108,7 +106,4 @@ export class I18nModule implements RouteConfigurable {
     }
   }
 
-  configureRoutes(router: Router): void {
-    router.use(I18nContextMiddleware)
-  }
 }

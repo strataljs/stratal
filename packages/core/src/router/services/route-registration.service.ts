@@ -10,8 +10,8 @@ import {
     getControllerGuards,
     getMethodGuards,
 } from '../../guards';
-import type { ZodType } from '../../i18n/validation';
-import { createRoute, z } from '../../i18n/validation';
+import type { ZodType } from '../../i18n/validation/zod';
+import { createRoute, z } from '../../i18n/validation/zod';
 import { LOGGER_TOKENS, type LoggerService } from '../../logger';
 import type { ModuleRegistry } from '../../module/module-registry';
 import { getRateLimits } from '../../rate-limiter/decorators/rate-limit.decorator';
@@ -86,7 +86,7 @@ export class RouteRegistrationService {
   constructor(
     @inject(LOGGER_TOKENS.LoggerService) private logger: LoggerService,
     @inject(ROUTER_TOKENS.RouteRegistry) private registry: RouteRegistry,
-    @inject(ROUTER_TOKENS.RouterResolver) private routerResolver: RouterResolver | null,
+    @inject(ROUTER_TOKENS.RouterResolver, { isOptional: true }) private routerResolver: RouterResolver | null,
     @inject(ROUTER_TOKENS.LocalePathService) private localePathService: LocalePathService,
     @inject(ROUTER_TOKENS.HonoApp) private app: HonoApp,
     @inject(DI_TOKENS.ModuleRegistry) private moduleRegistry: ModuleRegistry,

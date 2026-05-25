@@ -292,29 +292,42 @@ export class MyService {
 
 Default locale messages are at `stratal/i18n/messages/en`.
 
-## withI18n() for Zod Validation
+## withZodI18n() for Zod Validation
 
-Use `withI18n()` to attach i18n message keys to Zod validators:
+Use `withZodI18n()` to attach i18n message keys to Zod validators:
 
 ```typescript
-import { z, withI18n } from 'stratal/validation'
+import { z, withZodI18n } from 'stratal/validation'
 
 export const createNoteSchema = z.object({
   title: z.string()
-    .min(1, withI18n('notes.validation.title.required'))
-    .max(255, withI18n('notes.validation.title.max', { max: 255 })),
+    .min(1, withZodI18n('notes.validation.title.required'))
+    .max(255, withZodI18n('notes.validation.title.max', { max: 255 })),
   content: z.string().optional(),
 }).openapi('CreateNote')
 ```
 
-`withI18n(key, params?)` returns `{ error: () => string }` — a Zod error config that resolves the i18n message at validation time using `AsyncLocalStorage` to read the current locale context.
+`withZodI18n(key, params?)` returns `{ error: () => string }` — a Zod error config that resolves the i18n message at validation time using the current request's locale context.
+
+## withI18n() — General Translation Helper
+
+Use `withI18n()` to translate a message key anywhere in request-scoped code — services, middleware, error handlers, etc. Not tied to Zod.
+
+```typescript
+import { withI18n } from 'stratal/i18n'
+
+const message = withI18n('errors.notFound')
+const greeting = withI18n('common.welcome', { name: 'Alice' })
+```
+
+Returns the translated string directly. Uses the current request's locale. Returns the key itself when called outside a request context (e.g., during startup).
 
 ## cuid2() — Use Instead of z.cuid2()
 
 Zod 4.3.6's `z.cuid2()` regex is `/^[0-9a-z]+$/`, which accepts any non-empty lowercase-alphanumeric string (including 2-letter locale codes like `'sw'`). Always use Stratal's `cuid2()` for real cuid2 validation:
 
 ```ts
-import { z, cuid2, withI18n } from 'stratal/validation'
+import { z, cuid2, withZodI18n } from 'stratal/validation'
 
 // Default — 24-32 lowercase alphanumeric chars, must start with a letter
 const tenantSchema = z.object({ tenantId: cuid2() })
@@ -325,9 +338,9 @@ cuid2({ pattern: /^[a-z][0-9a-z]{23}$/ })
 // Plain-string error
 cuid2({ error: 'Invalid tenant ID' })
 
-// Translatable error — pass a withI18n() result.
+// Translatable error — pass a withZodI18n() result.
 // NEVER pass an i18n key string directly to `error`.
-cuid2(withI18n('tenants.errors.invalidId'))
+cuid2(withZodI18n('tenants.errors.invalidId'))
 
 // Compose with anything Zod string accepts
 cuid2().describe('Tenant ID')
