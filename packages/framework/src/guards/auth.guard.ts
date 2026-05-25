@@ -78,7 +78,7 @@ export function AuthGuard(options?: AuthGuardOptions): GuardClass {
       const userId = this.authContext.getUserId()
       if (!userId) {
         this.logger.debug('Auth guard: No user ID in context')
-        throw new InsufficientPermissionsError(rawPermissions!, undefined)
+        throw new InsufficientPermissionsError(rawPermissions!)
       }
 
       if (this.accessService) {

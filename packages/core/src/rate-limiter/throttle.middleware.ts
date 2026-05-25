@@ -4,7 +4,7 @@ import { Transient } from '../di/decorators'
 import type { Middleware, Next } from '../router/middleware.interface'
 import type { RouterContext } from '../router/router-context'
 import type { Constructor } from '../types'
-import { RateLimiterModuleNotImportedError } from './errors'
+import { RateLimiterError } from './errors'
 import type { RateLimiterRegistry } from './rate-limiter-registry'
 import { RATE_LIMITER_TOKENS } from './rate-limiter.tokens'
 
@@ -37,7 +37,7 @@ export function createThrottleMiddleware(name: string): Constructor<Middleware> 
       // request-scoped child. `isRegistered(token, true)` is recursive.
       const tsyringe = this.container.getTsyringeContainer()
       if (!tsyringe.isRegistered(RATE_LIMITER_TOKENS.ModuleMarker, true)) {
-        throw new RateLimiterModuleNotImportedError(name)
+        throw new RateLimiterError(`RateLimiterModule was not imported. Cannot resolve throttle "${name}". Import RateLimiterModule.forRoot({ store: ... }) in your AppModule.`)
       }
       const registry = this.container.resolve<RateLimiterRegistry>(RATE_LIMITER_TOKENS.Registry)
       return registry.handle(name, ctx, next)

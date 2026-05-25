@@ -28,11 +28,9 @@ import {
     getRouteMetadata,
 } from '../decorators';
 import {
-    ControllerMethodNotFoundError,
-    ControllerRegistrationError,
-    OpenAPIRouteRegistrationError,
     ResponseValidationError,
 } from '../errors';
+import { RouterError } from '../router.error';
 import type { HonoApp } from '../hono-app';
 import type { Middleware } from '../middleware.interface';
 import { createDomainMiddleware } from '../middleware/domain.middleware';
@@ -143,11 +141,10 @@ export class RouteRegistrationService {
     const controllerRoute = getControllerRoute(ControllerClass)
 
     if (!controllerRoute) {
-      throw new ControllerRegistrationError(
-        ControllerClass.name,
-        isWsGateway
+      throw new RouterError(
+        `Controller "${ControllerClass.name}" registration failed: ${isWsGateway
           ? 'Missing @Gateway decorator or route metadata'
-          : 'Missing @Controller decorator or route metadata'
+          : 'Missing @Controller decorator or route metadata'}`
       )
     }
 
@@ -246,9 +243,8 @@ export class RouteRegistrationService {
     const decoratedMethods = getRouteDecoratedMethods(ControllerClass)
 
     if (decoratedMethods.length === 0) {
-      throw new ControllerRegistrationError(
-        ControllerClass.name,
-        'No route decorators found. Use @Route() or HTTP method decorators (@Get, @Post, etc.) on controller methods.'
+      throw new RouterError(
+        `Controller "${ControllerClass.name}" registration failed: No route decorators found. Use @Route() or HTTP method decorators (@Get, @Post, etc.) on controller methods.`
       )
     }
 
@@ -266,9 +262,8 @@ export class RouteRegistrationService {
 
     // Enforce mutual exclusivity: no mixing @Route() with @Get/@Post/etc.
     if (hasConvention && hasExplicit) {
-      throw new ControllerRegistrationError(
-        ControllerClass.name,
-        'Cannot mix @Route() with HTTP method decorators (@Get, @Post, etc.) in the same controller. Use one pattern or the other.'
+      throw new RouterError(
+        `Controller "${ControllerClass.name}" registration failed: Cannot mix @Route() with HTTP method decorators (@Get, @Post, etc.) in the same controller. Use one pattern or the other.`
       )
     }
 
@@ -634,7 +629,7 @@ export class RouteRegistrationService {
     if (meta.type === 'convention') {
       const derived = this.deriveHttpMethodAndPath(methodName, basePath)
       if (!derived) {
-        throw new ControllerRegistrationError(
+        throw new RouterError(
           `Cannot derive HTTP method/path for convention-based route "${className}.${methodName}". ` +
           `Ensure the method name follows the naming convention (e.g., index, create, show).`
         )
@@ -858,7 +853,7 @@ export class RouteRegistrationService {
 
       return createRoute(route as OpenAPIRouteConfig)
     } catch (error) {
-      throw new OpenAPIRouteRegistrationError(path, error instanceof Error ? error.message : String(error))
+      throw new RouterError(`OpenAPI route registration failed for "${path}": ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -923,7 +918,7 @@ export class RouteRegistrationService {
         return response
       }
 
-      throw new ControllerMethodNotFoundError(methodName, ControllerClass.name)
+      throw new RouterError(`Method "${methodName}" not found on controller "${ControllerClass.name}"`)
     }
 
     this.nameHandler(handler, ControllerClass.name, methodName)

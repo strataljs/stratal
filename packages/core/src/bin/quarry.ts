@@ -7,7 +7,6 @@ import { dirname, join, resolve } from 'node:path'
 import { URL, pathToFileURL } from 'node:url'
 import type { QuarryRegistry } from 'stratal/quarry'
 import { type Application } from '../application'
-import { errors as errorMessages } from '../i18n/messages/en/errors'
 import { extractEnvFlag } from './argv'
 import { createDynamicCommands } from './commands/dynamic-command'
 
@@ -203,11 +202,8 @@ async function main(): Promise<void> {
 
 main().catch(async (error: unknown) => {
   const { ConfigValidationError } = await import('stratal/config')
-  const { StratalNotInitializedError } = await import('stratal/errors')
 
-  const message = error instanceof StratalNotInitializedError
-    ? errorMessages.stratalNotInitialized
-    : error instanceof Error ? error.message : String(error)
+  const message = error instanceof Error ? error.message : String(error)
   console.error('Fatal error:', message)
   if (error instanceof ConfigValidationError) {
     console.error(error.errors.message)

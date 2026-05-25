@@ -8,11 +8,9 @@ describe('CronExecutionError', () => {
 
 		expect(error.cause).toBe(inner)
 		expect(error.failures).toHaveLength(1)
-		expect(error.metadata).toMatchObject({
-			schedule: '0 0 * * *',
-			count: 1,
-			jobs: [{ job: 'StepTimeoutJob', name: 'Error', message: 'db down' }],
-		})
+		expect(error.schedule).toBe('0 0 * * *')
+		expect(error.failureCount).toBe(1)
+		expect(error.jobs).toEqual([{ job: 'StepTimeoutJob', name: 'Error', message: 'db down' }])
 	})
 
 	it('wraps multiple failures in an AggregateError as cause', () => {
@@ -32,21 +30,18 @@ describe('CronExecutionError', () => {
 		])
 	})
 
-	it('forwards ApplicationError code and DB metadata into the jobs metadata', () => {
+	it('forwards error code into the serialized jobs', () => {
 		const dbError = Object.assign(new Error('relation "x" does not exist'), {
 			code: 2000,
-			metadata: { dbErrorCode: '42P01', sql: 'SELECT * FROM x' },
 		})
 		const error = new CronExecutionError('0 0 * * *', [{ job: 'StepTimeoutJob', error: dbError }])
 
-		expect(error.metadata?.jobs).toEqual([
+		expect(error.jobs).toEqual([
 			{
 				job: 'StepTimeoutJob',
 				name: 'Error',
 				message: 'relation "x" does not exist',
 				code: 2000,
-				dbErrorCode: '42P01',
-				sql: 'SELECT * FROM x',
 			},
 		])
 	})

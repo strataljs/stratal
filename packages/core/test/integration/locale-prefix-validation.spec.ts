@@ -126,7 +126,6 @@ describe('Prefix `params` validation under locale-path detection', () => {
       // stale `z.cuid2()` schema cached from the previous describe block.
       const response = await module.http.get('/sw/settings').send()
       response.assertBadRequest()
-      await response.assertJsonPathExists('metadata.issues')
     })
 
     it('rejects any non-cuid2 string', async () => {

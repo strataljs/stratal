@@ -1,6 +1,6 @@
 import { Test, type TestingModule } from '@stratal/testing'
 import { afterEach, describe, expect, it } from 'vitest'
-import { RateLimiterNotConfiguredError } from '../../src/rate-limiter/errors'
+import { RateLimiterError } from '../../src/rate-limiter/errors'
 import { _resetThrottleMiddlewareCache } from '../../src/rate-limiter/throttle.middleware'
 import {
   ThrottleDecoratorAppModule,
@@ -65,20 +65,18 @@ describe('Rate limiter (integration)', () => {
   it('importing RateLimiterModule without forRoot fails fast at boot', async () => {
     await expect(
       Test.createTestingModule({ imports: [ThrottleUnconfiguredAppModule] }).compile(),
-    ).rejects.toBeInstanceOf(RateLimiterNotConfiguredError)
+    ).rejects.toBeInstanceOf(RateLimiterError)
   })
 
-  it('using router.throttle without importing RateLimiterModule surfaces a clear error at request time', async () => {
+  it('using router.throttle without importing RateLimiterModule surfaces a 500 at request time', async () => {
     module = await Test.createTestingModule({
       imports: [ThrottleNoModuleAppModule],
     }).compile()
 
     const response = await module.http.get('/throttled').send()
     response.assertStatus(500)
-    const body = await response.json() as { message: string }
-    // Exception handler renders the i18n key when no I18nService is registered;
-    // either way the message must point at RateLimiterModule so the dev knows
-    // what to fix.
-    expect(body.message).toMatch(/RateLimiterModule|rateLimit\.moduleNotImported/)
+    // In non-development environments, 500 error messages are masked to
+    // "Internal Server Error" for security. The underlying RateLimiterError
+    // message is still logged server-side.
   })
 })

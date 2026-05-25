@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
 import { R2StorageProvider } from '../providers/r2-storage.provider'
 import type { StorageEntry } from '../types'
-import { R2PresignedUrlSecretMissingError, StorageResponseBodyMissingError } from '../errors'
+import { StorageError } from '../storage.error'
 import type { StratalEnv } from '../../env'
 
 vi.mock('../../router/signed-url', () => ({
@@ -89,10 +89,10 @@ describe('R2StorageProvider', () => {
       expect(result.toStream()).toBe(mockBody)
     })
 
-    it('should throw StorageResponseBodyMissingError when object not found', async () => {
+    it('should throw StorageError when object not found', async () => {
       bucket.get.mockResolvedValue(null as unknown as R2ObjectBody)
 
-      await expect(provider.download('missing.txt')).rejects.toThrow(StorageResponseBodyMissingError)
+      await expect(provider.download('missing.txt')).rejects.toThrow(StorageError)
     })
   })
 
@@ -125,7 +125,7 @@ describe('R2StorageProvider', () => {
       expect(result.expiresAt).toBeInstanceOf(Date)
     })
 
-    it('should throw R2PresignedUrlSecretMissingError when APP_SECRET is missing', async () => {
+    it('should throw StorageError when APP_SECRET is missing', async () => {
       const providerWithoutSecret = new R2StorageProvider(
         config,
         bucket as unknown as R2Bucket,
@@ -134,7 +134,7 @@ describe('R2StorageProvider', () => {
 
       await expect(
         providerWithoutSecret.getPresignedUrl('file.txt', 'GET', 3600)
-      ).rejects.toThrow(R2PresignedUrlSecretMissingError)
+      ).rejects.toThrow(StorageError)
     })
   })
 

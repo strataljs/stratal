@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
 import { type StratalEnv } from '../../env'
-import { QueueBindingNotFoundError } from '../errors'
+import { QueueError } from '../queue.error'
 import { CloudflareQueueProvider } from '../providers/cloudflare-queue.provider'
 import type { QueueMessage } from '../queue-consumer'
 
@@ -57,12 +57,12 @@ describe('CloudflareQueueProvider', () => {
       expect(mockQueue.send).toHaveBeenCalledWith(message)
     })
 
-    it('should throw QueueBindingNotFoundError when binding is missing', async () => {
+    it('should throw QueueError when binding is missing', async () => {
       const message = createMessage('email.send', { to: 'test@example.com' })
 
       await expect(
         provider.send('NON_EXISTENT_BINDING', message)
-      ).rejects.toThrow(QueueBindingNotFoundError)
+      ).rejects.toThrow(QueueError)
     })
 
     it('should look up the binding verbatim without case or character transformation', async () => {
@@ -73,7 +73,7 @@ describe('CloudflareQueueProvider', () => {
       // NOTIFICATIONS_QUEUE, not notifications-queue → must throw.
       await expect(
         provider.send('notifications-queue', message)
-      ).rejects.toThrow(QueueBindingNotFoundError)
+      ).rejects.toThrow(QueueError)
 
       expect(mockQueue.send).not.toHaveBeenCalled()
     })

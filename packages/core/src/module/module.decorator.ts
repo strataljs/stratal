@@ -10,7 +10,7 @@ import { instancePerContainerCachingFactory, type Lifecycle, registry } from 'ts
 import type InjectionToken from 'tsyringe/dist/typings/providers/injection-token'
 import type RegistrationOptions from 'tsyringe/dist/typings/types/registration-options'
 import type { Constructor } from '../types'
-import { InvalidModuleProviderError } from './errors'
+import { ModuleError } from './module.error'
 import type { ModuleOptions, Provider } from './types'
 
 export const MODULE_OPTIONS_KEY = Symbol.for('stratal:module:options')
@@ -130,6 +130,6 @@ function buildRegistryEntries(providers: Provider[]): RegistryEntry[] {
     }
 
     // Fallback (should not reach here with proper types)
-    throw new InvalidModuleProviderError(provider)
+    throw new ModuleError(`Invalid module provider: ${JSON.stringify(provider)}`)
   })
 }

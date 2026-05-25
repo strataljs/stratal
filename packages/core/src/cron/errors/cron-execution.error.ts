@@ -1,5 +1,4 @@
 import { ApplicationError } from '../../errors'
-import { ERROR_CODES } from '../../errors'
 
 export interface CronJobFailure {
 	job: string
@@ -24,14 +23,14 @@ interface SerializedJobFailure {
  * - `this.cause` is set to the only failure (1 job) or an `AggregateError`
  *   wrapping all of them (2+ jobs), so `LoggerService.serializeError` can
  *   walk the chain and surface every stack/cause.
- * - `metadata.jobs` is a structured array (not a flat string), so the JSON
- *   formatter emits one entry per failure with name/code/message/dbErrorCode/sql.
  */
 export class CronExecutionError extends ApplicationError {
 	public readonly failures: readonly CronJobFailure[]
+	public readonly schedule: string
+	public readonly failureCount: number
+	public readonly jobs: SerializedJobFailure[]
 
 	constructor(schedule: string, failures: CronJobFailure[]) {
-		const jobsMetadata = failures.map((f) => serializeFailure(f))
 		const cause =
 			failures.length === 0
 				? undefined
@@ -40,17 +39,14 @@ export class CronExecutionError extends ApplicationError {
 					: new AggregateError(failures.map((f) => f.error), `${failures.length} cron jobs failed`)
 
 		super(
-			'errors.cronExecutionFailed',
-			ERROR_CODES.SYSTEM.CRON_EXECUTION_FAILED,
-			{
-				schedule,
-				count: failures.length,
-				jobs: jobsMetadata,
-			},
+			`${failures.length} cron job(s) failed for schedule "${schedule}"`,
 			cause,
 		)
 
 		this.failures = failures
+		this.schedule = schedule
+		this.failureCount = failures.length
+		this.jobs = failures.map((f) => serializeFailure(f))
 	}
 }
 
@@ -60,12 +56,7 @@ function serializeFailure({ job, error }: CronJobFailure): SerializedJobFailure 
 		name: error.name,
 		message: error.message,
 	}
-	const maybeCoded = error as { code?: number | string; metadata?: Record<string, unknown> }
+	const maybeCoded = error as { code?: number | string }
 	if (maybeCoded.code !== undefined) out.code = maybeCoded.code
-	if (maybeCoded.metadata) {
-		const meta = maybeCoded.metadata
-		if (typeof meta.dbErrorCode === 'string') out.dbErrorCode = meta.dbErrorCode
-		if (typeof meta.sql === 'string') out.sql = meta.sql
-	}
 	return out
 }

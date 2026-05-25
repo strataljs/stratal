@@ -65,10 +65,12 @@ export { createDomainMiddleware, parseDomainPattern } from './middleware/domain.
 export { VerifySignatureMiddleware } from './middleware/verify-signature.middleware'
 export { signUrl, verifySignedUrl, type SignedUrlOptions } from './signed-url'
 
+// Domain error
+export * from './router.error'
+
 // Errors
 export {
-  ControllerRegistrationError, DomainMismatchError, DuplicateRouteNameError, HonoAppAlreadyConfiguredError, InvalidSignatureError, MiddlewareNextCalledMultipleTimesError, MissingEnvironmentVariableError, MissingRouteParamError, OpenAPIRouteRegistrationError,
-  OpenAPIValidationError, ResponseValidationError, RouteNameNotFoundError, RouteNotFoundError,
-  RouterUseScopeError, SchemaValidationError
+  InvalidSignatureError, ResponseValidationError, RouteNotFoundError,
+  SchemaValidationError
 } from './errors'
 

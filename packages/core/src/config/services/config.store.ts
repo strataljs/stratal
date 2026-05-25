@@ -1,7 +1,7 @@
 import { Transient } from '../../di/decorators'
 import { CONFIG_TOKENS } from '../config.tokens'
 import type { ConfigPath, ConfigPathValue, ModuleConfig } from '../config.types'
-import { ConfigKeyNotFoundError } from '../errors'
+import { ConfigError } from '../config.error'
 
 /**
  * ConfigStore
@@ -17,7 +17,7 @@ import { ConfigKeyNotFoundError } from '../errors'
  *
  * If the store is never initialized (no `ConfigModule.forRoot()`), it
  * behaves like an empty config: `has()` returns `false`, `all()` returns
- * `{}`, and `get()` throws {@link ConfigKeyNotFoundError} for any path —
+ * `{}`, and `get()` throws {@link ConfigError} for any path —
  * the same error you'd get for a missing key on an initialized store.
  * Resolving the store via DI never throws on its own.
  */
@@ -35,12 +35,12 @@ export class ConfigStore<T extends object = ModuleConfig> {
 
   /**
    * Get config value using dot notation. Throws
-   * {@link ConfigKeyNotFoundError} if the path is absent.
+   * {@link ConfigError} if the path is absent.
    */
   get<P extends ConfigPath<T>>(path: P): ConfigPathValue<T, P> {
     const value = this.getByPath(this.data ?? {}, path)
     if (value === undefined) {
-      throw new ConfigKeyNotFoundError(path)
+      throw new ConfigError(`Configuration key "${path}" was not found`)
     }
     return value as ConfigPathValue<T, P>
   }

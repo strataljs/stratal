@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { ConfigPath } from '../config.types'
 import { ConfigService } from '../services/config.service'
 import { ConfigStore } from '../services/config.store'
-import { ConfigKeyNotFoundError } from '../errors/config-key-not-found.error'
+import { ConfigError } from '../config.error'
 
 describe('ConfigService', () => {
   let store: ConfigStore<TestConfig>
@@ -53,17 +53,17 @@ describe('ConfigService', () => {
       expect(result).toBe('Test App')
     })
 
-    it('should throw ConfigKeyNotFoundError for non-existent path', () => {
-      expect(() => service.get('nonexistent.path' as ConfigPath<TestConfig>)).toThrow(ConfigKeyNotFoundError)
+    it('should throw ConfigError for non-existent path', () => {
+      expect(() => service.get('nonexistent.path' as ConfigPath<TestConfig>)).toThrow(ConfigError)
     })
 
-    it('should include the requested path in the thrown error metadata', () => {
+    it('should include the requested path in the thrown error message', () => {
       try {
         service.get('nonexistent.path' as ConfigPath<TestConfig>)
-        expect.fail('Expected ConfigKeyNotFoundError to be thrown')
+        expect.fail('Expected ConfigError to be thrown')
       } catch (error) {
-        expect(error).toBeInstanceOf(ConfigKeyNotFoundError)
-        expect((error as ConfigKeyNotFoundError).metadata).toEqual({ path: 'nonexistent.path' })
+        expect(error).toBeInstanceOf(ConfigError)
+        expect((error as ConfigError).message).toContain('nonexistent.path')
       }
     })
 
@@ -212,12 +212,12 @@ describe('ConfigService', () => {
       expect(service.all()).toEqual(createConfig())
     })
 
-    it('get() with __proto__ path should throw ConfigKeyNotFoundError', () => {
-      expect(() => service.get('__proto__.toString' as ConfigPath<TestConfig>)).toThrow(ConfigKeyNotFoundError)
+    it('get() with __proto__ path should throw ConfigError', () => {
+      expect(() => service.get('__proto__.toString' as ConfigPath<TestConfig>)).toThrow(ConfigError)
     })
 
-    it('get() with constructor path should throw ConfigKeyNotFoundError', () => {
-      expect(() => service.get('constructor.prototype' as ConfigPath<TestConfig>)).toThrow(ConfigKeyNotFoundError)
+    it('get() with constructor path should throw ConfigError', () => {
+      expect(() => service.get('constructor.prototype' as ConfigPath<TestConfig>)).toThrow(ConfigError)
     })
 
     it('has() with __proto__ path should return false', () => {
@@ -232,10 +232,10 @@ describe('ConfigService', () => {
   })
 
   describe('uninitialized store', () => {
-    it('get() throws ConfigKeyNotFoundError for any key when the store was never initialized', () => {
+    it('get() throws ConfigError for any key when the store was never initialized', () => {
       const uninitializedStore = new ConfigStore<TestConfig>()
       const uninitialized = new ConfigService<TestConfig>(uninitializedStore)
-      expect(() => uninitialized.get('appName' as ConfigPath<TestConfig>)).toThrow(ConfigKeyNotFoundError)
+      expect(() => uninitialized.get('appName' as ConfigPath<TestConfig>)).toThrow(ConfigError)
     })
 
     it('has() returns false on an uninitialized store (no throw)', () => {

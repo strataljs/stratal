@@ -237,7 +237,7 @@ Inertia: `@stratal/inertia`, `@stratal/inertia/quarry` (CLI-only: `InertiaQuarry
 1. Create `src/exceptions/app-exception-handler.ts` extending `ExceptionHandler`
 2. Implement `register()` with `reportable()`, `renderable()`, `dontReport()` as needed
 3. Pass to entry point: `new Stratal({ module: AppModule, exceptionHandler: AppExceptionHandler })`
-4. Create custom error classes extending `ApplicationError` with error codes in 6000-8999 range
+4. Create custom error classes: extend `ApplicationError` for 500 errors, extend `HttpException` for non-500 errors with baked-in status
 
 See `references/errors-and-i18n.md` for the full ExceptionHandler API.
 
@@ -328,7 +328,7 @@ Load these when the task needs deeper knowledge:
 | `references/quarry-cli.md` | CLI commands, MCP server setup, custom command creation, debugging |
 | `references/modules-and-di.md` | Provider types, scopes, container API, dynamic modules |
 | `references/routing.md` | RouteConfig, RouterContext API, named routes, URL generation, signed URLs, domain routing, Router fluent API, OpenAPI, versioning |
-| `references/errors-and-i18n.md` | ExceptionHandler, ApplicationError, error codes, i18n, withI18n() |
+| `references/errors-and-i18n.md` | ExceptionHandler, ApplicationError, HttpException, domain error classes, i18n, withI18n() |
 | `references/inertia.md` | Inertia.js setup, rendering, props, SSR, type safety, Vite |
 | `references/inertia-modal.md` | Backend-driven modal pages: `ModalModule`, `ctx.inertiaModal()`, `<Modal>`, `useModal()` |
 | `references/websocket.md` | WebSocket gateways: `@Gateway`, `@OnMessage`, `GatewayContext` |

@@ -121,7 +121,7 @@ export class ConfigModule implements OnInitialize {
    * Initialize config service with merged namespaces.
    * Called after all providers are registered. No-op when the module
    * was imported without `forRoot()` — the store stays empty and
-   * `ConfigService.get()` will throw `ConfigKeyNotFoundError` only if
+   * `ConfigService.get()` will throw `ConfigError` only if
    * someone actually asks for a key.
    */
   onInitialize(context: ModuleContext): void {

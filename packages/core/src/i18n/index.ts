@@ -3,6 +3,7 @@
  */
 
 export * from './errors'
+export * from './i18n.error'
 export { I18nModule } from './i18n.module'
 export * from './i18n.options'
 export { I18N_TOKENS } from './i18n.tokens'

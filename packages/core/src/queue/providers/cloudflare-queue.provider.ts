@@ -2,7 +2,7 @@ import { inject } from 'tsyringe'
 import { type StratalEnv } from '../../env'
 import { Transient } from '../../di/decorators'
 import { DI_TOKENS } from '../../di/tokens'
-import { QueueBindingNotFoundError } from '../errors'
+import { QueueError } from '../queue.error'
 import type { QueueMessage } from '../queue-consumer'
 import type { IQueueProvider } from './queue-provider.interface'
 
@@ -30,13 +30,13 @@ export class CloudflareQueueProvider implements IQueueProvider {
    *
    * @param binding - Queue binding identifier (e.g., 'NOTIFICATIONS_QUEUE')
    * @param message - Complete message with id, timestamp, and payload
-   * @throws {QueueBindingNotFoundError} If the binding is not configured on env
+   * @throws {QueueError} If the binding is not configured on env
    */
   async send<T>(binding: string, message: QueueMessage<T>): Promise<void> {
     const queue = (this.env as unknown as Record<string, unknown>)[binding] as Queue | undefined
 
     if (!queue) {
-      throw new QueueBindingNotFoundError(binding)
+      throw new QueueError(`Queue binding "${binding}" was not found in the environment`)
     }
 
     await queue.send(message)

@@ -55,8 +55,7 @@ describe('InertiaModule onException — errorPage', () => {
     ;(ctx as unknown as { getContainer: () => unknown }).getContainer = () => container
 
     const errorResponse = {
-      code: 1404,
-      message: 'errors.route.notFound',
+      message: 'Route not found',
       timestamp: '2026-01-01T00:00:00.000Z',
     } as ErrorResponse
 
@@ -69,8 +68,7 @@ describe('InertiaModule onException — errorPage', () => {
     expect(component).toBe('Errors/404')
     expect(props).toEqual({
       status: 404,
-      message: 'errors.route.notFound',
-      code: 1404,
+      message: 'Route not found',
     })
     expect(options).toEqual({ status: 404 })
   })
@@ -82,7 +80,7 @@ describe('InertiaModule onException — errorPage', () => {
     const ctx = new RouterContext(createMockHonoContext() as unknown as Context)
     ;(ctx as unknown as { getContainer: () => unknown }).getContainer = () => container
 
-    const errorResponse = { code: 9000, message: 'errors.internal', timestamp: '' } as ErrorResponse
+    const errorResponse = { message: 'Internal Server Error', timestamp: '' } as ErrorResponse
 
     await captured!(errorResponse, 500, { type: 'http', ctx }, new Error())
     expect(renderSpy.mock.calls[0][1]).toBe('Errors/500')
@@ -99,7 +97,7 @@ describe('InertiaModule onException — errorPage', () => {
     const ctx = new RouterContext(createMockHonoContext() as unknown as Context)
     ;(ctx as unknown as { getContainer: () => unknown }).getContainer = () => container
 
-    const errorResponse = { code: 9000, message: 'errors.internal', timestamp: '' } as ErrorResponse
+    const errorResponse = { message: 'Internal Server Error', timestamp: '' } as ErrorResponse
 
     const result = await captured!(errorResponse, 500, { type: 'http', ctx }, new Error())
     expect(result).toBeUndefined()

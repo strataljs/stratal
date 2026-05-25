@@ -10,7 +10,7 @@ import type { CookieOptions } from 'hono/utils/cookie'
 import type { ContentfulStatusCode, RedirectStatusCode } from 'hono/utils/http-status'
 import type { StreamingApi } from 'hono/utils/stream'
 import type { Container } from '../di/container'
-import { RequestContainerNotInitializedError } from '../errors'
+import { ContainerError } from '../di/container.error'
 import { Macroable } from '../macroable'
 import { ROUTER_CONTEXT_KEYS } from './constants'
 import type { RouteName, RouteParams } from './route-map'
@@ -77,7 +77,7 @@ export class RouterContext<T extends RouterEnv = RouterEnv> extends Macroable {
   getContainer(): Container {
     const container = this.c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER)
     if (!container) {
-      throw new RequestContainerNotInitializedError()
+      throw new ContainerError('Request container has not been initialized')
     }
     return container as Container
   }

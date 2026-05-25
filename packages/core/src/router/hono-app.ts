@@ -12,7 +12,8 @@ import { LOGGER_TOKENS, type LoggerService } from '../logger'
 import { OPENAPI_TOKENS, type OpenAPIService } from '../openapi'
 import type { Constructor } from '../types'
 import { ROUTER_CONTEXT_KEYS } from './constants'
-import { HonoAppAlreadyConfiguredError, RouteNotFoundError, SchemaValidationError } from './errors'
+import { RouteNotFoundError, SchemaValidationError } from './errors'
+import { RouterError } from './router.error'
 import { createLoggerMiddleware, createMiddlewareChain, createTrailingSlashRedirect } from './middleware'
 import type { Middleware } from './middleware.interface'
 import { RouterContext } from './router-context'
@@ -114,7 +115,7 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
    * Called once by Application.initialize().
    */
   async configure(): Promise<void> {
-    if (this.configured) throw new HonoAppAlreadyConfiguredError()
+    if (this.configured) throw new RouterError('HonoApp has already been configured')
 
     // OpenAPI endpoints
     const openAPIService = this._container.resolve<OpenAPIService>(OPENAPI_TOKENS.OpenAPIService)

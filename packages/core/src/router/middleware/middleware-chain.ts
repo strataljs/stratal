@@ -1,7 +1,7 @@
 import type { Context, MiddlewareHandler } from 'hono'
 import type { Constructor } from '../../types'
 import { ROUTER_CONTEXT_KEYS } from '../constants'
-import { MiddlewareNextCalledMultipleTimesError } from '../errors'
+import { RouterError } from '../router.error'
 import type { Middleware, Next } from '../middleware.interface'
 import { RouterContext } from '../router-context'
 import type { RouterEnv } from '../types'
@@ -33,7 +33,7 @@ export function createMiddlewareChain(
         const guardedNext: Next = () => {
           if (called) {
             return Promise.reject(
-              new MiddlewareNextCalledMultipleTimesError(middlewareClass.name ?? 'anonymous')
+              new RouterError(`Middleware "${middlewareClass.name ?? 'anonymous'}" called next() multiple times`)
             )
           }
           called = true

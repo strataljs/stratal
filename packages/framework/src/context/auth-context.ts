@@ -1,7 +1,7 @@
 import type { BaseUser } from '@better-auth/core/db'
 import { Transient, DI_TOKENS } from 'stratal/di'
+import { AuthError } from 'stratal/errors'
 import {
-  ContextNotInitializedError,
   UserNotAuthenticatedError
 } from './errors'
 
@@ -85,7 +85,7 @@ export class AuthContext {
    */
   getAuthInfo(): AuthInfo {
     if (!this.user) {
-      throw new ContextNotInitializedError('Authentication')
+      throw new AuthError('Auth context has not been initialized')
     }
     return { user: this.user }
   }

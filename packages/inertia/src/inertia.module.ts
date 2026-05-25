@@ -1,6 +1,5 @@
 import { Scope } from 'stratal/di'
 import { ApplicationError, type ApplicationErrorConstructor, type ExceptionHandler, type HttpExceptionContext } from 'stratal/errors'
-import { I18N_TOKENS, type II18nService } from 'stratal/i18n'
 import type { AsyncModuleOptions, DynamicModule, OnException, OnInitialize } from 'stratal/module'
 import { Module } from 'stratal/module'
 import { SchemaValidationError, type RouteConfigurable, type Router } from 'stratal/router'
@@ -59,7 +58,7 @@ export class InertiaModule implements RouteConfigurable, OnInitialize, OnExcepti
 
       if (!this.isInertiaRequest(context)) return undefined
 
-      const issues = (error.metadata?.issues as { path: string; message: string }[]) ?? []
+      const issues = error.issues ?? []
       const errors: Record<string, string> = {}
       for (const issue of issues) {
         errors[issue.path] = issue.message
@@ -73,8 +72,7 @@ export class InertiaModule implements RouteConfigurable, OnInitialize, OnExcepti
     handler.renderable(ApplicationError as unknown as ApplicationErrorConstructor, (error, context) => {
       if (context.type !== 'http') return undefined
 
-      const i18n = context.ctx.getContainer().resolve<II18nService>(I18N_TOKENS.I18nService)
-      const message = i18n.t(error.message as Parameters<II18nService['t']>[0], error.metadata as Record<string, string | number>)
+      const message = error.message
 
       if (this.isPrecognitionRequest(context)) {
         return this.createPrecognitionErrorResponse({ _form: message })
@@ -94,7 +92,7 @@ export class InertiaModule implements RouteConfigurable, OnInitialize, OnExcepti
         return await inertia.render(
           context.ctx,
           `Errors/${status}`,
-          { status, message: errorResponse.message, code: errorResponse.code },
+          { status, message: errorResponse.message },
           { status },
         )
       } catch {
@@ -119,7 +117,7 @@ export class InertiaModule implements RouteConfigurable, OnInitialize, OnExcepti
   }
 
   private handlePrecognitionValidationError(error: SchemaValidationError, context: HttpExceptionContext): Response {
-    const issues = (error.metadata?.issues as { path: string; message: string }[]) ?? []
+    const issues = error.issues ?? []
     let errors: Record<string, string> = {}
     for (const issue of issues) {
       errors[issue.path] = issue.message

@@ -3,7 +3,7 @@ import { connectionSymbol } from '@stratal/framework/database'
 import type { Application, Constructor, StratalEnv, StratalExecutionContext } from 'stratal'
 import { DI_TOKENS, type Container } from 'stratal/di'
 import { type InjectionToken } from 'stratal/module'
-import { SEEDER_TOKENS, SeederNotRegisteredError, type Seeder, type SeederRegistry } from 'stratal/seeder'
+import { SEEDER_TOKENS, SeederError, type Seeder, type SeederRegistry } from 'stratal/seeder'
 import { STORAGE_TOKENS } from 'stratal/storage'
 import { expect } from 'vitest'
 import type { FakeStorageService } from '../storage'
@@ -167,7 +167,7 @@ export class TestingModule {
     const registry = this._requestContainer.resolve<SeederRegistry>(SEEDER_TOKENS.SeederRegistry)
     for (const SeederClass of SeederClasses) {
       if (!registry.has(SeederClass)) {
-        throw new SeederNotRegisteredError(SeederClass.name)
+        throw new SeederError(`Seeder "${SeederClass.name}" is not registered`)
       }
       await registry.run(SeederClass, { container: this._requestContainer })
     }

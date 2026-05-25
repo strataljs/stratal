@@ -24,3 +24,4 @@ export * from './services'
 
 // Errors
 export * from './errors'
+export * from './queue.error'

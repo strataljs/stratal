@@ -57,7 +57,7 @@ describe('Localization Integration', () => {
   })
 
   describe('Schema Validation Errors', () => {
-    it('returns French validation error with locale: fr (missing field)', async () => {
+    it('returns French validation message with locale: fr (missing field)', async () => {
       const response = await module.http
         .withLocale('fr')
         .post('/api/bench/items')
@@ -66,18 +66,9 @@ describe('Localization Integration', () => {
 
       response.assertBadRequest()
       await response.assertJsonPath('message', 'La validation du schéma a échoué')
-      await response.assertJsonPathExists('metadata.issues')
-      await response.assertJsonPathMatches(
-        'metadata.issues',
-        (issues) => Array.isArray(issues) && issues.length > 0,
-      )
-      await response.assertJsonPathMatches(
-        'metadata.issues.0.message',
-        (msg) => typeof msg === 'string' && msg === 'Requis',
-      )
     })
 
-    it('returns French validation error with locale: fr (empty string)', async () => {
+    it('returns French validation message with locale: fr (empty string)', async () => {
       const response = await module.http
         .withLocale('fr')
         .post('/api/bench/items')
@@ -86,10 +77,6 @@ describe('Localization Integration', () => {
 
       response.assertBadRequest()
       await response.assertJsonPath('message', 'La validation du schéma a échoué')
-      await response.assertJsonPathMatches(
-        'metadata.issues.0.message',
-        (msg) => typeof msg === 'string' && msg === 'Doit comporter au moins 1 caractères',
-      )
     })
 
     it('returns English validation error with locale: en', async () => {
@@ -101,10 +88,6 @@ describe('Localization Integration', () => {
 
       response.assertBadRequest()
       await response.assertJsonPath('message', 'Schema validation failed')
-      await response.assertJsonPathMatches(
-        'metadata.issues.0.message',
-        (msg) => typeof msg === 'string' && msg === 'Required',
-      )
     })
   })
 

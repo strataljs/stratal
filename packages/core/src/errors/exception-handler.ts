@@ -5,8 +5,6 @@ import { Transient } from '../di/decorators';
 import { DI_TOKENS } from '../di/tokens';
 import { type StratalEnv } from '../env';
 import type { StratalExecutionContext } from '../execution-context';
-import { I18N_TOKENS } from '../i18n/i18n.tokens';
-import type { II18nService, MessageKeys } from '../i18n/i18n.types';
 import { LOGGER_TOKENS, type LoggerService } from '../logger';
 import type { ApplicationError } from './application-error';
 import type { Environment, ErrorResponse } from './error-response';
@@ -21,7 +19,7 @@ import type {
     ReportableCallback,
     RespondCallback,
 } from './exception-handler.types';
-import { resolveHttpStatus } from './get-http-status';
+import { HTTP_STATUS_MESSAGES, HttpException } from './http-exception';
 import { InternalError } from './internal-error';
 import { isApplicationError } from './is-application-error';
 
@@ -38,44 +36,6 @@ interface RenderableEntry {
   callback: RenderableCallback<any>
 }
 
-/**
- * ExceptionHandler — Laravel-inspired exception handling for Stratal.
- *
- * Provides a composable, expressive API for controlling how exceptions are
- * reported (logged / sent to external services) and rendered (turned into
- * HTTP Responses or ErrorResponse objects).
- *
- * **Lifecycle:**
- * 1. The framework resolves this from the DI container (once at init time).
- * 2. `register()` is called to let the user configure reporting / rendering.
- * 3. Module `onException()` hooks contribute additional configuration.
- * 4. On every error, `handle()` runs the pipeline: normalize → report → render → respond.
- *
- * **Usage — extend and override `register()`:**
- *
- * @example
- * ```typescript
- * export class AppExceptionHandler extends ExceptionHandler {
- *   register(): void {
- *     this.reportable(PaymentError, (e, ctx) => {
- *       this.resolve(SentryService).captureException(e)
- *     }).stop()
- *
- *     this.renderable(MaintenanceError, (e, ctx) => {
- *       if (ctx.type === 'http') return ctx.ctx.html('<h1>Maintenance</h1>', 503)
- *     })
- *
- *     this.dontReport([RouteNotFoundError])
- *     this.level(RecordNotFoundError, 'warn')
- *     this.context(() => ({ region: 'us-east-1' }))
- *     this.respond((res, err) => {
- *       res.headers.set('X-Error-Code', String(err.code))
- *       return res
- *     })
- *   }
- * }
- * ```
- */
 @Transient()
 export abstract class ExceptionHandler {
   private readonly reportables: ReportableEntry[] = []
@@ -96,35 +56,10 @@ export abstract class ExceptionHandler {
     this.environment = this.env.ENVIRONMENT as Environment
   }
 
-  /**
-   * Configure exception reporting and rendering.
-   *
-   * Override this method in your handler class to register custom
-   * `reportable()`, `renderable()`, `dontReport()`, `level()`,
-   * `context()`, and `respond()` callbacks.
-   */
   abstract register(): void
 
   // ── Public Configuration API ──────────────────────────────────────
 
-  /**
-   * Register a custom reporting callback for a specific exception type.
-   *
-   * The callback is invoked when an error matching `errorClass` (via `instanceof`)
-   * is thrown. Chain `.stop()` to prevent the default logger from also reporting.
-   *
-   * @typeParam T - The exception type to match
-   * @param errorClass - Constructor of the exception to match
-   * @param callback - Reporting function receiving the typed error and context
-   * @returns A {@link Reportable} with a `stop()` method
-   *
-   * @example
-   * ```typescript
-   * this.reportable(PaymentError, (e, ctx) => {
-   *   sentry.captureException(e)
-   * }).stop() // skip default logging
-   * ```
-   */
   reportable<T extends ApplicationError>(
     errorClass: ApplicationErrorConstructor<T>,
     callback: ReportableCallback<T>,
@@ -136,25 +71,6 @@ export abstract class ExceptionHandler {
     }
   }
 
-  /**
-   * Register a custom rendering callback for a specific exception type.
-   *
-   * The callback should return a `Response` (for HTTP contexts), an `ErrorResponse`,
-   * or `undefined` to fall through to the default renderer.
-   *
-   * @typeParam T - The exception type to match
-   * @param errorClass - Constructor of the exception to match
-   * @param callback - Rendering function receiving the typed error and context
-   *
-   * @example
-   * ```typescript
-   * this.renderable(MaintenanceError, (e, ctx) => {
-   *   if (ctx.type === 'http') {
-   *     return ctx.ctx.html('<h1>Down for maintenance</h1>', 503)
-   *   }
-   * })
-   * ```
-   */
   renderable<T extends ApplicationError>(
     errorClass: ApplicationErrorConstructor<T>,
     callback: RenderableCallback<T>,
@@ -162,187 +78,54 @@ export abstract class ExceptionHandler {
     this.renderables.push({ errorClass, callback })
   }
 
-  /**
-   * Suppress reporting (logging) for the given exception types.
-   *
-   * Errors matching these classes will still be rendered into responses
-   * but will not be logged or sent to external reporters.
-   *
-   * @param errorClasses - Array of exception constructors to suppress
-   *
-   * @example
-   * ```typescript
-   * this.dontReport([RouteNotFoundError, SchemaValidationError])
-   * ```
-   */
   dontReport(errorClasses: ApplicationErrorConstructor[]): void {
     for (const cls of errorClasses) {
       this.dontReportSet.add(cls)
     }
   }
 
-  /**
-   * Override the log severity for a specific exception type.
-   *
-   * By default, severity is derived from the error code range.
-   * Use this to promote or demote specific errors.
-   *
-   * @param errorClass - Constructor of the exception to override
-   * @param severity - The log severity to use
-   *
-   * @example
-   * ```typescript
-   * this.level(RecordNotFoundError, 'warn')
-   * ```
-   */
   level(errorClass: ApplicationErrorConstructor, severity: LogSeverity): void {
     this.levelOverrides.set(errorClass, severity)
   }
 
-  /**
-   * Add global context data to all exception log entries.
-   *
-   * The callback is invoked on every reported error and its return value
-   * is merged into the log data.
-   *
-   * @param callback - Function returning key-value pairs to include in logs
-   *
-   * @example
-   * ```typescript
-   * this.context(() => ({
-   *   appVersion: '1.2.3',
-   *   region: env.CF_REGION,
-   * }))
-   * ```
-   */
   context(callback: ContextCallback): void {
     this.contextCallbacks.push(callback)
   }
 
-  /**
-   * Register a callback to post-process every error Response before it is returned.
-   *
-   * Use this to add headers, modify the body, change content type, or
-   * transform the response in any way.
-   *
-   * @param callback - Function receiving (response, error, context) and returning a Response
-   *
-   * @example
-   * ```typescript
-   * this.respond((response, error, ctx) => {
-   *   response.headers.set('X-Error-Code', String(error.code))
-   *   return response
-   * })
-   * ```
-   */
   respond(callback: RespondCallback): void {
     this.respondCallbacks.push(callback)
   }
 
-  /**
-   * Register a callback to render the HTML error page for HTTP requests that
-   * accept `text/html` (e.g. browser navigations, Inertia first-loads).
-   *
-   * Runs after content negotiation, after translation, after status resolution
-   * — the callback receives everything it needs to render. Return `undefined`
-   * to defer to the next registered callback, or — if none match — to the
-   * built-in minimal HTML page (`renderDefaultHtml`).
-   *
-   * Callbacks fire in registration order (first non-undefined wins). The
-   * consumer's `register()` runs before module `onException()` hooks, so user
-   * overrides take precedence over module-supplied defaults (e.g. Inertia's).
-   *
-   * Only fires for HTTP contexts where {@link wantsHtml} is true; JSON
-   * requests bypass it entirely.
-   *
-   * @param callback - Function receiving (errorResponse, status, context, error)
-   *
-   * @example
-   * ```typescript
-   * this.errorPage((errorResponse, status, context) => {
-   *   const inertia = context.ctx.getContainer().resolve(InertiaService)
-   *   return inertia.render(context.ctx, `Errors/${status}`, errorResponse, { status })
-   * })
-   * ```
-   */
   errorPage(callback: ErrorPageCallback): void {
     this.errorPages.push(callback)
   }
 
-  /**
-   * Resolve a service from the DI container.
-   *
-   * Useful inside `register()` callbacks for accessing injected services
-   * (e.g., Sentry, analytics, custom loggers).
-   *
-   * @typeParam T - The type of the service to resolve
-   * @param token - DI token (symbol or constructor)
-   * @returns The resolved service instance
-   *
-   * @example
-   * ```typescript
-   * this.reportable(CriticalError, (e) => {
-   *   this.resolve(SentryService).captureException(e)
-   * })
-   * ```
-   */
   resolve<T>(token: symbol | (new (...args: unknown[]) => T)): T {
     return this.container.resolve<T>(token)
   }
 
   // ── Pipeline Entry Point ──────────────────────────────────────────
 
-  /**
-   * Handle an error through the full exception pipeline.
-   *
-   * This is the single entry point used by all contexts (HTTP, queue, cron, CLI).
-   * It normalizes the error, reports it (non-blocking via `waitUntil`),
-   * renders it into a Response, and applies post-processing.
-   *
-   * @param error - The thrown error (may or may not be an ApplicationError)
-   * @param context - The execution context where the error occurred
-   * @returns A Response (JSON by default, customizable via renderable/respond)
-   */
   async handle(error: unknown, context: ExceptionContext): Promise<Response> {
     const appError = this.normalizeError(error)
 
-    // Report via waitUntil — non-blocking in all CF Workers contexts
     this.executionContext.waitUntil(this.performReport(appError, context))
 
-    // Render into a Response
     const response = await this.performRender(appError, context)
 
-    // Post-process
     return this.applyRespondCallbacks(response, appError, context)
   }
 
   // ── Internals ─────────────────────────────────────────────────────
 
-  /**
-   * Normalize an unknown error into an ApplicationError.
-   * Non-ApplicationError values are wrapped in InternalError.
-   */
   private normalizeError(error: unknown): ApplicationError {
     if (isApplicationError(error)) {
       return error
     }
 
-    const originalMessage = error instanceof Error ? error.message : String(error)
-    const internalError = new InternalError({
-      originalError: originalMessage,
-    })
-
-    internalError.message = originalMessage
-    if (error instanceof Error && error.stack) {
-      internalError.stack = error.stack
-    }
-
-    return internalError
+    return new InternalError(error)
   }
 
-  /**
-   * Run the reporting pipeline for an error.
-   */
   private async performReport(error: ApplicationError, context: ExceptionContext): Promise<void> {
     if (this.shouldNotReport(error)) return
 
@@ -352,12 +135,9 @@ export abstract class ExceptionHandler {
       if (entry.shouldStop) return
     }
 
-    this.defaultReport(error, context)
+    this.defaultReport(error)
   }
 
-  /**
-   * Run the rendering pipeline for an error, producing a Response.
-   */
   private async performRender(error: ApplicationError, context: ExceptionContext): Promise<Response> {
     const entry = this.findRenderable(error)
     if (entry) {
@@ -370,9 +150,6 @@ export abstract class ExceptionHandler {
     return await this.defaultRender(error, context)
   }
 
-  /**
-   * Apply all respond() callbacks to post-process a Response.
-   */
   private applyRespondCallbacks(
     response: Response,
     error: ApplicationError,
@@ -385,9 +162,6 @@ export abstract class ExceptionHandler {
     return result
   }
 
-  /**
-   * Check if an error is in the dontReport set.
-   */
   private shouldNotReport(error: ApplicationError): boolean {
     for (const cls of this.dontReportSet) {
       if (error instanceof cls) return true
@@ -395,16 +169,11 @@ export abstract class ExceptionHandler {
     return false
   }
 
-  /**
-   * Find the most-specific reportable entry for an error.
-   * Walks entries in registration order; picks the most-specific `instanceof` match.
-   */
   private findReportable(error: ApplicationError): ReportableEntry | undefined {
     let best: ReportableEntry | undefined
     for (const entry of this.reportables) {
-      if (error instanceof entry.errorClass) {
-        // More specific class wins (subclass check)
-        if (!best || !(error instanceof best.errorClass) || entry.errorClass.prototype instanceof best.errorClass) {
+      if (this.matchesErrorClass(error, entry.errorClass)) {
+        if (!best || !this.matchesErrorClass(error, best.errorClass) || entry.errorClass.prototype instanceof best.errorClass) {
           best = entry
         }
       }
@@ -412,14 +181,11 @@ export abstract class ExceptionHandler {
     return best
   }
 
-  /**
-   * Find the most-specific renderable entry for an error.
-   */
   private findRenderable(error: ApplicationError): RenderableEntry | undefined {
     let best: RenderableEntry | undefined
     for (const entry of this.renderables) {
-      if (error instanceof entry.errorClass) {
-        if (!best || !(error instanceof best.errorClass) || entry.errorClass.prototype instanceof best.errorClass) {
+      if (this.matchesErrorClass(error, entry.errorClass)) {
+        if (!best || !this.matchesErrorClass(error, best.errorClass) || entry.errorClass.prototype instanceof best.errorClass) {
           best = entry
         }
       }
@@ -427,25 +193,18 @@ export abstract class ExceptionHandler {
     return best
   }
 
-  /**
-   * Default reporting — log with appropriate severity and i18n translation.
-   *
-   * For errors with a `cause` chain (ES2022) or an `AggregateError.errors[]`
-   * payload, the originating message/code/metadata/stack are walked into a
-   * `cause` field on the log so the underlying DB/RPC error surfaces in the
-   * console — instead of the outermost wrapper's i18n key alone.
-   */
-  private defaultReport(error: ApplicationError, context: ExceptionContext): void {
-    const translatedMessage = this.translateError(error, context)
-    const severity = this.resolveSeverity(error)
+  private matchesErrorClass(error: ApplicationError, cls: ApplicationErrorConstructor): boolean {
+    if (error instanceof cls) return true
+    return (error as Error).constructor.name === cls.name
+  }
 
+  private defaultReport(error: ApplicationError): void {
+    const severity = this.resolveSeverity(error)
     const globalContext = this.gatherContext()
 
     const logData: Record<string, unknown> = {
-      code: error.code,
-      message: translatedMessage,
+      message: error.message,
       timestamp: error.timestamp,
-      metadata: error.metadata,
       name: error.name,
       stack: error.stack,
       ...globalContext,
@@ -472,21 +231,9 @@ export abstract class ExceptionHandler {
     }
   }
 
-  /**
-   * Default rendering — content-negotiated.
-   *
-   * For HTTP requests that accept HTML: walks registered {@link errorPage}
-   * callbacks (first non-undefined wins), then falls back to a minimal branded
-   * HTML page via {@link renderDefaultHtml} when none match.
-   * For everything else (API, queue, cron, CLI): returns JSON.
-   *
-   * Errors are always logged via `performReport` (non-blocking waitUntil),
-   * so they appear in the console regardless of the rendered response format.
-   */
   private async defaultRender(error: ApplicationError, context: ExceptionContext): Promise<Response> {
-    const translatedMessage = this.translateError(error, context)
-    const errorResponse = this.buildErrorResponse(error, translatedMessage)
-    const status = resolveHttpStatus(error)
+    const status = this.resolveStatus(error)
+    const errorResponse = this.buildErrorResponse(error, status)
 
     if (context.type === 'http' && this.wantsHtml(context)) {
       for (const callback of this.errorPages) {
@@ -507,28 +254,11 @@ export abstract class ExceptionHandler {
 
   // ── Content Negotiation ──────────────────────────────────────────
 
-  /**
-   * Check if the HTTP request prefers an HTML response.
-   *
-   * Uses the `Accept` header to determine format. Inertia v3 XHR requests
-   * send `Accept: text/html, application/xhtml+xml`, so they naturally
-   * receive HTML error pages (displayed in Inertia's error modal in dev).
-   *
-   * Override in a subclass to customize content negotiation logic.
-   */
   protected wantsHtml(context: HttpExceptionContext): boolean {
     const accept = context.ctx.c.req.header('accept') ?? ''
     return accept.includes('text/html')
   }
 
-  /**
-   * Minimal production HTML error page with inline styles.
-   *
-   * Override in a subclass to replace the absolute fallback HTML (used when
-   * no {@link errorPage} callback matches). Prefer registering an `errorPage`
-   * callback for per-status pages — override this method only when you want
-   * a single branded fallback for every HTML error.
-   */
   protected renderDefaultHtml(
     errorResponse: ErrorResponse,
     status: ContentfulStatusCode,
@@ -546,35 +276,25 @@ export abstract class ExceptionHandler {
     })
   }
 
-  private buildErrorResponse(error: ApplicationError, translatedMessage: string): ErrorResponse {
-    return {
-      code: error.code,
-      message: translatedMessage,
-      timestamp: error.timestamp,
-      metadata: this.filterMetadata(error.metadata),
-      stack: this.environment === 'development'
-        ? error.stack?.replace(error.message, translatedMessage)
-        : undefined,
-    }
+  private resolveStatus(error: ApplicationError): ContentfulStatusCode {
+    if (error instanceof HttpException) return error.httpStatus
+    const httpStatus = (error as { httpStatus?: number }).httpStatus
+    if (typeof httpStatus === 'number') return httpStatus as ContentfulStatusCode
+    return 500
   }
 
-  private filterMetadata(
-    metadata?: Record<string, unknown>
-  ): Record<string, unknown> | undefined {
-    if (!metadata) return undefined
+  private buildErrorResponse(error: ApplicationError, status: ContentfulStatusCode): ErrorResponse {
+    const isServerError = status >= 500
+    const isDev = this.environment === 'development'
+    const message = isServerError && !isDev
+      ? (HTTP_STATUS_MESSAGES[status] ?? 'Internal Server Error')
+      : error.message
 
-    const whitelist = ['issues', 'fields', 'field']
-    const filtered: Record<string, unknown> = {}
-    let hasUserFacingData = false
-
-    for (const key of whitelist) {
-      if (key in metadata && metadata[key] !== undefined) {
-        filtered[key] = metadata[key]
-        hasUserFacingData = true
-      }
+    return {
+      message,
+      timestamp: error.timestamp,
+      stack: isDev ? error.stack : undefined,
     }
-
-    return hasUserFacingData ? filtered : undefined
   }
 
   private escapeHtml(str: string): string {
@@ -585,40 +305,13 @@ export abstract class ExceptionHandler {
       .replace(/"/g, '&quot;')
   }
 
-  /**
-   * Convert a render result (Response or ErrorResponse) into a Response.
-   */
   private toResponse(result: Response | ErrorResponse, error: ApplicationError): Response {
     if (result instanceof Response) return result
-    const status = resolveHttpStatus(error)
+    const status = this.resolveStatus(error)
     return Response.json(result, { status })
   }
 
-  /**
-   * Translate an error's message key via i18n.
-   * Uses the request container (from HTTP context) for correct locale,
-   * falling back to the global container or raw message string.
-   */
-  private translateError(error: ApplicationError, context: ExceptionContext): string {
-    try {
-      const resolveContainer = context.type === 'http'
-        ? context.ctx.getContainer()
-        : this.container
-      const i18n = resolveContainer.resolve<II18nService>(I18N_TOKENS.I18nService)
-      const params = error.metadata as Record<string, string | number> | undefined
-      return i18n.t(error.message as MessageKeys, params)
-    } catch {
-      // I18n unavailable (startup/RPC context) — return raw message key
-      return error.message
-    }
-  }
-
-  /**
-   * Resolve the log severity for an error.
-   * Checks level overrides first, then falls back to code-range-based severity.
-   */
   private resolveSeverity(error: ApplicationError): LogSeverity {
-    // Check registered overrides (most-specific class wins)
     let bestClass: ApplicationErrorConstructor | undefined
     let bestSeverity: LogSeverity | undefined
 
@@ -631,24 +324,18 @@ export abstract class ExceptionHandler {
       }
     }
 
-    return bestSeverity ?? this.getDefaultSeverity(error.code)
+    if (bestSeverity) return bestSeverity
+
+    const status = this.resolveStatus(error)
+    return this.getDefaultSeverity(status)
   }
 
-  /**
-   * Determine default log severity based on error code range.
-   */
-  private getDefaultSeverity(code: number): LogSeverity {
-    if (code >= 9000) return 'error'
-    if (code >= 2000 && code < 3000) return 'error'
-    if (code >= 5000 && code < 6000) return 'warn'
-    if (code >= 1000 && code < 2000) return 'info'
-    if (code >= 3000 && code < 5000) return 'warn'
+  private getDefaultSeverity(status: number): LogSeverity {
+    if (status >= 500) return 'error'
+    if (status >= 400) return 'warn'
     return 'error'
   }
 
-  /**
-   * Gather all global context data from registered callbacks.
-   */
   private gatherContext(): Record<string, unknown> {
     if (this.contextCallbacks.length === 0) return {}
     const merged: Record<string, unknown> = {}
@@ -663,19 +350,12 @@ interface SerializedErrorNode {
   name: string
   message: string
   stack?: string
-  code?: number | string
-  metadata?: Record<string, unknown>
   cause?: SerializedErrorNode | { value: unknown }
   errors?: SerializedErrorNode[]
 }
 
 const MAX_CAUSE_DEPTH = 5
 
-/**
- * Walk an error's `cause` chain (ES2022) and `AggregateError.errors[]` into a
- * structured tree so the originating error reaches the log. Returns `undefined`
- * when there's nothing to surface.
- */
 function serializeErrorChain(error: Error): SerializedErrorNode | undefined {
   const cause = (error as { cause?: unknown }).cause
   const aggregated = error instanceof AggregateError && Array.isArray(error.errors) && error.errors.length > 0
@@ -687,7 +367,6 @@ function serializeErrorChain(error: Error): SerializedErrorNode | undefined {
       ? serializeErrorNode(cause, 0)
       : ({ value: cause } as unknown as SerializedErrorNode)
   }
-  // AggregateError-only case: surface .errors directly.
   return {
     name: error.name,
     message: error.message,
@@ -705,10 +384,6 @@ function serializeErrorNode(error: Error, depth: number): SerializedErrorNode {
     message: error.message,
     stack: error.stack,
   }
-
-  const coded = error as { code?: number | string; metadata?: Record<string, unknown> }
-  if (coded.code !== undefined) out.code = coded.code
-  if (coded.metadata && Object.keys(coded.metadata).length > 0) out.metadata = coded.metadata
 
   if (depth >= MAX_CAUSE_DEPTH) return out
 

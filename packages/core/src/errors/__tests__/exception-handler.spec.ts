@@ -5,11 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Container } from '../../di/container'
 import { DI_TOKENS } from '../../di/tokens'
 import { I18N_TOKENS } from '../../i18n/i18n.tokens'
-import type { MessageKeys } from '../../i18n/i18n.types'
 import { LOGGER_TOKENS } from '../../logger'
 import { ApplicationError } from '../application-error'
 import { DefaultExceptionHandler } from '../default-exception-handler'
-import { ERROR_CODES, type ErrorCode } from '../error-codes'
 import type { ErrorResponse } from '../error-response'
 import type { ExceptionContext } from '../exception-context'
 import { createCliExceptionContext, createCronExceptionContext, createHttpExceptionContext, createQueueExceptionContext } from '../exception-context'
@@ -20,14 +18,14 @@ import { InternalError } from '../internal-error'
 // ── Test Fixtures ───────────────────────────────────────────────────
 
 class TestError extends ApplicationError {
-  constructor(message = 'errors.testError', code: number = ERROR_CODES.VALIDATION.GENERIC) {
-    super(message as MessageKeys, code as ErrorCode, { detail: 'test' })
+  constructor(message = 'Test error occurred') {
+    super(message)
   }
 }
 
 class ChildTestError extends TestError {
   constructor() {
-    super('errors.childError', ERROR_CODES.VALIDATION.GENERIC)
+    super('Child error occurred')
   }
 }
 
@@ -102,25 +100,16 @@ describe('ExceptionHandler', () => {
 
       expect(response).toBeInstanceOf(Response)
       const body: Record<string, unknown> = await response.json()
-      expect(body.code).toBe(ERROR_CODES.SYSTEM.INTERNAL_ERROR)
+      expect(body.message).toBeDefined()
     })
 
-    it('should translate and render ApplicationError as JSON', async () => {
+    it('should render ApplicationError as JSON', async () => {
       const handler = createHandler()
       const error = new TestError()
       const response = await handler.handle(error, cliCtx)
 
       const body: Record<string, unknown> = await response.json()
-      expect(body.code).toBe(ERROR_CODES.VALIDATION.GENERIC)
-      expect(body.message).toBe('translated:errors.testError')
-    })
-
-    it('should set correct HTTP status from error code', async () => {
-      const handler = createHandler()
-      const error = new TestError('errors.notFound', ERROR_CODES.RESOURCE.NOT_FOUND)
-      const response = await handler.handle(error, cliCtx)
-
-      expect(response.status).toBe(404)
+      expect(body.message).toBeDefined()
     })
 
     it('should use HttpException httpStatus for status code', async () => {
@@ -131,6 +120,14 @@ describe('ExceptionHandler', () => {
       expect(response.status).toBe(418)
     })
 
+    it('should default to 500 status for non-HttpException errors', async () => {
+      const handler = createHandler()
+      const error = new TestError('some error')
+      const response = await handler.handle(error, cliCtx)
+
+      expect(response.status).toBe(500)
+    })
+
     it('should report via waitUntil', async () => {
       const handler = createHandler()
       await handler.handle(new TestError(), cliCtx)
@@ -138,13 +135,12 @@ describe('ExceptionHandler', () => {
       expect(mockWaitUntil).toHaveBeenCalledOnce()
     })
 
-    it('should log with correct severity for validation errors (info)', async () => {
+    it('should log with correct severity for 4xx errors (warn)', async () => {
       const handler = createHandler()
-      await handler.handle(new TestError('errors.val', ERROR_CODES.VALIDATION.GENERIC), cliCtx)
+      await handler.handle(new HttpException(400, 'Bad request'), cliCtx)
 
-      // waitUntil fires the promise; flush it
       await mockWaitUntil.mock.calls[0][0]
-      expect(mockLogger.info).toHaveBeenCalled()
+      expect(mockLogger.warn).toHaveBeenCalled()
     })
 
     it('should log with correct severity for system errors (error)', async () => {
@@ -189,7 +185,7 @@ describe('ExceptionHandler', () => {
 
       await mockWaitUntil.mock.calls[0][0]
       expect(spy).toHaveBeenCalledOnce()
-      expect(mockLogger.info).toHaveBeenCalled()
+      expect(mockLogger.error).toHaveBeenCalled()
     })
 
     it('should skip default logger when .stop() is called', async () => {
@@ -261,7 +257,7 @@ describe('ExceptionHandler', () => {
       const response = await handler.handle(new TestError(), cliCtx)
       const body: Record<string, unknown> = await response.json()
 
-      expect(body.code).toBe(ERROR_CODES.VALIDATION.GENERIC)
+      expect(body.message).toBeDefined()
     })
   })
 
@@ -294,7 +290,7 @@ describe('ExceptionHandler', () => {
       const response = await handler.handle(new TestError(), cliCtx)
       const body: Record<string, unknown> = await response.json()
 
-      expect(body.code).toBe(ERROR_CODES.VALIDATION.GENERIC)
+      expect(body.message).toBeDefined()
     })
   })
 
@@ -331,7 +327,7 @@ describe('ExceptionHandler', () => {
       await handler.handle(new TestError(), cliCtx)
 
       await mockWaitUntil.mock.calls[0][0]
-      const logCall = mockLogger.info.mock.calls[0]
+      const logCall = mockLogger.error.mock.calls[0]
       expect(logCall[1]).toMatchObject({ appVersion: '1.0.0' })
     })
   })
@@ -343,7 +339,7 @@ describe('ExceptionHandler', () => {
       class CustomHandler extends ExceptionHandler {
         register(): void {
           this.respond((response, error) => {
-            response.headers.set('X-Error-Code', String(error.code))
+            response.headers.set('X-Error-Name', error.name)
             return response
           })
         }
@@ -352,7 +348,7 @@ describe('ExceptionHandler', () => {
       const handler = createHandler(CustomHandler)
       const response = await handler.handle(new TestError(), cliCtx)
 
-      expect(response.headers.get('X-Error-Code')).toBe(String(ERROR_CODES.VALIDATION.GENERIC))
+      expect(response.headers.get('X-Error-Name')).toBe('TestError')
     })
 
     it('should chain multiple respond callbacks', async () => {
@@ -383,7 +379,7 @@ describe('ExceptionHandler', () => {
     it('should handle errors in queue context', async () => {
       const handler = createHandler()
       const queueCtx = createQueueExceptionContext('my-queue')
-      const response = await handler.handle(new TestError(), queueCtx)
+      const response = await handler.handle(new HttpException(400, 'Bad request'), queueCtx)
 
       expect(response).toBeInstanceOf(Response)
       expect(response.status).toBe(400)
@@ -399,39 +395,46 @@ describe('ExceptionHandler', () => {
 
     it('should handle errors in CLI context', async () => {
       const handler = createHandler()
-      const response = await handler.handle(new TestError(), cliCtx)
+      const response = await handler.handle(new HttpException(400, 'Bad request'), cliCtx)
 
       expect(response.status).toBe(400)
     })
   })
 
-  // ── Translation ───────────────────────────────────────────────
+  // ── Localization via renderable() ───────────────────────────────
 
-  describe('translation', () => {
-    it('should translate i18n keys via i18n service', async () => {
-      const handler = createHandler()
-      const response = await handler.handle(new TestError('errors.myKey'), cliCtx)
-      const body: Record<string, unknown> = await response.json()
+  describe('localization', () => {
+    it('consumer exception handler can translate error messages via renderable()', async () => {
+      const translations: Record<string, Record<string, string>> = {
+        en: { 'Not Found': 'Not Found' },
+        fr: { 'Not Found': 'Introuvable' },
+      }
 
-      expect(body.message).toBe('translated:errors.myKey')
-      expect(mockI18n.t).toHaveBeenCalledWith('errors.myKey', { detail: 'test' })
+      class LocalizedHandler extends ExceptionHandler {
+        register(): void {
+          this.renderable(HttpException, (error) => {
+            const locale = 'fr'
+            const translated = translations[locale]?.[error.message] ?? error.message
+            return Response.json(
+              { message: translated, timestamp: error.timestamp },
+              { status: error.httpStatus },
+            )
+          })
+        }
+      }
+
+      const handler = createHandler(LocalizedHandler)
+      const response = await handler.handle(new HttpException(404, 'Not Found'), cliCtx)
+      const body = await response.json() as { message: string }
+
+      expect(response.status).toBe(404)
+      expect(body.message).toBe('Introuvable')
     })
 
-    it('should fall back to raw message when i18n is unavailable', async () => {
-      // Create handler without I18n registered
-      const childContainer = tsyringeRootContainer.createChildContainer()
-      const container = new Container({ container: childContainer })
-      container.registerValue(LOGGER_TOKENS.LoggerService, mockLogger)
-      container.registerValue(DI_TOKENS.CloudflareEnv, { ENVIRONMENT: 'test' })
-      container.registerValue(DI_TOKENS.ExecutionContext, mockExecutionContext)
-      // No I18N_TOKENS.I18nService registered
-
-      container.registerSingleton(DI_TOKENS.ExceptionHandler, DefaultExceptionHandler as never)
-      const handler = container.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
-      handler.register()
-
+    it('falls back to plain English message by default', async () => {
+      const handler = createHandler()
       const response = await handler.handle(new HttpException(404, 'Not Found'), cliCtx)
-      const body: Record<string, unknown> = await response.json()
+      const body = await response.json() as { message: string }
 
       expect(body.message).toBe('Not Found')
     })
@@ -462,7 +465,7 @@ describe('ExceptionHandler', () => {
 
       expect(response.headers.get('content-type')).toContain('application/json')
       const body: Record<string, unknown> = await response.json()
-      expect(body.code).toBe(ERROR_CODES.VALIDATION.GENERIC)
+      expect(body.message).toBeDefined()
     })
 
     it('should return HTML for Inertia XHR Accept header (text/html, application/xhtml+xml)', async () => {
@@ -539,7 +542,9 @@ describe('ExceptionHandler', () => {
       expect(response.status).toBe(500)
       expect(response.headers.get('content-type')).toContain('text/html')
       const html = await response.text()
-      expect(html).toContain('boom')
+      // Plain errors are normalized to InternalError with "Internal Server Error" message;
+      // in dev mode the raw message is shown in the HTML page.
+      expect(html).toContain('Internal Server Error')
     })
 
     it('should return JSON for non-HTTP contexts regardless of error type', async () => {
@@ -586,7 +591,7 @@ describe('ExceptionHandler', () => {
   // ── errorPage() ───────────────────────────────────────────────
 
   describe('errorPage', () => {
-    it('receives translated errorResponse, status, context, and error', async () => {
+    it('receives errorResponse, status, context, and error', async () => {
       const spy = vi.fn(
         (_errorResponse: ErrorResponse, _status: number, _context: ExceptionContext, _err: ApplicationError) =>
           new Response('rendered', { status: 404 }),
@@ -600,16 +605,13 @@ describe('ExceptionHandler', () => {
 
       const handler = createHandler(CustomHandler)
       const httpCtx = createHttpExceptionContext(createMockHonoCtx({ accept: 'text/html' }))
-      const error = new HttpException(404, 'errors.notFound')
+      const error = new HttpException(404, 'Not Found')
 
       const response = await handler.handle(error, httpCtx)
 
       expect(spy).toHaveBeenCalledOnce()
       const [errorResponse, status, context, errArg] = spy.mock.calls[0]
-      expect(errorResponse.code).toBe(error.code)
-      // The mock RouterContext has no real container, so translation falls back
-      // to the raw message key — same fallback as the rest of the HTTP suite.
-      expect(errorResponse.message).toBe('errors.notFound')
+      expect(errorResponse.message).toBe('Not Found')
       expect(status).toBe(404)
       expect(context).toBe(httpCtx)
       expect(errArg).toBe(error)
@@ -765,41 +767,31 @@ describe('ExceptionHandler', () => {
 
       const handler = createHandler(CustomHandler)
       const httpCtx = createHttpExceptionContext(createMockHonoCtx({ accept: 'text/html' }))
-      const response = await handler.handle(new HttpException(404, 'errors.notFound'), httpCtx)
+      const response = await handler.handle(new HttpException(404, 'Not Found'), httpCtx)
 
       expect(response.status).toBe(404)
       const html = await response.text()
-      expect(html).toBe('<custom>404-errors.notFound</custom>')
+      expect(html).toBe('<custom>404-Not Found</custom>')
     })
   })
 
   // ── Cause chain logging ─────────────────────────────────────────
 
   describe('cause chain logging', () => {
-    class CausalError extends ApplicationError {
-      constructor(messageKey: string, code: number, metadata?: Record<string, unknown>, cause?: unknown) {
-        super(messageKey as MessageKeys, code as ErrorCode, metadata, cause)
-      }
-    }
-
     it('walks Error.cause and includes it in the logged cause field', async () => {
       const handler = createHandler()
-      const inner = Object.assign(new Error('underlying db boom'), {
-        code: 2000,
-        metadata: { dbErrorCode: '42P01', sql: 'SELECT 1' },
-      })
-      const outer = new CausalError('errors.databaseGeneric', 2000, { reason: 'wrap' }, inner)
+      const inner = new Error('underlying db boom')
+      const outer = new ApplicationError('Database error', inner)
 
       await handler.handle(outer, cliCtx)
 
+      await mockWaitUntil.mock.calls[0][0]
       expect(mockLogger.error).toHaveBeenCalledWith(
         '[ApplicationError]',
         expect.objectContaining({
           cause: expect.objectContaining({
             name: 'Error',
             message: 'underlying db boom',
-            code: 2000,
-            metadata: { dbErrorCode: '42P01', sql: 'SELECT 1' },
           }),
         }),
       )
@@ -810,7 +802,7 @@ describe('ExceptionHandler', () => {
       const a = new Error('a failed')
       const b = new Error('b failed')
       const aggregate = new AggregateError([a, b], '2 failed')
-      const outer = new CausalError('errors.cronExecutionFailed', 9204, undefined, aggregate)
+      const outer = new ApplicationError('Multiple failures', aggregate)
 
       await handler.handle(outer, cliCtx)
 
@@ -823,11 +815,11 @@ describe('ExceptionHandler', () => {
 
     it('omits the cause field entirely when neither cause nor AggregateError is present', async () => {
       const handler = createHandler()
-      // Use 9000+ code so severity is 'error' and we can inspect mockLogger.error.
-      const error = new CausalError('errors.plain', 9999)
+      const error = new ApplicationError('plain error')
 
       await handler.handle(error, cliCtx)
 
+      await mockWaitUntil.mock.calls[0][0]
       const logData = (mockLogger.error as ReturnType<typeof vi.fn>).mock.calls[0][1] as Record<string, unknown>
       expect(logData.cause).toBeUndefined()
     })
@@ -839,7 +831,7 @@ describe('ExceptionHandler', () => {
       for (let i = 1; i <= 10; i++) {
         inner = Object.assign(new Error(`depth-${i}`), { cause: inner })
       }
-      const outer = new CausalError('errors.deep', 9999, undefined, inner)
+      const outer = new ApplicationError('deep error', inner)
 
       await handler.handle(outer, cliCtx)
 

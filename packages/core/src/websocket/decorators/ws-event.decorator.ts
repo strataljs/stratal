@@ -1,6 +1,6 @@
 import { ROUTE_METADATA_KEYS } from '../../router/constants'
 import type { Constructor } from '../../types'
-import { WebSocketDuplicateEventHandlerError } from '../errors/websocket-duplicate-event-handler.error'
+import { WebSocketError } from '../websocket.error'
 
 const WS_ON_MESSAGE_KEY = ROUTE_METADATA_KEYS.WS_ON_MESSAGE
 const WS_ON_CLOSE_KEY = ROUTE_METADATA_KEYS.WS_ON_CLOSE
@@ -13,7 +13,7 @@ const WS_ON_ERROR_KEY = ROUTE_METADATA_KEYS.WS_ON_ERROR
 function defineSingleHandlerMetadata(key: string | symbol, propertyKey: string | symbol, target: object, decoratorName: string): void {
   const existing = Reflect.getMetadata(key, target) as string | symbol | undefined
   if (existing !== undefined && existing !== propertyKey) {
-    throw new WebSocketDuplicateEventHandlerError(decoratorName, String(existing))
+    throw new WebSocketError(`Duplicate @${decoratorName} handler: method "${String(existing)}" is already registered`)
   }
   Reflect.defineMetadata(key, propertyKey, target)
 }

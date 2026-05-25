@@ -47,7 +47,6 @@
 
 import type { BetterAuthOptions } from 'better-auth'
 import { CONTAINER_TOKEN, type Container } from 'stratal/di'
-import { I18nModule } from 'stratal/i18n'
 import type { AsyncModuleOptions, DynamicModule } from 'stratal/module'
 import { Module } from 'stratal/module'
 import type { IRateLimiterStore, RateLimiterRegistry } from 'stratal/rate-limiter'
@@ -58,7 +57,6 @@ import { AccessService } from '../access-control/services/access.service'
 import { AC_TOKENS } from '../access-control/tokens'
 import type { AccessControlOptions } from '../access-control/types'
 import { AUTH_OPTIONS, AUTH_SERVICE } from './auth.tokens'
-import { authMessages } from './i18n'
 import { AuthContextMiddleware } from './middleware/auth-context.middleware'
 import { SessionVerificationMiddleware } from './middleware/session-verification.middleware'
 // Side-effect import: registers `forPath`/`pathEntries` macros on
@@ -80,9 +78,6 @@ export interface AuthModuleAsyncOptions<TOptions extends BetterAuthOptions = Bet
 }
 
 @Module({
-  imports: [
-    I18nModule.registerMessages(authMessages),
-  ],
   providers: []
 })
 export class AuthModule implements RouteConfigurable {

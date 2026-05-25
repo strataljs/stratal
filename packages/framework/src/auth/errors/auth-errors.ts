@@ -1,181 +1,115 @@
-import { ApplicationError, ERROR_CODES } from 'stratal/errors'
+import { HttpException } from 'stratal/errors'
 
-export class UserNotFoundError extends ApplicationError {
-  constructor(email?: string) {
-    super('auth.errors.userNotFound', ERROR_CODES.RESOURCE.NOT_FOUND, email ? { email } : undefined)
+export class UserNotFoundError extends HttpException {
+  constructor(public readonly email?: string) {
+    super(404, 'User not found')
   }
 }
 
-export class InvalidCredentialsError extends ApplicationError {
-  constructor() {
-    super('auth.errors.invalidCredentials', ERROR_CODES.AUTH.INVALID_CREDENTIALS)
+export class InvalidCredentialsError extends HttpException {
+  constructor() { super(401, 'Invalid email or password') }
+}
+
+export class InvalidPasswordError extends HttpException {
+  constructor() { super(401, 'Invalid password') }
+}
+
+export class InvalidEmailError extends HttpException {
+  constructor(public readonly email?: string) {
+    super(422, 'Invalid email address')
   }
 }
 
-export class InvalidPasswordError extends ApplicationError {
-  constructor() {
-    super('auth.errors.invalidPassword', ERROR_CODES.AUTH.INVALID_CREDENTIALS)
+export class SessionExpiredError extends HttpException {
+  constructor() { super(401, 'Session expired') }
+}
+
+export class EmailNotVerifiedError extends HttpException {
+  constructor(public readonly email?: string) {
+    super(403, 'Email not verified')
   }
 }
 
-export class InvalidEmailError extends ApplicationError {
-  constructor(email?: string) {
-    super('auth.errors.invalidEmail', ERROR_CODES.VALIDATION.INVALID_FORMAT, email ? { email } : undefined)
+export class PasswordTooShortError extends HttpException {
+  constructor(public readonly minLength?: number) {
+    super(422, 'Password too short')
   }
 }
 
-export class SessionExpiredError extends ApplicationError {
-  constructor() {
-    super('auth.errors.sessionExpired', ERROR_CODES.AUTH.SESSION_EXPIRED)
+export class PasswordTooLongError extends HttpException {
+  constructor(public readonly maxLength?: number) {
+    super(422, 'Password too long')
   }
 }
 
-export class EmailNotVerifiedError extends ApplicationError {
-  constructor(email?: string) {
-    super('auth.errors.emailNotVerified', ERROR_CODES.AUTH.EMAIL_NOT_VERIFIED, email ? { email } : undefined)
+export class AccountAlreadyExistsError extends HttpException {
+  constructor(public readonly email?: string) {
+    super(409, 'Account already exists')
   }
 }
 
-export class PasswordTooShortError extends ApplicationError {
-  constructor(minLength: number) {
-    super('auth.errors.passwordTooShort', ERROR_CODES.AUTH.PASSWORD_TOO_SHORT, { minLength })
+export class SocialAccountLinkedError extends HttpException {
+  constructor(public readonly provider?: string) {
+    super(409, 'Social account already linked')
   }
 }
 
-export class PasswordTooLongError extends ApplicationError {
-  constructor(maxLength: number) {
-    super('auth.errors.passwordTooLong', ERROR_CODES.AUTH.PASSWORD_TOO_LONG, { maxLength })
+export class CannotUnlinkLastAccountError extends HttpException {
+  constructor() { super(409, 'Cannot unlink last account') }
+}
+
+export class ProviderNotFoundError extends HttpException {
+  constructor(public readonly provider?: string) {
+    super(404, 'Authentication provider not found')
   }
 }
 
-export class AccountAlreadyExistsError extends ApplicationError {
-  constructor(email?: string) {
-    super('auth.errors.accountAlreadyExists', ERROR_CODES.AUTH.ACCOUNT_ALREADY_EXISTS, email ? { email } : undefined)
+export class UserEmailNotFoundError extends HttpException {
+  constructor() { super(404, 'User email not found') }
+}
+
+export class AccountNotFoundError extends HttpException {
+  constructor() { super(404, 'Account not found') }
+}
+
+export class CredentialAccountNotFoundError extends HttpException {
+  constructor() { super(404, 'Credential account not found') }
+}
+
+export class UserAlreadyHasPasswordError extends HttpException {
+  constructor() { super(409, 'User already has a password') }
+}
+
+export class EmailCannotBeUpdatedError extends HttpException {
+  constructor(public readonly reason?: string) {
+    super(422, 'Email cannot be updated')
   }
 }
 
-export class FailedToCreateUserError extends ApplicationError {
-  constructor(reason?: string) {
-    super('auth.errors.failedToCreateUser', ERROR_CODES.AUTH.FAILED_TO_CREATE_USER, reason ? { reason } : undefined)
-  }
+export class IdTokenNotSupportedError extends HttpException {
+  constructor() { super(422, 'ID token not supported') }
 }
 
-export class FailedToCreateSessionError extends ApplicationError {
-  constructor(reason?: string) {
-    super('auth.errors.failedToCreateSession', ERROR_CODES.AUTH.FAILED_TO_CREATE_SESSION, reason ? { reason } : undefined)
-  }
+export class TokenExpiredError extends HttpException {
+  constructor() { super(401, 'Token expired') }
 }
 
-export class FailedToUpdateUserError extends ApplicationError {
-  constructor(reason?: string) {
-    super('auth.errors.failedToUpdateUser', ERROR_CODES.AUTH.FAILED_TO_UPDATE_USER, reason ? { reason } : undefined)
-  }
+export class InvalidCallbackUrlError extends HttpException {
+  constructor() { super(422, 'Invalid callback URL') }
 }
 
-export class SocialAccountLinkedError extends ApplicationError {
-  constructor(provider?: string) {
-    super('auth.errors.socialAccountLinked', ERROR_CODES.AUTH.SOCIAL_ACCOUNT_LINKED, provider ? { provider } : undefined)
-  }
+export class InvalidOriginError extends HttpException {
+  constructor() { super(403, 'Invalid request origin') }
 }
 
-export class CannotUnlinkLastAccountError extends ApplicationError {
-  constructor() {
-    super('auth.errors.cannotUnlinkLastAccount', ERROR_CODES.AUTH.CANNOT_UNLINK_LAST_ACCOUNT)
-  }
+export class AuthValidationFailedError extends HttpException {
+  constructor() { super(422, 'Authentication validation failed') }
 }
 
-export class ProviderNotFoundError extends ApplicationError {
-  constructor(provider?: string) {
-    super('auth.errors.providerNotFound', ERROR_CODES.RESOURCE.NOT_FOUND, provider ? { provider } : undefined)
-  }
+export class EmailAlreadyVerifiedError extends HttpException {
+  constructor() { super(409, 'Email already verified') }
 }
 
-export class UserEmailNotFoundError extends ApplicationError {
-  constructor() {
-    super('auth.errors.userEmailNotFound', ERROR_CODES.RESOURCE.NOT_FOUND)
-  }
-}
-
-export class AccountNotFoundError extends ApplicationError {
-  constructor() {
-    super('auth.errors.accountNotFound', ERROR_CODES.RESOURCE.NOT_FOUND)
-  }
-}
-
-export class CredentialAccountNotFoundError extends ApplicationError {
-  constructor() {
-    super('auth.errors.credentialAccountNotFound', ERROR_CODES.RESOURCE.NOT_FOUND)
-  }
-}
-
-export class UserAlreadyHasPasswordError extends ApplicationError {
-  constructor() {
-    super('auth.errors.userAlreadyHasPassword', ERROR_CODES.RESOURCE.CONFLICT)
-  }
-}
-
-export class EmailCannotBeUpdatedError extends ApplicationError {
-  constructor(reason?: string) {
-    super('auth.errors.emailCannotBeUpdated', ERROR_CODES.VALIDATION.GENERIC, reason ? { reason } : undefined)
-  }
-}
-
-export class FailedToGetSessionError extends ApplicationError {
-  constructor(reason?: string) {
-    super('auth.errors.failedToGetSession', ERROR_CODES.SYSTEM.INTERNAL_ERROR, reason ? { reason } : undefined)
-  }
-}
-
-export class FailedToGetUserInfoError extends ApplicationError {
-  constructor(reason?: string) {
-    super('auth.errors.failedToGetUserInfo', ERROR_CODES.SYSTEM.INTERNAL_ERROR, reason ? { reason } : undefined)
-  }
-}
-
-export class IdTokenNotSupportedError extends ApplicationError {
-  constructor() {
-    super('auth.errors.invalidToken', ERROR_CODES.VALIDATION.GENERIC)
-  }
-}
-
-export class TokenExpiredError extends ApplicationError {
-  constructor() {
-    super('auth.errors.tokenExpired', ERROR_CODES.VALIDATION.GENERIC)
-  }
-}
-
-export class InvalidCallbackUrlError extends ApplicationError {
-  constructor() {
-    super('auth.errors.invalidCallbackUrl', ERROR_CODES.VALIDATION.INVALID_FORMAT)
-  }
-}
-
-export class InvalidOriginError extends ApplicationError {
-  constructor() {
-    super('auth.errors.invalidOrigin', ERROR_CODES.AUTHZ.FORBIDDEN)
-  }
-}
-
-export class AuthValidationFailedError extends ApplicationError {
-  constructor() {
-    super('auth.errors.validationFailed', ERROR_CODES.VALIDATION.GENERIC)
-  }
-}
-
-export class EmailAlreadyVerifiedError extends ApplicationError {
-  constructor() {
-    super('auth.errors.emailAlreadyVerified', ERROR_CODES.RESOURCE.CONFLICT)
-  }
-}
-
-export class EmailMismatchError extends ApplicationError {
-  constructor() {
-    super('auth.errors.emailMismatch', ERROR_CODES.VALIDATION.INVALID_FORMAT)
-  }
-}
-
-export class BetterAuthUnknownError extends ApplicationError {
-  constructor(errorCode?: string) {
-    super('auth.errors.unknownError', ERROR_CODES.SYSTEM.INTERNAL_ERROR, errorCode ? { errorCode } : undefined)
-  }
+export class EmailMismatchError extends HttpException {
+  constructor() { super(422, 'Email mismatch') }
 }

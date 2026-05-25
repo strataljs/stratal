@@ -2,7 +2,7 @@ import { inject } from 'tsyringe';
 import type { Application } from '../application';
 import { Transient } from '../di/decorators';
 import { DI_TOKENS } from '../di/tokens';
-import { MissingRouteParamError, RouteNameNotFoundError } from './errors';
+import { RouterError } from './router.error';
 import type { RouteName, RouteParams } from './route-map';
 import type { RegisteredRoute, RouteRegistry } from './route-registry';
 import type { RouterContext } from './router-context';
@@ -46,7 +46,7 @@ function encodePathParam(value: string): string {
  * @param params - Path params, domain params, and extra query params
  * @returns Relative URL string (or absolute with domain prefix if route has a domain pattern)
  *
- * @throws MissingRouteParamError if a required path or domain param is missing
+ * @throws RouterError if a required path or domain param is missing
  */
 export function buildRouteUrl(
   route: RegisteredRoute,
@@ -67,7 +67,7 @@ export function buildRouteUrl(
   for (const paramName of route.paramNames) {
     const value = allParams[paramName]
     if (value === undefined) {
-      throw new MissingRouteParamError(paramName, name, route.path)
+      throw new RouterError(`Missing required route parameter "${paramName}" for route "${name}" (path: ${route.path})`)
     }
     url = url.replace(
       new RegExp(`:${paramName}(\\{[^}]*\\})?`),
@@ -83,7 +83,7 @@ export function buildRouteUrl(
     for (const domainParam of route.domainParamNames) {
       const value = allParams[domainParam]
       if (value === undefined) {
-        throw new MissingRouteParamError(domainParam, name, route.domain)
+        throw new RouterError(`Missing required domain parameter "${domainParam}" for route "${name}" (domain: ${route.domain})`)
       }
       domain = domain.replace(`{${domainParam}}`, encodeURIComponent(value))
       consumedKeys.add(domainParam)
@@ -174,13 +174,12 @@ export class Uri {
    * @param options - URL generation options
    * @returns Generated URL string
    *
-   * @throws RouteNameNotFoundError if route name not found
-   * @throws MissingRouteParamError if required params missing
+   * @throws RouterError if route name not found or required params missing
    */
   route<N extends RouteName>(name: N, params?: RouteParams<N>, options?: UriOptions): string {
     const registeredRoute = this.registry.get(name)
     if (!registeredRoute) {
-      throw new RouteNameNotFoundError(name)
+      throw new RouterError(`Route name "${name}" was not found in the registry`)
     }
 
     const mergedParams = { ...this._defaults, ...params } as Record<string, string>

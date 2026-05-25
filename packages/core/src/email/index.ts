@@ -1,3 +1,4 @@
+export * from './email.error'
 export * from './email.module'
 export * from './email.tokens'
 export * from './contracts'

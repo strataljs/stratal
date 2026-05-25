@@ -27,7 +27,7 @@ import { ROUTER_TOKENS } from '../router/router.tokens';
 import type { Constructor } from '../types';
 import { ConditionalBindingBuilderImpl, type ConditionalBindingBuilder, type PredicateContainer } from './conditional-binding-builder';
 import { containerStorage } from './container-storage';
-import { RequestScopeOperationNotAllowedError } from './errors/request-scope-operation-not-allowed.error';
+import { ContainerError } from './container.error';
 import { CONTAINER_TOKEN } from './tokens';
 import type { ExtensionDecorator, Scope, WhenOptions } from './types';
 
@@ -224,7 +224,7 @@ export class Container {
     callback: (requestContainer: Container) => T | Promise<T>
   ): Promise<T> {
     if (this.isRequestScoped) {
-      throw new RequestScopeOperationNotAllowedError('runInRequestScope')
+      throw new ContainerError('Cannot call runInRequestScope on a request-scoped container')
     }
 
     const requestContainer = this.createRequestScope(routerContext)
@@ -244,7 +244,7 @@ export class Container {
    */
   createRequestScope(routerContext: RouterContext): Container {
     if (this.isRequestScoped) {
-      throw new RequestScopeOperationNotAllowedError('createRequestScope')
+      throw new ContainerError('Cannot call createRequestScope on a request-scoped container')
     }
 
     const childContainer = this.container.createChildContainer()

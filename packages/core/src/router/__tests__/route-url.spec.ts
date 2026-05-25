@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Container } from '../../di/container'
 import { containerStorage } from '../../di/container-storage'
-import { RouteNameNotFoundError } from '../errors'
+import { RouterError } from '../router.error'
 import { route } from '../route-url'
 import { ROUTER_TOKENS } from '../router.tokens'
 import type { Uri } from '../uri'
@@ -36,11 +36,11 @@ describe('route() URL generation', () => {
   it('propagates errors thrown by Uri.route', () => {
     const uri = {
       route: vi.fn(() => {
-        throw new RouteNameNotFoundError('nonexistent')
+        throw new RouterError('nonexistent')
       }),
     } satisfies Pick<Uri, 'route'>
     runWithUri(uri, () => {
-      expect(() => route('nonexistent')).toThrow(RouteNameNotFoundError)
+      expect(() => route('nonexistent')).toThrow(RouterError)
     })
   })
 })

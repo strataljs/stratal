@@ -3,7 +3,7 @@ import { injectable, Lifecycle, container as tsyringeRootContainer } from 'tsyri
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RouterContext } from '../../router/router-context'
 import { Container } from '../container'
-import { RequestScopeOperationNotAllowedError } from '../errors/request-scope-operation-not-allowed.error'
+import { ContainerError } from '../container.error'
 import { CONTAINER_TOKEN, DI_TOKENS } from '../tokens'
 import { Scope } from '../types'
 
@@ -174,7 +174,7 @@ describe('Container', () => {
   })
 
   describe('request scope restrictions', () => {
-    it('should throw RequestScopeOperationNotAllowedError for runInRequestScope on request-scoped container', async () => {
+    it('should throw ContainerError for runInRequestScope on request-scoped container', async () => {
       const reqChildContainer = tsyringeRootContainer.createChildContainer()
       const reqContainer = new Container({
         container: reqChildContainer,
@@ -185,10 +185,10 @@ describe('Container', () => {
         reqContainer.runInRequestScope({} as unknown as RouterContext, async () => {
           // noop
         })
-      ).rejects.toThrow(RequestScopeOperationNotAllowedError)
+      ).rejects.toThrow(ContainerError)
     })
 
-    it('should throw RequestScopeOperationNotAllowedError for createRequestScope on request-scoped container', () => {
+    it('should throw ContainerError for createRequestScope on request-scoped container', () => {
       const reqChildContainer = tsyringeRootContainer.createChildContainer()
       const reqContainer = new Container({
         container: reqChildContainer,
@@ -196,7 +196,7 @@ describe('Container', () => {
       })
 
       expect(() => reqContainer.createRequestScope({} as unknown as RouterContext)).toThrow(
-        RequestScopeOperationNotAllowedError
+        ContainerError
       )
     })
   })

@@ -13,7 +13,7 @@ import { LogLevel } from '../logger';
 import { Module } from '../module/module.decorator';
 import { Controller } from '../router/decorators/controller.decorator';
 import { Route } from '../router/decorators/route.decorator';
-import { ControllerRegistrationError } from '../router/errors';
+import { RouterError } from '../router/router.error';
 import type { RouterContext } from '../router/router-context';
 import type { Constructor } from '../types';
 
@@ -162,10 +162,10 @@ describe('Application (eager bootstrap)', () => {
     // No error thrown
   })
 
-  it('should throw ControllerRegistrationError for controller without route decorators', async () => {
+  it('should throw RouterError for controller without route decorators', async () => {
     const noDecoratorApp = createTestApp({ module: NoDecoratorModule })
     await noDecoratorApp.initialize()
-    await expect(noDecoratorApp.ensureHono()).rejects.toThrow(ControllerRegistrationError)
+    await expect(noDecoratorApp.ensureHono()).rejects.toThrow(RouterError)
   })
 })
 

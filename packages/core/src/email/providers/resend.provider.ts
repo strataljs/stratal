@@ -1,7 +1,7 @@
 import { Resend } from 'resend'
 import type { ResolvedEmailAttachment, ResolvedEmailMessage } from '../contracts'
 import type { EmailModuleOptions } from '../email.module'
-import { EmailResendApiFailedError, ResendApiKeyMissingError } from '../errors'
+import { EmailError } from '../email.error'
 import { BaseEmailProvider } from './base-email.provider'
 import type { EmailSendResult } from './email-provider.interface'
 
@@ -22,7 +22,7 @@ export class ResendProvider extends BaseEmailProvider {
 
     // Validate Resend API key
     if (!this.options.apiKey) {
-      throw new ResendApiKeyMissingError()
+      throw new EmailError('Resend API key is required')
     }
 
     this.client = new Resend(this.options.apiKey)
@@ -60,7 +60,7 @@ export class ResendProvider extends BaseEmailProvider {
       })
 
       if (response.error) {
-        throw new EmailResendApiFailedError()
+        throw new EmailError('Resend API request failed')
       }
 
       return {
@@ -71,11 +71,11 @@ export class ResendProvider extends BaseEmailProvider {
         },
       }
     } catch (error) {
-      if (error instanceof EmailResendApiFailedError || error instanceof ResendApiKeyMissingError) {
+      if (error instanceof EmailError) {
         throw error
       }
 
-      throw new EmailResendApiFailedError()
+      throw new EmailError('Resend API request failed')
     }
   }
 
