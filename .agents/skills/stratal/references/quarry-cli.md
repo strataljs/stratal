@@ -69,6 +69,12 @@ npx quarry ./custom/entry.ts --env staging route:list
 | `api` | Serve the OpenAPI spec |
 | `mcp:serve` | Start an MCP stdio server exposing routes as tools |
 | `mcp:tools` | List routes that would be exposed as MCP tools |
+| `i18n:check {--locale=} {--prefix=}` | Audit translations: missing/extra keys vs `en`. Exit code 1 on issues (CI-friendly) |
+| `i18n:stats {--prefix=}` | Show translation coverage statistics per locale |
+| `i18n:list {--locale=} {--prefix=} {--values}` | List all message keys with Y/N coverage per locale |
+| `i18n:search {query} {--locale=} {--keys-only}` | Search message keys or values by substring |
+| `i18n:namespaces {--depth=} {--locale=}` | List namespaces with key counts per locale |
+| `i18n:duplicates {--locale=} {--prefix=}` | Find keys sharing identical translation values |
 
 ## Debugging Your App
 
@@ -145,6 +151,47 @@ npx quarry mcp:tools --tag=Notes --path=/api/v1
 ```
 
 Outputs a table with method, path, and description for each tool.
+
+## I18n Introspection
+
+Inspect translation coverage, find missing keys, and audit locales. Base locale is always `en`.
+
+```bash
+# Audit all non-en locales for missing/extra keys (returns exit code 1 if issues found)
+npx quarry i18n:check
+
+# Check only French translations
+npx quarry i18n:check --locale=fr
+
+# Check only the 'common' namespace
+npx quarry i18n:check --prefix=common
+
+# Coverage dashboard: keys, translated, missing, extra, % per locale
+npx quarry i18n:stats
+
+# List all keys with Y/N per locale
+npx quarry i18n:list
+
+# Show translated values for a specific locale
+npx quarry i18n:list --locale=fr --values
+
+# Search for keys or values matching a substring
+npx quarry i18n:search email
+npx quarry i18n:search obligatoire --locale=fr
+
+# Only search key names (skip value matching)
+npx quarry i18n:search validation --keys-only
+
+# Show namespaces with key counts
+npx quarry i18n:namespaces
+
+# Drill into sub-namespaces
+npx quarry i18n:namespaces --depth=2
+
+# Find duplicate values (copy-paste detection)
+npx quarry i18n:duplicates
+npx quarry i18n:duplicates --locale=fr
+```
 
 ## Creating Custom Commands
 

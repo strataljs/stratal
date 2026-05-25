@@ -471,3 +471,18 @@ I18nModule.forRoot({
 
 - `RouterContext.setLocale(locale)` / `RouterContext.getLocale()` for runtime locale changes
 - Falls back to `defaultLocale` if the detected locale is not in `locales`
+
+### CLI Introspection
+
+Audit and explore translations via Quarry CLI:
+
+```bash
+npx quarry i18n:check              # Audit missing/extra keys (exit code 1 = issues found)
+npx quarry i18n:stats              # Coverage % per locale
+npx quarry i18n:list --locale=fr --values  # Show translated values for a locale
+npx quarry i18n:search email       # Search keys/values
+npx quarry i18n:namespaces         # Key counts by namespace
+npx quarry i18n:duplicates         # Find duplicate values
+```
+
+See `references/quarry-cli.md` for all flags and options.

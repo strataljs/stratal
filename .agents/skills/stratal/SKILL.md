@@ -5,7 +5,7 @@ license: MIT
 compatibility: Designed for AI Agents. Requires Node.js 22+, npm.
 metadata:
   author: Temitayo Fadojutimi
-  version: "1.7"
+  version: "1.8"
 ---
 
 # Stratal Framework
@@ -62,6 +62,12 @@ Run `npx quarry help` to see all commands. Always use these to inspect your app 
 | `npx quarry mcp:tools` | Preview MCP tools from your API |
 | `npx quarry mcp:serve` | Start MCP stdio server exposing routes as tools |
 | `npx quarry api` | Serve the OpenAPI spec |
+| `npx quarry i18n:check` | Audit translations for missing/extra keys (exit code 1 on issues — CI-friendly) |
+| `npx quarry i18n:stats` | Show translation coverage % per locale |
+| `npx quarry i18n:list` | List all message keys with per-locale coverage |
+| `npx quarry i18n:search` | Search message keys or values by substring |
+| `npx quarry i18n:namespaces` | List namespaces with key counts per locale |
+| `npx quarry i18n:duplicates` | Find keys with duplicate translation values |
 
 For full CLI reference including custom command creation, see `references/quarry-cli.md`.
 
@@ -300,6 +306,8 @@ See `references/quarry-cli.md` for all MCP flags and options.
 **User says "List all routes" / "Debug my app"** -> Run `npx quarry route:list`. Also try `event:list`, `schedule:list`, `queue:list` to inspect other registrations.
 
 **User says "Set up i18n with Accept-Language header"** -> Read `references/errors-and-i18n.md`. Configure `I18nModule.forRoot({ detection: { strategy: 'header' } })`. Register messages with `I18nModule.registerMessages()`.
+
+**User says "Check if all translations are complete" / "Audit i18n" / "Missing translations"** -> Run `npx quarry i18n:check`. Use `--locale=fr` to check a single locale, `--prefix=common` to filter by namespace. See `references/quarry-cli.md` for all i18n commands.
 
 **User says "Generate URLs for routes"** -> Read `references/routing.md`. Use `ctx.route('name', params)` in controllers. Use standalone `route()` from `stratal/router` outside controllers. Run `npx quarry route:types` for type safety.
 
