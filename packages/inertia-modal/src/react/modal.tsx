@@ -50,9 +50,7 @@ export function Modal() {
         setComponent(() => component as ComponentType<Record<string, unknown>>)
       })
       .catch(() => setComponent(null))
-  // Re-load the component whenever nonce changes (new modal or refreshed props)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modal?.nonce])
+  }, [modal?.component])
 
   // Inject x-inertia-modal-key into every Inertia request while the modal is
   // open. This ensures partial reloads (e.g. country → states cascade) reuse the
@@ -70,5 +68,5 @@ export function Modal() {
     return null
   }
 
-  return <Component key={modal.key} {...modal.props} />
+  return <Component key={modal.component} {...modal.props} />
 }

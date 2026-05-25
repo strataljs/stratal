@@ -1,8 +1,7 @@
-import { ERROR_CODES } from '../../errors'
-import { ApplicationError } from '../../errors'
+import { HttpException } from '../../errors'
 
-export class FileNotFoundError extends ApplicationError {
-  constructor(path: string) {
-    super('errors.storage.fileNotFound', ERROR_CODES.RESOURCE.NOT_FOUND, { path })
+export class FileNotFoundError extends HttpException {
+  constructor(path?: string) {
+    super(404, path ? `File not found: "${path}"` : 'File not found')
   }
 }

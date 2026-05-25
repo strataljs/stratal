@@ -56,7 +56,7 @@ export class ThrottleDecoratorAppModule {}
 
 /**
  * Imports RateLimiterModule but never calls forRoot — should fail at boot
- * with RateLimiterNotConfiguredError thrown by the module's own onInitialize
+ * with RateLimiterError thrown by the module's own onInitialize
  * hook.
  *
  * The cast widens RateLimiterModule's typed `forRoot(options)` back to the
@@ -71,7 +71,7 @@ export class ThrottleUnconfiguredAppModule {}
 /**
  * Uses router.throttle() but does NOT import RateLimiterModule. The
  * Registry token is unbound, so the optional inject in ThrottleMiddleware
- * returns undefined and surfaces RateLimiterModuleNotImportedError on the
+ * returns undefined and surfaces RateLimiterError on the
  * first request.
  */
 @Module({

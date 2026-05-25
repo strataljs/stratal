@@ -3,7 +3,7 @@ import { Transient } from '../di/decorators'
 import { Macroable } from '../macroable'
 import type { Next } from '../router/middleware.interface'
 import type { RouterContext } from '../router/router-context'
-import { RateLimiterNotDefinedError, TooManyRequestsError } from './errors'
+import { RateLimiterError, TooManyRequestsError } from './errors'
 import type { Limit, RateLimitHeaders } from './limit'
 import { RATE_LIMITER_TOKENS } from './rate-limiter.tokens'
 import type { IRateLimiterStore, RateLimitHit } from './stores/rate-limiter-store.interface'
@@ -81,7 +81,7 @@ export class RateLimiterRegistry extends Macroable {
   async handle(name: string, ctx: RouterContext, next: Next): Promise<Response | void> {
     const resolver = this.resolvers.get(name)
     if (!resolver) {
-      throw new RateLimiterNotDefinedError(name)
+      throw new RateLimiterError(`Rate limiter "${name}" is not defined. Register it with limiter.for("${name}", ...) in a module's onInitialize hook.`)
     }
 
     const resolved = await resolver(ctx)

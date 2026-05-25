@@ -1,21 +1,16 @@
 import { APIError } from 'better-auth/api'
+import { AuthError } from 'stratal/errors'
 import type { ApplicationError } from 'stratal/errors'
 import {
   AccountAlreadyExistsError,
   AccountNotFoundError,
   AuthValidationFailedError,
-  BetterAuthUnknownError,
   CannotUnlinkLastAccountError,
   CredentialAccountNotFoundError,
   EmailAlreadyVerifiedError,
   EmailCannotBeUpdatedError,
   EmailMismatchError,
   EmailNotVerifiedError,
-  FailedToCreateSessionError,
-  FailedToCreateUserError,
-  FailedToGetSessionError,
-  FailedToGetUserInfoError,
-  FailedToUpdateUserError,
   IdTokenNotSupportedError,
   InvalidCallbackUrlError,
   InvalidCredentialsError,
@@ -58,12 +53,12 @@ export function mapBetterAuthError(error: APIError): ApplicationError {
     if (location.includes('EXPIRED_TOKEN')) return new TokenExpiredError()
     if (location.includes('ATTEMPTS_EXCEEDED')) return new InvalidTokenError()
     if (location.includes('new_user_signup_disabled')) return new UserNotFoundError()
-    if (location.includes('failed_to_create_user')) return new FailedToCreateUserError()
-    if (location.includes('failed_to_create_session')) return new FailedToCreateSessionError()
+    if (location.includes('failed_to_create_user')) return new AuthError('Failed to create user')
+    if (location.includes('failed_to_create_session')) return new AuthError('Failed to create session')
   }
 
   if (!errorCode) {
-    return new BetterAuthUnknownError()
+    return new AuthError('An authentication error occurred')
   }
 
   // ── Base Error Codes ──────────────────────────────────────────────────
@@ -79,8 +74,8 @@ export function mapBetterAuthError(error: APIError): ApplicationError {
 
   // Session errors
   if (errorCode === 'SESSION_EXPIRED' || errorCode === 'SESSION_NOT_FRESH') return new SessionExpiredError()
-  if (errorCode === 'FAILED_TO_CREATE_SESSION') return new FailedToCreateSessionError()
-  if (errorCode === 'FAILED_TO_GET_SESSION') return new FailedToGetSessionError()
+  if (errorCode === 'FAILED_TO_CREATE_SESSION') return new AuthError('Failed to create session')
+  if (errorCode === 'FAILED_TO_GET_SESSION') return new AuthError('Failed to retrieve session')
 
   // Email verification
   if (errorCode === 'EMAIL_NOT_VERIFIED') return new EmailNotVerifiedError()
@@ -101,9 +96,9 @@ export function mapBetterAuthError(error: APIError): ApplicationError {
   if (errorCode === 'FAILED_TO_UNLINK_LAST_ACCOUNT') return new CannotUnlinkLastAccountError()
 
   // User creation/update errors
-  if (errorCode === 'FAILED_TO_CREATE_USER') return new FailedToCreateUserError()
-  if (errorCode === 'FAILED_TO_UPDATE_USER') return new FailedToUpdateUserError()
-  if (errorCode === 'FAILED_TO_GET_USER_INFO') return new FailedToGetUserInfoError()
+  if (errorCode === 'FAILED_TO_CREATE_USER') return new AuthError('Failed to create user')
+  if (errorCode === 'FAILED_TO_UPDATE_USER') return new AuthError('Failed to update user')
+  if (errorCode === 'FAILED_TO_GET_USER_INFO') return new AuthError('Failed to retrieve user info')
 
   // Social account errors
   if (errorCode === 'SOCIAL_ACCOUNT_ALREADY_LINKED' || errorCode === 'LINKED_ACCOUNT_ALREADY_EXISTS') {
@@ -155,7 +150,7 @@ export function mapBetterAuthError(error: APIError): ApplicationError {
 
   // Verification errors
   if (errorCode === 'FAILED_TO_CREATE_VERIFICATION' || errorCode === 'VERIFICATION_EMAIL_NOT_ENABLED') {
-    return new FailedToCreateSessionError()
+    return new AuthError('Failed to create session')
   }
 
   // ── Organization Plugin Error Codes ───────────────────────────────────
@@ -248,7 +243,7 @@ export function mapBetterAuthError(error: APIError): ApplicationError {
   }
 
   // Unknown error code
-  return new BetterAuthUnknownError(errorCode)
+  return new AuthError('An authentication error occurred')
 }
 
 /**

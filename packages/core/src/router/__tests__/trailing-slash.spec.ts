@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Application, type ApplicationOptions } from '../../application'
 import type { StratalEnv } from '../../env'
-import { z } from '../../i18n/validation'
+import { z } from '../../i18n/validation/zod'
 import { LogLevel } from '../../logger'
 import { Module } from '../../module/module.decorator'
 import { Controller } from '../decorators/controller.decorator'

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { CacheService } from '../../cache/services/cache.service'
 import type { Container } from '../../di/container'
 import type { StratalEnv } from '../../env'
-import { RateLimiterNotConfiguredError } from '../errors'
+import { RateLimiterError } from '../errors'
 import { InMemoryRateLimiterStore } from '../stores/memory-store'
 import { KvRateLimiterStore } from '../stores/kv-store'
 import {
@@ -30,9 +30,9 @@ function buildFactory(options?: RateLimiterModuleOptions, env?: Partial<StratalE
 }
 
 describe('RateLimiterStoreFactory', () => {
-  it('throws RateLimiterNotConfiguredError when no options are bound', () => {
+  it('throws RateLimiterError when no options are bound', () => {
     const { factory } = buildFactory(undefined)
-    expect(() => factory.create()).toThrow(RateLimiterNotConfiguredError)
+    expect(() => factory.create()).toThrow(RateLimiterError)
   })
 
   it("returns InMemoryRateLimiterStore for { store: 'memory' }", () => {
@@ -58,7 +58,7 @@ describe('RateLimiterStoreFactory', () => {
       { store: 'kv', binding: 'MISSING_KV' as keyof StratalEnv },
       {},
     )
-    expect(() => factory.create()).toThrow(RateLimiterNotConfiguredError)
+    expect(() => factory.create()).toThrow(RateLimiterError)
   })
 
   it('resolves a custom store class from the container for { store: { useClass } }', () => {

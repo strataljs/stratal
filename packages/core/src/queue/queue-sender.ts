@@ -6,8 +6,8 @@ import type { DispatchMessage, IQueueSender } from './queue-sender.interface'
 /**
  * Queue Sender
  *
- * Implementation of IQueueSender bound to a specific queue name.
- * Created by QueueRegistry for each registered queue.
+ * Implementation of IQueueSender bound to a specific queue binding.
+ * Created by QueueRegistry for each registered binding.
  *
  * Automatically enriches messages with:
  * - `id`: UUID generated via crypto.randomUUID()
@@ -17,7 +17,7 @@ import type { DispatchMessage, IQueueSender } from './queue-sender.interface'
  * @example
  * ```typescript
  * // Created by QueueRegistry, not directly instantiated
- * const sender = registry.getQueue('notifications-queue')
+ * const sender = registry.getQueue('NOTIFICATIONS_QUEUE')
  *
  * await sender.dispatch({
  *   type: 'email.send',
@@ -27,7 +27,7 @@ import type { DispatchMessage, IQueueSender } from './queue-sender.interface'
  */
 export class QueueSender implements IQueueSender {
   constructor(
-    private readonly queueName: string,
+    private readonly binding: string,
     private readonly provider: IQueueProvider,
     private readonly i18n: II18nService
   ) {}
@@ -54,6 +54,6 @@ export class QueueSender implements IQueueSender {
       metadata: Object.keys(metadata).length > 0 ? metadata : undefined
     }
 
-    await this.provider.send(this.queueName, fullMessage)
+    await this.provider.send(this.binding, fullMessage)
   }
 }

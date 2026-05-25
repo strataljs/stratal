@@ -1,4 +1,5 @@
 import type { InertiaAppSSRResponse, Page, SharedPageProps } from '@inertiajs/core'
+import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { RouterContext } from 'stratal/router'
 
 
@@ -33,6 +34,11 @@ export interface InertiaRenderOptions {
   encryptHistory?: boolean
   clearHistory?: boolean
   preserveFragment?: boolean
+  /**
+   * HTTP status code to use for the rendered response. Defaults to `200`.
+   * Useful for rendering Inertia error pages (e.g. `Errors/404` with status 404).
+   */
+  status?: ContentfulStatusCode
 }
 
 // Use InertiaAppSSRResponse from @inertiajs/core — { head: string[]; body: string }

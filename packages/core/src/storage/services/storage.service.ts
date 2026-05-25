@@ -1,10 +1,7 @@
 import { inject } from 'tsyringe'
 import { Transient } from '../../di/decorators'
 import type { DownloadResult, PresignedUrlResult, UploadOptions, UploadResult } from '../contracts'
-import {
-  InvalidDiskError,
-  PresignedUrlInvalidExpiryError,
-} from '../errors'
+import { StorageError } from '../storage.error'
 import type { StreamingBlobPayloadInputTypes } from '../providers/storage-provider.interface'
 import { STORAGE_TOKENS } from '../storage.tokens'
 import type { StorageConfig } from '../types'
@@ -171,7 +168,7 @@ export class StorageService {
     const diskName = disk ?? this.options.defaultStorageDisk
 
     if (!this.storageManager.hasDisk(diskName)) {
-      throw new InvalidDiskError(diskName)
+      throw new StorageError(`Disk "${diskName}" is not configured`)
     }
 
     return diskName
@@ -228,7 +225,7 @@ export class StorageService {
     const maxExpiry = presignedUrlConfig.maxExpiry
 
     if (validatedExpiresIn < minExpiry || validatedExpiresIn > maxExpiry) {
-      throw new PresignedUrlInvalidExpiryError(validatedExpiresIn, minExpiry, maxExpiry)
+      throw new StorageError(`Presigned URL expiry ${validatedExpiresIn}s is out of range (${minExpiry}–${maxExpiry}s)`)
     }
 
     return validatedExpiresIn

@@ -19,7 +19,7 @@ export type SendBatchEmailInputWithTemplate = Omit<SendBatchEmailInput, 'message
  *
  * Main facade for sending emails. Routes emails to queues for async processing.
  * The queue is injected via EMAIL_TOKENS.EmailQueue, configured by the application
- * via EmailModule.forRoot({ queue: 'queue-name' }).
+ * via EmailModule.forRoot({ queue: 'QUEUE_BINDING_NAME' }).
  *
  * @example Basic usage
  * ```typescript

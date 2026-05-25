@@ -1,14 +1,9 @@
 import { Scope } from 'stratal/di'
 import { ApplicationError, type ApplicationErrorConstructor, type ExceptionHandler, type HttpExceptionContext } from 'stratal/errors'
-import { I18N_TOKENS, type II18nService } from 'stratal/i18n'
 import type { AsyncModuleOptions, DynamicModule, OnException, OnInitialize } from 'stratal/module'
 import { Module } from 'stratal/module'
 import { SchemaValidationError, type RouteConfigurable, type Router } from 'stratal/router'
 import { augmentRouterContext } from './augment/router-context'
-import { InertiaBuildCommand } from './commands/inertia-build.command'
-import { InertiaDevCommand } from './commands/inertia-dev.command'
-import { InertiaInstallCommand } from './commands/inertia-install.command'
-import { InertiaTypesCommand } from './commands/inertia-types.command'
 import type { InertiaModuleOptions } from './inertia.options'
 import { INERTIA_TOKENS } from './inertia.tokens'
 import { InertiaMiddleware } from './middleware/inertia.middleware'
@@ -23,10 +18,6 @@ import { TemplateService } from './services/template.service'
     { provide: INERTIA_TOKENS.TemplateService, useClass: TemplateService },
     { provide: INERTIA_TOKENS.ManifestService, useClass: ManifestService },
     { provide: INERTIA_TOKENS.SsrRenderer, useClass: SsrRendererService, scope: Scope.Singleton },
-    InertiaInstallCommand,
-    InertiaTypesCommand,
-    InertiaDevCommand,
-    InertiaBuildCommand,
   ],
 })
 export class InertiaModule implements RouteConfigurable, OnInitialize, OnException {
@@ -67,7 +58,7 @@ export class InertiaModule implements RouteConfigurable, OnInitialize, OnExcepti
 
       if (!this.isInertiaRequest(context)) return undefined
 
-      const issues = (error.metadata?.issues as { path: string; message: string }[]) ?? []
+      const issues = error.issues ?? []
       const errors: Record<string, string> = {}
       for (const issue of issues) {
         errors[issue.path] = issue.message
@@ -81,8 +72,7 @@ export class InertiaModule implements RouteConfigurable, OnInitialize, OnExcepti
     handler.renderable(ApplicationError as unknown as ApplicationErrorConstructor, (error, context) => {
       if (context.type !== 'http') return undefined
 
-      const i18n = context.ctx.getContainer().resolve<II18nService>(I18N_TOKENS.I18nService)
-      const message = i18n.t(error.message as Parameters<II18nService['t']>[0], error.metadata as Record<string, string | number>)
+      const message = error.message
 
       if (this.isPrecognitionRequest(context)) {
         return this.createPrecognitionErrorResponse({ _form: message })
@@ -92,6 +82,22 @@ export class InertiaModule implements RouteConfigurable, OnInitialize, OnExcepti
 
       context.ctx.flash('errors', { _form: message } as const)
       return this.redirectBack(context)
+    })
+
+    // Render full Inertia error pages for HTTP HTML requests. Convention:
+    // consumers ship `pages/Errors/${status}.tsx` (e.g. Errors/404, Errors/500).
+    handler.errorPage(async (errorResponse, status, context) => {
+      try {
+        const inertia = context.ctx.getContainer().resolve<InertiaService>(INERTIA_TOKENS.InertiaService)
+        return await inertia.render(
+          context.ctx,
+          `Errors/${status}`,
+          { status, message: errorResponse.message },
+          { status },
+        )
+      } catch {
+        return undefined
+      }
     })
   }
 
@@ -111,7 +117,7 @@ export class InertiaModule implements RouteConfigurable, OnInitialize, OnExcepti
   }
 
   private handlePrecognitionValidationError(error: SchemaValidationError, context: HttpExceptionContext): Response {
-    const issues = (error.metadata?.issues as { path: string; message: string }[]) ?? []
+    const issues = error.issues ?? []
     let errors: Record<string, string> = {}
     for (const issue of issues) {
       errors[issue.path] = issue.message

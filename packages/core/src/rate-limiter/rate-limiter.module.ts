@@ -26,7 +26,7 @@ import type { IRateLimiterStore } from './stores/rate-limiter-store.interface'
  * The module:
  *  - eagerly validates the store at app boot (`onInitialize` resolves the
  *    factory and calls `create()`); a missing `forRoot` surfaces
- *    `RateLimiterNotConfiguredError` before any request is served.
+ *    `RateLimiterError` before any request is served.
  *  - registers a `respond()` callback on the `ExceptionHandler` (via
  *    `onException`) that injects `Retry-After` and `X-RateLimit-*` headers
  *    on every {@link TooManyRequestsError} response, regardless of whether

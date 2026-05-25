@@ -12,10 +12,10 @@ import { type QueueProviderFactory } from './services'
  * Queue Registry
  *
  * Request-scoped factory service for creating QueueSender instances.
- * Caches senders per queue name within the request scope.
+ * Caches senders per binding within the request scope.
  *
  * This service is used internally by QueueModule.registerQueue() to provide
- * IQueueSender instances for each registered queue.
+ * IQueueSender instances for each registered binding.
  *
  * **Why request-scoped?**
  * - Needs access to I18nService for locale-aware message metadata
@@ -25,12 +25,12 @@ import { type QueueProviderFactory } from './services'
  * @example
  * ```typescript
  * // Used internally by QueueModule.registerQueue()
- * QueueModule.registerQueue('notifications-queue')
+ * QueueModule.registerQueue('NOTIFICATIONS_QUEUE')
  *
  * // The module creates a factory provider:
  * {
- *   provide: 'notifications-queue',
- *   useFactory: (registry: QueueRegistry) => registry.getQueue('notifications-queue'),
+ *   provide: 'NOTIFICATIONS_QUEUE',
+ *   useFactory: (registry: QueueRegistry) => registry.getQueue('NOTIFICATIONS_QUEUE'),
  *   inject: [QUEUE_TOKENS.QueueRegistry],
  * }
  * ```
@@ -48,19 +48,19 @@ export class QueueRegistry {
   }
 
   /**
-   * Get or create a QueueSender for the specified queue name.
+   * Get or create a QueueSender for the specified binding.
    *
-   * Senders are cached per queue name within the request scope.
+   * Senders are cached per binding within the request scope.
    *
-   * @param queueName - The queue name to get a sender for
-   * @returns QueueSender bound to the specified queue
+   * @param binding - The queue binding to get a sender for
+   * @returns QueueSender bound to the specified binding
    */
-  getQueue(queueName: string): IQueueSender {
-    let sender = this.senders.get(queueName)
+  getQueue(binding: string): IQueueSender {
+    let sender = this.senders.get(binding)
 
     if (!sender) {
-      sender = new QueueSender(queueName, this.provider, this.i18n)
-      this.senders.set(queueName, sender)
+      sender = new QueueSender(binding, this.provider, this.i18n)
+      this.senders.set(binding, sender)
     }
 
     return sender

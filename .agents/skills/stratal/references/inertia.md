@@ -55,7 +55,6 @@ InertiaModule.forRootAsync({
 - `flash?` — `{ store: FlashStore }` — flash message storage (use `CookieFlashStore`)
 - `i18n?` — `{ only?: string[] }` — share backend translations with frontend
 - `routes?` — `boolean` — When `true`, serializes all named routes and injects them as a `routes` shared prop for client-side URL generation with `useRoute()`. The configured `trailingSlash` mode (from the `Stratal` constructor) is also forwarded as a `trailingSlash` shared prop so `useRoute()` produces canonical URLs that match the server. Also injects a `route: { name, params, defaults }` shared prop so `useRoute()` knows the current match. Sticky params set on the server via `Uri.defaults()` come through as `defaults` and are auto-applied by `route(name, params?)` on the client.
-- `manifest?` — Vite manifest object for asset resolution
 - `entryClientPath?` — Client entry point (default: `src/inertia/app.tsx`)
 
 ## Rendering Pages
@@ -101,7 +100,48 @@ export class NotesController {
 `ctx.inertia(component, props?, options?)`:
 - First request: returns full HTML page with SSR
 - Subsequent Inertia requests (`X-Inertia` header): returns JSON page object
-- `options`: `{ encryptHistory?, clearHistory?, preserveFragment? }` (all optional)
+- `options`: `{ encryptHistory?, clearHistory?, preserveFragment?, status? }` (all optional). `status` defaults to `200`; set it to return a non-200 response (useful for hand-rendered error pages).
+
+## Error Pages
+
+`InertiaModule` auto-registers an `errorPage` callback on the `ExceptionHandler`. Any thrown error whose HTTP status is `S` renders the Inertia page `Errors/${S}` (e.g. `Errors/404`, `Errors/500`, `Errors/503`) with the response status set to `S`.
+
+Convention: ship error components under your pages directory:
+
+```
+pages/Errors/404.tsx
+pages/Errors/500.tsx
+pages/Errors/503.tsx
+```
+
+The page receives `{ status, message, code }` as props:
+
+```tsx
+// pages/Errors/404.tsx
+export default function NotFound({ status, message, code }: { status: number; message: string; code: number }) {
+  return (
+    <div>
+      <h1>{status}</h1>
+      <p>{message}</p>
+    </div>
+  )
+}
+```
+
+Override per-status from `AppExceptionHandler.register()` — user `errorPage` callbacks run before the Inertia-supplied one and win:
+
+```typescript
+import { ExceptionHandler } from 'stratal/errors'
+
+export class AppExceptionHandler extends ExceptionHandler {
+  register(): void {
+    this.errorPage((errorResponse, status, context) => {
+      if (status === 503) return new Response(maintenanceHtml(), { status, headers: { 'content-type': 'text/html' } })
+      // Return undefined to defer to Inertia's `Errors/${status}` renderer
+    })
+  }
+}
+```
 
 ## Inertia Decorators
 
@@ -442,7 +482,17 @@ With augmentation, `ctx.inertia('notes/Index', { notes })` is fully type-checked
 
 ## Inertia CLI Commands
 
-`@stratal/inertia` ships a standalone `inertia` bin (declared in its `package.json`). It runs in plain Node — no Quarry / DI bootstrap — so it works in projects that don't have a Stratal entry yet (e.g. during `install`).
+Inertia CLI commands live in `InertiaQuarryModule` — import it from `@stratal/inertia/quarry` in your `src/quarry.ts`:
+
+```typescript
+import { QuarryRunner } from 'stratal/quarry/runner'
+import { InertiaQuarryModule } from '@stratal/inertia/quarry'
+import { AppModule } from './app.module'
+
+export default QuarryRunner.run({
+  imports: [AppModule, InertiaQuarryModule],
+})
+```
 
 ```bash
 # Scaffold Inertia project structure (run once after install)
@@ -451,7 +501,7 @@ npx quarry inertia:install               # --skip-deps to skip the npm-install h
 # Start Vite dev server
 npx quarry inertia:dev                   # --port=5173 --host --persist-to=.cf-state
 
-# Production build via Vite
+# Production build via Vite (2-phase: browser bundle → worker bundle)
 npx quarry inertia:build                 # --out-dir=dist --ssr
 
 # Generate TypeScript types for Inertia pages
@@ -472,9 +522,18 @@ export default createViteConfig({
 })
 ```
 
+### `stratalInertia()` Plugin Options
+
+The `stratalInertia()` Vite plugin (included in `createViteConfig`) accepts:
+
+- `entries?` — Client entry paths for CSS collection (default: `['/src/inertia/app.tsx']`)
+- `sourcemap?` — `boolean | 'dev-and-staging'` (default: `'dev-and-staging'`). When `'dev-and-staging'`, sourcemaps are emitted unless `CLOUDFLARE_ENV` is `'prod'` or `'production'`.
+- `clientManifestPath?` — Path to the Vite client manifest from the browser-bundle build (default: `'dist/client/.vite/manifest.json'`)
+
 ## Sub-Path Imports
 
 - `@stratal/inertia` — Main module, service, decorators, flash stores, types
+- `@stratal/inertia/quarry` — CLI-only: `InertiaQuarryModule`, build/dev/types/install commands, `runTypeGeneration`
 - `@stratal/inertia/vite` — Vite configuration and plugins
 - `@stratal/inertia/react` — React hooks (`useI18n`, `useRoute`)
 - `@stratal/inertia/testing` — Test response assertions for Inertia pages

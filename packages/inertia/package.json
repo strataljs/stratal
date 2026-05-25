@@ -40,6 +40,10 @@
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
     },
+    "./quarry": {
+      "types": "./dist/quarry.d.mts",
+      "import": "./dist/quarry.mjs"
+    },
     "./react": {
       "types": "./dist/react.d.mts",
       "import": "./dist/react.mjs"

@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from 'hono/types'
-import type { PathItemObject } from '../i18n/validation'
+import type { PathItemObject } from '../i18n/validation/zod'
 import type { RouterEnv } from '../router/types'
 
 /**

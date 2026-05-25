@@ -6,7 +6,7 @@ import { Transient } from '../../di/decorators'
 import { DI_TOKENS } from '../../di/tokens'
 import type { StratalEnv } from '../../env'
 import type { Constructor } from '../../types'
-import { RateLimiterNotConfiguredError } from '../errors'
+import { RateLimiterError } from '../errors'
 import { RATE_LIMITER_TOKENS } from '../rate-limiter.tokens'
 import { KvRateLimiterStore } from './kv-store'
 import { InMemoryRateLimiterStore } from './memory-store'
@@ -42,7 +42,7 @@ export class RateLimiterStoreFactory {
 
   create(): IRateLimiterStore {
     if (!this.options) {
-      throw new RateLimiterNotConfiguredError()
+      throw new RateLimiterError('RateLimiterModule is not configured. Call RateLimiterModule.forRoot({ store: ... }) to configure a backing store.')
     }
 
     const { store } = this.options
@@ -54,7 +54,7 @@ export class RateLimiterStoreFactory {
     if (store === 'kv') {
       const binding = this.env[this.options.binding] as KVNamespace | undefined
       if (!binding) {
-        throw new RateLimiterNotConfiguredError()
+        throw new RateLimiterError(`KV binding "${String(this.options.binding)}" is not available in the environment.`)
       }
       return new KvRateLimiterStore(this.cache.withBinding(binding))
     }

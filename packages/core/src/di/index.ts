@@ -1,5 +1,6 @@
 export * from './tokens'
 export * from './container'
+export * from './container.error'
 export * from './decorators'
 export * from './types'
 export * from './conditional-binding-builder'

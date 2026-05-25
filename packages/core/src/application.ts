@@ -1,4 +1,4 @@
-import { injectable, container as tsyringeRootContainer } from 'tsyringe'
+import { container as tsyringeRootContainer } from 'tsyringe'
 import { CacheModule } from './cache'
 import type { CronJob } from './cron/cron-job'
 import { CronManager } from './cron/cron-manager'
@@ -7,7 +7,6 @@ import { runWithContainer } from './di/container-storage'
 import { DI_TOKENS } from './di/tokens'
 import { Scope } from './di/types'
 import { type StratalEnv } from './env'
-import { ApplicationError } from './errors'
 import { DefaultExceptionHandler } from './errors/default-exception-handler'
 import { createCliExceptionContext, createCronExceptionContext, createQueueExceptionContext } from './errors/exception-context'
 import type { ExceptionHandler } from './errors/exception-handler'
@@ -15,20 +14,11 @@ import type { EventHandler } from './events'
 import { EventRegistry, getListenerHandlers } from './events'
 import type { StratalExecutionContext } from './execution-context'
 import { I18nModule } from './i18n/i18n.module'
-import { ConsoleTransport, JsonFormatter, LOGGER_TOKENS, LoggerService, LogLevel, PrettyFormatter } from './logger'
+import { JsonFormatter, LOGGER_TOKENS, LoggerService, LogLevel, PrettyFormatter } from './logger'
 import { ModuleRegistry } from './module/module-registry'
 import type { DynamicModule, ModuleClass } from './module/types'
 import { OpenAPIModule } from './openapi'
 import type { Command } from './quarry/command'
-import { ApiCommand } from './quarry/commands/api.command'
-import { EventListCommand } from './quarry/commands/event-list.command'
-import { HelpCommand } from './quarry/commands/help.command'
-import { McpServeCommand } from './quarry/commands/mcp-serve.command'
-import { McpToolsCommand } from './quarry/commands/mcp-tools.command'
-import { QueueListCommand } from './quarry/commands/queue-list.command'
-import { RouteListCommand } from './quarry/commands/route-list.command'
-import { RouteTypesCommand } from './quarry/commands/route-types.command'
-import { ScheduleListCommand } from './quarry/commands/schedule-list.command'
 import { QuarryRegistry } from './quarry/quarry-registry'
 import type { CommandInput, CommandResult } from './quarry/types'
 import { type ConsumerRegistry } from './queue/consumer-registry'
@@ -45,7 +35,7 @@ import { RouteRegistrationService } from './router/services/route-registration.s
 import { VersioningService } from './router/services/versioning.service'
 import type { TrailingSlashMode, VersioningOptions } from './router/types'
 import { Uri } from './router/uri'
-import { DbSeedCommand, DbSeedListCommand, SEEDER_TOKENS, SeederRegistry, type Seeder } from './seeder'
+import { SEEDER_TOKENS, SeederRegistry, type Seeder } from './seeder'
 import type { Constructor } from './types'
 
 export interface ApplicationConfig {
@@ -137,8 +127,6 @@ export class Application {
   constructor({ env, ctx, ...config }: ApplicationOptions) {
     this.env = env
     this.appConfig = config
-
-    ApplicationError.captureStackTraces = env.ENVIRONMENT !== 'production'
 
     // Create unified Container with explicit child container
     this._container = new Container({
@@ -250,10 +238,11 @@ export class Application {
     // Uri — URL generation service (request-scoped for access to RouterContext)
     this._container.register(ROUTER_TOKENS.Uri, Uri, Scope.Request)
 
-    // RouterResolver — merges Router configs from modules
+    // RouterResolver — merges Router configs from modules (only registered when modules define routes)
     const routerConfigs = this.moduleRegistry.getAllRouterConfigs()
-    const routerResolver = routerConfigs.length > 0 ? new RouterResolver(routerConfigs) : null
-    this._container.registerValue(ROUTER_TOKENS.RouterResolver, routerResolver)
+    if (routerConfigs.length > 0) {
+      this._container.registerValue(ROUTER_TOKENS.RouterResolver, new RouterResolver(routerConfigs))
+    }
 
     // RouteRegistrationService — transient, resolved in HonoApp.configure()
     this._container.register(RouteRegistrationService, RouteRegistrationService)
@@ -261,9 +250,15 @@ export class Application {
 
   /**
    * Wire up queue consumers and event listeners.
-   * Called lazily on first fetch/queue — not during scheduled handling.
+   *
+   * Idempotent — the first call does the work; subsequent calls await the
+   * cached promise. Every entry path that opens a request scope
+   * (`handleFetch`, `handleQueue`, `handleScheduled`, and `runInScope` for
+   * RPC / Durable Objects / Workflows) must call this before resolving
+   * services that emit events, or the EventRegistry will silently drop
+   * events for handlers that have not been registered yet.
    */
-  private initializeHandlers(): Promise<void> {
+  async initializeHandlers(): Promise<void> {
     this.handlerInitPromise ??= runWithContainer(this._container, () => {
       this.registerQueueConsumers()
       this.registerEventListeners()
@@ -328,6 +323,8 @@ export class Application {
    * Handle scheduled cron trigger
    */
   async handleScheduled(controller: ScheduledController): Promise<void> {
+    await this.initializeHandlers()
+
     const mockRouterContext = this.createMockRouterContext('en')
 
     await this._container.runInRequestScope(mockRouterContext, async (requestContainer) => {
@@ -376,26 +373,12 @@ export class Application {
   }
 
   private registerCommands(): void {
-    // Built-in commands (always available)
-    const builtinCommands: Constructor<Command>[] = [
-      HelpCommand,
-      DbSeedCommand, DbSeedListCommand,
-      RouteListCommand, RouteTypesCommand, EventListCommand,
-      ScheduleListCommand, QueueListCommand,
-      McpServeCommand, McpToolsCommand, ApiCommand,
-    ]
-    for (const Cmd of builtinCommands) {
-      injectable()(Cmd)
-      this._container.register(Cmd, Cmd, Scope.Singleton)
-      this.quarry.register(Cmd)
-    }
-
-    // User commands from modules
+    // Commands come from modules — including framework built-ins, which
+    // `QuarryRunner` registers via `BuiltinQuarryModule`. The worker entry
+    // (`new Stratal({ module: AppModule })`) doesn't go through QuarryRunner
+    // so it stays free of CLI-only command classes and their transitive
+    // dev deps (`@modelcontextprotocol/sdk`, `ts-morph`, etc.).
     const commands = this.moduleRegistry.getAllCommands()
-    if (commands.length === 0) {
-      return
-    }
-
     for (const CommandClass of commands) {
       this.quarry.register(CommandClass as Constructor<Command>)
     }
@@ -463,8 +446,6 @@ export class Application {
       .give(PrettyFormatter)
       .otherwise(JsonFormatter)
 
-    this._container.registerSingleton(LOGGER_TOKENS.ConsoleTransport, ConsoleTransport)
-    this._container.registerFactory(LOGGER_TOKENS.Transports, (c) => [c.resolve(LOGGER_TOKENS.ConsoleTransport)])
     this._container.registerSingleton(LOGGER_TOKENS.LoggerService, LoggerService)
   }
 

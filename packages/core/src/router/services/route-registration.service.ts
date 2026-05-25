@@ -1,61 +1,59 @@
-import type { Context, MiddlewareHandler } from 'hono'
-import type { UpgradeWebSocket, WSContext, WSEvents } from 'hono/ws'
-import { inject } from 'tsyringe'
-import { type Container, getMethodInjections } from '../../di'
-import { Transient } from '../../di/decorators'
-import { DI_TOKENS } from '../../di/tokens'
+import type { Context, MiddlewareHandler } from 'hono';
+import type { UpgradeWebSocket, WSContext, WSEvents } from 'hono/ws';
+import { inject } from 'tsyringe';
+import { type Container, getMethodInjections } from '../../di';
+import { Transient } from '../../di/decorators';
+import { DI_TOKENS } from '../../di/tokens';
 import {
-  type Guard,
-  GuardExecutionService,
-  getControllerGuards,
-  getMethodGuards,
-} from '../../guards'
-import type { ZodType } from '../../i18n/validation'
-import { createRoute, z } from '../../i18n/validation'
-import { LOGGER_TOKENS, type LoggerService } from '../../logger'
-import type { ModuleRegistry } from '../../module/module-registry'
-import type { Constructor } from '../../types'
-import { getWsOnCloseMethod, getWsOnErrorMethod, getWsOnMessageMethod, isGateway } from '../../websocket/decorators'
-import { GatewayContext } from '../../websocket/gateway-context'
-import { DEFAULT_CONTENT_TYPE, HTTP_METHODS, METHOD_STATUS_CODES, SECURITY_SCHEMES } from '../constants'
-import type { IController } from '../controller'
+    type Guard,
+    GuardExecutionService,
+    getControllerGuards,
+    getMethodGuards,
+} from '../../guards';
+import type { ZodType } from '../../i18n/validation/zod';
+import { createRoute, z } from '../../i18n/validation/zod';
+import { LOGGER_TOKENS, type LoggerService } from '../../logger';
+import type { ModuleRegistry } from '../../module/module-registry';
+import { getRateLimits } from '../../rate-limiter/decorators/rate-limit.decorator';
+import { createThrottleMiddleware } from '../../rate-limiter/throttle.middleware';
+import type { Constructor } from '../../types';
+import { getWsOnCloseMethod, getWsOnErrorMethod, getWsOnMessageMethod, isGateway } from '../../websocket/decorators';
+import { GatewayContext } from '../../websocket/gateway-context';
+import { DEFAULT_CONTENT_TYPE, HTTP_METHODS, METHOD_STATUS_CODES, SECURITY_SCHEMES } from '../constants';
+import type { IController } from '../controller';
 import {
-  getControllerOptions,
-  getControllerRoute,
-  getRouteDecoratedMethods,
-  getRouteMetadata,
-} from '../decorators'
+    getControllerOptions,
+    getControllerRoute,
+    getRouteDecoratedMethods,
+    getRouteMetadata,
+} from '../decorators';
 import {
-  ControllerMethodNotFoundError,
-  ControllerRegistrationError,
-  OpenAPIRouteRegistrationError,
-  ResponseValidationError,
-} from '../errors'
-import type { HonoApp } from '../hono-app'
-import { getRateLimits } from '../../rate-limiter/decorators/rate-limit.decorator'
-import { createThrottleMiddleware } from '../../rate-limiter/throttle.middleware'
-import type { Middleware } from '../middleware.interface'
-import { createDomainMiddleware } from '../middleware/domain.middleware'
-import { createMiddlewareChain } from '../middleware/middleware-chain'
-import { type RegisteredRoute, type RouteRegistry } from '../route-registry'
-import { RouterContext } from '../router-context'
-import type { RouterResolver } from '../router-resolver'
-import { ROUTER_TOKENS } from '../router.tokens'
-import { commonErrorSchemas } from '../schemas/common.schemas'
+    ResponseValidationError,
+} from '../errors';
+import { RouterError } from '../router.error';
+import type { HonoApp } from '../hono-app';
+import type { Middleware } from '../middleware.interface';
+import { createDomainMiddleware } from '../middleware/domain.middleware';
+import { createMiddlewareChain } from '../middleware/middleware-chain';
+import { type RegisteredRoute, type RouteRegistry } from '../route-registry';
+import { RouterContext } from '../router-context';
+import type { RouterResolver } from '../router-resolver';
+import { ROUTER_TOKENS } from '../router.tokens';
+import { commonErrorSchemas } from '../schemas/common.schemas';
 import type {
-  ControllerOptions,
-  HttpMethod,
-  OpenAPIRouteConfig,
-  RouteBodyObject,
-  RouteConfig,
-  RouteMetadata,
-  RouteResponseObject,
-  RouterEnv,
-  SecuritySchemeRecord,
-} from '../types'
-import { toOpenAPIPath, toRoutingOpenAPIPath } from '../utils/path'
-import { generateConventionRouteName } from '../utils/route-name'
-import type { LocalePathService } from './locale-path.service'
+    ControllerOptions,
+    HttpMethod,
+    OpenAPIRouteConfig,
+    RouteBodyObject,
+    RouteConfig,
+    RouteMetadata,
+    RouteResponseObject,
+    RouterEnv,
+    SecuritySchemeRecord,
+} from '../types';
+import { toOpenAPIPath, toRoutingOpenAPIPath } from '../utils/path';
+import { generateConventionRouteName } from '../utils/route-name';
+import type { LocalePathService } from './locale-path.service';
 
 const invokeHandler = (instance: Record<string, (...args: unknown[]) => unknown>, method: string, ...args: unknown[]): Promise<unknown> => {
   try {
@@ -88,7 +86,7 @@ export class RouteRegistrationService {
   constructor(
     @inject(LOGGER_TOKENS.LoggerService) private logger: LoggerService,
     @inject(ROUTER_TOKENS.RouteRegistry) private registry: RouteRegistry,
-    @inject(ROUTER_TOKENS.RouterResolver) private routerResolver: RouterResolver | null,
+    @inject(ROUTER_TOKENS.RouterResolver, { isOptional: true }) private routerResolver: RouterResolver | null,
     @inject(ROUTER_TOKENS.LocalePathService) private localePathService: LocalePathService,
     @inject(ROUTER_TOKENS.HonoApp) private app: HonoApp,
     @inject(DI_TOKENS.ModuleRegistry) private moduleRegistry: ModuleRegistry,
@@ -143,11 +141,10 @@ export class RouteRegistrationService {
     const controllerRoute = getControllerRoute(ControllerClass)
 
     if (!controllerRoute) {
-      throw new ControllerRegistrationError(
-        ControllerClass.name,
-        isWsGateway
+      throw new RouterError(
+        `Controller "${ControllerClass.name}" registration failed: ${isWsGateway
           ? 'Missing @Gateway decorator or route metadata'
-          : 'Missing @Controller decorator or route metadata'
+          : 'Missing @Controller decorator or route metadata'}`
       )
     }
 
@@ -246,9 +243,8 @@ export class RouteRegistrationService {
     const decoratedMethods = getRouteDecoratedMethods(ControllerClass)
 
     if (decoratedMethods.length === 0) {
-      throw new ControllerRegistrationError(
-        ControllerClass.name,
-        'No route decorators found. Use @Route() or HTTP method decorators (@Get, @Post, etc.) on controller methods.'
+      throw new RouterError(
+        `Controller "${ControllerClass.name}" registration failed: No route decorators found. Use @Route() or HTTP method decorators (@Get, @Post, etc.) on controller methods.`
       )
     }
 
@@ -266,9 +262,8 @@ export class RouteRegistrationService {
 
     // Enforce mutual exclusivity: no mixing @Route() with @Get/@Post/etc.
     if (hasConvention && hasExplicit) {
-      throw new ControllerRegistrationError(
-        ControllerClass.name,
-        'Cannot mix @Route() with HTTP method decorators (@Get, @Post, etc.) in the same controller. Use one pattern or the other.'
+      throw new RouterError(
+        `Controller "${ControllerClass.name}" registration failed: Cannot mix @Route() with HTTP method decorators (@Get, @Post, etc.) in the same controller. Use one pattern or the other.`
       )
     }
 
@@ -473,7 +468,9 @@ export class RouteRegistrationService {
         return (evt: MessageEvent | CloseEvent | Event, ws: WSContext) => {
           const ctx = new GatewayContext(c as Context<RouterEnv>, ws)
           invokeHandler(gateway as Record<string, (...args: unknown[]) => unknown>, method, evt, ctx).catch((err: unknown) => {
-            this.logger.error(`WebSocket ${method} handler error`, { gateway: GatewayClass.name, error: err instanceof Error ? err.message : String(err) })
+            this.logger.error(`WebSocket ${method} handler error`, err as Error, {
+              gateway: GatewayClass.name,
+            })
             onCatch?.(err, ws)
           })
         }
@@ -484,6 +481,15 @@ export class RouteRegistrationService {
       }
       if (onCloseMethod) {
         events.onClose = bindWsHandler(onCloseMethod)
+      } else {
+        // Cloudflare Workers (pre-2026-04-07 compat date) requires the server
+        // to complete the WebSocket close handshake explicitly. Without a close
+        // listener, Hono never calls server.addEventListener('close', ...),
+        // leaving the Worker alive until the runtime kills it with
+        // "script will never generate a response".
+        events.onClose = (_evt: CloseEvent, ws: WSContext) => {
+          ws.close()
+        }
       }
       if (onErrMethod) {
         events.onError = bindWsHandler(onErrMethod)
@@ -623,7 +629,7 @@ export class RouteRegistrationService {
     if (meta.type === 'convention') {
       const derived = this.deriveHttpMethodAndPath(methodName, basePath)
       if (!derived) {
-        throw new ControllerRegistrationError(
+        throw new RouterError(
           `Cannot derive HTTP method/path for convention-based route "${className}.${methodName}". ` +
           `Ensure the method name follows the naming convention (e.g., index, create, show).`
         )
@@ -847,7 +853,7 @@ export class RouteRegistrationService {
 
       return createRoute(route as OpenAPIRouteConfig)
     } catch (error) {
-      throw new OpenAPIRouteRegistrationError(path, error instanceof Error ? error.message : String(error))
+      throw new RouterError(`OpenAPI route registration failed for "${path}": ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -912,7 +918,7 @@ export class RouteRegistrationService {
         return response
       }
 
-      throw new ControllerMethodNotFoundError(methodName, ControllerClass.name)
+      throw new RouterError(`Method "${methodName}" not found on controller "${ControllerClass.name}"`)
     }
 
     this.nameHandler(handler, ControllerClass.name, methodName)

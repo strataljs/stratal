@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Application } from '../../application'
-import { MissingRouteParamError, RouteNameNotFoundError } from '../errors'
+import { RouterError } from '../router.error'
 import type { RegisteredRoute, RouteRegistry } from '../route-registry'
 import type { RouterContext } from '../router-context'
 import type { TrailingSlashMode } from '../types'
@@ -93,18 +93,18 @@ describe('buildRouteUrl', () => {
     expect(buildRouteUrl(route, 'users.show', { id: 'hello world' })).toBe('/users/hello%20world')
   })
 
-  it('should throw MissingRouteParamError for missing path param', () => {
+  it('should throw RouterError for missing path param', () => {
     const route = createRoute({ path: '/users/:id', paramNames: ['id'] })
-    expect(() => buildRouteUrl(route, 'users.show')).toThrow(MissingRouteParamError)
+    expect(() => buildRouteUrl(route, 'users.show')).toThrow(RouterError)
   })
 
-  it('should throw MissingRouteParamError for missing domain param', () => {
+  it('should throw RouterError for missing domain param', () => {
     const route = createRoute({
       path: '/dashboard',
       domain: '{tenant}.myapp.com',
       domainParamNames: ['tenant'],
     })
-    expect(() => buildRouteUrl(route, 'tenant.dashboard')).toThrow(MissingRouteParamError)
+    expect(() => buildRouteUrl(route, 'tenant.dashboard')).toThrow(RouterError)
   })
 
   it('should prepend locale segment when locale param and localePaths present', () => {
@@ -224,14 +224,14 @@ describe('Uri', () => {
         .toBe('https://acme.myapp.com/dashboard')
     })
 
-    it('should throw RouteNameNotFoundError for unknown route', () => {
+    it('should throw RouterError for unknown route', () => {
       setupUri({})
-      expect(() => uri.route('nonexistent')).toThrow(RouteNameNotFoundError)
+      expect(() => uri.route('nonexistent')).toThrow(RouterError)
     })
 
-    it('should throw MissingRouteParamError for missing params', () => {
+    it('should throw RouterError for missing params', () => {
       setupUri({ 'users.show': createRoute({ path: '/users/:id', paramNames: ['id'] }) })
-      expect(() => uri.route('users.show')).toThrow(MissingRouteParamError)
+      expect(() => uri.route('users.show')).toThrow(RouterError)
     })
 
     it('should merge defaults into params', () => {

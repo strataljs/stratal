@@ -7,7 +7,6 @@
  */
 
 export { common } from './common'
-export { errors } from './errors'
 export { emails } from './emails'
 export { validation } from './validation'
 export { zodI18n } from './zod'

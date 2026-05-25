@@ -96,14 +96,10 @@ export class CronManager {
 			}
 		}
 
-		// If any jobs failed, throw an aggregate error
-		// This ensures the error is logged by ExceptionHandler
+		// If any jobs failed, throw an aggregate error so ExceptionHandler logs
+		// it. The full per-job errors are passed through so cause/stacks survive.
 		if (errors.length > 0) {
-			const jobNames = errors
-				.map(({ job, error }) => `${job}: ${error.message}`)
-				.join('; ')
-
-			throw new CronExecutionError(cron, errors.length, jobNames)
+			throw new CronExecutionError(cron, errors)
 		}
 	}
 

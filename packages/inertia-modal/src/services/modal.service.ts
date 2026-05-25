@@ -11,7 +11,6 @@ export interface ModalData {
   baseURL: string
   redirectURL: string
   key: string
-  nonce: string
 }
 
 export interface ModalRenderOptions {
@@ -46,7 +45,6 @@ export class ModalService {
 
     const redirectURL = this.resolveRedirectURL(ctx, options.baseURL)
     const key = ctx.c.req.header('x-inertia-modal-key') ?? crypto.randomUUID()
-    const nonce = crypto.randomUUID()
     const modalURL = new URL(ctx.c.req.url).pathname
 
     const modalData: ModalData = {
@@ -55,7 +53,6 @@ export class ModalService {
       baseURL: options.baseURL,
       redirectURL,
       key,
-      nonce,
     }
 
     // Partial reload requesting 'modal' — skip background sub-request,

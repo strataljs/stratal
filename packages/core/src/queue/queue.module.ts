@@ -11,12 +11,12 @@
  *   useFactory: (config) => ({ provider: config.get('queue').provider })
  * })
  *
- * // 2. Register queues (queue name IS the injection token)
- * QueueModule.registerQueue('notifications-queue')
- * QueueModule.registerQueue('batch-notifications-queue')
+ * // 2. Register queue bindings (the binding IS the injection token)
+ * QueueModule.registerQueue('NOTIFICATIONS_QUEUE')
+ * QueueModule.registerQueue('BACKGROUND_QUEUE')
  *
  * // 3. Inject and use
- * constructor(@InjectQueue('notifications-queue') private queue: IQueueSender) {}
+ * constructor(@InjectQueue('NOTIFICATIONS_QUEUE') private queue: IQueueSender) {}
  * await this.queue.dispatch({ type: 'email.send', payload: {...} })
  * ```
  *
@@ -30,7 +30,7 @@ import { Scope } from '../di/types'
 import { Module } from '../module'
 import type { AsyncModuleOptions, DynamicModule, InjectionToken } from '../module/types'
 import { ConsumerRegistry } from './consumer-registry'
-import type { QueueName } from './queue-name'
+import type { QueueBinding } from './queue-binding'
 import { QueueRegistry } from './queue-registry'
 import type { IQueueSender } from './queue-sender.interface'
 import { QUEUE_TOKENS } from './queue.tokens'
@@ -88,30 +88,32 @@ export class QueueModule {
   }
 
   /**
-   * Register a queue for injection.
+   * Register a queue binding for injection.
    *
-   * The queue name serves as both the identifier and the DI injection token.
-   * Queue names are typed via module augmentation of QueueNames interface.
+   * The binding name doubles as the DI injection token and the
+   * `env`-lookup key. Binding names are typed against `StratalEnv`
+   * (autocomplete works once an app augments `StratalEnv` with its
+   * Cloudflare bindings).
    *
-   * @param name - Queue name (typed with autocomplete if QueueNames is augmented)
+   * @param binding - Queue binding identifier (e.g. `NOTIFICATIONS_QUEUE`).
    * @returns Dynamic module that provides the queue sender
    *
    * @example
    * ```typescript
    * // In AppModule imports
-   * QueueModule.registerQueue('notifications-queue')
+   * QueueModule.registerQueue('NOTIFICATIONS_QUEUE')
    *
-   * // Then inject using the queue name
-   * constructor(@InjectQueue('notifications-queue') private queue: IQueueSender) {}
+   * // Then inject using the binding name
+   * constructor(@InjectQueue('NOTIFICATIONS_QUEUE') private queue: IQueueSender) {}
    * ```
    */
-  static registerQueue(name: QueueName): DynamicModule {
+  static registerQueue(binding: QueueBinding): DynamicModule {
     return {
       module: QueueModule,
       providers: [
         {
-          provide: name as InjectionToken<IQueueSender>,
-          useFactory: (registry: QueueRegistry) => registry.getQueue(name),
+          provide: binding as InjectionToken<IQueueSender>,
+          useFactory: (registry: QueueRegistry) => registry.getQueue(binding),
           inject: [QUEUE_TOKENS.QueueRegistry],
         },
       ],

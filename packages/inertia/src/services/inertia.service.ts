@@ -126,9 +126,11 @@ export class InertiaService {
       ...(renderOptions.preserveFragment ? { preserveFragment: true } : {}),
     }
 
+    const status = renderOptions.status ?? 200
+
     if (isInertia) {
       return new Response(JSON.stringify(page), {
-        status: 200,
+        status,
         headers: {
           'Content-Type': 'application/json',
           'X-Inertia': 'true',
@@ -145,7 +147,7 @@ export class InertiaService {
     const html = this.template.render(page, ssrResult.head, ssrResult.body)
 
     return new Response(html, {
-      status: 200,
+      status,
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
       },

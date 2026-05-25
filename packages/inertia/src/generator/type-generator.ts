@@ -179,12 +179,12 @@ function unwrapWrapperType(type: Type, tsObj: TsObj, fallbackLocation?: Node): s
 }
 
 function unwrapPromise(type: Type, tsObj: TsObj, fallbackLocation?: Node): string {
-  const text = type.getText(undefined, tsObj.TypeFormatFlags.NoTruncation)
-  if (text.startsWith('Promise<')) {
-    const typeArgs = type.getTypeArguments()
-    if (typeArgs.length > 0) {
-      return stripReadonly(typeArgs[0], tsObj, fallbackLocation)
-    }
+  // `getAwaitedType()` resolves the `Awaited<T>` of any thenable — covers
+  // `Promise<T>`, `PromiseLike<T>`, and branded thenables (e.g. ZenStack's
+  // `ZenStackPromise<T>`) whose text doesn't start with `Promise<`.
+  const awaited = type.getAwaitedType?.()
+  if (awaited && awaited !== type) {
+    return stripReadonly(awaited, tsObj, fallbackLocation)
   }
   return stripReadonly(type, tsObj, fallbackLocation)
 }
@@ -253,6 +253,81 @@ export function extractShareCallTypes(
 
 // --- Detect i18n config in InertiaModule.forRoot() ---
 
+/**
+ * Given the first argument of `Module.forRoot(...)` or `Module.forRootAsync(...)`,
+ * return the object literal where downstream options actually live.
+ *
+ * - For `forRoot({...})` the literal IS the first arg.
+ * - For `forRootAsync({ inject, useFactory: (...) => ({...}) })` we drill into
+ *   the `useFactory`'s return value:
+ *     `() => ({ … })`                  — ParenthesizedExpression → ObjectLiteral
+ *     `() => ({ ... } as Foo)`         — AsExpression → ObjectLiteral
+ *     `() => { return { … } }`         — Block → ReturnStatement → ObjectLiteral
+ *
+ * Returns `null` when nothing usable is found.
+ */
+function resolveModuleOptionsLiteral(
+  optionsArg: Node,
+  SK: TsMorphModule['SyntaxKind'],
+): Node | null {
+  if (!optionsArg.isKind(SK.ObjectLiteralExpression)) return null
+
+  // forRootAsync wrapper: { inject, useFactory: (env) => ({ ... }) }
+  const useFactoryProp = optionsArg.getProperty('useFactory')
+  if (useFactoryProp?.isKind(SK.PropertyAssignment)) {
+    const initializer = useFactoryProp.getInitializer()
+    if (initializer?.isKind(SK.ArrowFunction) || initializer?.isKind(SK.FunctionExpression)) {
+      const body = initializer.getBody()
+
+      // Concise arrow body: () => ({...}) — Parenthesized
+      if (body.isKind(SK.ParenthesizedExpression)) {
+        const inner = unwrapAs(body.getExpression(), SK)
+        if (inner?.isKind(SK.ObjectLiteralExpression)) return inner
+      }
+
+      // Concise arrow body returning a plain literal (rare without parens but legal)
+      const unwrapped = unwrapAs(body, SK)
+      if (unwrapped?.isKind(SK.ObjectLiteralExpression)) return unwrapped
+
+      // Block body: { ... return {...}; }
+      if (body.isKind(SK.Block)) {
+        const returnStatements = body.getDescendantsOfKind(SK.ReturnStatement)
+        // Walk in reverse so a later `return` wins (last-write-wins semantics)
+        for (let i = returnStatements.length - 1; i >= 0; i--) {
+          const ret = returnStatements[i]
+          const expr = ret.getExpression()
+          if (!expr) continue
+          if (expr.isKind(SK.ParenthesizedExpression)) {
+            const inner = unwrapAs(expr.getExpression(), SK)
+            if (inner?.isKind(SK.ObjectLiteralExpression)) return inner
+            continue
+          }
+          const direct = unwrapAs(expr, SK)
+          if (direct?.isKind(SK.ObjectLiteralExpression)) return direct
+        }
+      }
+    }
+  }
+
+  // Plain forRoot({...}) — the first arg IS the options literal.
+  return optionsArg
+}
+
+/**
+ * Strip a single `as Foo` cast if present, otherwise return the node as-is.
+ * `useFactory: (env) => ({ ... } as Options)` is common in TypeScript.
+ */
+function unwrapAs(node: Node | undefined, SK: TsMorphModule['SyntaxKind']): Node | undefined {
+  if (!node) return undefined
+  if (node.isKind(SK.AsExpression) || node.isKind(SK.TypeAssertionExpression)) {
+    return node.getExpression()
+  }
+  if (node.isKind(SK.SatisfiesExpression)) {
+    return node.getExpression()
+  }
+  return node
+}
+
 export function detectI18nConfig(
   project: Project,
   SK: TsMorphModule['SyntaxKind'],
@@ -276,10 +351,12 @@ export function detectI18nConfig(
     const args = call.getArguments()
     if (args.length === 0) continue
 
-    const optionsArg = args[0]
-    if (!optionsArg.isKind(SK.ObjectLiteralExpression)) continue
+    const optionsLiteral = resolveModuleOptionsLiteral(args[0], SK)
+    if (!optionsLiteral) continue
 
-    return !!optionsArg.getProperty('i18n')
+    if (optionsLiteral.isKind(SK.ObjectLiteralExpression) && optionsLiteral.getProperty('i18n')) {
+      return true
+    }
   }
 
   return false
@@ -354,10 +431,10 @@ export function extractSharedDataType(
     const args = call.getArguments()
     if (args.length === 0) continue
 
-    const optionsArg = args[0]
-    if (!optionsArg.isKind(SK.ObjectLiteralExpression)) continue
+    const optionsLiteral = resolveModuleOptionsLiteral(args[0], SK)
+    if (!optionsLiteral || !optionsLiteral.isKind(SK.ObjectLiteralExpression)) continue
 
-    const sharedDataProp = optionsArg.getProperty('sharedData')
+    const sharedDataProp = optionsLiteral.getProperty('sharedData')
     if (!sharedDataProp) continue
 
     if (!sharedDataProp.isKind(SK.PropertyAssignment)) continue

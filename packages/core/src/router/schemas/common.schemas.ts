@@ -1,4 +1,4 @@
-import { z } from '../../i18n/validation'
+import { z } from '../../i18n/validation/zod'
 
 /**
  * Common OpenAPI Schemas
@@ -12,34 +12,20 @@ import { z } from '../../i18n/validation'
 /**
  * Generic error response schema
  * Used for all error responses (4xx, 5xx)
- * Matches ApplicationError.toErrorResponse() structure
+ * Matches the ErrorResponse shape produced by ExceptionHandler
  */
 export const errorResponseSchema = z.object({
-  code: z.number().int().describe('Application error code'),
   message: z.string().describe('Human-readable error message'),
   timestamp: z.string().datetime().describe('ISO timestamp when error occurred'),
-  metadata: z.record(z.string(), z.unknown()).optional().describe('Additional error context'),
-  stack: z.string().optional().describe('Stack trace (development only)')
+  stack: z.string().optional().describe('Stack trace (development only)'),
 }).openapi('ErrorResponse')
 
 /**
  * Validation error response schema
  * Used for 400 Bad Request with validation failures
- * Matches ApplicationError.toErrorResponse() structure with validation-specific metadata
+ * Matches the ErrorResponse shape produced by ExceptionHandler
  */
-export const validationErrorResponseSchema = z.object({
-  code: z.number().int().describe('Application error code'),
-  message: z.string().describe('Human-readable error message'),
-  timestamp: z.string().datetime().describe('ISO timestamp when error occurred'),
-  metadata: z.object({
-    issues: z.array(z.object({
-      path: z.string().describe('Field path that failed validation'),
-      message: z.string().describe('Validation failure message'),
-      code: z.string().describe('Zod validation error code')
-    }))
-  }).describe('Validation error details'),
-  stack: z.string().optional().describe('Stack trace (development only)')
-}).openapi('ValidationErrorResponse')
+export const validationErrorResponseSchema = errorResponseSchema.openapi('ValidationErrorResponse')
 
 /**
  * Pagination query parameters schema

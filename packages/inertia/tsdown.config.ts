@@ -9,6 +9,7 @@ export default defineConfig({
     'src/vite.ts',
     'src/react.ts',
     'src/testing.ts',
+    'src/quarry.ts',
     'src/generator/type-generator.worker.ts',
   ],
   tsconfig: './tsconfig.build.json',

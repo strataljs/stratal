@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
+import type { LoggerService } from '../../logger'
 import { ConsumerRegistry } from '../consumer-registry'
 import type { IQueueConsumer, QueueMessage } from '../queue-consumer'
 import { QueueManager } from '../queue-manager'
@@ -7,11 +8,13 @@ import { QueueManager } from '../queue-manager'
 describe('QueueManager', () => {
   let queueManager: QueueManager
   let consumerRegistry: ConsumerRegistry
+  let mockLogger: DeepMocked<LoggerService>
 
   beforeEach(() => {
     vi.clearAllMocks()
     consumerRegistry = new ConsumerRegistry()
-    queueManager = new QueueManager(consumerRegistry)
+    mockLogger = createMock<LoggerService>()
+    queueManager = new QueueManager(consumerRegistry, mockLogger as unknown as LoggerService)
   })
 
   const createMockBatch = (messages: QueueMessage[]): DeepMocked<MessageBatch> => {

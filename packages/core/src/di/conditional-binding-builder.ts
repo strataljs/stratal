@@ -27,7 +27,7 @@ import type { DependencyContainer } from 'tsyringe'
 import { predicateAwareClassFactory } from 'tsyringe'
 import type InjectionToken from 'tsyringe/dist/typings/providers/injection-token'
 import type { Constructor } from '../types'
-import { ConditionalBindingFallbackError } from './errors'
+import { ContainerError } from './container.error'
 import type { WhenOptions } from './types'
 
 /**
@@ -167,7 +167,7 @@ class ConditionalBindingUseImpl<T extends object> implements ConditionalBindingU
         : String(this.token)
     return class NoFallbackError {
       constructor() {
-        throw new ConditionalBindingFallbackError(tokenStr)
+        throw new ContainerError(`No fallback registered for conditional binding "${tokenStr}". Use .otherwise() or register a default implementation.`)
       }
     } as unknown as Constructor<T>
   }

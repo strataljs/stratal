@@ -6,6 +6,7 @@ import type { StratalEnv } from '../../env'
 import { LogLevel } from '../../logger'
 import { Module } from '../../module/module.decorator'
 import { Stratal } from '../../stratal'
+import { forceGc } from './__helpers__/force-gc'
 
 const TOKEN = Symbol('TestSvc')
 
@@ -72,7 +73,7 @@ describe('StratalWorkflow', () => {
     expect(Stratal.resolveApplication).toHaveBeenCalledOnce()
   })
 
-  it('should dispose the request container after callback completes', async () => {
+  it('should release the request container for garbage collection after callback completes', async () => {
     vi.doMock('cloudflare:workers', () => ({
       WorkflowEntrypoint: class {
         ctx: unknown
@@ -88,17 +89,19 @@ describe('StratalWorkflow', () => {
 
     class TestWorkflow extends StratalWorkflow {
       async testRunInScope() {
-        let capturedContainer: Container | undefined
+        let weakRef: WeakRef<Container> | undefined
         await this.runInScope((container) => {
-          capturedContainer = container
+          weakRef = new WeakRef(container)
         })
-        return capturedContainer
+        return weakRef
       }
     }
 
     const workflow = new TestWorkflow({} as never, mockEnv)
-    const container = await workflow.testRunInScope()
+    const weakRef = await workflow.testRunInScope()
 
-    expect(() => container!.resolve(TOKEN)).toThrow()
+    await forceGc()
+
+    expect(weakRef!.deref()).toBeUndefined()
   })
 })

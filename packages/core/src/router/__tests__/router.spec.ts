@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { z } from '../../i18n/validation'
+import { z } from '../../i18n/validation/zod'
 import type { Constructor } from '../../types'
-import { RouterUseScopeError } from '../errors'
+import { RouterError } from '../router.error'
 import type { Middleware } from '../middleware.interface'
 import { Router } from '../router'
 import * as internal from '../router.internals'
@@ -156,13 +156,13 @@ describe('Router', () => {
       expect(router[internal.getGlobalMiddleware]()).toHaveLength(2)
     })
 
-    it('should throw RouterUseScopeError when called inside group()', () => {
+    it('should throw RouterError when called inside group()', () => {
       const router = new Router()
       expect(() => {
         router.group([UsersController as Constructor], (child) => {
           (child as Router).use(AuthMiddleware as unknown as Constructor<Middleware>)
         })
-      }).toThrow(RouterUseScopeError)
+      }).toThrow(RouterError)
     })
   })
 

@@ -4,7 +4,7 @@ import type SMTPTransport from 'nodemailer/lib/smtp-transport'
 import { Readable } from 'stream'
 import type { ResolvedEmailAttachment, ResolvedEmailMessage } from '../contracts'
 import type { EmailModuleOptions } from '../email.module'
-import { EmailSmtpConnectionFailedError, SmtpConfigurationMissingError, SmtpHostMissingError } from '../errors'
+import { EmailError } from '../email.error'
 import { BaseEmailProvider } from './base-email.provider'
 import type { EmailSendResult } from './email-provider.interface'
 
@@ -25,11 +25,11 @@ export class SmtpProvider extends BaseEmailProvider {
 
     // Validate SMTP configuration
     if (!this.options.smtp) {
-      throw new SmtpConfigurationMissingError()
+      throw new EmailError('SMTP configuration is missing')
     }
 
     if (!this.options.smtp.host) {
-      throw new SmtpHostMissingError()
+      throw new EmailError('SMTP host is required')
     }
 
     // Create nodemailer transporter
@@ -79,10 +79,7 @@ export class SmtpProvider extends BaseEmailProvider {
         },
       }
     } catch {
-      throw new EmailSmtpConnectionFailedError(
-        this.options.smtp?.host ?? '',
-        this.options.smtp?.port ?? 587
-      )
+      throw new EmailError(`SMTP connection failed to ${this.options.smtp?.host ?? ''}:${this.options.smtp?.port ?? 587}`)
     }
   }
 

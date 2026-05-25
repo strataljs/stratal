@@ -8,8 +8,6 @@ import type { Container } from './container'
  * Set by `Application.initialize()` — all code from that point onward
  * (Stratal handlers, TestingModuleBuilder, standalone functions like `route()`)
  * can access the container without DI or static singletons.
- *
- * Follows the same pattern as `errorMapContextStorage` in `i18n/validation/validation.context.ts`.
  */
 export const containerStorage = new AsyncLocalStorage<Container>()
 

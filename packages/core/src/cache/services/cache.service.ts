@@ -4,12 +4,7 @@ import { DI_TOKENS } from '../../di/tokens'
 import { type StratalEnv } from '../../env'
 import { LOGGER_TOKENS, type LoggerService } from '../../logger'
 import { CACHE_TOKENS } from '../cache.tokens'
-import {
-  CacheDeleteError,
-  CacheGetError,
-  CacheListError,
-  CachePutError,
-} from '../errors'
+import { CacheError } from '../cache.error'
 
 /**
  * Cache Service
@@ -106,7 +101,7 @@ export class CacheService {
    * @param key - Cache key
    * @param typeOrOptions - Type string or options object (defaults to 'text')
    * @returns Value in specified type, or null if not found
-   * @throws {CacheGetError} If operation fails
+   * @throws {CacheError} If operation fails
    */
   async get(key: string, typeOrOptions?: 'text' | KVNamespaceGetOptions<'text'>): Promise<string | null>
   async get<ExpectedValue = unknown>(key: string, typeOrOptions: 'json' | KVNamespaceGetOptions<'json'>): Promise<ExpectedValue | null>
@@ -131,7 +126,7 @@ export class CacheService {
       return await this.kv.get(key)
     } catch (error) {
       this.logger.error('Cache get operation failed', { key, error })
-      throw new CacheGetError(key)
+      throw new CacheError(`Failed to get cache key "${key}"`)
     }
   }
 
@@ -143,7 +138,7 @@ export class CacheService {
    * @param key - Cache key
    * @param typeOrOptions - Type string or options object (defaults to 'text')
    * @returns Object with value, metadata, and cacheStatus
-   * @throws {CacheGetError} If operation fails
+   * @throws {CacheError} If operation fails
    */
   async getWithMetadata<Metadata = unknown>(
     key: string,
@@ -185,7 +180,7 @@ export class CacheService {
       return await this.kv.getWithMetadata(key)
     } catch (error) {
       this.logger.error('Cache getWithMetadata operation failed', { key, error })
-      throw new CacheGetError(key)
+      throw new CacheError(`Failed to get cache key "${key}"`)
     }
   }
 
@@ -197,7 +192,7 @@ export class CacheService {
    * @param key - Cache key
    * @param value - Value to store (string, ArrayBuffer, ArrayBufferView, or ReadableStream)
    * @param options - Put options (expiration, expirationTtl, metadata)
-   * @throws {CachePutError} If operation fails
+   * @throws {CacheError} If operation fails
    *
    * @example
    * ```typescript
@@ -220,7 +215,7 @@ export class CacheService {
       await this.kv.put(key, value as string, options)
     } catch (error) {
       this.logger.error('Cache put operation failed', { key, error })
-      throw new CachePutError(key)
+      throw new CacheError(`Failed to store cache key "${key}"`)
     }
   }
 
@@ -230,14 +225,14 @@ export class CacheService {
    * Delete a value from cache
    *
    * @param key - Cache key to delete
-   * @throws {CacheDeleteError} If operation fails
+   * @throws {CacheError} If operation fails
    */
   async delete(key: string): Promise<void> {
     try {
       await this.kv.delete(key)
     } catch (error) {
       this.logger.error('Cache delete operation failed', { key, error })
-      throw new CacheDeleteError(key)
+      throw new CacheError(`Failed to delete cache key "${key}"`)
     }
   }
 
@@ -249,7 +244,7 @@ export class CacheService {
    *
    * @param options - List options (limit, prefix, cursor)
    * @returns List result with keys and pagination info
-   * @throws {CacheListError} If operation fails
+   * @throws {CacheError} If operation fails
    *
    * @example
    * ```typescript
@@ -273,7 +268,7 @@ export class CacheService {
       return await this.kv.list<Metadata>(options)
     } catch (error) {
       this.logger.error('Cache list operation failed', { options, error })
-      throw new CacheListError()
+      throw new CacheError('Failed to list cache keys')
     }
   }
 }

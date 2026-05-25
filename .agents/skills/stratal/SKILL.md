@@ -5,7 +5,7 @@ license: MIT
 compatibility: Designed for AI Agents. Requires Node.js 22+, npm.
 metadata:
   author: Temitayo Fadojutimi
-  version: "1.5"
+  version: "1.8"
 ---
 
 # Stratal Framework
@@ -41,7 +41,7 @@ Breaking any of these causes runtime failures.
 
 10. **Cron schedules must match `wrangler.jsonc`** — `CronJob.schedule` string must exactly match a trigger in `[triggers]`.
 
-11. **I18nModule must be configured for translations** — `I18nModule.forRoot()` for locale config with `detection` option (`'cookie'` default, `'header'`, `'querystring'`, `'path'`). Path detection supports `prefixDefaultLocale` (`false` default, `'redirect'`, `true`). `I18nModule.registerMessages()` to add messages. `I18nService.t()` for translation. `withI18n()` for Zod validation messages.
+11. **I18nModule must be configured for translations** — `I18nModule.forRoot()` for locale config with `detection` option (`'cookie'` default, `'header'`, `'querystring'`, `'path'`). Path detection supports `prefixDefaultLocale` (`false` default, `'redirect'`, `true`). `I18nModule.registerMessages()` to add messages. `I18nService.t()` for translation. `withZodI18n()` (from `stratal/validation`) for Zod validation messages. `withI18n()` (from `stratal/i18n`) for general translations.
 
 12. **Custom ExceptionHandler must extend `ExceptionHandler`** — Import from `stratal/errors`, implement `register()`, pass to `new Stratal({ exceptionHandler: AppExceptionHandler })`.
 
@@ -62,13 +62,20 @@ Run `npx quarry help` to see all commands. Always use these to inspect your app 
 | `npx quarry mcp:tools` | Preview MCP tools from your API |
 | `npx quarry mcp:serve` | Start MCP stdio server exposing routes as tools |
 | `npx quarry api` | Serve the OpenAPI spec |
+| `npx quarry i18n:check` | Audit translations for missing/extra keys (exit code 1 on issues — CI-friendly) |
+| `npx quarry i18n:stats` | Show translation coverage % per locale |
+| `npx quarry i18n:list` | List all message keys with per-locale coverage |
+| `npx quarry i18n:search` | Search message keys or values by substring |
+| `npx quarry i18n:namespaces` | List namespaces with key counts per locale |
+| `npx quarry i18n:duplicates` | Find keys with duplicate translation values |
 
 For full CLI reference including custom command creation, see `references/quarry-cli.md`.
 
-## Entry Point
+## Entry Points
+
+### Worker Entry (`src/index.ts`)
 
 ```typescript
-// src/index.ts
 import { Stratal } from 'stratal'
 import { AppModule } from './app.module'
 
@@ -81,6 +88,25 @@ Constructor config:
 - `logging?` — `{ level?, formatter? }` (`'json'` | `'pretty'`)
 - `versioning?` — `{ prefix?, defaultVersion? }`
 - `trailingSlash?` — `'ignore'` (default) | `'always'` | `'never'`. Redirects non-canonical forms with 308 and applies the same canonicalisation to all URL helpers. See `references/routing.md`.
+
+### CLI Entry (`src/quarry.ts`)
+
+Quarry CLI defaults to `src/quarry.ts`. Use `QuarryRunner`:
+
+```typescript
+import { QuarryRunner } from 'stratal/quarry/runner'
+import { AppModule } from './app.module'
+
+export default QuarryRunner.run({
+  imports: [AppModule],
+  providers: [/* seeders, CLI-only services */],
+})
+```
+
+`QuarryRunner.run()` options:
+- `imports` (required) — Modules to register (always include your root module; add CLI-only modules like `InertiaQuarryModule`)
+- `providers?` — CLI-only classes (seeders, services)
+- `exceptionHandler?` — Custom exception handler for CLI runs
 
 ## Module System
 
@@ -152,7 +178,8 @@ For full routing reference (RouteConfig, RouterContext, named routes, URL genera
 
 ```
 src/
-  index.ts                    # Entry point
+  index.ts                    # Worker entry point
+  quarry.ts                   # CLI entry point (QuarryRunner)
   app.module.ts               # Root module
   types/
     env.ts                    # StratalEnv augmentation
@@ -182,13 +209,13 @@ Run `wrangler types` to generate `Cloudflare.Env` from your `wrangler.jsonc` bin
 
 ### Sub-Path Imports
 
-Core: `stratal`, `stratal/cache`, `stratal/config`, `stratal/cron`, `stratal/di`, `stratal/email`, `stratal/errors`, `stratal/events`, `stratal/guards`, `stratal/i18n`, `stratal/i18n/messages/en`, `stratal/i18n/utils`, `stratal/logger`, `stratal/module`, `stratal/openapi`, `stratal/quarry`, `stratal/queue`, `stratal/rate-limiter`, `stratal/router`, `stratal/seeder`, `stratal/storage`, `stratal/storage/providers`, `stratal/validation`, `stratal/websocket`, `stratal/workers`
+Core: `stratal`, `stratal/cache`, `stratal/config`, `stratal/cron`, `stratal/di`, `stratal/email`, `stratal/errors`, `stratal/events`, `stratal/guards`, `stratal/i18n`, `stratal/i18n/messages/en`, `stratal/i18n/utils`, `stratal/logger`, `stratal/module`, `stratal/openapi`, `stratal/quarry`, `stratal/quarry/runner` (CLI-only: `QuarryRunner`, built-in commands), `stratal/queue`, `stratal/rate-limiter`, `stratal/router`, `stratal/seeder`, `stratal/storage`, `stratal/storage/providers`, `stratal/validation`, `stratal/websocket`, `stratal/workers`
 
 Framework: `@stratal/framework/access-control`, `@stratal/framework/auth`, `@stratal/framework/context`, `@stratal/framework/database`, `@stratal/framework/factory`, `@stratal/framework/guards`
 
 Testing: `@stratal/testing`, `@stratal/testing/mocks`, `@stratal/testing/mocks/nodemailer`, `@stratal/testing/mocks/zenstack-language`, `@stratal/testing/storage`, `@stratal/testing/vitest-plugin`
 
-Inertia: `@stratal/inertia`, `@stratal/inertia/react`, `@stratal/inertia/testing`, `@stratal/inertia/vite`, `@stratal/inertia-modal`, `@stratal/inertia-modal/react`
+Inertia: `@stratal/inertia`, `@stratal/inertia/quarry` (CLI-only: `InertiaQuarryModule`, build/dev/types/install commands), `@stratal/inertia/react`, `@stratal/inertia/testing`, `@stratal/inertia/vite`, `@stratal/inertia-modal`, `@stratal/inertia-modal/react`
 
 ## Workflows
 
@@ -216,7 +243,7 @@ Inertia: `@stratal/inertia`, `@stratal/inertia/react`, `@stratal/inertia/testing
 1. Create `src/exceptions/app-exception-handler.ts` extending `ExceptionHandler`
 2. Implement `register()` with `reportable()`, `renderable()`, `dontReport()` as needed
 3. Pass to entry point: `new Stratal({ module: AppModule, exceptionHandler: AppExceptionHandler })`
-4. Create custom error classes extending `ApplicationError` with error codes in 5000-8999 range
+4. Create custom error classes: extend `ApplicationError` for 500 errors, extend `HttpException` for non-500 errors with baked-in status
 
 See `references/errors-and-i18n.md` for the full ExceptionHandler API.
 
@@ -224,10 +251,11 @@ See `references/errors-and-i18n.md` for the full ExceptionHandler API.
 
 1. Install: `npm install @stratal/inertia`
 2. Configure `InertiaModule.forRoot({ rootView: 'app', ssr: { bundle: () => import('./ssr') } })` in root module
-3. Use `@InertiaGet('/')` / `@InertiaPost('/')` and `ctx.inertia('page/Name', props)` in controllers (or `@InertiaRoute()` for convention routing)
-4. For flash messages: add `flash: { store: new CookieFlashStore({ secret: env.FLASH_SECRET }) }` and use `ctx.flash(key, value)`
-5. For frontend i18n: add `i18n: { only: ['common', 'nav'] }` and use `useI18n()` from `@stratal/inertia/react`
-6. Run `npx quarry inertia:dev` for development (standalone bin shipped by `@stratal/inertia`)
+3. Create `src/quarry.ts` with `QuarryRunner.run({ imports: [AppModule, InertiaQuarryModule] })` — import `InertiaQuarryModule` from `@stratal/inertia/quarry`
+4. Use `@InertiaGet('/')` / `@InertiaPost('/')` and `ctx.inertia('page/Name', props)` in controllers (or `@InertiaRoute()` for convention routing)
+5. For flash messages: add `flash: { store: new CookieFlashStore({ secret: env.FLASH_SECRET }) }` and use `ctx.flash(key, value)`
+6. For frontend i18n: add `i18n: { only: ['common', 'nav'] }` and use `useI18n()` from `@stratal/inertia/react`
+7. Run `npx quarry inertia:dev` for development
 
 See `references/inertia.md` for props, shared data, flash messages, i18n integration, type safety, and Vite setup.
 
@@ -261,6 +289,8 @@ See `references/quarry-cli.md` for all MCP flags and options.
 
 **User says "Add custom error handling"** -> Read `references/errors-and-i18n.md`. Create `ExceptionHandler` subclass, implement `register()`, pass to `Stratal` constructor.
 
+**User says "Customize the 404 page" / "Custom error pages"** -> Read `references/errors-and-i18n.md` (and `references/inertia.md` if using Inertia). For Inertia apps, ship `pages/Errors/${status}.tsx` — `InertiaModule` auto-renders them. Otherwise use `this.errorPage(cb)` inside `AppExceptionHandler.register()`, or override `protected renderDefaultHtml()` for a static branded fallback.
+
 **User says "Set up Inertia.js"** -> Read `references/inertia.md`. Install `@stratal/inertia`, configure `InertiaModule.forRoot()`, use `@InertiaRoute()` + `ctx.inertia()`.
 
 **User says "Add a modal route" / "Open a modal page"** -> Read `references/inertia-modal.md`. Install `@stratal/inertia-modal`, add `ModalModule`, use `ctx.inertiaModal('Component', props, { baseURL })` in controllers, place `<Modal />` in the layout.
@@ -276,6 +306,8 @@ See `references/quarry-cli.md` for all MCP flags and options.
 **User says "List all routes" / "Debug my app"** -> Run `npx quarry route:list`. Also try `event:list`, `schedule:list`, `queue:list` to inspect other registrations.
 
 **User says "Set up i18n with Accept-Language header"** -> Read `references/errors-and-i18n.md`. Configure `I18nModule.forRoot({ detection: { strategy: 'header' } })`. Register messages with `I18nModule.registerMessages()`.
+
+**User says "Check if all translations are complete" / "Audit i18n" / "Missing translations"** -> Run `npx quarry i18n:check`. Use `--locale=fr` to check a single locale, `--prefix=common` to filter by namespace. See `references/quarry-cli.md` for all i18n commands.
 
 **User says "Generate URLs for routes"** -> Read `references/routing.md`. Use `ctx.route('name', params)` in controllers. Use standalone `route()` from `stratal/router` outside controllers. Run `npx quarry route:types` for type safety.
 
@@ -304,7 +336,7 @@ Load these when the task needs deeper knowledge:
 | `references/quarry-cli.md` | CLI commands, MCP server setup, custom command creation, debugging |
 | `references/modules-and-di.md` | Provider types, scopes, container API, dynamic modules |
 | `references/routing.md` | RouteConfig, RouterContext API, named routes, URL generation, signed URLs, domain routing, Router fluent API, OpenAPI, versioning |
-| `references/errors-and-i18n.md` | ExceptionHandler, ApplicationError, error codes, i18n, withI18n() |
+| `references/errors-and-i18n.md` | ExceptionHandler, ApplicationError, HttpException, domain error classes, i18n, withZodI18n(), withI18n() |
 | `references/inertia.md` | Inertia.js setup, rendering, props, SSR, type safety, Vite |
 | `references/inertia-modal.md` | Backend-driven modal pages: `ModalModule`, `ctx.inertiaModal()`, `<Modal>`, `useModal()` |
 | `references/websocket.md` | WebSocket gateways: `@Gateway`, `@OnMessage`, `GatewayContext` |
@@ -336,7 +368,7 @@ Load these when the task needs deeper knowledge:
 
 **Cron job not firing** -> `schedule` string doesn't match `wrangler.jsonc` trigger.
 
-**Queue messages not consumed** -> Check: consumer in `consumers` array (not `providers`), `messageTypes` matches dispatched `type`, `QueueModule.registerQueue()` called, queue binding in `wrangler.jsonc`.
+**Queue messages not consumed** -> Check: consumer in `consumers` array (not `providers`), `messageTypes` matches dispatched `type`, `QueueModule.registerQueue('BINDING_NAME')` called, and `'BINDING_NAME'` matches the `binding` field under `queues.producers[]` in `wrangler.jsonc` exactly (UPPER_SNAKE_CASE, no transformation).
 
 **ExceptionHandler `register()` not called** -> Did you pass `exceptionHandler` to `new Stratal()`? The handler class must also have `@Transient()`.
 

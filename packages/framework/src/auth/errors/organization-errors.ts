@@ -1,61 +1,32 @@
-import { ApplicationError, ERROR_CODES } from 'stratal/errors'
+import { HttpException } from 'stratal/errors'
 
-export class OrganizationNotFoundError extends ApplicationError {
-  constructor() {
-    super('auth.org.organizationNotFound', ERROR_CODES.AUTH.ORGANIZATION_NOT_FOUND)
-  }
+export class OrganizationNotFoundError extends HttpException {
+  constructor() { super(404, 'Organization not found') }
 }
-
-export class OrganizationMemberNotFoundError extends ApplicationError {
-  constructor() {
-    super('auth.org.memberNotFound', ERROR_CODES.AUTH.MEMBER_NOT_FOUND)
-  }
+export class OrganizationMemberNotFoundError extends HttpException {
+  constructor() { super(404, 'Organization member not found') }
 }
-
-export class OrganizationInvitationNotFoundError extends ApplicationError {
-  constructor() {
-    super('auth.org.invitationNotFound', ERROR_CODES.AUTH.INVITATION_NOT_FOUND)
-  }
+export class OrganizationInvitationNotFoundError extends HttpException {
+  constructor() { super(404, 'Invitation not found') }
 }
-
-export class OrganizationPermissionDeniedError extends ApplicationError {
-  constructor() {
-    super('auth.org.permissionDenied', ERROR_CODES.AUTHZ.FORBIDDEN)
-  }
+export class OrganizationPermissionDeniedError extends HttpException {
+  constructor() { super(403, 'Organization permission denied') }
 }
-
-export class OrganizationInvitationRecipientMismatchError extends ApplicationError {
-  constructor() {
-    super('auth.org.invitationRecipientMismatch', ERROR_CODES.AUTH.INVITATION_RECIPIENT_MISMATCH)
-  }
+export class OrganizationInvitationRecipientMismatchError extends HttpException {
+  constructor() { super(403, 'Invitation recipient mismatch') }
 }
-
-export class OrganizationConflictError extends ApplicationError {
-  constructor() {
-    super('auth.org.conflict', ERROR_CODES.RESOURCE.CONFLICT)
-  }
+export class OrganizationConflictError extends HttpException {
+  constructor() { super(409, 'Organization resource conflict') }
 }
-
-export class OrganizationLimitReachedError extends ApplicationError {
-  constructor() {
-    super('auth.org.limitReached', ERROR_CODES.AUTH.ORGANIZATION_LIMIT_REACHED)
-  }
+export class OrganizationLimitReachedError extends HttpException {
+  constructor() { super(422, 'Organization limit reached') }
 }
-
-export class OrganizationMembershipError extends ApplicationError {
-  constructor() {
-    super('auth.org.membershipError', ERROR_CODES.AUTH.ORGANIZATION_MEMBERSHIP_REQUIRED)
-  }
+export class OrganizationMembershipError extends HttpException {
+  constructor() { super(422, 'Organization membership constraint violated') }
 }
-
-export class OrganizationTeamNotFoundError extends ApplicationError {
-  constructor() {
-    super('auth.org.teamNotFound', ERROR_CODES.RESOURCE.NOT_FOUND)
-  }
+export class OrganizationTeamNotFoundError extends HttpException {
+  constructor() { super(404, 'Team not found') }
 }
-
-export class OrganizationRoleNotFoundError extends ApplicationError {
-  constructor() {
-    super('auth.org.roleNotFound', ERROR_CODES.RESOURCE.NOT_FOUND)
-  }
+export class OrganizationRoleNotFoundError extends HttpException {
+  constructor() { super(404, 'Role not found') }
 }

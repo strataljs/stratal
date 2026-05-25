@@ -4,9 +4,7 @@
 //   import { RateLimiterModule, RateLimit, Limit, RATE_LIMITER_TOKENS } from 'stratal/rate-limiter'
 
 export {
-  RateLimiterModuleNotImportedError,
-  RateLimiterNotConfiguredError,
-  RateLimiterNotDefinedError,
+  RateLimiterError,
   TooManyRequestsError,
 } from './errors'
 export { Limit, type RateLimitHeaders, type RateLimitResponseHandler } from './limit'

@@ -89,7 +89,11 @@ export class MyService {
     this.logger.debug('Debug message', { key: 'value' })
     this.logger.info('Info message')
     this.logger.warn('Warning message')
-    this.logger.error('Error message', { error })
+
+    // error() overloads:
+    this.logger.error('Something failed', new Error('boom'))                    // (message, Error)
+    this.logger.error('Something failed', new Error('boom'), { userId: '123' }) // (message, Error, context)
+    this.logger.error('Something failed', { code: 500 })                        // (message, context)
   }
 }
 ```
@@ -101,7 +105,7 @@ export default new Stratal({
   module: AppModule,
   logging: {
     level: LogLevel.INFO,    // DEBUG, INFO, WARN, ERROR
-    formatter: 'json',       // 'json' or 'text'
+    formatter: 'json',       // 'json' or 'pretty'
   },
 })
 ```
@@ -121,10 +125,10 @@ import { EmailModule } from 'stratal/email'
         provider: 'resend',              // 'resend' | 'smtp'
         from: { name: 'My App', email: 'noreply@example.com' },
         apiKey: env.RESEND_API_KEY,      // required for resend provider
-        queue: 'email-queue',            // queue name for async sending
+        queue: 'NOTIFICATIONS_QUEUE',    // queue binding registered via QueueModule
       }),
     }),
-    QueueModule.registerQueue('email-queue'),
+    QueueModule.registerQueue('NOTIFICATIONS_QUEUE'),
   ],
 })
 export class AppModule {}
@@ -301,4 +305,4 @@ Custom schemes can be passed via `securitySchemes` option.
 
 ## I18n
 
-See `references/errors-and-i18n.md` for I18nModule configuration, I18nService usage, and `withI18n()` for Zod validation messages.
+See `references/errors-and-i18n.md` for I18nModule configuration, I18nService usage, `withZodI18n()` for Zod validation messages, and `withI18n()` from `stratal/i18n` for general translations.

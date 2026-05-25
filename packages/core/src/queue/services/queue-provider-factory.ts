@@ -3,7 +3,7 @@ import { type StratalEnv } from '../../env'
 import { Transient } from '../../di/decorators'
 import { DI_TOKENS } from '../../di/tokens'
 import { type ConsumerRegistry } from '../consumer-registry'
-import { QueueProviderNotSupportedError } from '../errors'
+import { QueueError } from '../queue.error'
 import { CloudflareQueueProvider, SyncQueueProvider, type IQueueProvider } from '../providers'
 import type { QueueModuleOptions } from '../queue.module'
 import { QUEUE_TOKENS } from '../queue.tokens'
@@ -43,7 +43,7 @@ export class QueueProviderFactory {
    * Create a queue provider based on module configuration
    *
    * @returns Queue provider instance
-   * @throws {QueueProviderNotSupportedError} If provider type is not supported
+   * @throws {QueueError} If provider type is not supported
    */
   create(): IQueueProvider {
     const providerType = this.options?.provider ?? 'cloudflare'
@@ -56,7 +56,7 @@ export class QueueProviderFactory {
         return new SyncQueueProvider(this.registry)
 
       default:
-        throw new QueueProviderNotSupportedError(providerType)
+        throw new QueueError(`Queue provider "${String(providerType)}" is not supported`)
     }
   }
 }

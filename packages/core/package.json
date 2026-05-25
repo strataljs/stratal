@@ -110,6 +110,10 @@
       "types": "./dist/quarry/index.d.mts",
       "import": "./dist/quarry/index.mjs"
     },
+    "./quarry/runner": {
+      "types": "./dist/quarry/runner.d.mts",
+      "import": "./dist/quarry/runner.mjs"
+    },
     "./queue": {
       "types": "./dist/queue/index.d.mts",
       "import": "./dist/queue/index.mjs"
@@ -155,10 +159,10 @@
     "bench:unit": "vitest bench --run --project unit",
     "bench:e2e": "vitest bench --run --project e2e",
     "bench:json": "vitest bench --run --outputJson benchmark-results.json",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:integration": "vitest run --project workerd",
-    "test:coverage": "vitest run --coverage",
+    "test": "NODE_OPTIONS='--expose-gc' vitest run",
+    "test:watch": "NODE_OPTIONS='--expose-gc' vitest",
+    "test:integration": "NODE_OPTIONS='--expose-gc' vitest run --project workerd",
+    "test:coverage": "NODE_OPTIONS='--expose-gc' vitest run --coverage",
     "lint": "npx oxlint .",
     "lint:fix": "npx oxlint --fix ."
   },

@@ -1,4 +1,4 @@
-import { z } from '../../i18n/validation'
+import { z } from '../../i18n/validation/zod'
 import { ROUTE_METADATA_KEYS } from '../constants'
 import type { ExplicitRouteMetadata, HttpMethod, RouteConfig } from '../types'
 
