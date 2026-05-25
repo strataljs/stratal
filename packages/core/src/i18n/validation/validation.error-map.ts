@@ -111,8 +111,8 @@ function getMessageKey(issue: $ZodRawIssue): MessageKeys {
  * Extracts interpolation parameters from Zod issue
  * Uses proper type narrowing for v4
  */
-function getMessageParams(issue: $ZodRawIssue): Record<string, unknown> {
-  const params: Record<string, unknown> = {}
+function getMessageParams(issue: $ZodRawIssue): Record<string, string | number> {
+  const params: Record<string, string | number> = {}
 
   if (isInvalidType(issue)) {
     params.expected = issue.expected
@@ -135,14 +135,14 @@ function getMessageParams(issue: $ZodRawIssue): Record<string, unknown> {
     params.validation = issue.format
 
     // Check for specific string format issues with additional fields
-    if ('prefix' in issue) {
-      params.startsWith = (issue as { prefix?: string }).prefix
+    if ('prefix' in issue && typeof issue.prefix === 'string') {
+      params.startsWith = issue.prefix
     }
-    if ('suffix' in issue) {
-      params.endsWith = (issue as { suffix?: string }).suffix
+    if ('suffix' in issue && typeof issue.suffix === 'string') {
+      params.endsWith = issue.suffix
     }
-    if ('includes' in issue) {
-      params.includes = (issue as { includes?: string }).includes
+    if ('includes' in issue && typeof issue.includes === 'string') {
+      params.includes = issue.includes
     }
     if (issue.pattern) {
       params.pattern = issue.pattern
@@ -152,7 +152,7 @@ function getMessageParams(issue: $ZodRawIssue): Record<string, unknown> {
   }
 
   if (isTooSmall(issue)) {
-    params.minimum = issue.minimum
+    params.minimum = Number(issue.minimum)
     params.type = issue.origin
     if (issue.origin === 'date') {
       params.minimum = new Date(Number(issue.minimum)).toLocaleDateString()
@@ -161,7 +161,7 @@ function getMessageParams(issue: $ZodRawIssue): Record<string, unknown> {
   }
 
   if (isTooBig(issue)) {
-    params.maximum = issue.maximum
+    params.maximum = Number(issue.maximum)
     params.type = issue.origin
     if (issue.origin === 'date') {
       params.maximum = new Date(Number(issue.maximum)).toLocaleDateString()
