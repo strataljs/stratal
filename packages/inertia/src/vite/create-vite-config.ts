@@ -54,7 +54,6 @@ const baseConfig = {
     ...(inertiaPlugin ? [inertiaPlugin] : []),
     ...stratalInertia(${stratalArgs}),
   ],
-  publicDir: '${join(options.cwd, 'src', 'inertia', 'public').replace(/\\/g, '/')}',
   build: {
     ${outDirConfig}
   },
