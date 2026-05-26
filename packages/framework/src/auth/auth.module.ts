@@ -56,6 +56,7 @@ import { createStratalAcPlugin } from '../access-control/plugin'
 import { AccessService } from '../access-control/services/access.service'
 import { AC_TOKENS } from '../access-control/tokens'
 import type { AccessControlOptions } from '../access-control/types'
+import { AuthContext } from '../context/auth-context'
 import { AUTH_OPTIONS, AUTH_SERVICE } from './auth.tokens'
 import { AuthContextMiddleware } from './middleware/auth-context.middleware'
 import { SessionVerificationMiddleware } from './middleware/session-verification.middleware'
@@ -78,7 +79,7 @@ export interface AuthModuleAsyncOptions<TOptions extends BetterAuthOptions = Bet
 }
 
 @Module({
-  providers: []
+  providers: [AuthContext]
 })
 export class AuthModule implements RouteConfigurable {
   /**
@@ -121,10 +122,8 @@ export class AuthModule implements RouteConfigurable {
           }
         }
 
-        const tsyringe = container.getTsyringeContainer()
-        const rateLimiterPresent = tsyringe.isRegistered(
+        const rateLimiterPresent = container.isRegistered(
           RATE_LIMITER_TOKENS.ModuleMarker,
-          true,
         )
 
         if (rateLimiterPresent) {

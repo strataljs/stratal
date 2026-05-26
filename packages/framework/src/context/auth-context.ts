@@ -1,5 +1,5 @@
 import type { BaseUser } from '@better-auth/core/db'
-import { Transient, DI_TOKENS } from 'stratal/di'
+import { Request, DI_TOKENS } from 'stratal/di'
 import { AuthError } from 'stratal/errors'
 import {
   UserNotAuthenticatedError
@@ -34,7 +34,7 @@ export interface AuthInfo {
   user: AuthUser
 }
 
-@Transient(DI_TOKENS.AuthContext)
+@Request(DI_TOKENS.AuthContext)
 export class AuthContext {
   protected user?: AuthUser
 

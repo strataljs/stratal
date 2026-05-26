@@ -1,6 +1,3 @@
-import 'reflect-metadata'
-
-import { container as tsyringeRootContainer, type DependencyContainer } from 'tsyringe'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Container } from '../../di/container'
 import { DI_TOKENS } from '../../di/tokens'
@@ -79,7 +76,6 @@ class CallerCommand extends Command {
 
 describe('QuarryRegistry', () => {
   let quarry: QuarryRegistry
-  let childContainer: DependencyContainer
   let container: Container
 
   const mockErrorHandler = {
@@ -91,10 +87,7 @@ describe('QuarryRegistry', () => {
   }
 
   beforeEach(() => {
-    childContainer = tsyringeRootContainer.createChildContainer()
-    container = new Container({
-      container: childContainer,
-    })
+    container = new Container()
     container.registerValue(DI_TOKENS.ExceptionHandler, mockErrorHandler)
     quarry = new QuarryRegistry(container)
     mockErrorHandler.handle.mockClear()

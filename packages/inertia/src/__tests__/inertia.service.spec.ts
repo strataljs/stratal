@@ -310,6 +310,25 @@ describe('InertiaService', () => {
       expect(body.props).toEqual({ comments: ['comment1'], errors: {} })
       expect(body).not.toHaveProperty('deferredProps')
     })
+
+    it('should resolve deferred props eagerly when x-inertia-resolve-deferred header is set', async () => {
+      const ctx = createMockContext({
+        isInertia: true,
+        headers: {
+          'x-inertia-resolve-deferred': 'true',
+        },
+      })
+
+      const response = await service.render(ctx, 'Home', {
+        name: 'John',
+        comments: service.defer(() => ['comment1']),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.props).toHaveProperty('comments', ['comment1'])
+      expect(body.props).toHaveProperty('name', 'John')
+      expect(body).not.toHaveProperty('deferredProps')
+    })
   })
 
   describe('merge()', () => {

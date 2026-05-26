@@ -1,4 +1,3 @@
-import { createCoreContext } from '@intlify/core-base'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
 import { type RouterContext } from '../../router/router-context'
@@ -11,48 +10,43 @@ describe('I18nService', () => {
   let mockLoader: DeepMocked<MessageLoaderService>
   let mockRouterContext: DeepMocked<RouterContext>
 
-  const flatMessages: Record<string, string> = {
-    'common.welcome': 'Welcome',
-    'common.greeting': 'Hello, {name}!',
-    'auth.login.title': 'Sign In',
-  }
-
-  const createContext = (locale: string) =>
-    createCoreContext({
-      locale,
-      messages: { [locale]: flatMessages },
-      missingWarn: false,
-      fallbackWarn: false,
-    })
-
   beforeEach(() => {
     vi.clearAllMocks()
 
     mockLoader = createMock<MessageLoaderService>()
-    mockLoader.getCoreContext.mockImplementation((locale: string) => createContext(locale))
+    mockLoader.translate.mockImplementation((locale: string, key: string, params?: Record<string, unknown>) => {
+      const messages: Record<string, string> = {
+        'common.welcome': 'Welcome',
+        'common.greeting': `Hello, ${(params?.['name'] as string) ?? ''}!`,
+        'auth.login.title': 'Sign In',
+      }
+      return messages[key] ?? key
+    })
 
     mockRouterContext = createMock<RouterContext>()
     mockRouterContext.getLocale.mockReturnValue('en')
   })
 
   describe('t()', () => {
-    it('should return translated string from loader messages', () => {
+    it('should return translated string from loader', () => {
       service = new I18nService(mockLoader as unknown as MessageLoaderService, mockRouterContext as unknown as RouterContext)
 
       const result = service.t('common.welcome' as MessageKeys)
 
       expect(result).toBe('Welcome')
+      expect(mockLoader.translate).toHaveBeenCalledWith('en', 'common.welcome', undefined)
     })
 
-    it('should return interpolated message', () => {
+    it('should pass params to loader', () => {
       service = new I18nService(mockLoader as unknown as MessageLoaderService, mockRouterContext as unknown as RouterContext)
 
       const result = service.t('common.greeting' as MessageKeys, { name: 'John' })
 
       expect(result).toBe('Hello, John!')
+      expect(mockLoader.translate).toHaveBeenCalledWith('en', 'common.greeting', { name: 'John' })
     })
 
-    it('should return the key itself as fallback for nonexistent key', () => {
+    it('should return the key itself for nonexistent key', () => {
       service = new I18nService(mockLoader as unknown as MessageLoaderService, mockRouterContext as unknown as RouterContext)
 
       const result = service.t('nonexistent.key' as MessageKeys)
@@ -73,29 +67,6 @@ describe('I18nService', () => {
       service = new I18nService(mockLoader as unknown as MessageLoaderService, undefined)
 
       expect(service.getLocale()).toBe('en')
-    })
-  })
-
-  describe('cached context', () => {
-    it('should use getCoreContext from loader for each t() call', () => {
-      service = new I18nService(mockLoader as unknown as MessageLoaderService, mockRouterContext as unknown as RouterContext)
-
-      service.t('common.welcome' as MessageKeys)
-      service.t('auth.login.title' as MessageKeys)
-
-      // getCoreContext is called for each t() call (but it returns a cached singleton)
-      expect(mockLoader.getCoreContext).toHaveBeenCalledTimes(2)
-      expect(mockLoader.getCoreContext).toHaveBeenCalledWith('en')
-    })
-  })
-
-  describe('flattenMessages (via loader)', () => {
-    it('should translate nested keys via pre-flattened messages', () => {
-      service = new I18nService(mockLoader as unknown as MessageLoaderService, mockRouterContext as unknown as RouterContext)
-
-      const result = service.t('auth.login.title' as MessageKeys)
-
-      expect(result).toBe('Sign In')
     })
   })
 })

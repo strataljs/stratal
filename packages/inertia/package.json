@@ -67,6 +67,7 @@
     "lint:fix": "npx oxlint --fix ."
   },
   "dependencies": {
+    "intl-messageformat": "^11.2.7",
     "ts-morph": "^28.0.0"
   },
   "peerDependencies": {
@@ -74,12 +75,10 @@
     "@inertiajs/core": ">=3",
     "@inertiajs/react": ">=3",
     "@inertiajs/vite": ">=3",
-    "@intlify/core-base": ">=11",
     "@stratal/testing": ">=0.0.21",
     "hono": ">=4",
     "react": ">=19",
     "react-dom": ">=19",
-    "reflect-metadata": ">=0.2",
     "stratal": ">=0.0.21",
     "vite": ">=8",
     "vitest": ">=4"
@@ -95,9 +94,6 @@
       "optional": true
     },
     "@inertiajs/vite": {
-      "optional": true
-    },
-    "@intlify/core-base": {
       "optional": true
     },
     "@stratal/testing": {
@@ -119,7 +115,6 @@
     "@inertiajs/core": "^3.1.1",
     "@inertiajs/react": "^3.1.1",
     "@inertiajs/vite": "^3.1.1",
-    "@intlify/core-base": "^11.4.2",
     "@stratal/testing": "workspace:*",
     "@types/node": "^25.6.2",
     "@types/react": "^19.2.14",
@@ -129,7 +124,6 @@
     "hono": "^4.12.18",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "reflect-metadata": "^0.2.2",
     "stratal": "workspace:*",
     "tsdown": "^0.22.0",
     "typescript": "^6.0.3",

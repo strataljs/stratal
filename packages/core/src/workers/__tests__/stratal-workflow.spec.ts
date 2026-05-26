@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Application } from '../../application'
 import type { Container } from '../../di/container'
-import { Scope } from '../../di/types'
 import type { StratalEnv } from '../../env'
 import { LogLevel } from '../../logger'
 import { Module } from '../../module/module.decorator'
@@ -15,7 +14,7 @@ class TestService {
 }
 
 @Module({
-  providers: [{ provide: TOKEN, useClass: TestService, scope: Scope.Singleton }],
+  providers: [{ provide: TOKEN, useClass: TestService }],
 })
 class TestAppModule {}
 

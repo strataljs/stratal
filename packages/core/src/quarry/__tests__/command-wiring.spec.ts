@@ -1,10 +1,7 @@
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
-import type { DependencyContainer } from 'tsyringe'
-import { inject, container as tsyringeRootContainer } from 'tsyringe'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { Transient } from '../../di'
+import { inject, Transient } from '../../di'
 import { Container } from '../../di/container'
-import { Scope } from '../../di/types'
 import type { LoggerService } from '../../logger/services/logger.service'
 import { ModuleRegistry } from '../../module/module-registry'
 import { Module } from '../../module/module.decorator'
@@ -14,17 +11,13 @@ import { isCommand } from '../is-command'
 import { QuarryRegistry } from '../quarry-registry'
 
 describe('Command Auto-Wiring (Application-level)', () => {
-  let childContainer: DependencyContainer
   let container: Container
   let mockLogger: DeepMocked<LoggerService>
   let registry: ModuleRegistry
 
   beforeEach(() => {
     vi.clearAllMocks()
-    childContainer = tsyringeRootContainer.createChildContainer()
-    container = new Container({
-      container: childContainer,
-    })
+    container = new Container()
     mockLogger = createMock<LoggerService>()
     registry = new ModuleRegistry(container, mockLogger as unknown as LoggerService)
   })
@@ -70,7 +63,7 @@ describe('Command Auto-Wiring (Application-level)', () => {
 
     @Module({
       providers: [
-        { provide: CMD_TOKEN, useClass: MyCommand, scope: Scope.Singleton },
+        { provide: CMD_TOKEN, useClass: MyCommand },
       ],
     })
     class TestModule { }
@@ -125,7 +118,7 @@ describe('Command Auto-Wiring (Application-level)', () => {
       getValue() { return 'injected-value' }
     }
 
-    container.register(SERVICE_TOKEN, TestService, Scope.Singleton)
+    container.register(SERVICE_TOKEN, TestService)
 
     @Transient()
     class DependentCommand extends Command {

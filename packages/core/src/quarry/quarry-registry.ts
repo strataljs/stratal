@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe'
+import { inject } from '../di'
 import type { Container } from '../di/container'
 import { Transient } from '../di/decorators'
 import { DI_TOKENS } from '../di/tokens'

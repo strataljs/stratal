@@ -1,8 +1,8 @@
 import type { Context, MiddlewareHandler } from 'hono'
 import { languageDetector } from 'hono/language'
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import type { Container } from '../../di/container'
-import { Transient } from '../../di/decorators'
+import { Singleton } from '../../di/decorators'
 import { CONTAINER_TOKEN } from '../../di/tokens'
 import { buildDetectorOptions, type I18nModuleOptions } from '../../i18n/i18n.options'
 import { I18N_TOKENS } from '../../i18n/i18n.tokens'
@@ -32,7 +32,7 @@ export interface ResolvedPath {
  *
  * Registered as a singleton in the container.
  */
-@Transient()
+@Singleton()
 export class LocalePathService {
   private readonly _config: LocalePathConfig | null
   private readonly _pathDetectionEnabled: boolean

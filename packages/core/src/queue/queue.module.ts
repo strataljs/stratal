@@ -26,7 +26,6 @@
  */
 
 import { DI_TOKENS } from '../di/tokens'
-import { Scope } from '../di/types'
 import { Module } from '../module'
 import type { AsyncModuleOptions, DynamicModule, InjectionToken } from '../module/types'
 import { ConsumerRegistry } from './consumer-registry'
@@ -50,8 +49,8 @@ export interface QueueModuleOptions {
 
 @Module({
   providers: [
-    { provide: DI_TOKENS.ConsumerRegistry, useClass: ConsumerRegistry, scope: Scope.Singleton },
-    { provide: QUEUE_TOKENS.QueueProviderFactory, useClass: QueueProviderFactory, scope: Scope.Singleton },
+    { provide: DI_TOKENS.ConsumerRegistry, useClass: ConsumerRegistry },
+    { provide: QUEUE_TOKENS.QueueProviderFactory, useClass: QueueProviderFactory },
     { provide: QUEUE_TOKENS.QueueRegistry, useClass: QueueRegistry },
   ],
 })

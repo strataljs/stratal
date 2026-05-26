@@ -38,7 +38,6 @@
  * ```
  */
 
-import { Scope } from '../di'
 import { Module } from '../module'
 import type { AsyncModuleOptions, DynamicModule } from '../module/types'
 import { OPENAPI_TOKENS } from './openapi.tokens'
@@ -57,9 +56,9 @@ const DEFAULT_OPTIONS: OpenAPIModuleOptions = {
 @Module({
   providers: [
     // OpenAPI config service (request-scoped, supports runtime overrides)
-    { provide: OPENAPI_TOKENS.ConfigService, useClass: OpenAPIConfigService, scope: Scope.Request },
+    { provide: OPENAPI_TOKENS.ConfigService, useClass: OpenAPIConfigService },
     // OpenAPI service (singleton — serves spec and docs endpoints)
-    { provide: OPENAPI_TOKENS.OpenAPIService, useClass: OpenAPIService, scope: Scope.Singleton },
+    { provide: OPENAPI_TOKENS.OpenAPIService, useClass: OpenAPIService },
   ],
 })
 export class OpenAPIModule {

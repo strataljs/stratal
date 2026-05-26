@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import { Transient } from '../../di/decorators'
 import type { EmailModuleOptions } from '../email.module'
 import { EMAIL_TOKENS } from '../email.tokens'

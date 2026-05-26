@@ -1,5 +1,5 @@
-import { inject } from 'tsyringe'
-import { Transient } from '../../di/decorators'
+import { inject } from '../../di'
+import { Singleton } from '../../di/decorators'
 import { DI_TOKENS } from '../../di/tokens'
 import { type StratalEnv } from '../../env'
 import { StorageError } from '../storage.error'
@@ -12,7 +12,7 @@ import type { StorageConfig, StorageEntry } from '../types'
  * Manages multiple storage providers (one per disk)
  * Handles lazy initialization and caching of R2 providers
  */
-@Transient(STORAGE_TOKENS.StorageManager)
+@Singleton(STORAGE_TOKENS.StorageManager)
 export class StorageManagerService {
   private readonly providers = new Map<string, IStorageProvider>()
   private readonly creationPromises = new Map<string, Promise<IStorageProvider>>()

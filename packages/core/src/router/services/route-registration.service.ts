@@ -1,8 +1,8 @@
 import type { Context, MiddlewareHandler } from 'hono';
 import type { UpgradeWebSocket, WSContext, WSEvents } from 'hono/ws';
-import { inject } from 'tsyringe';
+import { inject } from '../../di';
 import { type Container, getMethodInjections } from '../../di';
-import { Transient } from '../../di/decorators';
+import { Singleton } from '../../di/decorators';
 import { DI_TOKENS } from '../../di/tokens';
 import {
     type Guard,
@@ -78,7 +78,7 @@ const invokeHandler = (instance: Record<string, (...args: unknown[]) => unknown>
  * 1. Collect: iterate controllers, register in RouteRegistry, store Hono actions
  * 2. Register: iterate registry.all() (sorted), execute stored actions in Hono
  */
-@Transient()
+@Singleton()
 export class RouteRegistrationService {
   private controllerClasses = new Map<string, Constructor>()
   private upgradeWebSocketFn: UpgradeWebSocket | null = null
@@ -574,7 +574,7 @@ export class RouteRegistrationService {
       ? this.createGuardMiddleware(guards)
       : null
 
-    return async (c: Context<RouterEnv>): Promise<Response> => {
+    return async (c: Context<RouterEnv, string>): Promise<Response> => {
       let captured: Response | undefined
 
       const runHandler = async () => {

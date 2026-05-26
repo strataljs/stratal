@@ -207,7 +207,7 @@ export class TestingModule {
    * Cleanup - call in afterAll
    */
   async close(): Promise<void> {
-    await this._requestContainer.dispose()
+    this._requestContainer.dispose()
     await this.app.shutdown()
   }
 }

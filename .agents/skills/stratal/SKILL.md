@@ -5,7 +5,7 @@ license: MIT
 compatibility: Designed for AI Agents. Requires Node.js 22+, npm.
 metadata:
   author: Temitayo Fadojutimi
-  version: "1.8"
+  version: "1.9"
 ---
 
 # Stratal Framework
@@ -21,17 +21,15 @@ Stratal is a modular Cloudflare Workers framework. ESM-only. Packages:
 
 Breaking any of these causes runtime failures.
 
-1. **Every injectable class MUST have `@Transient()`** — tsyringe requires it. Without it, DI fails. `@Controller()` applies it automatically; services, repositories, listeners, seeders, and commands all need it explicitly.
+1. **Every injectable class MUST have a scope decorator** — Use `@Singleton()`, `@Request()`, or `@Transient()` from `stratal/di`. Without it, DI fails. `@Controller()` applies it automatically; services, repositories, listeners, seeders, and commands all need it explicitly.
 
 2. **Import `z` from `stratal/validation`, NOT `zod`** — Stratal wraps Zod with i18n. Direct `zod` imports bypass translation.
 
 3. **Use `cuid2` from `stratal/validation`, NOT `z.cuid2()`** — Zod 4.3.6's `cuid2()` regex is `/^[0-9a-z]+$/` and accepts any non-empty lowercase-alphanumeric string (`'sw'`, `'a'`, `'0'`). Stratal's `cuid2()` enforces real cuid2 shape and keeps `format: cuid2` in the OpenAPI spec.
 
-4. **Never import from `tsyringe` directly** — Use `import { inject } from 'stratal/di'`. Stratal re-exports everything needed.
+4. **Import DI utilities from `stratal/di`** — Use `import { inject, Singleton, Request } from 'stratal/di'`.
 
-5. **`reflect-metadata` must be imported** — `Stratal` class does this automatically. Test setup files must add `import 'reflect-metadata'`.
-
-6. **`experimentalDecorators` and `emitDecoratorMetadata` must be `true`** in tsconfig.
+5. **`experimentalDecorators` and `emitDecoratorMetadata` must be `true`** in tsconfig.
 
 7. **Convention routing and explicit HTTP decorators cannot mix** — Per controller, use EITHER convention-based (`@Route()` / `@InertiaRoute()` + method names `index/show/create/update/patch/destroy`) OR explicit (`@Get()/@Post()` / `@InertiaGet()/@InertiaPost()`). Never both. You CAN mix regular decorators (`@Get`) with Inertia explicit decorators (`@InertiaGet`) in the same controller.
 
@@ -39,7 +37,7 @@ Breaking any of these causes runtime failures.
 
 9. **DI tokens** — Use class-as-token for simple cases. Use `Symbol.for()` for shareable modules, value providers, factory providers. Group symbols in a `tokens.ts` file.
 
-10. **Cron schedules must match `wrangler.jsonc`** — `CronJob.schedule` string must exactly match a trigger in `[triggers]`.
+10. **Cron schedules must match `wrangler.jsonc`** — Declare `static schedule` on the class. The string must exactly match a trigger in `[triggers]`.
 
 11. **I18nModule must be configured for translations** — `I18nModule.forRoot()` for locale config with `detection` option (`'cookie'` default, `'header'`, `'querystring'`, `'path'`). Path detection supports `prefixDefaultLocale` (`false` default, `'redirect'`, `true`). `I18nModule.registerMessages()` to add messages. `I18nService.t()` for translation. `withZodI18n()` (from `stratal/validation`) for Zod validation messages. `withI18n()` (from `stratal/i18n`) for general translations.
 
@@ -356,7 +354,7 @@ Load these when the task needs deeper knowledge:
 
 ## Troubleshooting
 
-**"No injectable constructor"** -> Missing `@Transient()` on the class.
+**"No injectable constructor"** -> Missing scope decorator (`@Singleton()`, `@Request()`, or `@Transient()`) on the class.
 
 **"Token not registered"** -> Provider not in any module's `providers`, or module not imported.
 
@@ -366,7 +364,7 @@ Load these when the task needs deeper knowledge:
 
 **`z.cuid2()` accepts `'sw'`, `'a'`, or any short lowercase string** -> Zod 4.3.6's regex is `/^[0-9a-z]+$/`. Use `cuid2()` from `stratal/validation` instead.
 
-**Cron job not firing** -> `schedule` string doesn't match `wrangler.jsonc` trigger.
+**Cron job not firing** -> `schedule` must be a `static` class property (not instance property). Also verify the string matches `wrangler.jsonc` trigger exactly.
 
 **Queue messages not consumed** -> Check: consumer in `consumers` array (not `providers`), `messageTypes` matches dispatched `type`, `QueueModule.registerQueue('BINDING_NAME')` called, and `'BINDING_NAME'` matches the `binding` field under `queues.producers[]` in `wrangler.jsonc` exactly (UPPER_SNAKE_CASE, no transformation).
 

@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import { Transient } from '../../di/decorators'
 import type { InternalLogContext, LogContext, LogEntry } from '../contracts'
 import { LOG_LEVEL_PRIORITY, LogLevel } from '../contracts/log-level'

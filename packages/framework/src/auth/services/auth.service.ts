@@ -1,7 +1,6 @@
 import type { Auth, BetterAuthOptions } from 'better-auth';
 import { betterAuth } from 'better-auth/minimal';
-import { Transient } from 'stratal/di';
-import { inject } from 'tsyringe';
+import { inject, Request } from 'stratal/di';
 import { AUTH_OPTIONS, AUTH_SERVICE } from '../auth.tokens';
 import { getErrorHandlerConfig } from '../utils';
 
@@ -26,7 +25,7 @@ import { getErrorHandlerConfig } from '../utils';
  * }
  * ```
  */
-@Transient(AUTH_SERVICE)
+@Request(AUTH_SERVICE)
 export class AuthService<TOptions extends BetterAuthOptions = BetterAuthOptions> {
   private _authInstance?: Auth<TOptions>
 

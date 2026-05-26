@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Application } from '../../application';
 import type { Container } from '../../di/container';
 import { DI_TOKENS } from '../../di/tokens';
-import { Scope } from '../../di/types';
 import type { StratalEnv } from '../../env';
 import type { EventContext, IEventRegistry } from '../../events';
 import { Listener, On } from '../../events';
@@ -30,7 +29,7 @@ class TestEventListener {
 
 @Module({
   providers: [
-    { provide: TOKEN, useClass: TestService, scope: Scope.Singleton },
+    { provide: TOKEN, useClass: TestService },
     TestEventListener,
   ],
 })

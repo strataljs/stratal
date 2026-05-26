@@ -154,7 +154,6 @@ export function stratalInertia(options?: StratalInertiaPluginOptions): Plugin[] 
         }
       },
     },
-    invokeReflectMetadataBeforeTsyringeCheck(),
     injectClientManifestIntoWorker({ clientManifestPath }),
   ]
 }
@@ -208,79 +207,3 @@ function injectClientManifestIntoWorker(args: { clientManifestPath: string }): P
   }
 }
 
-// Stratal relies on tsyringe for dependency injection. Rolldown wraps
-// `reflect-metadata` as a lazy CJS module, so `import "reflect-metadata"` at the
-// top of the worker entry only DEFINES `require_Reflect()` without invoking it.
-// tsyringe's main module body runs
-//   `if (typeof Reflect === "undefined" || !Reflect.getMetadata) throw new Error("tsyringe requires a reflect polyfill ...");`
-// at load time, so when production builds split the bundle into ESM chunks
-// (Cloudflare Workers ESM allows multiple chunks) and tsyringe's chunk happens
-// to evaluate before any chunk invokes the polyfill, the worker crashes on
-// boot. The Vite dev server doesn't chunk, so this only surfaces on deploy.
-//
-// `manualChunks` co-locates reflect-metadata and tsyringe in a single chunk so
-// the polyfill declaration and the runtime check sit in the same module. The
-// `generateBundle` hook then prepends an explicit `require_Reflect$X();` to
-// each tsyringe check so the lazy CJS wrapper actually runs first.
-function invokeReflectMetadataBeforeTsyringeCheck(): Plugin {
-  const TSYRINGE_CHECK = /if \(typeof Reflect === "undefined" \|\| !Reflect\.getMetadata\) throw new Error\("tsyringe requires a reflect polyfill[\s\S]*?\);/
-  const REFLECT_DECL = /var (require_Reflect\$?\d*) = \/\* @__PURE__ \*\/ __commonJSMin/
-
-  return {
-    name: 'stratal:invoke-reflect-metadata-before-tsyringe',
-    apply: 'build',
-    configEnvironment(_name: string, env: EnvironmentOptions) {
-      const rawOutput = env.build?.rolldownOptions?.output
-      if (Array.isArray(rawOutput)) {
-        throw new Error('stratal:invoke-reflect-metadata-before-tsyringe does not support array-form rolldownOptions.output')
-      }
-      const existingOutput = rawOutput ?? {}
-      const userManualChunks = existingOutput.manualChunks
-      env.build = {
-        ...env.build,
-        rolldownOptions: {
-          ...env.build?.rolldownOptions,
-          output: {
-            ...existingOutput,
-            manualChunks(id: string, meta: unknown) {
-              if (typeof userManualChunks === 'function') {
-                const userResult = (userManualChunks as (id: string, meta: unknown) => string | null | undefined)(id, meta)
-                if (userResult != null) return userResult
-              } else if (userManualChunks && typeof userManualChunks === 'object') {
-                for (const [name, ids] of Object.entries(userManualChunks as Record<string, string[]>)) {
-                  if (Array.isArray(ids) && ids.some((entry) => id.includes(entry))) return name
-                }
-              }
-              if (id.includes('/reflect-metadata/') || id.includes('/tsyringe/')) {
-                return 'stratal-reflect-metadata'
-              }
-            },
-          },
-        },
-      }
-    },
-    generateBundle(_, bundle) {
-      for (const fileName of Object.keys(bundle)) {
-        const chunk = bundle[fileName]
-        if (chunk.type !== 'chunk') continue
-        let modified = chunk.code
-        let injected = false
-        let cursor = 0
-        while (true) {
-          const matchOffset = modified.slice(cursor).search(TSYRINGE_CHECK)
-          if (matchOffset === -1) break
-          const checkIndex = cursor + matchOffset
-          const declMatch = modified.slice(0, checkIndex).match(REFLECT_DECL)
-          if (!declMatch) {
-            this.error(`stratal: tsyringe runtime check found in chunk ${fileName} but reflect-metadata polyfill is not declared earlier in the same chunk. Something is overriding the manualChunks configuration that co-locates them.`)
-          }
-          const invocation = `${declMatch[1]}();\n`
-          modified = modified.slice(0, checkIndex) + invocation + modified.slice(checkIndex)
-          cursor = checkIndex + invocation.length + 1
-          injected = true
-        }
-        if (injected) chunk.code = modified
-      }
-    },
-  }
-}

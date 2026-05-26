@@ -21,7 +21,6 @@ Add `fixPgCjs()` and `fixNobleHashesCjs()` when the project uses `@stratal/frame
 
 ```typescript
 // vitest.setup.ts
-import 'reflect-metadata'  // Required for tsyringe
 ```
 
 ### Test File Convention
@@ -379,7 +378,6 @@ Add the side-effect import to your test setup file:
 
 ```typescript
 // vitest.setup.ts
-import 'reflect-metadata'
 import '@stratal/inertia/testing'  // Augments TestResponse with Inertia assertions
 ```
 

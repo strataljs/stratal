@@ -1,7 +1,6 @@
 import { createMock } from '@stratal/testing/mocks'
 import type { Context } from 'hono'
 import type { WSContext } from 'hono/ws'
-import 'reflect-metadata'
 import { describe, expect, it, vi } from 'vitest'
 import { VERSION_NEUTRAL } from '../../router/constants'
 import { Controller, getControllerOptions, getControllerRoute } from '../../router/decorators/controller.decorator'

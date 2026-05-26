@@ -1,9 +1,7 @@
 import type { BetterAuthOptions } from 'better-auth'
-import 'reflect-metadata'
 import { Container, CONTAINER_TOKEN } from 'stratal/di'
 import type { IRateLimiterStore } from 'stratal/rate-limiter'
 import { Limit, RATE_LIMITER_TOKENS, RateLimiterRegistry } from 'stratal/rate-limiter'
-import { container as rootContainer } from 'tsyringe'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthModule } from '../auth.module'
 import { AUTH_OPTIONS } from '../auth.tokens'
@@ -41,13 +39,11 @@ describe('AuthModule.forRootAsync — rate-limit auto-wiring', () => {
   let container: Container
 
   beforeEach(() => {
-    container = new Container({
-      container: rootContainer.createChildContainer(),
-    })
+    container = new Container()
   })
 
-  afterEach(async () => {
-    await container.dispose()
+  afterEach(() => {
+    container.dispose()
   })
 
   it('returns the user options unchanged when RateLimiterModule is NOT imported', () => {

@@ -169,15 +169,13 @@
   "dependencies": {
     "@hono/swagger-ui": "^0.6.1",
     "@hono/zod-openapi": "^1.4.0",
-    "@intlify/core-base": "^11.4.2",
-    "@intlify/message-compiler": "^11.4.2",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@swc-node/register": "^1.11.1",
     "@swc/core": "^1.15.33",
     "@swc/helpers": "^0.5.21",
     "clipanion": "^4.0.0-rc.4",
     "hono": "^4.12.18",
-    "tsyringe": "^4.10.0",
+    "intl-messageformat": "^11.2.7",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
@@ -185,7 +183,6 @@
     "nodemailer": ">=7",
     "react": ">=19",
     "react-dom": ">=19",
-    "reflect-metadata": ">=0.2",
     "resend": ">=6"
   },
   "peerDependenciesMeta": {
@@ -221,7 +218,6 @@
     "nodemailer": "^8.0.7",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "reflect-metadata": "^0.2.2",
     "resend": "^6.12.3",
     "tsdown": "^0.22.0",
     "typescript": "^6.0.3",

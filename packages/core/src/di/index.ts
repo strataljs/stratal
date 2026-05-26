@@ -3,15 +3,15 @@ export * from './container'
 export * from './container.error'
 export * from './decorators'
 export * from './types'
+export * from './lazy'
+export * from './metadata'
 export * from './conditional-binding-builder'
 export * from './errors'
 
-// Re-export Container as named export for clarity
 export { Container } from './container'
 export { CONTAINER_TOKEN } from './tokens'
 export type { ContainerOptions } from './container'
 
-// Re-export conditional binding types for convenience
 export type {
   ConditionalBindingBuilder,
   ConditionalBindingUse,
@@ -21,5 +21,4 @@ export type {
 
 export type { WhenOptions, ExtensionDecorator, ContainerLike } from './types'
 
-// Container storage (AsyncLocalStorage)
 export { containerStorage, getContainer, runWithContainer } from './container-storage'

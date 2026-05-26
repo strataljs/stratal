@@ -20,7 +20,7 @@ A modular framework for building Cloudflare Workers with dependency injection, O
 
 ## Features
 
-- **Dependency Injection** - Two-tier DI container (global + request-scoped) powered by tsyringe
+- **Dependency Injection** - Two-tier DI container (global + request-scoped) with built-in decorator support
 - **OpenAPI Documentation** - Define Zod schemas once and get a full OpenAPI 3.0 spec with interactive docs
 - **Modular Architecture** - NestJS-style modules with lifecycle hooks, dynamic configuration, and middleware
 - **Hono Routing** - Convention-based RESTful controllers with automatic HTTP method mapping
@@ -65,7 +65,6 @@ npx skills add strataljs/stratal
 Define a module with a controller and wire it up as a Cloudflare Worker:
 
 ```typescript
-import 'reflect-metadata'
 import { Stratal } from 'stratal'
 import { Module } from 'stratal/module'
 import { Controller, Route, type RouterContext } from 'stratal/router'

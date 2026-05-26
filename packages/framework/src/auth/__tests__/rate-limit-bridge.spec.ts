@@ -1,4 +1,3 @@
-import 'reflect-metadata'
 import type { IRateLimiterStore } from 'stratal/rate-limiter'
 import { Limit, RateLimiterRegistry } from 'stratal/rate-limiter'
 import { afterEach, describe, expect, it, vi } from 'vitest'

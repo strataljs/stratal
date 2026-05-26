@@ -5,12 +5,7 @@ export const RATE_LIMITER_TOKENS = {
   Options: Symbol.for('stratal:rate-limiter:options'),
   /**
    * Per-app marker registered by RateLimiterModule.onInitialize. Used by
-   * ThrottleMiddleware to detect "module not imported" — the @Module
-   * decorator globally registers providers via tsyringe's registry(),
-   * so the Registry/Store tokens are globally bound the moment the module
-   * file is loaded. The only way to confirm the module was actually wired
-   * into the *user's* AppModule is to look for an artifact registered
-   * inside the user's app container (not the root container).
+   * ThrottleMiddleware to detect "module not imported".
    */
   ModuleMarker: Symbol.for('stratal:rate-limiter:module-marker'),
 } as const

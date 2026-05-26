@@ -1,4 +1,4 @@
-import { Transient } from '../../di/decorators'
+import { Singleton } from '../../di/decorators'
 import { I18N_TOKENS } from '../i18n.tokens'
 import { deepMerge } from '../utils/deep-merge'
 
@@ -30,7 +30,7 @@ function getContributions(): Contributions {
  *
  * Later registrations override earlier ones at leaf level.
  */
-@Transient(I18N_TOKENS.MessageRegistry)
+@Singleton(I18N_TOKENS.MessageRegistry)
 export class MessageRegistry {
   /**
    * Add messages (called statically by I18nModule.registerMessages)

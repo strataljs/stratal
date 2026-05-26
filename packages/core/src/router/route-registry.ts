@@ -1,5 +1,5 @@
-import { inject } from 'tsyringe'
-import { Transient } from '../di/decorators'
+import { inject } from '../di'
+import { Singleton } from '../di/decorators'
 import { type VERSION_NEUTRAL } from './constants'
 import { RouterError } from './router.error'
 import { ROUTER_TOKENS } from './router.tokens'
@@ -66,7 +66,7 @@ export type RouteRegistrationInput = Omit<RegisteredRoute, 'paramNames' | 'domai
  *
  * Registered as a singleton in the container.
  */
-@Transient()
+@Singleton()
 export class RouteRegistry {
   private readonly routes: RegisteredRoute[] = []
   private readonly namedRoutes = new Map<string, RegisteredRoute>()

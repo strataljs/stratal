@@ -45,7 +45,6 @@
     "@stratal/inertia": ">=0.0.21",
     "hono": ">=4",
     "react": ">=19",
-    "reflect-metadata": ">=0.2",
     "stratal": ">=0.0.21"
   },
   "peerDependenciesMeta": {
@@ -68,7 +67,6 @@
     "@types/react": "^19.2.14",
     "hono": "^4.12.18",
     "react": "^19.2.6",
-    "reflect-metadata": "^0.2.2",
     "stratal": "workspace:*",
     "tsdown": "^0.22.0",
     "typescript": "^6.0.3"

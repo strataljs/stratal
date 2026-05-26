@@ -147,6 +147,8 @@ Stratal code only references the `binding` value (`NOTIFICATIONS_QUEUE`). The `q
 
 ## Cron Jobs
 
+Declare `schedule` as a **static** property on the class.
+
 ```typescript
 import { Transient, inject } from 'stratal/di'
 import type { CronJob } from 'stratal/cron'
@@ -154,7 +156,7 @@ import { LOGGER_TOKENS } from 'stratal/logger'
 
 @Transient()
 export class DataCleanupJob implements CronJob {
-  readonly schedule = '0 2 * * *'  // Daily at 2 AM UTC
+  static schedule = '0 2 * * *'  // Daily at 2 AM UTC
 
   constructor(
     @inject(LOGGER_TOKENS.LoggerService) private logger: LoggerService,
@@ -197,8 +199,9 @@ The `schedule` value MUST exactly match a trigger in `wrangler.jsonc`:
 
 ```typescript
 interface CronJob {
-  readonly schedule: string                     // Cron expression
   execute(controller: ScheduledController): Promise<void>
   onError?(error: Error, controller: ScheduledController): Promise<void>
 }
 ```
+
+Declare `static schedule` on the class — it is not part of the interface.

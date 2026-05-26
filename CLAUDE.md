@@ -18,7 +18,7 @@ Per-package contributor rules: `packages/<name>/CLAUDE.md` — auto-load when wo
 
 - Yarn 4 workspaces. Node ≥22. ESM-only (`"type": "module"`).
 - Don't hand-edit `packages/*/package.json` `exports` — `tsdown` regenerates on build. Add new sub-paths via the package's `tsdown.config.ts` `entry` list. For an alias (path A exposed at name B) use `customExports`.
-- Keep `experimentalDecorators` + `emitDecoratorMetadata` on (tsyringe needs them).
+- Keep `experimentalDecorators` + `emitDecoratorMetadata` on (needed by the DI decorator system).
 - DI tokens: `Symbol.for('stratal:...')` in each package's `tokens.ts`. Never strings.
 - Inline type imports enforced (`consistent-type-imports`). Leading-underscore for unused vars.
 - `oxlint` lints. Husky + lint-staged auto-fixes staged `.ts/.mts` on commit. Don't pass `--no-verify`.

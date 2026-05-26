@@ -556,7 +556,6 @@ Import `@stratal/inertia/testing` in your test setup to augment `TestResponse` w
 
 ```typescript
 // vitest.setup.ts
-import 'reflect-metadata'
 import '@stratal/inertia/testing'
 ```
 

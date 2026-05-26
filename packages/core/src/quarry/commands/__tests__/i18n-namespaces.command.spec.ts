@@ -1,8 +1,6 @@
-import 'reflect-metadata'
-
-import { injectable, container as tsyringeRootContainer } from 'tsyringe'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { Container } from '../../../di/container'
+import { Transient } from '../../../di/decorators'
 import { I18N_TOKENS } from '../../../i18n/i18n.tokens'
 import { getCommandResult, setCommandInputs, setCommandQuarry } from '../../command-internals'
 import type { QuarryRegistry } from '../../quarry-registry'
@@ -34,11 +32,10 @@ function createMockLoader() {
 let childContainer: Container
 
 beforeEach(() => {
-  const tsyringe = tsyringeRootContainer.createChildContainer()
-  childContainer = new Container({ container: tsyringe })
+  childContainer = new Container()
   childContainer.registerValue(I18N_TOKENS.MessageLoader, createMockLoader())
 
-  injectable()(I18nNamespacesCommand)
+  Transient()(I18nNamespacesCommand)
   childContainer.register(I18nNamespacesCommand, I18nNamespacesCommand)
 })
 
@@ -89,10 +86,9 @@ describe('I18nNamespacesCommand', () => {
       getDefaultLocale: () => 'en',
       getFilteredMessages: () => ({}),
     }
-    const tsyringe = tsyringeRootContainer.createChildContainer()
-    const container = new Container({ container: tsyringe })
+    const container = new Container()
     container.registerValue(I18N_TOKENS.MessageLoader, loader)
-    injectable()(I18nNamespacesCommand)
+    Transient()(I18nNamespacesCommand)
     container.register(I18nNamespacesCommand, I18nNamespacesCommand)
 
     const cmd = container.resolve<I18nNamespacesCommand>(I18nNamespacesCommand)

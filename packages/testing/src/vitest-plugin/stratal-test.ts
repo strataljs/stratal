@@ -121,7 +121,7 @@ const stratalPlugin: Plugin = {
     return {
       resolve: {
         alias: {
-          tslib: 'tsyringe/node_modules/tslib/tslib.es6.js',
+          tslib: 'tslib/tslib.es6.mjs',
           '@zenstackhq/language/ast': '@stratal/testing/mocks/zenstack-language',
           '@zenstackhq/language/utils': '@stratal/testing/mocks/zenstack-language',
           '@zenstackhq/language': '@stratal/testing/mocks/zenstack-language',
