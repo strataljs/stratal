@@ -1,5 +1,5 @@
-import { inject } from 'tsyringe'
-import { Transient } from '../../di/decorators'
+import { inject } from '../../di'
+import { Singleton } from '../../di/decorators'
 import { DI_TOKENS } from '../../di/tokens'
 import { type StratalEnv } from '../../env'
 import { LOGGER_TOKENS, type LoggerService } from '../../logger'
@@ -39,7 +39,7 @@ import { CacheError } from '../cache.error'
  *
  * @see https://developers.cloudflare.com/kv/api/
  */
-@Transient(CACHE_TOKENS.CacheService)
+@Singleton(CACHE_TOKENS.CacheService)
 export class CacheService {
   private kv: KVNamespace
 

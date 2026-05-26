@@ -1,6 +1,6 @@
 import { swaggerUI } from '@hono/swagger-ui'
 import type { Container } from '../../di/container'
-import { Transient } from '../../di/decorators'
+import { Singleton } from '../../di/decorators'
 import { I18N_TOKENS } from '../../i18n/i18n.tokens'
 import type { II18nService } from '../../i18n/i18n.types'
 import type { OpenAPIHono, OpenAPIObject, PathItemObject } from '../../i18n/validation/zod'
@@ -24,7 +24,7 @@ import type { IOpenAPIConfigService, OpenAPIEffectiveConfig } from '../types'
  * Configuration is resolved per-request from OpenAPIConfigService,
  * allowing middleware to override config based on domain context.
  */
-@Transient(OPENAPI_TOKENS.OpenAPIService)
+@Singleton(OPENAPI_TOKENS.OpenAPIService)
 export class OpenAPIService {
 
   /**

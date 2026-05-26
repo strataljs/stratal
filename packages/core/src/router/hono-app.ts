@@ -1,5 +1,5 @@
 import type { Context, MiddlewareHandler } from 'hono'
-import { inject } from 'tsyringe'
+import { inject } from '../di'
 import type { Application } from '../application'
 import type { Container } from '../di/container'
 import { runWithContainer } from '../di/container-storage'

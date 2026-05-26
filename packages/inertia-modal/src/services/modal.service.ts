@@ -1,6 +1,6 @@
 import type { Page } from '@inertiajs/core'
 import { INERTIA_TOKENS, type SsrRendererService, type TemplateService } from '@stratal/inertia'
-import { Transient, inject } from 'stratal/di'
+import { Request as RequestScoped, inject } from 'stratal/di'
 import type { RouterContext } from 'stratal/router'
 import { ROUTER_TOKENS } from 'stratal/router'
 import { ModalBackgroundFetchError } from '../errors/modal-background-fetch.error'
@@ -25,7 +25,7 @@ interface FetchableApp {
   fetch(request: Request, env: unknown, ctx: unknown): Promise<Response>
 }
 
-@Transient()
+@RequestScoped()
 export class ModalService {
   constructor(
     @inject(ROUTER_TOKENS.HonoApp) private readonly app: FetchableApp,

@@ -1,8 +1,6 @@
-import 'reflect-metadata'
-
-import { injectable, container as tsyringeRootContainer } from 'tsyringe'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { Container } from '../../../di/container'
+import { Transient } from '../../../di/decorators'
 import { I18N_TOKENS } from '../../../i18n/i18n.tokens'
 import { getCommandResult, setCommandInputs, setCommandQuarry } from '../../command-internals'
 import type { QuarryRegistry } from '../../quarry-registry'
@@ -46,11 +44,10 @@ function createMockLoader() {
 let childContainer: Container
 
 beforeEach(() => {
-  const tsyringe = tsyringeRootContainer.createChildContainer()
-  childContainer = new Container({ container: tsyringe })
+  childContainer = new Container()
   childContainer.registerValue(I18N_TOKENS.MessageLoader, createMockLoader())
 
-  injectable()(I18nCheckCommand)
+  Transient()(I18nCheckCommand)
   childContainer.register(I18nCheckCommand, I18nCheckCommand)
 })
 
@@ -110,10 +107,9 @@ describe('I18nCheckCommand', () => {
       getDefaultLocale: () => 'en',
       getFilteredMessages: () => ({ 'common.title': 'Title' }),
     }
-    const tsyringe = tsyringeRootContainer.createChildContainer()
-    const container = new Container({ container: tsyringe })
+    const container = new Container()
     container.registerValue(I18N_TOKENS.MessageLoader, loader)
-    injectable()(I18nCheckCommand)
+    Transient()(I18nCheckCommand)
     container.register(I18nCheckCommand, I18nCheckCommand)
 
     const cmd = container.resolve<I18nCheckCommand>(I18nCheckCommand)
@@ -134,10 +130,9 @@ describe('I18nCheckCommand', () => {
       getDefaultLocale: () => 'en',
       getFilteredMessages: () => ({ 'key': 'value' }),
     }
-    const tsyringe = tsyringeRootContainer.createChildContainer()
-    const container = new Container({ container: tsyringe })
+    const container = new Container()
     container.registerValue(I18N_TOKENS.MessageLoader, loader)
-    injectable()(I18nCheckCommand)
+    Transient()(I18nCheckCommand)
     container.register(I18nCheckCommand, I18nCheckCommand)
 
     const cmd = container.resolve<I18nCheckCommand>(I18nCheckCommand)

@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import { z } from '../../i18n/validation'
 import { Controller } from '../../router/decorators/controller.decorator'
 import { Delete, Get, Put } from '../../router/decorators/http-method.decorator'

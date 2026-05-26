@@ -1,5 +1,5 @@
-import { inject } from 'tsyringe'
-import { Transient } from '../di/decorators'
+import { inject } from '../di'
+import { Request } from '../di/decorators'
 import { I18N_TOKENS } from '../i18n/i18n.tokens'
 import type { II18nService } from '../i18n/i18n.types'
 import type { IQueueProvider } from './providers'
@@ -35,7 +35,7 @@ import { type QueueProviderFactory } from './services'
  * }
  * ```
  */
-@Transient(QUEUE_TOKENS.QueueRegistry)
+@Request(QUEUE_TOKENS.QueueRegistry)
 export class QueueRegistry {
   private readonly provider: IQueueProvider
   private readonly senders = new Map<string, IQueueSender>()

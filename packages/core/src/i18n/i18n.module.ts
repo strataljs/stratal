@@ -1,37 +1,5 @@
-/**
- * I18n Module
- *
- * Core infrastructure module for internationalization.
- * Provides message translation and locale handling.
- *
- * - `forRoot()` configures locale settings (call once in root module)
- * - `registerMessages()` adds translations (call from any module, as many times as needed)
- *
- * @example
- * ```typescript
- * @Module({
- *   imports: [
- *     I18nModule.forRoot({ defaultLocale: 'en', locales: ['en', 'fr'] }),
- *     I18nModule.registerMessages(appMessages),
- *   ],
- * })
- * export class AppModule {}
- * ```
- *
- * @example Package contributing messages
- * ```typescript
- * @Module({
- *   imports: [
- *     I18nModule.registerMessages(tenancyMessages),
- *   ],
- * })
- * export class TenancyModule {}
- * ```
- */
-
-import { Scope } from '../di'
 import { Module } from '../module'
-import type { DynamicModule } from '../module/types'
+import type { DynamicModule, ModuleContext, OnInitialize } from '../module/types'
 import type { I18nModuleOptions } from './i18n.options'
 import { I18N_TOKENS } from './i18n.tokens'
 import { I18nService } from './services/i18n.service'
@@ -41,31 +9,19 @@ import { setupI18nCompiler } from './utils/setup'
 import { zodErrorMap } from './validation/validation.context'
 import { z } from './validation/zod'
 
-// Setup i18n JIT compiler once at module load time
-setupI18nCompiler()
-
-// Set global Zod error map for i18n support
-z.config({ customError: zodErrorMap })
-
 @Module({
   providers: [
-    // Singleton: Message registry (accumulates all registerMessages contributions)
-    { provide: I18N_TOKENS.MessageRegistry, useClass: MessageRegistry, scope: Scope.Singleton },
-    // Singleton: Message loader (loaded once at startup)
-    { provide: I18N_TOKENS.MessageLoader, useClass: MessageLoaderService, scope: Scope.Singleton },
-    // Request-scoped: I18n service (per request)
+    { provide: I18N_TOKENS.MessageRegistry, useClass: MessageRegistry },
+    { provide: I18N_TOKENS.MessageLoader, useClass: MessageLoaderService },
     { provide: I18N_TOKENS.I18nService, useClass: I18nService },
   ],
 })
-export class I18nModule {
-  /**
-   * Configure I18n locale settings
-   *
-   * Call once in the root module. Does not accept messages —
-   * use `registerMessages()` to add translations.
-   *
-   * @param options - Locale configuration (defaultLocale, fallbackLocale, locales)
-   */
+export class I18nModule implements OnInitialize {
+  onInitialize(_context: ModuleContext): void {
+    setupI18nCompiler()
+    z.config({ customError: zodErrorMap })
+  }
+
   static forRoot(options: I18nModuleOptions = {}): DynamicModule {
     return {
       module: I18nModule,
@@ -75,29 +31,6 @@ export class I18nModule {
     }
   }
 
-  /**
-   * Register i18n messages
-   *
-   * Can be called from any module, as many times as needed.
-   * Messages are deep-merged in registration order — later calls override earlier ones at leaf level.
-   *
-   * @param messages - Messages keyed by locale code
-   *
-   * @example App-level messages
-   * ```typescript
-   * I18nModule.registerMessages({
-   *   en: { common: { hello: 'Hello' }, errors: { notFound: 'Not found' } },
-   *   fr: { common: { hello: 'Bonjour' }, errors: { notFound: 'Introuvable' } },
-   * })
-   * ```
-   *
-   * @example Package-level messages
-   * ```typescript
-   * I18nModule.registerMessages({
-   *   en: { tenancy: { tenantNotFound: 'Tenant not found' } },
-   * })
-   * ```
-   */
   static registerMessages(messages: Record<string, Record<string, unknown>>): DynamicModule {
     MessageRegistry.addMessages(messages)
     return {
@@ -105,5 +38,4 @@ export class I18nModule {
       providers: [],
     }
   }
-
 }

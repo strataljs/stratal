@@ -1,11 +1,9 @@
-import { container as tsyringeRootContainer } from 'tsyringe'
 import { CacheModule } from './cache'
 import type { CronJob } from './cron/cron-job'
 import { CronManager } from './cron/cron-manager'
 import { Container } from './di/container'
 import { runWithContainer } from './di/container-storage'
 import { DI_TOKENS } from './di/tokens'
-import { Scope } from './di/types'
 import { type StratalEnv } from './env'
 import { DefaultExceptionHandler } from './errors/default-exception-handler'
 import { createCliExceptionContext, createCronExceptionContext, createQueueExceptionContext } from './errors/exception-context'
@@ -39,45 +37,13 @@ import { SEEDER_TOKENS, SeederRegistry, type Seeder } from './seeder'
 import type { Constructor } from './types'
 
 export interface ApplicationConfig {
-  /** Root application module */
   module: ModuleClass | DynamicModule
-  /** Logging configuration. Defaults: level=INFO, formatter='json' */
   logging?: {
     level?: LogLevel
     formatter?: 'json' | 'pretty'
   }
-  /**
-   * API versioning configuration.
-   * When provided, enables URI-based versioning for controllers.
-   */
   versioning?: VersioningOptions
-  /**
-   * Trailing-slash handling for incoming requests.
-   *
-   * Defaults to `'ignore'` — both `/foo` and `/foo/` resolve to the same route.
-   *
-   * - `'ignore'` — match both, no redirect.
-   * - `'always'` — non-trailing requests redirect (308) to the trailing-slash form.
-   * - `'never'`  — trailing requests redirect (308) to the non-trailing form.
-   */
   trailingSlash?: TrailingSlashMode
-  /**
-   * Custom exception handler class.
-   *
-   * Extend {@link ExceptionHandler} and override `register()` to configure
-   * custom reporting, rendering, and post-processing of exceptions.
-   *
-   * When not provided, {@link DefaultExceptionHandler} is used (standard
-   * severity-based logging and JSON error responses).
-   *
-   * @example
-   * ```typescript
-   * new Stratal({
-   *   module: AppModule,
-   *   exceptionHandler: AppExceptionHandler,
-   * })
-   * ```
-   */
   exceptionHandler?: Constructor<ExceptionHandler>
 }
 
@@ -86,32 +52,8 @@ export interface ApplicationOptions extends ApplicationConfig {
   ctx: StratalExecutionContext
 }
 
-/**
- * Application
- *
- * Main application class managing the two-tier container hierarchy:
- * - Global Container: All services (singletons via tsyringe native)
- * - Request Container: Child of global, context-enriched instances per request
- *
- * @example
- * ```typescript
- * const app = new Application({ module: AppModule, env, ctx })
- * await app.initialize()
- *
- * // Access container via getter
- * const service = app.container.resolve(MY_TOKEN)
- *
- * // Handle HTTP request (via HonoApp)
- * // Handle queue batch
- * await app.handleQueue(batch, 'my-queue')
- * ```
- */
 export class Application {
-  /**
-   * Unified Container - manages all DI operations
-   */
   private _container: Container
-
   private honoApp!: HonoApp
   private moduleRegistry: ModuleRegistry
   private consumerRegistry!: ConsumerRegistry
@@ -128,50 +70,30 @@ export class Application {
     this.env = env
     this.appConfig = config
 
-    // Create unified Container with explicit child container
-    this._container = new Container({
-      container: tsyringeRootContainer.createChildContainer()
-    })
+    this._container = new Container()
 
-    // Register globally — env and ctx always available
     this._container.registerValue(DI_TOKENS.Application, this)
     this._container.registerValue(DI_TOKENS.CloudflareEnv, env)
     this._container.registerValue(DI_TOKENS.ExecutionContext, ctx)
 
-    // Register core infrastructure inline
     this.registerLoggerService()
     this.registerCoreServices()
 
-    // Create ModuleRegistry with our Container
     const logger = this._container.resolve<LoggerService>(LOGGER_TOKENS.LoggerService)
     this.moduleRegistry = new ModuleRegistry(this._container, logger)
 
-    // Register ModuleRegistry in container so modules can access it in onInitialize
     this._container.registerValue(DI_TOKENS.ModuleRegistry, this.moduleRegistry)
   }
 
-  /**
-   * Get the Container instance
-   */
   get container(): Container {
     return this._container
   }
 
-  /**
-   * Lazily initialize routing and return the HonoApp instance.
-   *
-   * Routing (service registration, HonoApp resolution, route configuration)
-   * is deferred so that `scheduled` and `queue` handlers don't pay the CPU
-   * cost of route setup on cold start.
-   */
   async ensureHono(): Promise<HonoApp> {
     await this.initializeRouting()
     return this.honoApp
   }
 
-  /**
-   * Get the application configuration
-   */
   get config(): ApplicationConfig {
     return this.appConfig
   }
@@ -181,13 +103,11 @@ export class Application {
       return
     }
 
-    // Wrap in AsyncLocalStorage so getContainer() works for route() and other standalone functions
     await runWithContainer(this._container, () => this.initializeInternal())
   }
 
   private async initializeInternal(): Promise<void> {
-    // Phase 1: Register core infrastructure modules (internal)
-    // OpenAPIModule is deferred to initializeRouting() (only needed for fetch)
+    // Phase 1: Register core infrastructure modules
     this.moduleRegistry.registerAll([
       I18nModule,
       QueueModule,
@@ -197,20 +117,16 @@ export class Application {
     // Phase 2: Register user's root module (traverses imports)
     this.moduleRegistry.register(this.appConfig.module)
 
-    // Phase 3: Initialize all modules
+    // Phase 3: Initialize all modules (only those with lifecycle hooks)
     await this.moduleRegistry.initialize()
 
-    // Phase 3.5: Initialize ExceptionHandler and call module onException hooks
+    // Phase 3.5: Initialize ExceptionHandler
     this.initializeExceptionHandler()
 
-    // Phase 4: Resolve managers from container
-    this.consumerRegistry = this._container.resolve<ConsumerRegistry>(DI_TOKENS.ConsumerRegistry)
+    // Phase 4: Resolve lightweight managers (CronManager only — others deferred)
     this.cronManager = this._container.resolve<CronManager>(DI_TOKENS.Cron)
-    this.quarry = this._container.resolve<QuarryRegistry>(DI_TOKENS.Quarry)
 
-    // Phase 5: Register cron jobs, seeders, and commands (cheap — stores class refs)
-    // Queue consumers and event listeners are deferred (they resolve instances
-    // from the container, which is expensive). Routing is also deferred.
+    // Phase 5: Register cron jobs (static schedule, no resolve), seeders, commands
     this.registerCronJobs()
     this.registerSeeders()
     this.registerCommands()
@@ -218,48 +134,25 @@ export class Application {
     this.initialized = true
   }
 
-  /**
-   * Register routing services as singletons in the container.
-   * Called after module initialization so I18N_TOKENS.Options is available.
-   */
   private registerRoutingServices(): void {
-    // VersioningService — resolves version prefixes from appConfig.versioning
-    this._container.register(ROUTER_TOKENS.VersioningService, VersioningService, Scope.Singleton)
+    this._container.register(ROUTER_TOKENS.VersioningService, VersioningService)
+    this._container.register(ROUTER_TOKENS.HonoApp, HonoApp)
+    this._container.register(ROUTER_TOKENS.LocalePathService, LocalePathService)
+    this._container.register(ROUTER_TOKENS.RouteRegistry, RouteRegistry)
+    this._container.register(ROUTER_TOKENS.Uri, Uri)
 
-    // HonoApp — the Hono application instance (must be before LocalePathService)
-    this._container.register(ROUTER_TOKENS.HonoApp, HonoApp, Scope.Singleton)
-
-    // LocalePathService — computes LocalePathConfig and applies locale middleware to HonoApp
-    this._container.register(ROUTER_TOKENS.LocalePathService, LocalePathService, Scope.Singleton)
-
-    // RouteRegistry — single source of truth, expands routes via services above
-    this._container.register(ROUTER_TOKENS.RouteRegistry, RouteRegistry, Scope.Singleton)
-
-    // Uri — URL generation service (request-scoped for access to RouterContext)
-    this._container.register(ROUTER_TOKENS.Uri, Uri, Scope.Request)
-
-    // RouterResolver — merges Router configs from modules (only registered when modules define routes)
     const routerConfigs = this.moduleRegistry.getAllRouterConfigs()
     if (routerConfigs.length > 0) {
       this._container.registerValue(ROUTER_TOKENS.RouterResolver, new RouterResolver(routerConfigs))
     }
 
-    // RouteRegistrationService — transient, resolved in HonoApp.configure()
     this._container.register(RouteRegistrationService, RouteRegistrationService)
   }
 
-  /**
-   * Wire up queue consumers and event listeners.
-   *
-   * Idempotent — the first call does the work; subsequent calls await the
-   * cached promise. Every entry path that opens a request scope
-   * (`handleFetch`, `handleQueue`, `handleScheduled`, and `runInScope` for
-   * RPC / Durable Objects / Workflows) must call this before resolving
-   * services that emit events, or the EventRegistry will silently drop
-   * events for handlers that have not been registered yet.
-   */
   async initializeHandlers(): Promise<void> {
     this.handlerInitPromise ??= runWithContainer(this._container, () => {
+      // Resolve ConsumerRegistry lazily (deferred from Phase 4)
+      this.consumerRegistry = this._container.resolve<ConsumerRegistry>(DI_TOKENS.ConsumerRegistry)
       this.registerQueueConsumers()
       this.registerEventListeners()
       return Promise.resolve()
@@ -267,10 +160,6 @@ export class Application {
     return this.handlerInitPromise
   }
 
-  /**
-   * Register routing services, resolve HonoApp, and configure routes.
-   * Called lazily on first fetch — not during scheduled/queue handling.
-   */
   private initializeRouting(): Promise<void> {
     this.routingInitPromise ??= runWithContainer(this._container, async () => {
       await this.initializeHandlers()
@@ -282,24 +171,17 @@ export class Application {
     return this.routingInitPromise
   }
 
-  /**
-   * Resolve a service from the container
-   */
   resolve<T>(token: symbol): T {
     try {
       return this._container.resolve(token)
     } catch (error) {
       const handler = this._container.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
       const ctx = createCliExceptionContext('resolve')
-      // Fire-and-forget — reporting happens via waitUntil internally
       void handler.handle(error, ctx)
       throw error
     }
   }
 
-  /**
-   * Handle queue batch processing
-   */
   async handleQueue(batch: MessageBatch, queueName: string): Promise<void> {
     await this.initializeHandlers()
 
@@ -319,9 +201,6 @@ export class Application {
     })
   }
 
-  /**
-   * Handle scheduled cron trigger
-   */
   async handleScheduled(controller: ScheduledController): Promise<void> {
     await this.initializeHandlers()
 
@@ -338,9 +217,6 @@ export class Application {
     })
   }
 
-  /**
-   * Create mock RouterContext for queue/cron/seeder processing
-   */
   createMockRouterContext(locale = 'en'): RouterContext {
     return {
       getLocale: () => locale,
@@ -358,14 +234,13 @@ export class Application {
     const logger = this._container.resolve<LoggerService>(LOGGER_TOKENS.LoggerService)
     logger.info('Disposing container...')
 
-    await this._container.dispose()
+    this._container.dispose()
   }
 
-  /**
-   * Execute a command by name in a request-scoped container.
-   */
   async handleCommand(name: string, input?: CommandInput): Promise<CommandResult> {
     await this.initializeRouting()
+    // Resolve QuarryRegistry lazily (deferred from Phase 4)
+    this.quarry ??= this._container.resolve<QuarryRegistry>(DI_TOKENS.Quarry)
     const mockContext = this.createMockRouterContext('en')
     return this._container.runInRequestScope(mockContext, async () => {
       return this.quarry.call(name, input)
@@ -373,11 +248,7 @@ export class Application {
   }
 
   private registerCommands(): void {
-    // Commands come from modules — including framework built-ins, which
-    // `QuarryRunner` registers via `BuiltinQuarryModule`. The worker entry
-    // (`new Stratal({ module: AppModule })`) doesn't go through QuarryRunner
-    // so it stays free of CLI-only command classes and their transitive
-    // dev deps (`@modelcontextprotocol/sdk`, `ts-morph`, etc.).
+    this.quarry ??= this._container.resolve<QuarryRegistry>(DI_TOKENS.Quarry)
     const commands = this.moduleRegistry.getAllCommands()
     for (const CommandClass of commands) {
       this.quarry.register(CommandClass as Constructor<Command>)
@@ -402,17 +273,13 @@ export class Application {
 
   private registerCronJobs(): void {
     for (const JobClass of this.moduleRegistry.getAllJobs()) {
-      // Resolve temporarily to read the schedule property.
-      // The delay() proxy on DB dependencies is created but never triggered
-      // since we only access the schedule string.
-      const tempJob = this._container.resolve(JobClass) as CronJob
-      this.cronManager.registerJob(tempJob.schedule, JobClass as Constructor<CronJob>)
+      const schedule = (JobClass as unknown as { schedule: string }).schedule
+      if (schedule) {
+        this.cronManager.registerJob(schedule, JobClass as Constructor<CronJob>)
+      }
     }
   }
 
-  /**
-   * Auto-wire `@Listener()` classes with the EventRegistry.
-   */
   private registerEventListeners(): void {
     const listeners = this.moduleRegistry.getAllListeners()
     if (listeners.length === 0) {
@@ -431,9 +298,6 @@ export class Application {
     }
   }
 
-  /**
-   * Register LoggerService and dependencies
-   */
   private registerLoggerService(): void {
     const logLevel = this.appConfig.logging?.level ?? LogLevel.INFO
     const formatter = this.appConfig.logging?.formatter ?? 'json'
@@ -449,9 +313,6 @@ export class Application {
     this._container.registerSingleton(LOGGER_TOKENS.LoggerService, LoggerService)
   }
 
-  /**
-   * Register core services with explicit scope
-   */
   private registerCoreServices(): void {
     this._container.registerSingleton(DI_TOKENS.Cron, CronManager)
     this._container.registerSingleton(
@@ -463,9 +324,6 @@ export class Application {
     this._container.registerValue(SEEDER_TOKENS.SeederRegistry, new SeederRegistry(this))
   }
 
-  /**
-   * Initialize the ExceptionHandler: call register(), then module onException hooks.
-   */
   private initializeExceptionHandler(): void {
     const handler = this._container.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
     handler.register()

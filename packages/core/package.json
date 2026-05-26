@@ -177,7 +177,6 @@
     "@swc/helpers": "^0.5.21",
     "clipanion": "^4.0.0-rc.4",
     "hono": "^4.12.18",
-    "tsyringe": "^4.10.0",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
@@ -185,7 +184,6 @@
     "nodemailer": ">=7",
     "react": ">=19",
     "react-dom": ">=19",
-    "reflect-metadata": ">=0.2",
     "resend": ">=6"
   },
   "peerDependenciesMeta": {
@@ -221,7 +219,6 @@
     "nodemailer": "^8.0.7",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "reflect-metadata": "^0.2.2",
     "resend": "^6.12.3",
     "tsdown": "^0.22.0",
     "typescript": "^6.0.3",

@@ -1,5 +1,5 @@
-import { inject } from 'tsyringe'
-import { Transient } from '../../di/decorators'
+import { inject } from '../../di'
+import { Request } from '../../di/decorators'
 import { OPENAPI_TOKENS } from '../openapi.tokens'
 import type {
   IOpenAPIConfigService,
@@ -30,7 +30,7 @@ import type {
  * }
  * ```
  */
-@Transient(OPENAPI_TOKENS.ConfigService)
+@Request(OPENAPI_TOKENS.ConfigService)
 export class OpenAPIConfigService implements IOpenAPIConfigService {
   private overrides: OpenAPIConfigOverride[] = []
 

@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import type { QueueBinding } from '../queue-binding'
 
 /**

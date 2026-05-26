@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import type { MessageLoaderService } from '../../i18n/services/message-loader.service'
 import { I18N_TOKENS } from '../../i18n/i18n.tokens'
 import { Command } from '../command'

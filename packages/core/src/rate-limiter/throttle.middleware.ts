@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe'
+import { inject } from '../di'
 import { CONTAINER_TOKEN, type Container } from '../di'
 import { Transient } from '../di/decorators'
 import type { Middleware, Next } from '../router/middleware.interface'
@@ -33,10 +33,7 @@ export function createThrottleMiddleware(name: string): Constructor<Middleware> 
     ) {}
 
     handle(ctx: RouterContext, next: Next): Promise<Response | void> {
-      // Walk the parent chain — marker lives in the app container, not the
-      // request-scoped child. `isRegistered(token, true)` is recursive.
-      const tsyringe = this.container.getTsyringeContainer()
-      if (!tsyringe.isRegistered(RATE_LIMITER_TOKENS.ModuleMarker, true)) {
+      if (!this.container.isRegistered(RATE_LIMITER_TOKENS.ModuleMarker)) {
         throw new RateLimiterError(`RateLimiterModule was not imported. Cannot resolve throttle "${name}". Import RateLimiterModule.forRoot({ store: ... }) in your AppModule.`)
       }
       const registry = this.container.resolve<RateLimiterRegistry>(RATE_LIMITER_TOKENS.Registry)

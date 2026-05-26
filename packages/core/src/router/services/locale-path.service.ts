@@ -1,6 +1,6 @@
 import type { Context, MiddlewareHandler } from 'hono'
 import { languageDetector } from 'hono/language'
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import type { Container } from '../../di/container'
 import { Transient } from '../../di/decorators'
 import { CONTAINER_TOKEN } from '../../di/tokens'

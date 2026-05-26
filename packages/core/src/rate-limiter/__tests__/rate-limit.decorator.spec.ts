@@ -1,4 +1,3 @@
-import 'reflect-metadata'
 import { describe, expect, it } from 'vitest'
 import { getRateLimits, RateLimit } from '../decorators/rate-limit.decorator'
 

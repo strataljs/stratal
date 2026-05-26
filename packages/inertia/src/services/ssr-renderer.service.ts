@@ -1,5 +1,5 @@
 import type { InertiaAppSSRResponse, Page } from '@inertiajs/core'
-import { Transient, inject } from 'stratal/di'
+import { Singleton, inject } from 'stratal/di'
 import { LOGGER_TOKENS, type LoggerService } from 'stratal/logger'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { INERTIA_TOKENS } from '../inertia.tokens'
@@ -8,7 +8,7 @@ interface LoadedSsrBundle {
   render(page: Page): Promise<InertiaAppSSRResponse>
 }
 
-@Transient()
+@Singleton()
 export class SsrRendererService {
   private bundle: LoadedSsrBundle | null = null
   private loadPromise: Promise<void> | null = null

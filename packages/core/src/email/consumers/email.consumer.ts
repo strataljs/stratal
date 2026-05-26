@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import { Transient } from '../../di/decorators'
 import { LOGGER_TOKENS, type LoggerService } from '../../logger'
 import type { IQueueConsumer, QueueMessage } from '../../queue/queue-consumer'

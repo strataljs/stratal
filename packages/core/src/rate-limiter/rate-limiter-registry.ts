@@ -1,5 +1,5 @@
-import { inject } from 'tsyringe'
-import { Transient } from '../di/decorators'
+import { inject } from '../di'
+import { Singleton } from '../di/decorators'
 import { Macroable } from '../macroable'
 import type { Next } from '../router/middleware.interface'
 import type { RouterContext } from '../router/router-context'
@@ -41,13 +41,13 @@ interface StoredHit {
  * can attach extra registration methods such as `forPath()` for better-auth
  * `customRules` interop.
  */
-// IMPORTANT: do not pass a token to @Transient — that would self-register
+// IMPORTANT: do not pass a token to @Singleton — that would self-register
 // the class globally at module-load time, making the Registry resolvable
 // even when the user never imported RateLimiterModule. We rely on
 // RateLimiterModule providers being the only binding source, so
 // `{ isOptional: true }` in ThrottleMiddleware correctly returns undefined
 // when the module is missing.
-@Transient()
+@Singleton()
 export class RateLimiterRegistry extends Macroable {
   private readonly resolvers = new Map<string, LimitResolver>()
 

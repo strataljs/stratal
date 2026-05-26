@@ -1,7 +1,6 @@
-import { injectable } from 'tsyringe'
+import { Transient } from '../di'
 import { bench, describe } from 'vitest'
 import { Application, type ApplicationConfig } from '../application'
-import { Scope } from '../di/types'
 import type { StratalEnv } from '../env'
 import { z } from '../i18n/validation'
 import { LogLevel } from '../logger'
@@ -14,7 +13,7 @@ import type { RouterContext } from '../router/router-context'
 
 const TOKEN_SVC = Symbol('BenchAppSvc')
 
-@injectable()
+@Transient()
 class AppBenchService {
   getValue() {
     return 'bench'
@@ -33,7 +32,7 @@ class BenchController {
 }
 
 @Controller('/api/bench/users')
-@injectable()
+@Transient()
 class BenchUsersController {
   @Route({ summary: 'List users', response: z.object({ users: z.array(z.string()) }) })
   index(ctx: RouterContext) { return ctx.json({ users: [] }) }
@@ -46,7 +45,7 @@ class BenchUsersController {
 }
 
 @Controller('/api/bench/posts')
-@injectable()
+@Transient()
 class BenchPostsController {
   @Route({ summary: 'List posts', response: z.object({ posts: z.array(z.string()) }) })
   index(ctx: RouterContext) { return ctx.json({ posts: [] }) }
@@ -56,14 +55,14 @@ class BenchPostsController {
 }
 
 @Controller('/api/bench/comments')
-@injectable()
+@Transient()
 class BenchCommentsController {
   @Route({ summary: 'List comments', response: z.object({ comments: z.array(z.string()) }) })
   index(ctx: RouterContext) { return ctx.json({ comments: [] }) }
 }
 
 @Controller('/api/bench/tags')
-@injectable()
+@Transient()
 class BenchTagsController {
   @Route({ summary: 'List tags', response: z.object({ tags: z.array(z.string()) }) })
   index(ctx: RouterContext) { return ctx.json({ tags: [] }) }
@@ -71,7 +70,7 @@ class BenchTagsController {
 
 @Module({
   providers: [
-    { provide: TOKEN_SVC, useClass: AppBenchService, scope: Scope.Singleton },
+    { provide: TOKEN_SVC, useClass: AppBenchService },
   ],
   controllers: [BenchController],
 })
@@ -79,7 +78,7 @@ class BenchAppModule { }
 
 @Module({
   providers: [
-    { provide: TOKEN_SVC, useClass: AppBenchService, scope: Scope.Singleton },
+    { provide: TOKEN_SVC, useClass: AppBenchService },
   ],
   controllers: [
     BenchController,

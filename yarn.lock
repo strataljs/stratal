@@ -8440,10 +8440,8 @@ __metadata:
     nodemailer: "npm:^8.0.7"
     react: "npm:^19.2.6"
     react-dom: "npm:^19.2.6"
-    reflect-metadata: "npm:^0.2.2"
     resend: "npm:^6.12.3"
     tsdown: "npm:^0.22.0"
-    tsyringe: "npm:^4.10.0"
     typescript: "npm:^6.0.3"
     vitest: "npm:~4.1.5"
     zod: "npm:^4.4.3"
@@ -8452,7 +8450,6 @@ __metadata:
     nodemailer: ">=7"
     react: ">=19"
     react-dom: ">=19"
-    reflect-metadata: ">=0.2"
     resend: ">=6"
   peerDependenciesMeta:
     "@react-email/components":
@@ -8838,26 +8835,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tslib@npm:^1.9.3":
-  version: 1.14.1
-  resolution: "tslib@npm:1.14.1"
-  checksum: 10c0/69ae09c49eea644bc5ebe1bca4fa4cc2c82b7b3e02f43b84bd891504edf66dbc6b2ec0eef31a957042de2269139e4acff911e6d186a258fb14069cd7f6febce2
-  languageName: node
-  linkType: hard
-
 "tslib@npm:^2.4.0, tslib@npm:^2.8.0, tslib@npm:^2.8.1":
   version: 2.8.1
   resolution: "tslib@npm:2.8.1"
   checksum: 10c0/9c4759110a19c53f992d9aae23aac5ced636e99887b51b9e61def52611732872ff7668757d4e4c61f19691e36f4da981cd9485e869b4a7408d689f6bf1f14e62
-  languageName: node
-  linkType: hard
-
-"tsyringe@npm:^4.10.0":
-  version: 4.10.0
-  resolution: "tsyringe@npm:4.10.0"
-  dependencies:
-    tslib: "npm:^1.9.3"
-  checksum: 10c0/918594b4dfac97beb8be2c041c6ec45f078ef3768ed4edfe35ae2c709ab503e2e6b454b2b37e692c658572d1972a428fbfdbc0a2b42fee727a83c1c685fbe5e1
   languageName: node
   linkType: hard
 

@@ -1,16 +1,4 @@
-/**
- * Module Registry
- *
- * Manages module lifecycle for the @Module decorator pattern.
- * Simplified for tsyringe's flat container model:
- * - Imports are traversed for registration (organization only)
- * - Modules registered in declaration order
- * - Lifecycle hooks: onInitialize, onShutdown
- */
-
-import { injectable, instancePerContainerCachingFactory } from 'tsyringe'
 import type { Container } from '../di/container'
-import { Scope } from '../di/types'
 import { isListener } from '../events'
 import type { LoggerService } from '../logger'
 import { Router, type RouteConfigurable } from '../router/router'
@@ -35,26 +23,14 @@ interface RegisteredModule {
   moduleClass: Constructor
   options: ModuleOptions
   instance: object | null
+  hasLifecycle: boolean
 }
 
-/**
- * ModuleRegistry - manages module lifecycle
- *
- * @example
- * ```typescript
- * const registry = new ModuleRegistry(container, logger)
- * registry.register(AppModule)  // Traverses imports recursively
- * await registry.initialize()
- * // ... application running ...
- * await registry.shutdown()
- * ```
- */
 export class ModuleRegistry {
   private modules: RegisteredModule[] = []
   private registeredClasses = new Set<Constructor>()
   private initialized = false
 
-  // Collected items from all modules for Application to use
   private allControllers: Constructor[] = []
   private allConsumers: Constructor[] = []
   private allJobs: Constructor[] = []
@@ -68,19 +44,11 @@ export class ModuleRegistry {
     private readonly logger: LoggerService
   ) { }
 
-  /**
-   * Register a module (static or dynamic)
-   *
-   * @param moduleOrDynamic - Module class decorated with `@Module` or DynamicModule from configure()
-   */
   register(moduleOrDynamic: ModuleClass | DynamicModule): void {
     const { moduleClass, options } = this.resolveModule(moduleOrDynamic)
     const isDynamic = this.isDynamicModule(moduleOrDynamic)
 
-    // Check for duplicate registration
     if (this.registeredClasses.has(moduleClass)) {
-      // For DynamicModules: Still register the additional providers
-      // This allows forRoot() to add configuration even if base module is registered
       if (isDynamic) {
         this.logger.debug(`Module ${moduleClass.name} already registered, registering DynamicModule providers`)
         const { module: _, ...dynamicRest } = moduleOrDynamic
@@ -96,50 +64,45 @@ export class ModuleRegistry {
     this.registeredClasses.add(moduleClass)
     this.logger.info(`Registering module: ${moduleClass.name}`)
 
-    // First, register imported modules recursively
     for (const ImportedModule of options.imports ?? []) {
       this.register(ImportedModule)
     }
 
-    // Register providers in container
     for (const provider of options.providers ?? []) {
       this.registerProvider(provider)
     }
 
-    // Register controllers and collect them
     for (const controller of options.controllers ?? []) {
       this.container.register(controller)
       this.allControllers.push(controller)
     }
 
-    // Register consumers as singletons by default and collect them
     for (const consumer of options.consumers ?? []) {
-      this.container.register(consumer, Scope.Singleton)
+      this.container.register(consumer)
       this.allConsumers.push(consumer)
       this.logger.info(`Collected consumer: ${consumer.name}`, { queueCount: this.allConsumers.length })
     }
 
-    // Register jobs as singletons by default and collect them
     for (const job of options.jobs ?? []) {
-      this.container.register(job, Scope.Singleton)
+      this.container.register(job)
       this.allJobs.push(job)
     }
 
-    this.modules.push({ moduleClass, options, instance: null })
+    const hasLifecycle =
+      'onInitialize' in moduleClass.prototype ||
+      'onShutdown' in moduleClass.prototype ||
+      'onException' in moduleClass.prototype ||
+      'configureRoutes' in moduleClass.prototype
+
+    this.modules.push({ moduleClass, options, instance: null, hasLifecycle })
   }
 
-  /**
-   * Register multiple modules in order
-   */
   registerAll(modules: (ModuleClass | DynamicModule)[]): void {
     for (const module of modules) {
       this.register(module)
     }
   }
 
-  /**
-   * Initialize all modules (call configure and onInitialize hooks)
-   */
   async initialize(): Promise<void> {
     if (this.initialized) return
 
@@ -151,11 +114,11 @@ export class ModuleRegistry {
     }
 
     for (const registered of this.modules) {
-      // Instantiate module class
+      if (!registered.hasLifecycle) continue
+
       const instance = new registered.moduleClass()
       registered.instance = instance
 
-      // Call onInitialize if implemented
       if (this.hasOnInitialize(instance)) {
         this.logger.info(`Initializing: ${registered.moduleClass.name}`)
         await instance.onInitialize(context)
@@ -166,52 +129,30 @@ export class ModuleRegistry {
     this.logger.info('All modules initialized')
   }
 
-  /**
-   * Get all controllers registered from all modules
-   */
   getAllControllers(): Constructor[] {
     return this.allControllers
   }
 
-  /**
-   * Get all consumers registered from all modules
-   */
   getAllConsumers(): Constructor[] {
     return this.allConsumers
   }
 
-  /**
-   * Get all jobs registered from all modules
-   */
   getAllJobs(): Constructor[] {
     return this.allJobs
   }
 
-  /**
-   * Get all listeners registered from all modules
-   */
   getAllListeners(): Constructor[] {
     return this.allListeners
   }
 
-  /**
-   * Get all commands registered from all modules
-   */
   getAllCommands(): Constructor[] {
     return this.allCommands
   }
 
-  /**
-   * Get all seeders registered from all modules
-   */
   getAllSeeders(): Constructor[] {
     return this.allSeeders
   }
 
-  /**
-   * Get all Router configurations from modules implementing RouteConfigurable.
-   * Runs configureRoutes() lazily on first call (deferred from initialize()).
-   */
   getAllRouterConfigs(): { router: Router; controllers: Constructor[] }[] {
     if (this.allRouterConfigs.length === 0) {
       for (const { moduleClass, options, instance } of this.modules) {
@@ -227,12 +168,6 @@ export class ModuleRegistry {
     return this.allRouterConfigs
   }
 
-  /**
-   * Call `onException()` on all modules that implement the OnException interface.
-   * Invoked by Application after the ExceptionHandler is resolved and `register()` is called.
-   *
-   * @param handler - The resolved ExceptionHandler instance
-   */
   configureExceptionHandlers(handler: ExceptionHandler): void {
     for (const { moduleClass, instance } of this.modules) {
       if (instance && this.hasOnException(instance)) {
@@ -242,9 +177,6 @@ export class ModuleRegistry {
     }
   }
 
-  /**
-   * Shutdown all modules (call onShutdown hooks in reverse order)
-   */
   async shutdown(): Promise<void> {
     this.logger.info('Shutting down modules...')
 
@@ -253,7 +185,6 @@ export class ModuleRegistry {
       logger: this.logger,
     }
 
-    // Reverse order for shutdown
     const reversed = [...this.modules].reverse()
 
     for (const { moduleClass, instance } of reversed) {
@@ -269,9 +200,6 @@ export class ModuleRegistry {
     this.logger.info('All modules shut down')
   }
 
-  /**
-   * Type guard for RouteConfigurable
-   */
   private hasRouteConfigurable(instance: unknown): instance is RouteConfigurable {
     return (
       typeof instance === 'object' &&
@@ -281,9 +209,6 @@ export class ModuleRegistry {
     )
   }
 
-  /**
-   * Type guard for OnInitialize
-   */
   private hasOnInitialize(instance: unknown): instance is OnInitialize {
     return (
       typeof instance === 'object' &&
@@ -293,9 +218,6 @@ export class ModuleRegistry {
     )
   }
 
-  /**
-   * Type guard for OnShutdown
-   */
   private hasOnShutdown(instance: unknown): instance is OnShutdown {
     return (
       typeof instance === 'object' &&
@@ -305,9 +227,6 @@ export class ModuleRegistry {
     )
   }
 
-  /**
-   * Type guard for OnException
-   */
   private hasOnException(instance: unknown): instance is OnException {
     return (
       typeof instance === 'object' &&
@@ -317,28 +236,17 @@ export class ModuleRegistry {
     )
   }
 
-  /**
-   * Resolve module class and options from static or dynamic module
-   *
-   * For DynamicModules, merges the decorator metadata (consumers, controllers, jobs)
-   * with the DynamicModule options (providers, imports). This ensures modules using
-   * forRoot/forRootAsync patterns still have their decorator-defined consumers registered.
-   */
   private resolveModule(moduleOrDynamic: ModuleClass | DynamicModule): {
     moduleClass: Constructor
     options: ModuleOptions
   } {
-    // DynamicModule (from forRoot/forRootAsync) - has module property
     if (this.isDynamicModule(moduleOrDynamic)) {
       const { module: moduleClass, ...dynamicRest } = moduleOrDynamic
 
-      // Get decorator options and merge with dynamic options
-      // This ensures consumers/controllers/jobs from @Module decorator are included
       const decoratorOptions = getModuleOptions(moduleClass) ?? {}
       const mergedOptions: ModuleOptions = {
         ...decoratorOptions,
         ...dynamicRest,
-        // Merge arrays: decorator providers first, then dynamic providers
         providers: [...(decoratorOptions.providers ?? []), ...(dynamicRest.providers ?? [])],
         imports: [...(decoratorOptions.imports ?? [])],
       }
@@ -346,74 +254,51 @@ export class ModuleRegistry {
       return { moduleClass: moduleClass, options: mergedOptions }
     }
 
-    // Static module (decorated with @Module)
     const moduleClass = moduleOrDynamic as Constructor
     const options = getModuleOptions(moduleClass) ?? {}
     return { moduleClass, options }
   }
 
-  /**
-   * Type guard for DynamicModule
-   */
   private isDynamicModule(value: unknown): value is DynamicModule {
     return (
       typeof value === 'object' &&
       value !== null &&
-      'module' in value && // Required property for dynamic modules
+      'module' in value &&
       typeof (value as DynamicModule).module === 'function'
     )
   }
 
-  /**
-   * Register a single provider in the container
-   */
   private registerProvider(provider: Provider): void {
     if (typeof provider === 'function') {
-      // Class-only provider - transient by default
       this.container.register(provider as Constructor)
       this.collectIfListener(provider as Constructor)
       this.collectIfCommand(provider as Constructor)
       this.collectIfSeeder(provider as Constructor)
     } else if ('useClass' in provider) {
-      // ClassProvider with optional scope
-      this.container.register(provider.provide, provider.useClass as Constructor, provider.scope)
+      this.container.register(provider.provide, provider.useClass as Constructor)
       this.collectIfListener(provider.useClass as Constructor)
       this.collectIfCommand(provider.useClass as Constructor)
       this.collectIfSeeder(provider.useClass as Constructor)
     } else if ('useValue' in provider) {
-      // ValueProvider - no scope needed (values are inherently singleton)
       this.container.registerValue(provider.provide, provider.useValue)
     } else if ('useFactory' in provider) {
-      // FactoryProvider - use instancePerContainerCachingFactory to:
-      // 1. Get the actual container at resolution time (global vs request)
-      // 2. Cache result per container
       const { provide, useFactory, inject = [] } = provider
-      this.container.getTsyringeContainer().register(provide, {
-        useFactory: instancePerContainerCachingFactory((dependencyContainer) => {
-          const deps = inject.map((token) => dependencyContainer.resolve(token))
-          return useFactory(...deps)
-        })
+      this.container.registerFactory(provide, (c) => {
+        const deps = inject.map((token) => c.resolve(token))
+        return useFactory(...deps)
       })
     } else if ('useExisting' in provider) {
-      // ExistingProvider - alias to another token
       this.container.registerExisting(provider.provide, provider.useExisting)
     }
   }
 
-  /**
-   * Check if a class is a `Command` and collect it for auto-wiring
-   */
   private collectIfCommand(providerClass: Constructor): void {
     if (isCommand(providerClass) && !this.allCommands.includes(providerClass)) {
-      injectable()(providerClass)
       this.allCommands.push(providerClass)
       this.logger.debug(`Collected command: ${providerClass.name}`)
     }
   }
 
-  /**
-   * Check if a class is a `Seeder` and collect it for auto-wiring
-   */
   private collectIfSeeder(providerClass: Constructor): void {
     if (isSeeder(providerClass) && !this.allSeeders.includes(providerClass)) {
       this.allSeeders.push(providerClass)
@@ -421,13 +306,9 @@ export class ModuleRegistry {
     }
   }
 
-  /**
-   * Check if a class is a `@Listener()` and collect it for auto-wiring
-   */
   private collectIfListener(providerClass: Constructor): void {
     if (isListener(providerClass)) {
-      // Re-register as singleton so the same instance is used across all event registrations
-      this.container.register(providerClass, providerClass, Scope.Singleton)
+      this.container.register(providerClass, providerClass)
       this.allListeners.push(providerClass)
       this.logger.debug(`Collected listener: ${providerClass.name}`)
     }

@@ -1,275 +1,290 @@
-/**
- * Unified DI Container
- *
- * Provides a developer-friendly wrapper around tsyringe with:
- * - Auto-token extraction from decorator metadata
- * - Auto-scope detection from decorator metadata
- * - Seamless global/request scope interoperability
- * - Request scope lifecycle management
- *
- * **Two-Tier Container Architecture:**
- * ```
- * Global Container (managed by Container)
- *        ↓
- *   All services registered here
- *   (singletons + container-scoped)
- *        ↓
- * Request Container (child, per request)
- *        ↓
- *   Fresh instances for ContainerScoped services
- *   RouterContext registered per request
- * ```
- */
-import { type DependencyContainer, type Lifecycle } from 'tsyringe';
-import type InjectionToken from 'tsyringe/dist/typings/providers/injection-token';
 import type { RouterContext } from '../router/router-context';
 import { ROUTER_TOKENS } from '../router/router.tokens';
 import type { Constructor } from '../types';
 import { ConditionalBindingBuilderImpl, type ConditionalBindingBuilder, type PredicateContainer } from './conditional-binding-builder';
 import { containerStorage } from './container-storage';
 import { ContainerError } from './container.error';
+import { getClassMetadata } from './decorators';
+import { getInjectionTokens } from './decorators/inject.decorator';
+import { isLazyToken, type LazyToken } from './lazy';
 import { CONTAINER_TOKEN } from './tokens';
-import type { ExtensionDecorator, Scope, WhenOptions } from './types';
+import { Scope, type ExtensionDecorator, type InjectionToken, type WhenOptions } from './types';
 
-/**
- * Options for creating a Container instance
- */
+interface ClassRegistration {
+  kind: 'class'
+  useClass: Constructor
+  scope: Scope
+}
+
+interface LazyClassRegistration {
+  kind: 'lazy'
+  factory: () => Constructor
+  scope: Scope
+}
+
+interface ValueRegistration {
+  kind: 'value'
+  value: unknown
+}
+
+interface FactoryRegistration {
+  kind: 'factory'
+  factory: (container: Container) => unknown
+}
+
+interface AliasRegistration {
+  kind: 'alias'
+  target: InjectionToken
+}
+
+type Registration = ClassRegistration | LazyClassRegistration | ValueRegistration | FactoryRegistration | AliasRegistration
+
+function tokenToString(token: InjectionToken): string {
+  if (typeof token === 'symbol') return token.description ?? 'Symbol'
+  if (typeof token === 'function') return token.name
+  if (typeof token === 'object' && token !== null && 'factory' in token) return '(lazy)'
+  return String(token)
+}
+
 export interface ContainerOptions {
-  /** Pre-created DependencyContainer */
-  container: DependencyContainer
-  /** Whether this is a request-scoped container */
+  parent?: Container
   isRequestScoped?: boolean
 }
 
-/**
- * Unified Container for DI management
- *
- * Manages the two-tier container hierarchy:
- * - Global scope: Singletons, base instances of request-scoped services
- * - Request scope: Context-enriched instances per HTTP request
- *
- * @example Basic registration
- * ```typescript
- * import { container as tsyringeRootContainer } from 'tsyringe'
- *
- * const container = new Container({
- *   container: tsyringeRootContainer.createChildContainer()
- * })
- *
- * container.register(I18nService)
- * container.register(MY_TOKEN, MyService)
- * container.registerSingleton(ConfigService)
- * container.registerValue(MY_TOKEN, myInstance)
- * ```
- *
- * @example Request scope (automatic lifecycle)
- * ```typescript
- * await container.runInRequestScope(routerContext, async (requestContainer) => {
- *   const i18n = requestContainer.resolve(I18N_TOKEN)
- * })
- * ```
- */
 export class Container {
-  private readonly container: DependencyContainer
+  private readonly registrations = new Map<InjectionToken, Registration>()
+  private readonly singletons = new Map<InjectionToken, unknown>()
+  private readonly requestCache = new Map<InjectionToken, unknown>()
+  private readonly parent: Container | null
   private readonly isRequestScoped: boolean
 
-  constructor(options: ContainerOptions) {
+  constructor(options: ContainerOptions = {}) {
+    this.parent = options.parent ?? null
     this.isRequestScoped = options.isRequestScoped ?? false
-    this.container = options.container
 
-    // Only register CONTAINER_TOKEN for global container (not request-scoped)
     if (!this.isRequestScoped) {
-      this.container.register(CONTAINER_TOKEN, { useValue: this })
+      this.registrations.set(CONTAINER_TOKEN, { kind: 'value', value: this })
     }
   }
 
-  // ============================================================
-  // Registration Methods
-  // ============================================================
+  // ── Registration ──────────────────────────────────────────────
 
-  /**
-   * Register a service with optional explicit token and scope
-   */
-  register<T extends object>(serviceClass: Constructor<T>, scope?: Scope): void
-  register<T extends object>(token: InjectionToken<T>, serviceClass: Constructor<T>, scope?: Scope): void
+  register<T extends object>(serviceClass: Constructor<T>): void
+  register<T extends object>(token: InjectionToken<T>, serviceClassOrLazy: Constructor<T> | LazyToken<T>): void
   register<T extends object>(
     tokenOrClass: InjectionToken<T> | Constructor<T>,
-    serviceClassOrScope?: Constructor<T> | Scope,
-    scope?: Scope
+    serviceClassOrLazy?: Constructor<T> | LazyToken<T>,
   ): void {
+    if (serviceClassOrLazy !== undefined && isLazyToken(serviceClassOrLazy)) {
+      const lazyToken = serviceClassOrLazy
+      this.registrations.set(tokenOrClass, {
+        kind: 'lazy',
+        factory: lazyToken.factory,
+        scope: Scope.Request,
+      })
+      return
+    }
+
     let token: InjectionToken<T>
-    let serviceClass: Constructor<T>
-    let lifecycle: Lifecycle | undefined
+    let impl: Constructor<T>
 
-    if (typeof serviceClassOrScope === 'function') {
-      // Called as register(token, class, scope?)
-      token = tokenOrClass as InjectionToken<T>
-      serviceClass = serviceClassOrScope
-      lifecycle = scope as Lifecycle | undefined
+    if (serviceClassOrLazy !== undefined) {
+      token = tokenOrClass
+      impl = serviceClassOrLazy
     } else {
-      // Called as register(class, scope?)
       token = tokenOrClass as Constructor<T>
-      serviceClass = tokenOrClass as Constructor<T>
-      lifecycle = serviceClassOrScope as Lifecycle | undefined
+      impl = tokenOrClass as Constructor<T>
     }
 
-    if (lifecycle !== undefined) {
-      this.container.register(token, { useClass: serviceClass }, { lifecycle })
-    } else {
-      this.container.register(token, { useClass: serviceClass })
-    }
+    const meta = getClassMetadata(impl)
+    const scope = meta?.scope ?? Scope.Transient
+
+    this.registrations.set(token, { kind: 'class', useClass: impl, scope })
   }
 
-  /**
-   * Register a service as singleton
-   */
   registerSingleton<T extends object>(serviceClass: Constructor<T>): void
   registerSingleton<T extends object>(token: InjectionToken<T>, serviceClass: Constructor<T>): void
   registerSingleton<T extends object>(
     tokenOrClass: InjectionToken<T> | Constructor<T>,
-    serviceClass?: Constructor<T>
+    serviceClass?: Constructor<T>,
   ): void {
-    if (serviceClass !== undefined) {
-      this.container.registerSingleton(tokenOrClass as InjectionToken<T>, serviceClass)
-    } else {
-      const targetClass = tokenOrClass as Constructor<T>
-      this.container.registerSingleton(targetClass, targetClass)
+    const token = serviceClass !== undefined ? tokenOrClass : tokenOrClass as Constructor<T>
+    const impl = serviceClass ?? tokenOrClass as Constructor<T>
+    this.registrations.set(token, { kind: 'class', useClass: impl, scope: Scope.Singleton })
+  }
+
+  registerValue<T>(token: InjectionToken<T>, value: T): void {
+    this.registrations.set(token, { kind: 'value', value })
+  }
+
+  registerFactory<T>(token: InjectionToken<T>, factory: (container: Container) => T): void {
+    this.registrations.set(token, { kind: 'factory', factory })
+  }
+
+  registerExisting<T>(alias: InjectionToken<T>, target: InjectionToken<T>): void {
+    this.registrations.set(alias, { kind: 'alias', target })
+  }
+
+  // ── Resolution ────────────────────────────────────────────────
+
+  resolve<T>(token: InjectionToken<T>): T {
+    if (isLazyToken(token)) {
+      const realToken = token.factory() as InjectionToken<T>
+      return this.resolve(realToken)
+    }
+
+    // Check request cache (request-scoped containers)
+    if (this.isRequestScoped && this.requestCache.has(token)) {
+      return this.requestCache.get(token) as T
+    }
+
+    // Check local registrations first
+    const reg = this.registrations.get(token)
+    if (reg) return this.resolveRegistration(token, reg) as T
+
+    // Check parent chain
+    if (this.parent) return this.parent.resolve(token)
+
+    throw new ContainerError(`No provider for ${tokenToString(token)}. Did you forget to register it?`)
+  }
+
+  tryResolve<T>(token: InjectionToken<T>): T | undefined {
+    try {
+      return this.resolve(token)
+    } catch {
+      return undefined
     }
   }
 
-  /**
-   * Register a value (instance) directly
-   */
-  registerValue<T>(token: InjectionToken<T>, value: T): void {
-    this.container.register(token, { useValue: value })
-  }
-
-  /**
-   * Register with factory function
-   */
-  registerFactory<T>(
-    token: InjectionToken<T>,
-    factory: (container: Container) => T
-  ): void {
-    this.container.register(token, { useFactory: () => factory(this) })
-  }
-
-  /**
-   * Register an alias to an existing token
-   */
-  registerExisting<T>(alias: InjectionToken<T>, target: InjectionToken<T>): void {
-    this.container.register(alias, { useToken: target })
-  }
-
-  // ============================================================
-  // Resolution Methods
-  // ============================================================
-
-  /**
-   * Resolve a service from the container
-   */
-  resolve<T>(token: InjectionToken<T>): T {
-    return this.container.resolve<T>(token)
-  }
-
-  /**
-   * Check if a token is registered
-   */
   isRegistered<T>(token: InjectionToken<T>): boolean {
-    return this.container.isRegistered(token)
+    if (this.registrations.has(token)) return true
+    return this.parent?.isRegistered(token) ?? false
   }
 
-  // ============================================================
-  // Conditional Registration Methods
-  // ============================================================
+  // ── Conditional ───────────────────────────────────────────────
 
-  /**
-   * Start a conditional binding with predicate evaluation
-   */
   when(
     predicate: (container: PredicateContainer) => boolean,
-    options: WhenOptions = {}
+    options: WhenOptions = {},
   ): ConditionalBindingBuilder {
-    return new ConditionalBindingBuilderImpl(
-      this.container,
-      this,
-      predicate,
-      options
-    )
+    return new ConditionalBindingBuilderImpl(this, predicate, options)
   }
 
-  /**
-   * Replace a service registration with a decorated version
-   */
   extend<T>(token: InjectionToken<T>, decorator: ExtensionDecorator<T>): void {
-    const currentInstance = this.container.resolve<T>(token)
-    const decoratedInstance = decorator(currentInstance, this)
-    this.container.register(token, { useValue: decoratedInstance })
+    const current = this.resolve<T>(token)
+    const decorated = decorator(current, this)
+    this.registerValue(token, decorated)
   }
 
-  // ============================================================
-  // Request Scope Management
-  // ============================================================
+  // ── Request Scope ─────────────────────────────────────────────
 
-  /**
-   * Run callback within request scope
-   *
-   * Creates a child container with fresh instances for services registered with `scope: Scope.Request`.
-   * Callback receives the request-scoped container as argument.
-   *
-   * Can only be called on global container (not request-scoped).
-   */
   async runInRequestScope<T>(
     routerContext: RouterContext,
-    callback: (requestContainer: Container) => T | Promise<T>
+    callback: (requestContainer: Container) => T | Promise<T>,
   ): Promise<T> {
     if (this.isRequestScoped) {
       throw new ContainerError('Cannot call runInRequestScope on a request-scoped container')
     }
 
     const requestContainer = this.createRequestScope(routerContext)
-      // Pin the request-scoped Container into AsyncLocalStorage for the
-      // duration of the callback so `getContainer()` (and anything reading
-      // `containerStorage.getStore()`) resolves the per-request container
-      // instead of the global one — e.g. ConfigService.set branches on
-      // `isRequestScoped` to decide between request overrides and the
-      // shared ConfigStore.
-      return await containerStorage.run(requestContainer, () => callback(requestContainer))
+    return await containerStorage.run(requestContainer, () => callback(requestContainer))
   }
 
-  /**
-   * Create request scope container
-   *
-   * Can only be called on global container (not request-scoped).
-   */
   createRequestScope(routerContext: RouterContext): Container {
     if (this.isRequestScoped) {
       throw new ContainerError('Cannot call createRequestScope on a request-scoped container')
     }
 
-    const childContainer = this.container.createChildContainer()
-    childContainer.register(ROUTER_TOKENS.RouterContext, { useValue: routerContext })
-
-    return new Container({ container: childContainer, isRequestScoped: true })
+    const child = new Container({ parent: this, isRequestScoped: true })
+    child.registerValue(ROUTER_TOKENS.RouterContext, routerContext)
+    return child
   }
 
-  // ============================================================
-  // Escape Hatches
-  // ============================================================
+  // ── Lifecycle ─────────────────────────────────────────────────
 
-  /**
-   * Get underlying tsyringe container
-   */
-  getTsyringeContainer(): DependencyContainer {
-    return this.container
+  dispose(): void {
+    this.registrations.clear()
+    this.singletons.clear()
+    this.requestCache.clear()
   }
 
-  dispose() {
-    return this.container.dispose()
+  // ── Internal ──────────────────────────────────────────────────
+
+  private resolveRegistration(token: InjectionToken, reg: Registration): unknown {
+    switch (reg.kind) {
+      case 'value':
+        return reg.value
+
+      case 'alias':
+        return this.resolve(reg.target)
+
+      case 'factory': {
+        if (this.singletons.has(token)) return this.singletons.get(token)
+        const result = reg.factory(this)
+        this.singletons.set(token, result)
+        return result
+      }
+
+      case 'lazy': {
+        const useClass = reg.factory()
+        return this.resolveClass(token, { kind: 'class', useClass, scope: reg.scope })
+      }
+
+      case 'class':
+        return this.resolveClass(token, reg)
+    }
+  }
+
+  private resolveClass(token: InjectionToken, reg: ClassRegistration): unknown {
+    const { useClass, scope } = reg
+
+    // Singleton: check global cache (root or current)
+    if (scope === Scope.Singleton) {
+      const root = this.getRoot()
+      if (root.singletons.has(token)) return root.singletons.get(token)
+      const instance = this.instantiate(useClass)
+      root.singletons.set(token, instance)
+      return instance
+    }
+
+    // Request: cache in the request-scoped container
+    if (scope === Scope.Request) {
+      if (this.isRequestScoped) {
+        if (this.requestCache.has(token)) return this.requestCache.get(token)
+        const instance = this.instantiate(useClass)
+        this.requestCache.set(token, instance)
+        return instance
+      }
+      // Resolving a request-scoped service from global container — treat as transient
+    }
+
+    // Transient: always new instance
+    return this.instantiate(useClass)
+  }
+
+  private instantiate(Class: Constructor): unknown {
+    const injections = getInjectionTokens(Class)
+
+    if (injections.size === 0) {
+      return new Class()
+    }
+
+    const maxIndex = Math.max(...injections.keys())
+    const args: unknown[] = new Array(maxIndex + 1)
+
+    for (const [index, entry] of injections) {
+      if (entry.optional) {
+        args[index] = this.tryResolve(entry.token)
+      } else {
+        args[index] = this.resolve(entry.token)
+      }
+    }
+
+    return new Class(...args)
+  }
+
+  private getRoot(): Container {
+    if (!this.parent) return this
+    return this.parent.getRoot()
   }
 }
-
-// Re-export tsyringe utilities for convenience
-export { container, delay, inject, injectable, instancePerContainerCachingFactory, singleton } from 'tsyringe';
-export type { DependencyContainer } from 'tsyringe';
-

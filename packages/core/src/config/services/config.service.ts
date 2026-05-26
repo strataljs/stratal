@@ -1,5 +1,5 @@
-import { inject } from 'tsyringe'
-import { Transient } from '../../di/decorators'
+import { inject } from '../../di'
+import { Request } from '../../di/decorators'
 import { Macroable } from '../../macroable/macroable'
 import { CONFIG_TOKENS } from '../config.tokens'
 import type { ConfigPath, ConfigPathValue, IConfigService, ModuleConfig } from '../config.types'
@@ -30,7 +30,7 @@ import { type ConfigStore } from './config.store'
  * config.reset('environment.appUrl')
  * ```
  */
-@Transient(CONFIG_TOKENS.ConfigService)
+@Request(CONFIG_TOKENS.ConfigService)
 export class ConfigService<T extends object = ModuleConfig> extends Macroable implements IConfigService<T> {
   private overrides = new Map<string, unknown>()
 

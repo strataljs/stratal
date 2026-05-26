@@ -1,3 +1,4 @@
+import { defineMetadata, getMetadata } from '../../di/metadata'
 import { ROUTE_METADATA_KEYS } from '../constants'
 import type { ConventionRouteMetadata, RouteConfig, RouteMetadata } from '../types'
 
@@ -84,7 +85,7 @@ export function Route(config: Omit<RouteConfig, 'statusCode'>) {
       config,
     }
 
-    Reflect.defineMetadata(
+    defineMetadata(
       ROUTE_METADATA_KEYS.ROUTE_CONFIG,
       metadata,
       target,
@@ -93,9 +94,9 @@ export function Route(config: Omit<RouteConfig, 'statusCode'>) {
 
     // Track this method as decorated on the prototype
     const existing: string[] =
-      (Reflect.getOwnMetadata(ROUTE_METADATA_KEYS.DECORATED_METHODS, target) as string[] | undefined) ?? []
+      getMetadata<string[]>(ROUTE_METADATA_KEYS.DECORATED_METHODS, target) ?? []
     existing.push(propertyKey)
-    Reflect.defineMetadata(ROUTE_METADATA_KEYS.DECORATED_METHODS, existing, target)
+    defineMetadata(ROUTE_METADATA_KEYS.DECORATED_METHODS, existing, target)
 
     return descriptor
   }
@@ -109,7 +110,7 @@ export function Route(config: Omit<RouteConfig, 'statusCode'>) {
  * @returns Route metadata or undefined if not decorated
  */
 export function getRouteMetadata(target: object, methodName: string): RouteMetadata | undefined {
-  return Reflect.getMetadata(ROUTE_METADATA_KEYS.ROUTE_CONFIG, target, methodName) as RouteMetadata | undefined
+  return getMetadata<RouteMetadata>(ROUTE_METADATA_KEYS.ROUTE_CONFIG, target, methodName)
 }
 
 /**
@@ -123,7 +124,7 @@ export function getRouteDecoratedMethods(ControllerClass: new (...args: unknown[
   let proto: object | null = ControllerClass.prototype as object
 
   while (proto && proto !== Object.prototype) {
-    const own = Reflect.getOwnMetadata(ROUTE_METADATA_KEYS.DECORATED_METHODS, proto) as string[] | undefined
+    const own = getMetadata<string[]>(ROUTE_METADATA_KEYS.DECORATED_METHODS, proto)
     if (own) {
       for (const m of own) methods.add(m)
     }

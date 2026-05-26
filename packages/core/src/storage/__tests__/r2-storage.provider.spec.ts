@@ -1,4 +1,3 @@
-import 'reflect-metadata'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
 import { R2StorageProvider } from '../providers/r2-storage.provider'

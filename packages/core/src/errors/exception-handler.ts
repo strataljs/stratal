@@ -1,5 +1,5 @@
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
-import { inject } from 'tsyringe';
+import { inject } from '../di';
 import { CONTAINER_TOKEN, type Container } from '../di';
 import { Transient } from '../di/decorators';
 import { DI_TOKENS } from '../di/tokens';

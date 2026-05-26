@@ -7,8 +7,8 @@
  */
 
 import { translate } from '@intlify/core-base'
-import { inject } from 'tsyringe'
-import { Transient } from '../../di/decorators'
+import { inject } from '../../di'
+import { Request } from '../../di/decorators'
 import { ROUTER_TOKENS, type RouterContext } from '../../router'
 import { I18N_TOKENS } from '../i18n.tokens'
 import type { II18nService, MessageKeys, MessageParams } from '../i18n.types'
@@ -34,7 +34,7 @@ import type { MessageLoaderService } from './message-loader.service'
  * }
  * ```
  */
-@Transient(I18N_TOKENS.I18nService)
+@Request(I18N_TOKENS.I18nService)
 export class I18nService implements II18nService {
   constructor(
     @inject(I18N_TOKENS.MessageLoader) private readonly loader: MessageLoaderService,

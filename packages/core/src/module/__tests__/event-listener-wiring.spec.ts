@@ -1,27 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
-import { container as tsyringeRootContainer, injectable, inject } from 'tsyringe'
-import type { DependencyContainer } from 'tsyringe'
 import { Container } from '../../di/container'
+import { inject, Transient } from '../../di/decorators'
 import { DI_TOKENS } from '../../di/tokens'
-import { Scope } from '../../di/types'
 import { Listener, On, getListenerHandlers } from '../../events'
 import type { LoggerService } from '../../logger/services/logger.service'
 import { Module } from '../module.decorator'
 import { ModuleRegistry } from '../module-registry'
 
 describe('Event Listener Auto-Wiring (Application-level)', () => {
-  let childContainer: DependencyContainer
   let container: Container
   let mockLogger: DeepMocked<LoggerService>
   let registry: ModuleRegistry
 
   beforeEach(() => {
     vi.clearAllMocks()
-    childContainer = tsyringeRootContainer.createChildContainer()
-    container = new Container({
-      container: childContainer,
-    })
+    container = new Container()
     mockLogger = createMock<LoggerService>()
     registry = new ModuleRegistry(container, mockLogger as unknown as LoggerService)
   })
@@ -139,12 +133,12 @@ describe('Event Listener Auto-Wiring (Application-level)', () => {
   it('should handle listener with injected dependencies', () => {
     const SERVICE_TOKEN = Symbol('TestService')
 
-    @injectable()
+    @Transient()
     class TestService {
       getValue() { return 'injected' }
     }
 
-    container.register(SERVICE_TOKEN, TestService, Scope.Singleton)
+    container.register(SERVICE_TOKEN, TestService)
 
     @Listener()
     class DependentListener {

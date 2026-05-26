@@ -1,3 +1,4 @@
+import { defineMetadata, getMetadata } from '../../di/metadata'
 import { ROUTE_METADATA_KEYS } from '../../router/constants'
 import type { Constructor } from '../../types'
 import { WebSocketError } from '../websocket.error'
@@ -10,12 +11,12 @@ const WS_ON_ERROR_KEY = ROUTE_METADATA_KEYS.WS_ON_ERROR
  * Define a single-handler metadata key on the prototype.
  * Throws if a different method already owns this key (prevents silent override).
  */
-function defineSingleHandlerMetadata(key: string | symbol, propertyKey: string | symbol, target: object, decoratorName: string): void {
-  const existing = Reflect.getMetadata(key, target) as string | symbol | undefined
+function defineSingleHandlerMetadata(key: symbol, propertyKey: string | symbol, target: object, decoratorName: string): void {
+  const existing = getMetadata<string | symbol>(key, target)
   if (existing !== undefined && existing !== propertyKey) {
     throw new WebSocketError(`Duplicate @${decoratorName} handler: method "${String(existing)}" is already registered`)
   }
-  Reflect.defineMetadata(key, propertyKey, target)
+  defineMetadata(key, propertyKey, target)
 }
 
 /**
@@ -84,19 +85,19 @@ export function OnError(): MethodDecorator {
  * Get the method name decorated with @OnMessage
  */
 export function getWsOnMessageMethod(target: Constructor): string | undefined {
-  return Reflect.getMetadata(WS_ON_MESSAGE_KEY, target.prototype as object) as string | undefined
+  return getMetadata<string>(WS_ON_MESSAGE_KEY, target.prototype as object)
 }
 
 /**
  * Get the method name decorated with @OnClose
  */
 export function getWsOnCloseMethod(target: Constructor): string | undefined {
-  return Reflect.getMetadata(WS_ON_CLOSE_KEY, target.prototype as object) as string | undefined
+  return getMetadata<string>(WS_ON_CLOSE_KEY, target.prototype as object)
 }
 
 /**
  * Get the method name decorated with @OnError
  */
 export function getWsOnErrorMethod(target: Constructor): string | undefined {
-  return Reflect.getMetadata(WS_ON_ERROR_KEY, target.prototype as object) as string | undefined
+  return getMetadata<string>(WS_ON_ERROR_KEY, target.prototype as object)
 }

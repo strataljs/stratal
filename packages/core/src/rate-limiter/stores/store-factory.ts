@@ -1,8 +1,8 @@
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import { CACHE_TOKENS } from '../../cache/cache.tokens'
 import type { CacheService } from '../../cache/services/cache.service'
 import { CONTAINER_TOKEN, type Container } from '../../di'
-import { Transient } from '../../di/decorators'
+import { Singleton } from '../../di/decorators'
 import { DI_TOKENS } from '../../di/tokens'
 import type { StratalEnv } from '../../env'
 import type { Constructor } from '../../types'
@@ -26,11 +26,11 @@ export type RateLimiterModuleOptions =
   | { store: 'memory' }
   | { store: { useClass: Constructor<IRateLimiterStore> } }
 
-// IMPORTANT: see RateLimiterRegistry — no token on @Transient so the
+// IMPORTANT: see RateLimiterRegistry — no token on @Singleton so the
 // factory isn't globally bound at class-load time. Module providers are
 // the sole binding source, which keeps the "module not imported" detection
 // in ThrottleMiddleware working.
-@Transient()
+@Singleton()
 export class RateLimiterStoreFactory {
   constructor(
     @inject(DI_TOKENS.CloudflareEnv) private readonly env: StratalEnv,

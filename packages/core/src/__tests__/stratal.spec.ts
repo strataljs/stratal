@@ -1,10 +1,8 @@
-import { inject, injectable } from 'tsyringe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Application, type ApplicationOptions } from '../application';
 import type { CronJob } from '../cron/cron-job';
-import { Transient } from '../di/decorators';
+import { inject, Transient } from '../di/decorators';
 import { DI_TOKENS } from '../di/tokens';
-import { Scope } from '../di/types';
 import type { StratalEnv } from '../env';
 import type { EventContext, IEventRegistry } from '../events';
 import { Listener, On } from '../events';
@@ -21,7 +19,7 @@ import type { Constructor } from '../types';
 
 const TOKEN = Symbol('TestSvc')
 
-@injectable()
+@Transient()
 class TestService {
   getValue() {
     return 'stratal-test'
@@ -40,7 +38,7 @@ class TestController {
 }
 
 @Module({
-  providers: [{ provide: TOKEN, useClass: TestService, scope: Scope.Singleton }],
+  providers: [{ provide: TOKEN, useClass: TestService }],
   controllers: [TestController],
 })
 class TestAppModule { }
@@ -202,7 +200,7 @@ class TestCronJob implements CronJob {
 
 @Module({
   providers: [
-    { provide: REQUEST_SCOPED_TOKEN, useClass: RequestScopedService, scope: Scope.Request },
+    { provide: REQUEST_SCOPED_TOKEN, useClass: RequestScopedService },
   ],
   jobs: [TestCronJob as Constructor],
 })

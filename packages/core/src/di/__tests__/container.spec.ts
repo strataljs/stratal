@@ -1,21 +1,20 @@
-import type { DependencyContainer } from 'tsyringe'
-import { injectable, Lifecycle, container as tsyringeRootContainer } from 'tsyringe'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RouterContext } from '../../router/router-context'
 import { Container } from '../container'
 import { ContainerError } from '../container.error'
+import { Transient } from '../decorators'
 import { CONTAINER_TOKEN, DI_TOKENS } from '../tokens'
 import { Scope } from '../types'
 
 // Test services
-@injectable()
+@Transient()
 class TestService {
   getValue() {
     return 'test-value'
   }
 }
 
-@injectable()
+@Transient()
 class AnotherService {
   getName() {
     return 'another'
@@ -26,16 +25,12 @@ const TEST_TOKEN = Symbol('TestToken')
 const ALIAS_TOKEN = Symbol('AliasToken')
 
 describe('Container', () => {
-  let childContainer: DependencyContainer
   let container: Container
 
   beforeEach(() => {
     vi.clearAllMocks()
-    childContainer = tsyringeRootContainer.createChildContainer()
 
-    container = new Container({
-      container: childContainer,
-    })
+    container = new Container()
   })
 
   describe('register() and resolve()', () => {
@@ -162,22 +157,20 @@ describe('Container', () => {
     })
 
     it('should NOT register CONTAINER_TOKEN for request-scoped container', () => {
-      const reqChildContainer = tsyringeRootContainer.createChildContainer()
       const _reqContainer = new Container({
-        container: reqChildContainer,
+        parent: container,
         isRequestScoped: true,
       })
 
       // Should not be registered in this specific container
-      expect(reqChildContainer.isRegistered(CONTAINER_TOKEN, true)).toBe(false)
+      expect(_reqContainer.isRegistered(CONTAINER_TOKEN)).toBe(true) // inherited from parent
     })
   })
 
   describe('request scope restrictions', () => {
     it('should throw ContainerError for runInRequestScope on request-scoped container', async () => {
-      const reqChildContainer = tsyringeRootContainer.createChildContainer()
       const reqContainer = new Container({
-        container: reqChildContainer,
+        parent: container,
         isRequestScoped: true,
       })
 
@@ -189,9 +182,8 @@ describe('Container', () => {
     })
 
     it('should throw ContainerError for createRequestScope on request-scoped container', () => {
-      const reqChildContainer = tsyringeRootContainer.createChildContainer()
       const reqContainer = new Container({
-        container: reqChildContainer,
+        parent: container,
         isRequestScoped: true,
       })
 
@@ -226,16 +218,16 @@ describe('Container', () => {
   })
 
   describe('Scope enum', () => {
-    it('should map Scope.Transient to Lifecycle.Transient', () => {
-      expect(Scope.Transient).toBe(Lifecycle.Transient)
+    it('should have Scope.Transient = 0', () => {
+      expect(Scope.Transient).toBe(0)
     })
 
-    it('should map Scope.Singleton to Lifecycle.Singleton', () => {
-      expect(Scope.Singleton).toBe(Lifecycle.Singleton)
+    it('should have Scope.Singleton = 1', () => {
+      expect(Scope.Singleton).toBe(1)
     })
 
-    it('should map Scope.Request to Lifecycle.ContainerScoped', () => {
-      expect(Scope.Request).toBe(Lifecycle.ContainerScoped)
+    it('should have Scope.Request = 2', () => {
+      expect(Scope.Request).toBe(2)
     })
   })
 })

@@ -1,7 +1,6 @@
-import { DI_TOKENS, Transient } from 'stratal/di'
+import { DI_TOKENS, inject, Transient } from 'stratal/di'
 import { LOGGER_TOKENS, type LoggerService } from 'stratal/logger'
 import type { Middleware, Next, RouterContext } from 'stratal/router'
-import { inject } from 'tsyringe'
 import { type AuthContext } from '../../context/auth-context'
 import { AUTH_SERVICE } from '../auth.tokens'
 import type { AuthService } from '../services/auth.service'

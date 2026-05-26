@@ -1,5 +1,5 @@
-import { inject } from 'tsyringe'
-import { Transient } from '../../di/decorators'
+import { inject } from '../../di'
+import { Request } from '../../di/decorators'
 import type { DownloadResult, PresignedUrlResult, UploadOptions, UploadResult } from '../contracts'
 import { StorageError } from '../storage.error'
 import type { StreamingBlobPayloadInputTypes } from '../providers/storage-provider.interface'
@@ -21,7 +21,7 @@ import { type StorageManagerService } from './storage-manager.service'
  * await this.storage.upload(file, 'documents/report.pdf')
  * ```
  */
-@Transient(STORAGE_TOKENS.StorageService)
+@Request(STORAGE_TOKENS.StorageService)
 export class StorageService {
   constructor(
     @inject(STORAGE_TOKENS.StorageManager)

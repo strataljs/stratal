@@ -8,8 +8,8 @@
 
 import type { CoreContext } from '@intlify/core-base'
 import { createCoreContext } from '@intlify/core-base'
-import { inject } from 'tsyringe'
-import { Transient } from '../../di/decorators'
+import { inject } from '../../di'
+import { Singleton } from '../../di/decorators'
 import type { I18nModuleOptions } from '../i18n.options'
 import type { MessageKeyPrefix } from '../i18n.types'
 import { I18N_TOKENS } from '../i18n.tokens'
@@ -17,7 +17,7 @@ import { getLocales, getMessages } from '../messages'
 import { deepMerge } from '../utils/deep-merge'
 import type { MessageRegistry } from './message-registry'
 
-@Transient(I18N_TOKENS.MessageLoader)
+@Singleton(I18N_TOKENS.MessageLoader)
 export class MessageLoaderService {
   private readonly cache: Map<string, Record<string, unknown>>
   private readonly contextCache: Map<string, CoreContext>

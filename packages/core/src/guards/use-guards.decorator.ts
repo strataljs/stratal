@@ -1,3 +1,4 @@
+import { defineMetadata, getMetadata } from '../di/metadata'
 import { GUARD_METADATA_KEY, type Guard, type GuardMetadata } from './types'
 
 /**
@@ -61,10 +62,10 @@ export function UseGuards(...guards: Guard[]): ClassDecorator & MethodDecorator 
 
     if (propertyKey !== undefined) {
       // Method decorator - store on method
-      Reflect.defineMetadata(GUARD_METADATA_KEY, metadata, target, propertyKey)
+      defineMetadata(GUARD_METADATA_KEY, metadata, target, propertyKey)
     } else {
       // Class decorator - store on class
-      Reflect.defineMetadata(GUARD_METADATA_KEY, metadata, target)
+      defineMetadata(GUARD_METADATA_KEY, metadata, target)
     }
   }
 }
@@ -76,7 +77,7 @@ export function UseGuards(...guards: Guard[]): ClassDecorator & MethodDecorator 
  * @returns Guard metadata or undefined if not decorated
  */
 export function getControllerGuards(target: object): GuardMetadata | undefined {
-  return Reflect.getMetadata(GUARD_METADATA_KEY, target) as GuardMetadata | undefined
+  return getMetadata<GuardMetadata>(GUARD_METADATA_KEY, target)
 }
 
 /**
@@ -87,5 +88,5 @@ export function getControllerGuards(target: object): GuardMetadata | undefined {
  * @returns Guard metadata or undefined if not decorated
  */
 export function getMethodGuards(target: object, propertyKey: string | symbol): GuardMetadata | undefined {
-  return Reflect.getMetadata(GUARD_METADATA_KEY, target, propertyKey) as GuardMetadata | undefined
+  return getMetadata<GuardMetadata>(GUARD_METADATA_KEY, target, propertyKey)
 }

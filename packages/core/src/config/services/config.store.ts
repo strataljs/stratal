@@ -1,4 +1,4 @@
-import { Transient } from '../../di/decorators'
+import { Singleton } from '../../di/decorators'
 import { CONFIG_TOKENS } from '../config.tokens'
 import type { ConfigPath, ConfigPathValue, ModuleConfig } from '../config.types'
 import { ConfigError } from '../config.error'
@@ -21,7 +21,7 @@ import { ConfigError } from '../config.error'
  * the same error you'd get for a missing key on an initialized store.
  * Resolving the store via DI never throws on its own.
  */
-@Transient(CONFIG_TOKENS.ConfigStore)
+@Singleton(CONFIG_TOKENS.ConfigStore)
 export class ConfigStore<T extends object = ModuleConfig> {
   private data: T | undefined
 

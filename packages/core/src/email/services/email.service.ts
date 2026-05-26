@@ -1,6 +1,6 @@
 import { render } from '@react-email/render'
 import type { ReactElement } from 'react'
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import { Transient } from '../../di/decorators'
 import type { IQueueSender } from '../../queue'
 import type { SendBatchEmailInput, SendEmailInput } from '../contracts'

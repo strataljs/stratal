@@ -1,5 +1,4 @@
 import { DI_TOKENS } from '../di/tokens'
-import { Scope } from '../di/types'
 import type { z } from '../i18n/validation/zod'
 import { Module } from '../module'
 import type { DynamicModule, ModuleContext, OnInitialize, Provider } from '../module/types'
@@ -83,14 +82,12 @@ let moduleOptions: ConfigModuleOptions | null = null
     {
       provide: CONFIG_TOKENS.ConfigStore,
       useClass: ConfigStore,
-      scope: Scope.Singleton,
     },
     // ConfigService is request-scoped: each request gets its own
     // overrides map layered over the shared ConfigStore.
     {
       provide: CONFIG_TOKENS.ConfigService,
       useClass: ConfigService,
-      scope: Scope.Request,
     },
   ],
 })

@@ -1,3 +1,4 @@
+import { defineMetadata, getMetadata } from '../../di/metadata'
 import { ROUTE_METADATA_KEYS } from '../../router/constants'
 import { Controller } from '../../router/decorators/controller.decorator'
 import { type Constructor } from '../../types'
@@ -36,7 +37,7 @@ const GATEWAY_MARKER_KEY = ROUTE_METADATA_KEYS.GATEWAY_MARKER
 export function Gateway(route: string, options?: GatewayOptions) {
   return function <T extends Constructor>(target: T) {
     Controller(route, options)(target)
-    Reflect.defineMetadata(GATEWAY_MARKER_KEY, true, target)
+    defineMetadata(GATEWAY_MARKER_KEY, true, target)
     return target
   }
 }
@@ -49,5 +50,5 @@ export function Gateway(route: string, options?: GatewayOptions) {
  */
 export function isGateway(target: object): boolean {
   const metadataTarget = typeof target === 'function' ? target : (target as { constructor: object }).constructor
-  return Reflect.getMetadata(GATEWAY_MARKER_KEY, metadataTarget) === true
+  return getMetadata(GATEWAY_MARKER_KEY, metadataTarget) === true
 }

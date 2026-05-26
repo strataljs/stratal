@@ -1,5 +1,3 @@
-import 'reflect-metadata'
-
 import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { createRequire, register } from 'node:module'
 import { tmpdir } from 'node:os'

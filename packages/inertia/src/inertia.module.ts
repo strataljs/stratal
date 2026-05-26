@@ -1,4 +1,3 @@
-import { Scope } from 'stratal/di'
 import { ApplicationError, type ApplicationErrorConstructor, type ExceptionHandler, type HttpExceptionContext } from 'stratal/errors'
 import type { AsyncModuleOptions, DynamicModule, OnException, OnInitialize } from 'stratal/module'
 import { Module } from 'stratal/module'
@@ -14,10 +13,10 @@ import { TemplateService } from './services/template.service'
 
 @Module({
   providers: [
-    { provide: INERTIA_TOKENS.InertiaService, useClass: InertiaService, scope: Scope.Request },
+    { provide: INERTIA_TOKENS.InertiaService, useClass: InertiaService },
     { provide: INERTIA_TOKENS.TemplateService, useClass: TemplateService },
     { provide: INERTIA_TOKENS.ManifestService, useClass: ManifestService },
-    { provide: INERTIA_TOKENS.SsrRenderer, useClass: SsrRendererService, scope: Scope.Singleton },
+    { provide: INERTIA_TOKENS.SsrRenderer, useClass: SsrRendererService },
   ],
 })
 export class InertiaModule implements RouteConfigurable, OnInitialize, OnException {

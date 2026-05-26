@@ -1,8 +1,6 @@
-import 'reflect-metadata'
-
-import { injectable, container as tsyringeRootContainer } from 'tsyringe'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { Container } from '../../../di/container'
+import { Transient } from '../../../di/decorators'
 import { I18N_TOKENS } from '../../../i18n/i18n.tokens'
 import { getCommandResult, setCommandInputs, setCommandQuarry } from '../../command-internals'
 import type { QuarryRegistry } from '../../quarry-registry'
@@ -32,11 +30,10 @@ function createMockLoader() {
 let childContainer: Container
 
 beforeEach(() => {
-  const tsyringe = tsyringeRootContainer.createChildContainer()
-  childContainer = new Container({ container: tsyringe })
+  childContainer = new Container()
   childContainer.registerValue(I18N_TOKENS.MessageLoader, createMockLoader())
 
-  injectable()(I18nSearchCommand)
+  Transient()(I18nSearchCommand)
   childContainer.register(I18nSearchCommand, I18nSearchCommand)
 })
 

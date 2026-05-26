@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe'
+import { inject } from '../di'
 import { Transient } from '../di/decorators'
 import { type VERSION_NEUTRAL } from './constants'
 import { RouterError } from './router.error'

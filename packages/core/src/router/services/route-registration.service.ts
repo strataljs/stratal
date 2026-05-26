@@ -1,6 +1,6 @@
 import type { Context, MiddlewareHandler } from 'hono';
 import type { UpgradeWebSocket, WSContext, WSEvents } from 'hono/ws';
-import { inject } from 'tsyringe';
+import { inject } from '../../di';
 import { type Container, getMethodInjections } from '../../di';
 import { Transient } from '../../di/decorators';
 import { DI_TOKENS } from '../../di/tokens';
@@ -574,7 +574,7 @@ export class RouteRegistrationService {
       ? this.createGuardMiddleware(guards)
       : null
 
-    return async (c: Context<RouterEnv>): Promise<Response> => {
+    return async (c: Context<RouterEnv, string>): Promise<Response> => {
       let captured: Response | undefined
 
       const runHandler = async () => {

@@ -1,8 +1,6 @@
-import 'reflect-metadata'
-
-import { injectable, container as tsyringeRootContainer } from 'tsyringe'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Container } from '../../di/container'
+import { Transient } from '../../di/decorators'
 import { DI_TOKENS } from '../../di/tokens'
 import { I18N_TOKENS } from '../../i18n/i18n.tokens'
 import { LOGGER_TOKENS } from '../../logger'
@@ -52,16 +50,14 @@ const mockWaitUntil = vi.fn((p: Promise<unknown>) => {
 const mockExecutionContext = { waitUntil: mockWaitUntil }
 
 function createHandler(HandlerClass: typeof ExceptionHandler = DefaultExceptionHandler): ExceptionHandler {
-  const childContainer = tsyringeRootContainer.createChildContainer()
-  const container = new Container({ container: childContainer })
+  const container = new Container()
 
   container.registerValue(LOGGER_TOKENS.LoggerService, mockLogger)
   container.registerValue(DI_TOKENS.CloudflareEnv, { ENVIRONMENT: 'test' })
   container.registerValue(DI_TOKENS.ExecutionContext, mockExecutionContext)
   container.registerValue(I18N_TOKENS.I18nService, mockI18n)
 
-  // Ensure tsyringe has decorator metadata for the handler class
-  injectable()(HandlerClass as never)
+  Transient()(HandlerClass as never)
   container.register(DI_TOKENS.ExceptionHandler, HandlerClass as never)
   const handler = container.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
   handler.register()
@@ -504,13 +500,12 @@ describe('ExceptionHandler', () => {
 
     it('should return HTML error page in development environment for HTML requests', async () => {
       // Override environment to development
-      const childContainer = tsyringeRootContainer.createChildContainer()
-      const container = new Container({ container: childContainer })
+      const container = new Container()
       container.registerValue(LOGGER_TOKENS.LoggerService, mockLogger)
       container.registerValue(DI_TOKENS.CloudflareEnv, { ENVIRONMENT: 'development' })
       container.registerValue(DI_TOKENS.ExecutionContext, mockExecutionContext)
       container.registerValue(I18N_TOKENS.I18nService, mockI18n)
-      injectable()(DefaultExceptionHandler as never)
+      Transient()(DefaultExceptionHandler as never)
       container.register(DI_TOKENS.ExceptionHandler, DefaultExceptionHandler as never)
       const handler = container.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
       handler.register()
@@ -525,13 +520,12 @@ describe('ExceptionHandler', () => {
     })
 
     it('should return HTML error page in development environment for plain Error', async () => {
-      const childContainer = tsyringeRootContainer.createChildContainer()
-      const container = new Container({ container: childContainer })
+      const container = new Container()
       container.registerValue(LOGGER_TOKENS.LoggerService, mockLogger)
       container.registerValue(DI_TOKENS.CloudflareEnv, { ENVIRONMENT: 'development' })
       container.registerValue(DI_TOKENS.ExecutionContext, mockExecutionContext)
       container.registerValue(I18N_TOKENS.I18nService, mockI18n)
-      injectable()(DefaultExceptionHandler as never)
+      Transient()(DefaultExceptionHandler as never)
       container.register(DI_TOKENS.ExceptionHandler, DefaultExceptionHandler as never)
       const handler = container.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
       handler.register()

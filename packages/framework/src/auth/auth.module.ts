@@ -121,10 +121,8 @@ export class AuthModule implements RouteConfigurable {
           }
         }
 
-        const tsyringe = container.getTsyringeContainer()
-        const rateLimiterPresent = tsyringe.isRegistered(
+        const rateLimiterPresent = container.isRegistered(
           RATE_LIMITER_TOKENS.ModuleMarker,
-          true,
         )
 
         if (rateLimiterPresent) {

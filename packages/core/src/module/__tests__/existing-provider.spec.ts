@@ -1,9 +1,7 @@
-import type { DependencyContainer } from 'tsyringe'
-import { injectable, container as tsyringeRootContainer } from 'tsyringe'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createMock } from '@stratal/testing/mocks'
 import { Container } from '../../di/container'
-import { Scope } from '../../di/types'
+import { Transient } from '../../di/decorators'
 import type { LoggerService } from '../../logger'
 import { ModuleRegistry } from '../module-registry'
 import { Module, getModuleOptions } from '../module.decorator'
@@ -14,7 +12,7 @@ const I_USER_SERVICE_TOKEN = Symbol('IUserService')
 const ALIAS_TOKEN = Symbol('AliasToken')
 
 // Test service
-@injectable()
+@Transient()
 class UserService {
   getName() {
     return 'UserService'
@@ -25,15 +23,11 @@ class UserService {
 const mockLogger = createMock<LoggerService>()
 
 describe('ExistingProvider', () => {
-  let childContainer: DependencyContainer
   let container: Container
 
   beforeEach(() => {
-    // Create a fresh child container for each test
-    childContainer = tsyringeRootContainer.createChildContainer()
-    container = new Container({
-      container: childContainer,
-    })
+    // Create a fresh container for each test
+    container = new Container()
   })
 
   describe('Container.registerExisting()', () => {
@@ -113,7 +107,7 @@ describe('ExistingProvider', () => {
     it('should register existing provider through ModuleRegistry', () => {
       @Module({
         providers: [
-          { provide: USER_SERVICE_TOKEN, useClass: UserService, scope: Scope.Singleton },
+          { provide: USER_SERVICE_TOKEN, useClass: UserService },
           { provide: I_USER_SERVICE_TOKEN, useExisting: USER_SERVICE_TOKEN },
         ],
       })
@@ -131,7 +125,7 @@ describe('ExistingProvider', () => {
 
     it('should work with dynamic modules', () => {
       @Module({
-        providers: [{ provide: USER_SERVICE_TOKEN, useClass: UserService, scope: Scope.Singleton }],
+        providers: [{ provide: USER_SERVICE_TOKEN, useClass: UserService }],
       })
       class BaseModule {
         static forRoot() {

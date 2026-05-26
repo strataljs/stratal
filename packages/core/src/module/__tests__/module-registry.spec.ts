@@ -1,10 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
-import { container as tsyringeRootContainer, injectable } from 'tsyringe'
-import type { DependencyContainer } from 'tsyringe'
 import type { Constructor } from '../../types'
 import { Container } from '../../di/container'
-import { Scope } from '../../di/types'
+import { Transient } from '../../di/decorators'
 import type { LoggerService } from '../../logger/services/logger.service'
 import { Module } from '../module.decorator'
 import { ModuleRegistry } from '../module-registry'
@@ -14,14 +12,14 @@ const SERVICE_TOKEN = Symbol('TestService')
 const IMPORTED_TOKEN = Symbol('ImportedService')
 
 // Test services
-@injectable()
+@Transient()
 class TestService {
   getValue() {
     return 'test'
   }
 }
 
-@injectable()
+@Transient()
 class ImportedService {
   getValue() {
     return 'imported'
@@ -34,17 +32,13 @@ class TestConsumer {}
 class TestJob {}
 
 describe('ModuleRegistry', () => {
-  let childContainer: DependencyContainer
   let container: Container
   let mockLogger: DeepMocked<LoggerService>
   let registry: ModuleRegistry
 
   beforeEach(() => {
     vi.clearAllMocks()
-    childContainer = tsyringeRootContainer.createChildContainer()
-    container = new Container({
-      container: childContainer,
-    })
+    container = new Container()
     mockLogger = createMock<LoggerService>()
     registry = new ModuleRegistry(container, mockLogger as unknown as LoggerService)
   })
@@ -53,7 +47,7 @@ describe('ModuleRegistry', () => {
     it('should register providers from module decorator', () => {
       @Module({
         providers: [
-          { provide: SERVICE_TOKEN, useClass: TestService, scope: Scope.Singleton },
+          { provide: SERVICE_TOKEN, useClass: TestService },
         ],
       })
       class TestModule {}
@@ -68,7 +62,7 @@ describe('ModuleRegistry', () => {
     it('should register imported modules recursively', () => {
       @Module({
         providers: [
-          { provide: IMPORTED_TOKEN, useClass: ImportedService, scope: Scope.Singleton },
+          { provide: IMPORTED_TOKEN, useClass: ImportedService },
         ],
       })
       class ChildModule {}
@@ -76,7 +70,7 @@ describe('ModuleRegistry', () => {
       @Module({
         imports: [ChildModule],
         providers: [
-          { provide: SERVICE_TOKEN, useClass: TestService, scope: Scope.Singleton },
+          { provide: SERVICE_TOKEN, useClass: TestService },
         ],
       })
       class ParentModule {}
@@ -191,7 +185,7 @@ describe('ModuleRegistry', () => {
     it('should skip duplicate static modules', () => {
       @Module({
         providers: [
-          { provide: SERVICE_TOKEN, useClass: TestService, scope: Scope.Singleton },
+          { provide: SERVICE_TOKEN, useClass: TestService },
         ],
       })
       class TestModule {}

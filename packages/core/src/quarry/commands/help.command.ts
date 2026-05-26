@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import { DI_TOKENS } from '../../di/tokens'
 import { Command } from '../command'
 import { CommandNotFoundError } from '../errors/command-not-found.error'

@@ -1,3 +1,4 @@
+import { defineMetadata, getMetadata } from '../../di/metadata'
 import { z } from '../../i18n/validation/zod'
 import { ROUTE_METADATA_KEYS } from '../constants'
 import type { ExplicitRouteMetadata, HttpMethod, RouteConfig } from '../types'
@@ -23,7 +24,7 @@ function createHttpMethodDecorator(method: HttpMethod) {
         config: config ?? { response: z.any() },
       }
 
-      Reflect.defineMetadata(
+      defineMetadata(
         ROUTE_METADATA_KEYS.ROUTE_CONFIG,
         metadata,
         target,
@@ -32,9 +33,9 @@ function createHttpMethodDecorator(method: HttpMethod) {
 
       // Track this method as decorated on the prototype
       const existing: string[] =
-        (Reflect.getOwnMetadata(ROUTE_METADATA_KEYS.DECORATED_METHODS, target) as string[] | undefined) ?? []
+        getMetadata<string[]>(ROUTE_METADATA_KEYS.DECORATED_METHODS, target) ?? []
       existing.push(propertyKey)
-      Reflect.defineMetadata(ROUTE_METADATA_KEYS.DECORATED_METHODS, existing, target)
+      defineMetadata(ROUTE_METADATA_KEYS.DECORATED_METHODS, existing, target)
 
       return descriptor
     }

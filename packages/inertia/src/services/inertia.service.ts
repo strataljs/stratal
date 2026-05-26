@@ -1,6 +1,6 @@
 import type { Page } from '@inertiajs/core'
 import type { Application } from 'stratal'
-import { DI_TOKENS, Transient, inject } from 'stratal/di'
+import { DI_TOKENS, Request, inject } from 'stratal/di'
 import { I18N_TOKENS, type MessageLoaderService } from 'stratal/i18n'
 import { ROUTER_TOKENS, type CurrentRoute, type RegisteredRoute, type RouteRegistry, type RouterContext, type SerializedRoutes, type Uri } from 'stratal/router'
 import type { InertiaMergeOptions, InertiaOnceOptions } from '../augment/router-context'
@@ -25,7 +25,7 @@ import {
 import type { SsrRendererService } from './ssr-renderer.service'
 import type { TemplateService } from './template.service'
 
-@Transient(INERTIA_TOKENS.InertiaService)
+@Request(INERTIA_TOKENS.InertiaService)
 export class InertiaService {
   private sharedData: Record<string, unknown> = {}
 
