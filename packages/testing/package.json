@@ -41,10 +41,6 @@
       "types": "./dist/mocks/index.d.mts",
       "import": "./dist/mocks/index.mjs"
     },
-    "./mocks/nodemailer": {
-      "types": "./dist/mocks/nodemailer.d.mts",
-      "import": "./dist/mocks/nodemailer.mjs"
-    },
     "./mocks/zenstack-language": {
       "types": "./dist/mocks/zenstack-language.d.mts",
       "import": "./dist/mocks/zenstack-language.mjs"

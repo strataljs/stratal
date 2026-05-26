@@ -56,7 +56,7 @@ export class EmailConsumer implements IQueueConsumer<SendEmailInput> {
       // Resolve storage-based attachments before sending
       const resolvedAttachments = await this.resolveAttachments(payload.attachments)
 
-      const provider = await this.providerFactory.create()
+      const provider = this.providerFactory.create()
       const result = await provider.send({
         ...payload,
         attachments: resolvedAttachments,

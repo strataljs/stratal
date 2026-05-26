@@ -24,7 +24,7 @@ describe('EmailConsumer', () => {
     mockStorage = createMock<StorageService>()
 
     mockProvider = { send: vi.fn().mockResolvedValue({ messageId: 'msg-123' }) }
-    mockProviderFactory.create.mockResolvedValue(mockProvider as unknown as IEmailProvider)
+    mockProviderFactory.create.mockReturnValue(mockProvider as unknown as IEmailProvider)
 
     consumer = new EmailConsumer(
       mockLogger as unknown as LoggerService,

@@ -52,7 +52,7 @@ export interface EmailBatchSendResult {
 /**
  * Email Provider Interface
  *
- * All email provider implementations (Resend, SMTP, etc.) must implement this interface.
+ * All email provider implementations must implement this interface.
  * This allows the EmailService to work with any provider without knowing the implementation details.
  */
 export interface IEmailProvider {

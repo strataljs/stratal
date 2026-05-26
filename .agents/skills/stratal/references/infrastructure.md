@@ -112,6 +112,8 @@ export default new Stratal({
 
 ## Email
 
+Sends email via SMTP. Works with any provider that offers an SMTP endpoint (Resend, Postmark, SendGrid, Mailgun, self-hosted). Zero npm dependencies.
+
 ### EmailModule Setup
 
 ```typescript
@@ -122,10 +124,9 @@ import { EmailModule } from 'stratal/email'
     EmailModule.forRootAsync({
       inject: [DI_TOKENS.CloudflareEnv],
       useFactory: (env) => ({
-        provider: 'resend',              // 'resend' | 'smtp'
         from: { name: 'My App', email: 'noreply@example.com' },
-        apiKey: env.RESEND_API_KEY,      // required for resend provider
-        queue: 'NOTIFICATIONS_QUEUE',    // queue binding registered via QueueModule
+        smtp: { url: env.SMTP_URL },
+        queue: 'NOTIFICATIONS_QUEUE',
       }),
     }),
     QueueModule.registerQueue('NOTIFICATIONS_QUEUE'),
@@ -133,6 +134,8 @@ import { EmailModule } from 'stratal/email'
 })
 export class AppModule {}
 ```
+
+SMTP URL format: `smtp://user:pass@host:port` (STARTTLS, default port 587) or `smtps://user:pass@host:port` (implicit TLS, default port 465).
 
 ### Sending Email
 
@@ -165,7 +168,7 @@ export class NotificationService {
 }
 ```
 
-Email supports `html`, `text`, and `template` (React) props. Emails are dispatched via queue for async sending. Providers: Resend, SMTP (nodemailer). Both are optional peerDependencies.
+Email supports `html`, `text`, and `template` (React) props. Emails are dispatched via queue for async sending. Attachments supported (inline base64 or storage-backed via `StorageService`).
 
 ## Storage
 
