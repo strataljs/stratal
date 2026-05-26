@@ -101,7 +101,7 @@ export function generateListing(
   // Global Options
   lines.push(bold(yellow('Global Options')))
   lines.push(...formatTable([
-    [`-e, --env ${cyan('<name>')}`, `Select a ${dim('wrangler.jsonc')} environment (e.g. staging, production)`],
+    [`-e, --env ${cyan('<name>')}`, `Select a wrangler config environment (e.g. staging, production)`],
   ]))
   lines.push('')
 
