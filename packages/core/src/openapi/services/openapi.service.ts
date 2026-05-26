@@ -1,4 +1,3 @@
-import { swaggerUI } from '@hono/swagger-ui'
 import type { Container } from '../../di/container'
 import { Singleton } from '../../di/decorators'
 import { I18N_TOKENS } from '../../i18n/i18n.tokens'
@@ -94,7 +93,7 @@ export class OpenAPIService {
       const uiPath = config.ui?.path ?? '/api/docs'
       const uiRenderer = config.ui?.renderer
 
-      app.get(uiPath, (c, next) => {
+      app.get(uiPath, async (c, next) => {
         const requestContainer = c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER)
         const requestConfigService = requestContainer.resolve<IOpenAPIConfigService>(
           OPENAPI_TOKENS.ConfigService
@@ -106,6 +105,7 @@ export class OpenAPIService {
           return uiRenderer(uiContext)(c, next)
         }
 
+        const { swaggerUI } = await import('@hono/swagger-ui')
         return swaggerUI<RouterEnv>({ url: uiContext.specUrl })(c, next)
       })
       this.nameLastHandler(app, 'OpenAPI', 'docs')
