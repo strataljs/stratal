@@ -3,7 +3,7 @@ import { inject } from '../di'
 import type { Application } from '../application'
 import type { Container } from '../di/container'
 import { runWithContainer } from '../di/container-storage'
-import { Transient } from '../di/decorators'
+import { Singleton } from '../di/decorators'
 import { CONTAINER_TOKEN, DI_TOKENS } from '../di/tokens'
 import { createHttpExceptionContext } from '../errors/exception-context'
 import type { ExceptionHandler } from '../errors/exception-handler'
@@ -34,7 +34,7 @@ const isMiddlewareClass = (arg: unknown): arg is Constructor<Middleware> =>
  * - `use()` overload for Stratal middleware classes
  * - `configure()` for OpenAPI, routes, and 404
  */
-@Transient()
+@Singleton()
 export class HonoApp extends OpenAPIHono<RouterEnv> {
   private configured = false
   private readonly _container: Container

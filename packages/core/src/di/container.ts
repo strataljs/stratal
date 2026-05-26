@@ -98,8 +98,9 @@ export class Container {
 
     const meta = getClassMetadata(impl)
     const scope = meta?.scope ?? Scope.Transient
+    const effectiveToken = (serviceClassOrLazy === undefined && meta?.token) ? meta.token : token
 
-    this.registrations.set(token, { kind: 'class', useClass: impl, scope })
+    this.registrations.set(effectiveToken, { kind: 'class', useClass: impl, scope })
   }
 
   registerSingleton<T extends object>(serviceClass: Constructor<T>): void
@@ -142,8 +143,26 @@ export class Container {
     const reg = this.registrations.get(token)
     if (reg) return this.resolveRegistration(token, reg) as T
 
-    // Check parent chain
-    if (this.parent) return this.parent.resolve(token)
+    // Check parent chain — request-scoped containers resolve locally to access request values
+    if (this.parent) {
+      const parentReg = this.parent.findRegistration(token)
+      if (parentReg) {
+        if (this.isRequestScoped) {
+          return this.resolveRegistration(token, parentReg) as T
+        }
+        return this.parent.resolve(token)
+      }
+    }
+
+    // Auto-resolve class constructors: any class with DI decorators can be
+    // instantiated without explicit registration (matches tsyringe's @injectable behavior)
+    if (typeof token === 'function') {
+      const meta = getClassMetadata(token)
+      const scope = meta?.scope ?? Scope.Transient
+      const classReg: ClassRegistration = { kind: 'class', useClass: token as unknown as Constructor, scope }
+      this.getRoot().registrations.set(token, classReg)
+      return this.resolveClass(token, classReg) as T
+    }
 
     throw new ContainerError(`No provider for ${tokenToString(token)}. Did you forget to register it?`)
   }
@@ -218,12 +237,8 @@ export class Container {
       case 'alias':
         return this.resolve(reg.target)
 
-      case 'factory': {
-        if (this.singletons.has(token)) return this.singletons.get(token)
-        const result = reg.factory(this)
-        this.singletons.set(token, result)
-        return result
-      }
+      case 'factory':
+        return reg.factory(this)
 
       case 'lazy': {
         const useClass = reg.factory()
@@ -281,6 +296,12 @@ export class Container {
     }
 
     return new Class(...args)
+  }
+
+  findRegistration(token: InjectionToken): Registration | undefined {
+    const local = this.registrations.get(token)
+    if (local) return local
+    return this.parent?.findRegistration(token)
   }
 
   private getRoot(): Container {

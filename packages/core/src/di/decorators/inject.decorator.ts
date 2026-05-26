@@ -22,5 +22,15 @@ export function inject<T>(
 }
 
 export function getInjectionTokens(target: object): Map<number, InjectionEntry> {
-  return INJECTION_TOKENS.get(target) ?? new Map<number, InjectionEntry>()
+  const direct = INJECTION_TOKENS.get(target)
+  if (direct && direct.size > 0) return direct
+
+  let proto = Object.getPrototypeOf(target) as object | null
+  while (proto !== null && proto !== Function.prototype) {
+    const inherited = INJECTION_TOKENS.get(proto)
+    if (inherited && inherited.size > 0) return inherited
+    proto = Object.getPrototypeOf(proto) as object | null
+  }
+
+  return new Map<number, InjectionEntry>()
 }

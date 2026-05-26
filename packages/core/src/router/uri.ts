@@ -1,6 +1,6 @@
 import { inject } from '../di';
 import type { Application } from '../application';
-import { Transient } from '../di/decorators';
+import { Request } from '../di/decorators';
 import { DI_TOKENS } from '../di/tokens';
 import { RouterError } from './router.error';
 import type { RouteName, RouteParams } from './route-map';
@@ -127,7 +127,7 @@ export function buildRouteUrl(
  * uri.route('posts.index') // auto-fills :locale param
  * ```
  */
-@Transient()
+@Request()
 export class Uri {
   private _defaults: Record<string, string> = {}
   private readonly trailingSlash: TrailingSlashMode

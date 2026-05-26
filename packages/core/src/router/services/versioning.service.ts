@@ -1,5 +1,5 @@
 import { inject } from '../../di'
-import { Transient } from '../../di/decorators'
+import { Singleton } from '../../di/decorators'
 import { DI_TOKENS } from '../../di/tokens'
 import type { Application } from '../../application'
 import { VERSION_NEUTRAL } from '../constants'
@@ -13,7 +13,7 @@ import type { VersioningOptions } from '../types'
  *
  * Registered as a singleton in the container.
  */
-@Transient()
+@Singleton()
 export class VersioningService {
   private readonly options: VersioningOptions | null
 

@@ -30,5 +30,15 @@ export const Request = scopeDecorator(Scope.Request)
 export const Transient = scopeDecorator(Scope.Transient)
 
 export function getClassMetadata(target: object): ClassMetadata | undefined {
-  return CLASS_METADATA.get(target)
+  const direct = CLASS_METADATA.get(target)
+  if (direct) return direct
+
+  let proto = Object.getPrototypeOf(target) as object | null
+  while (proto !== null && proto !== Function.prototype) {
+    const inherited = CLASS_METADATA.get(proto)
+    if (inherited) return inherited
+    proto = Object.getPrototypeOf(proto) as object | null
+  }
+
+  return undefined
 }

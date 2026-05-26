@@ -75,6 +75,7 @@ export class Application {
     this._container.registerValue(DI_TOKENS.Application, this)
     this._container.registerValue(DI_TOKENS.CloudflareEnv, env)
     this._container.registerValue(DI_TOKENS.ExecutionContext, ctx)
+    this._container.registerValue(ROUTER_TOKENS.RouterContext, null)
 
     this.registerLoggerService()
     this.registerCoreServices()
