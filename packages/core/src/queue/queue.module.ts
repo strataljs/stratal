@@ -29,6 +29,7 @@ import { DI_TOKENS } from '../di/tokens'
 import { Module } from '../module'
 import type { AsyncModuleOptions, DynamicModule, InjectionToken } from '../module/types'
 import { ConsumerRegistry } from './consumer-registry'
+import { QueueManager } from './queue-manager'
 import type { QueueBinding } from './queue-binding'
 import { QueueRegistry } from './queue-registry'
 import type { IQueueSender } from './queue-sender.interface'
@@ -50,6 +51,7 @@ export interface QueueModuleOptions {
 @Module({
   providers: [
     { provide: DI_TOKENS.ConsumerRegistry, useClass: ConsumerRegistry },
+    QueueManager,
     { provide: QUEUE_TOKENS.QueueProviderFactory, useClass: QueueProviderFactory },
     { provide: QUEUE_TOKENS.QueueRegistry, useClass: QueueRegistry },
   ],
