@@ -11,8 +11,8 @@ import { LogLevel } from '../logger';
 import { Module } from '../module/module.decorator';
 import { Controller } from '../router/decorators/controller.decorator';
 import { Route } from '../router/decorators/route.decorator';
-import { RouterError } from '../router/router.error';
 import type { RouterContext } from '../router/router-context';
+import { RouterError } from '../router/router.error';
 import type { Constructor } from '../types';
 
 // Fixtures
@@ -317,5 +317,54 @@ describe('handleScheduled (event emission from cron jobs)', () => {
     await app.handleScheduled(controller)
 
     expect(scheduledListenerInvocations).toEqual(['from-cron'])
+  })
+})
+
+// ──────────────────────────────────────────────────────────────────
+// Regression: a job with `readonly schedule` (instance property)
+// instead of `static schedule` silently fails to register because
+// the framework reads JobClass.schedule at registration time.
+// ──────────────────────────────────────────────────────────────────
+
+const instanceScheduleExecutions: string[] = []
+
+@Transient()
+class InstanceScheduleJob implements CronJob {
+  readonly schedule = '*/3 * * * *'
+
+  execute(): Promise<void> {
+    instanceScheduleExecutions.push('executed')
+    return Promise.resolve()
+  }
+}
+
+@Module({
+  jobs: [InstanceScheduleJob as Constructor],
+})
+class InstanceScheduleModule { }
+
+describe('registerCronJobs (static vs instance schedule)', () => {
+  it('should not register a job whose schedule is an instance property instead of static', async () => {
+    const app = new Application({
+      module: InstanceScheduleModule,
+      logging: { level: LogLevel.ERROR },
+      env: mockEnv,
+      ctx: { waitUntil: vi.fn() },
+    })
+
+    await app.initialize()
+    instanceScheduleExecutions.length = 0
+
+    const controller = {
+      scheduledTime: Date.now(),
+      cron: '*/3 * * * *',
+      noRetry: vi.fn(),
+    } as unknown as ScheduledController
+
+    await app.handleScheduled(controller)
+
+    expect(instanceScheduleExecutions).toHaveLength(0)
+
+    await app.shutdown()
   })
 })
