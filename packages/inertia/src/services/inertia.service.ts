@@ -232,6 +232,7 @@ export class InertiaService {
     const partialDataHeader = ctx.header('x-inertia-partial-data')
     const partialExceptHeader = ctx.header('x-inertia-partial-except')
     const resetHeader = ctx.header('x-inertia-reset')
+    const shouldResolveDeferred = ctx.header('x-inertia-resolve-deferred') === 'true'
     const isPartialReload = isInertia && partialComponent === component && partialDataHeader
 
     const requestedProps = partialDataHeader?.split(',').map((s) => s.trim()) ?? []
@@ -264,8 +265,12 @@ export class InertiaService {
         if (isPartialReload && this.isRequested(key, requestedProps)) {
           resolvedProps[key] = await value.callback()
         } else if (!isPartialReload) {
-          deferredProps[value.group] ??= []
-          deferredProps[value.group].push(key)
+          if (shouldResolveDeferred) {
+            resolvedProps[key] = await value.callback()
+          } else {
+            deferredProps[value.group] ??= []
+            deferredProps[value.group].push(key)
+          }
         }
         continue
       }
