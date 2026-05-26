@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RouterContext } from '../../router/router-context'
 import { Container } from '../container'
 import { ContainerError } from '../container.error'
-import { Transient } from '../decorators'
+import { Request, Transient } from '../decorators'
 import { CONTAINER_TOKEN, DI_TOKENS } from '../tokens'
 
 // Test services
@@ -17,6 +17,15 @@ class TestService {
 class AnotherService {
   getName() {
     return 'another'
+  }
+}
+
+const REQUEST_SCOPED_TOKEN = Symbol('RequestScopedToken')
+
+@Request(REQUEST_SCOPED_TOKEN)
+class RequestScopedService {
+  getValue() {
+    return 'request-scoped'
   }
 }
 
@@ -76,6 +85,36 @@ describe('Container', () => {
 
       expect(resolved).toBe(value)
       expect(resolved.count).toBe(42)
+    })
+
+    it('should not destroy other cached request-scoped services', () => {
+      const UNRELATED_TOKEN = Symbol('UnrelatedToken')
+
+      container.register(REQUEST_SCOPED_TOKEN, RequestScopedService)
+      const reqContainer = new Container({ parent: container, isRequestScoped: true })
+
+      const first = reqContainer.resolve<RequestScopedService>(REQUEST_SCOPED_TOKEN)
+      reqContainer.registerValue(UNRELATED_TOKEN, { unrelated: true })
+      const second = reqContainer.resolve<RequestScopedService>(REQUEST_SCOPED_TOKEN)
+
+      expect(second).toBe(first)
+    })
+
+    it('should invalidate only its own token in request cache', () => {
+      const TOKEN_A = Symbol('TokenA')
+      const TOKEN_B = Symbol('TokenB')
+
+      const reqContainer = new Container({ parent: container, isRequestScoped: true })
+      reqContainer.registerValue(TOKEN_A, 'original-a')
+      reqContainer.registerValue(TOKEN_B, 'original-b')
+
+      expect(reqContainer.resolve(TOKEN_A)).toBe('original-a')
+      expect(reqContainer.resolve(TOKEN_B)).toBe('original-b')
+
+      reqContainer.registerValue(TOKEN_A, 'updated-a')
+
+      expect(reqContainer.resolve(TOKEN_A)).toBe('updated-a')
+      expect(reqContainer.resolve(TOKEN_B)).toBe('original-b')
     })
   })
 
