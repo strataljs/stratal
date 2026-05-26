@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createMock } from '@stratal/testing/mocks'
 import { Container } from '../../di/container'
-import { Transient } from '../../di/decorators'
+import { Singleton } from '../../di/decorators'
 import type { LoggerService } from '../../logger'
 import { ModuleRegistry } from '../module-registry'
 import { Module, getModuleOptions } from '../module.decorator'
@@ -12,7 +12,7 @@ const I_USER_SERVICE_TOKEN = Symbol('IUserService')
 const ALIAS_TOKEN = Symbol('AliasToken')
 
 // Test service
-@Transient()
+@Singleton()
 class UserService {
   getName() {
     return 'UserService'

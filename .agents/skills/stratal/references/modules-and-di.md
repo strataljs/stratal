@@ -18,17 +18,19 @@ export class MyModule {}
 
 ## Provider Types
 
-### Class Provider (with optional scope)
+### Class Provider
 
 ```typescript
-// Bare class — transient by default, uses class-as-token
+// Bare class — uses class-as-token
 providers: [MyService]
 
-// Explicit class provider with Symbol token and scope
+// Explicit class provider with Symbol token
 providers: [
-  { provide: MY_TOKENS.MyService, useClass: MyService, scope: Scope.Singleton },
+  { provide: MY_TOKENS.MyService, useClass: MyService },
 ]
 ```
+
+Set scope via the decorator on the class (`@Singleton()`, `@Request()`, `@Transient()`), not in the provider definition.
 
 ### Value Provider
 
@@ -216,7 +218,7 @@ import { Container, DI_TOKENS } from 'stratal/di'
 const service = container.resolve<MyService>(MY_TOKENS.MyService)
 
 // Register a service
-container.register(MY_TOKENS.MyService, MyService, Scope.Singleton)
+container.register(MY_TOKENS.MyService, MyService)
 
 // Conditional registration
 container
@@ -230,6 +232,19 @@ container.extend(MY_TOKEN, (original, container) => new DecoratedService(origina
 ```
 
 Global container holds singletons. Request container (child) is created per HTTP request for `Scope.Request` services.
+
+## Lazy Resolution
+
+Use `lazy()` to break circular dependencies:
+
+```typescript
+import { lazy } from 'stratal/di'
+
+@Transient()
+export class ServiceA {
+  constructor(@inject(lazy(() => ServiceB)) private b: ServiceB) {}
+}
+```
 
 ## InjectParam Decorator
 

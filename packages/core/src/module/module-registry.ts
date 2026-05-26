@@ -308,7 +308,7 @@ export class ModuleRegistry {
 
   private collectIfListener(providerClass: Constructor): void {
     if (isListener(providerClass)) {
-      this.container.register(providerClass, providerClass)
+      this.container.registerSingleton(providerClass)
       this.allListeners.push(providerClass)
       this.logger.debug(`Collected listener: ${providerClass.name}`)
     }

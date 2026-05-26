@@ -120,17 +120,16 @@ describe('ModuleRegistry', () => {
 
   describe('initialize()', () => {
     it('should call onInitialize() lifecycle hook on modules', async () => {
-      const onInitialize = vi.fn()
-
       @Module({ providers: [] })
       class TestModule {
-        onInitialize = onInitialize
+        onInitialize(_ctx: unknown) { /* noop */ }
       }
 
+      const spy = vi.spyOn(TestModule.prototype, 'onInitialize')
       registry.register(TestModule)
       await registry.initialize()
 
-      expect(onInitialize).toHaveBeenCalledWith(
+      expect(spy).toHaveBeenCalledWith(
         expect.objectContaining({
           container,
           logger: expect.anything(),
@@ -139,22 +138,21 @@ describe('ModuleRegistry', () => {
     })
 
     it('should defer configureRoutes() to getAllRouterConfigs()', async () => {
-      const configureRoutes = vi.fn()
-
       @Module({ providers: [] })
       class TestModule {
-        configureRoutes = configureRoutes
+        configureRoutes(_router: unknown) { /* noop */ }
       }
 
+      const spy = vi.spyOn(TestModule.prototype, 'configureRoutes')
       registry.register(TestModule)
       await registry.initialize()
 
       // Deferred — not called during initialize
-      expect(configureRoutes).not.toHaveBeenCalled()
+      expect(spy).not.toHaveBeenCalled()
 
       // Called lazily when router configs are requested
       registry.getAllRouterConfigs()
-      expect(configureRoutes).toHaveBeenCalledWith(expect.any(Object))
+      expect(spy).toHaveBeenCalledWith(expect.any(Object))
     })
   })
 
@@ -206,16 +204,12 @@ describe('ModuleRegistry', () => {
 
       @Module({ providers: [] })
       class ModuleA {
-        onShutdown = vi.fn(() => {
-          shutdownOrder.push('A')
-        })
+        onShutdown() { shutdownOrder.push('A') }
       }
 
       @Module({ providers: [] })
       class ModuleB {
-        onShutdown = vi.fn(() => {
-          shutdownOrder.push('B')
-        })
+        onShutdown() { shutdownOrder.push('B') }
       }
 
       registry.register(ModuleA)

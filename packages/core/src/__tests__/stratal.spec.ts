@@ -185,7 +185,7 @@ const cronJobExecutions: string[] = []
 
 @Transient()
 class TestCronJob implements CronJob {
-  readonly schedule = '*/5 * * * *'
+  static schedule = '*/5 * * * *'
 
   constructor(
     @inject(REQUEST_SCOPED_TOKEN) private readonly service: RequestScopedService,
@@ -270,7 +270,7 @@ class ScheduledEventListener {
 
 @Transient()
 class EmittingCronJob implements CronJob {
-  readonly schedule = '*/5 * * * *'
+  static schedule = '*/5 * * * *'
 
   constructor(
     @inject(DI_TOKENS.EventRegistry) private readonly events: IEventRegistry,

@@ -5,7 +5,7 @@ license: MIT
 compatibility: Designed for AI Agents. Requires Node.js 22+, npm.
 metadata:
   author: Temitayo Fadojutimi
-  version: "1.8"
+  version: "1.9"
 ---
 
 # Stratal Framework
@@ -37,7 +37,7 @@ Breaking any of these causes runtime failures.
 
 9. **DI tokens** — Use class-as-token for simple cases. Use `Symbol.for()` for shareable modules, value providers, factory providers. Group symbols in a `tokens.ts` file.
 
-10. **Cron schedules must match `wrangler.jsonc`** — `CronJob.schedule` string must exactly match a trigger in `[triggers]`.
+10. **Cron schedules must match `wrangler.jsonc`** — Declare `static schedule` on the class. The string must exactly match a trigger in `[triggers]`.
 
 11. **I18nModule must be configured for translations** — `I18nModule.forRoot()` for locale config with `detection` option (`'cookie'` default, `'header'`, `'querystring'`, `'path'`). Path detection supports `prefixDefaultLocale` (`false` default, `'redirect'`, `true`). `I18nModule.registerMessages()` to add messages. `I18nService.t()` for translation. `withZodI18n()` (from `stratal/validation`) for Zod validation messages. `withI18n()` (from `stratal/i18n`) for general translations.
 
@@ -354,7 +354,7 @@ Load these when the task needs deeper knowledge:
 
 ## Troubleshooting
 
-**"No injectable constructor"** -> Missing `@Transient()` on the class.
+**"No injectable constructor"** -> Missing scope decorator (`@Singleton()`, `@Request()`, or `@Transient()`) on the class.
 
 **"Token not registered"** -> Provider not in any module's `providers`, or module not imported.
 
@@ -364,7 +364,7 @@ Load these when the task needs deeper knowledge:
 
 **`z.cuid2()` accepts `'sw'`, `'a'`, or any short lowercase string** -> Zod 4.3.6's regex is `/^[0-9a-z]+$/`. Use `cuid2()` from `stratal/validation` instead.
 
-**Cron job not firing** -> `schedule` string doesn't match `wrangler.jsonc` trigger.
+**Cron job not firing** -> `schedule` must be a `static` class property (not instance property). Also verify the string matches `wrangler.jsonc` trigger exactly.
 
 **Queue messages not consumed** -> Check: consumer in `consumers` array (not `providers`), `messageTypes` matches dispatched `type`, `QueueModule.registerQueue('BINDING_NAME')` called, and `'BINDING_NAME'` matches the `binding` field under `queues.producers[]` in `wrangler.jsonc` exactly (UPPER_SNAKE_CASE, no transformation).
 
