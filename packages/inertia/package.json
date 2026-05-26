@@ -67,6 +67,7 @@
     "lint:fix": "npx oxlint --fix ."
   },
   "dependencies": {
+    "intl-messageformat": "^11.2.7",
     "ts-morph": "^28.0.0"
   },
   "peerDependencies": {
@@ -74,7 +75,6 @@
     "@inertiajs/core": ">=3",
     "@inertiajs/react": ">=3",
     "@inertiajs/vite": ">=3",
-    "@messageformat/core": ">=3",
     "@stratal/testing": ">=0.0.21",
     "hono": ">=4",
     "react": ">=19",
@@ -96,9 +96,6 @@
     "@inertiajs/vite": {
       "optional": true
     },
-    "@messageformat/core": {
-      "optional": true
-    },
     "@stratal/testing": {
       "optional": true
     },
@@ -118,7 +115,6 @@
     "@inertiajs/core": "^3.1.1",
     "@inertiajs/react": "^3.1.1",
     "@inertiajs/vite": "^3.1.1",
-    "@messageformat/core": "^3.4.0",
     "@stratal/testing": "workspace:*",
     "@types/node": "^25.6.2",
     "@types/react": "^19.2.14",

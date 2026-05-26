@@ -1,4 +1,4 @@
-import MessageFormat from '@messageformat/core'
+import IntlMessageFormat from 'intl-messageformat'
 import { inject } from '../../di'
 import { Singleton } from '../../di/decorators'
 import type { I18nModuleOptions } from '../i18n.options'
@@ -14,7 +14,6 @@ type CompiledMessages = Record<string, (params?: Record<string, unknown>) => str
 export class MessageLoaderService {
   private readonly cache: Map<string, Record<string, unknown>>
   private readonly compiledCache: Map<string, CompiledMessages>
-  private readonly formatters: Map<string, MessageFormat>
   private readonly locales: string[]
   private readonly defaultLocale: string
 
@@ -26,7 +25,6 @@ export class MessageLoaderService {
     this.defaultLocale = this.options?.defaultLocale ?? 'en'
     this.cache = new Map()
     this.compiledCache = new Map()
-    this.formatters = new Map()
 
     const coreMessages = getMessages()
     const coreLocales = getLocales()
@@ -43,7 +41,6 @@ export class MessageLoaderService {
 
       const merged = deepMerge(coreLocaleMessages, registryLocaleMessages)
       this.cache.set(locale, merged)
-      this.formatters.set(locale, new MessageFormat(locale))
     }
   }
 
@@ -51,11 +48,7 @@ export class MessageLoaderService {
     const compiled = this.getCompiledMessages(locale)
     const fn = compiled[key]
     if (!fn) return key
-    try {
-      return fn(params)
-    } catch {
-      return key
-    }
+    return fn(params)
   }
 
   getMessages(locale: string): Record<string, unknown> {
@@ -100,15 +93,11 @@ export class MessageLoaderService {
 
     const messages = this.cache.get(effectiveLocale) ?? {}
     const flattened = this.flattenMessages(messages)
-    const mf = this.formatters.get(effectiveLocale) ?? new MessageFormat(effectiveLocale)
 
     const compiled: CompiledMessages = {}
     for (const [key, value] of Object.entries(flattened)) {
-      try {
-        compiled[key] = mf.compile(value) as (params?: Record<string, unknown>) => string
-      } catch {
-        compiled[key] = () => value
-      }
+      const msg = new IntlMessageFormat(value, effectiveLocale)
+      compiled[key] = (params) => String(msg.format(params as Record<string, string | number | boolean>))
     }
 
     this.compiledCache.set(effectiveLocale, compiled)
