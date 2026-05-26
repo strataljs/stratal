@@ -277,6 +277,9 @@ export class Application {
       const schedule = (JobClass as unknown as { schedule: string }).schedule
       if (schedule) {
         this.cronManager.registerJob(schedule, JobClass as Constructor<CronJob>)
+      } else {
+        const logger = this._container.resolve<LoggerService>(LOGGER_TOKENS.LoggerService)
+        logger.warn(`Cron job "${JobClass.name}" has no static schedule property — skipped`)
       }
     }
   }
