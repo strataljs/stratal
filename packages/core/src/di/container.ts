@@ -155,7 +155,7 @@ export class Container {
     }
 
     // Auto-resolve class constructors: any class with DI decorators can be
-    // instantiated without explicit registration (matches tsyringe's @injectable behavior)
+    // instantiated without explicit registration
     if (typeof token === 'function') {
       const meta = getClassMetadata(token)
       const scope = meta?.scope ?? Scope.Transient

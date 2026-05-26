@@ -128,7 +128,6 @@ This tells Stratal about your Cloudflare env bindings. Run `wrangler types` to g
   },
   "devDependencies": {
     "@stratal/testing": "latest",
-    "reflect-metadata": "^0.2.2",
     "typescript": "^5.9.0",
     "vitest": "^4.1.0",
     "wrangler": "latest"
@@ -163,5 +162,5 @@ export default defineConfig({
 ### vitest.setup.ts
 
 ```typescript
-import 'reflect-metadata'
+// Test setup — add base modules or global mocks here
 ```

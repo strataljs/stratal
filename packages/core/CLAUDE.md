@@ -27,7 +27,7 @@ Two Vitest projects (`vitest.config.ts`):
 - **e2e / workerd integration** — `test/vitest.config.ts`, `test/integration/**/*.spec.ts`, uses `stratalTest()` from `@stratal/testing/vitest-plugin`. Run via `yarn workspace stratal test:integration`.
 
 Other rules:
-- `vitest.setup.ts` imports `reflect-metadata` — required for tsyringe metadata, don't remove.
+- `vitest.setup.ts` — shared test setup; don't remove.
 - Coverage excludes by convention: `__tests__/`, `*.spec.ts`, `index.ts`, `types.ts`, `tokens.ts`. Match this when adding new excluded shapes.
 - Single-file run: `yarn workspace stratal test src/path/__tests__/file.spec.ts`.
 

@@ -73,14 +73,14 @@ Scope.Request    // New instance per HTTP request (child container)
 - Use `Scope.Request` for request-specific state (auth context, current user)
 - Default `Scope.Transient` for most services
 
-## @Transient() Decorator
+## DI Decorators
 
-Every class resolved by DI must have `@Transient()`. It wraps tsyringe's `@injectable()`.
+Every injectable class must have a scope decorator (`@Singleton()`, `@Request()`, or `@Transient()`).
 
 ```typescript
-import { Transient, inject } from 'stratal/di'
+import { Request, inject } from 'stratal/di'
 
-@Transient()
+@Request()
 export class UserService {
   constructor(
     @inject(UserRepository) private repo: UserRepository,
@@ -207,7 +207,7 @@ export class MyModule implements OnInitialize, OnShutdown {
 
 ## Container API
 
-The `Container` class wraps tsyringe with a two-tier model:
+The `Container` class provides a two-tier model:
 
 ```typescript
 import { Container, DI_TOKENS } from 'stratal/di'

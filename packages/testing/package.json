@@ -73,7 +73,6 @@
   "peerDependencies": {
     "@stratal/framework": ">=0.0.21",
     "better-auth": ">=1.4",
-    "reflect-metadata": ">=0.2",
     "stratal": ">=0.0.21",
     "vitest": "^4.1.0"
   },
@@ -92,7 +91,6 @@
     "@vitest/runner": "~4.1.5",
     "@vitest/snapshot": "~4.1.5",
     "better-auth": "^1.6.11",
-    "reflect-metadata": "^0.2.2",
     "stratal": "workspace:*",
     "tsdown": "^0.22.0",
     "typescript": "^6.0.3",

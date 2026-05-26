@@ -75,8 +75,6 @@ export class CronManager {
 			try {
 				// Register the job class in the request-scoped container so its
 				// dependencies are resolved from request scope (not the parent).
-				// Without this, tsyringe falls through to the parent container
-				// and request-scoped services (e.g. database) get stale instances.
 				container.register(jobClass, jobClass)
 				const job = container.resolve<CronJob>(jobClass)
 				await job.execute(controller)

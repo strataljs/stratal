@@ -37,7 +37,6 @@ Set up base modules once in your Vitest setup file, then create test modules in 
 
 ```typescript
 // vitest.setup.ts
-import 'reflect-metadata'
 import { Test } from '@stratal/testing'
 import { CoreModule } from './src/core.module'
 

@@ -16,11 +16,8 @@ const cache = new Map<string, Constructor<Middleware>>()
  * — important for `Router.middleware` deduplication via class identity.
  *
  * Detection of "module not imported" works against a per-app marker
- * registered by `RateLimiterModule.onInitialize` (NOT via inject decorator,
- * because tsyringe would still try to construct Registry — whose Store
- * inject would explode with a less-actionable tsyringe wrapping). We hold
- * the user's container, then check `isRegistered(marker, recursive=true)`
- * at request time before resolving Registry.
+ * registered by `RateLimiterModule.onInitialize`. We check
+ * `isRegistered(marker)` at request time before resolving Registry.
  */
 export function createThrottleMiddleware(name: string): Constructor<Middleware> {
   const existing = cache.get(name)
