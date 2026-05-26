@@ -156,8 +156,6 @@ export class ModalService {
     const headers: Record<string, string> = {
       // Always request JSON — we run SSR ourselves with the combined page object
       'x-inertia': 'true',
-      // Resolve deferred props eagerly so the background page has data
-      'x-inertia-resolve-deferred': 'true',
       // Deliberately omit x-inertia-version: the InertiaMiddleware version check
       // returns a 409 with no body when versions don't match, which would make
       // JSON.parse fail. Internal sub-requests don't need cache-bust checks.
