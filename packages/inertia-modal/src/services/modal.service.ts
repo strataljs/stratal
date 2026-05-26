@@ -11,6 +11,7 @@ export interface ModalData {
   baseURL: string
   redirectURL: string
   key: string
+  nativeBack: boolean
 }
 
 export interface ModalRenderOptions {
@@ -47,22 +48,24 @@ export class ModalService {
     const key = ctx.c.req.header('x-inertia-modal-key') ?? crypto.randomUUID()
     const modalURL = new URL(ctx.c.req.url).pathname
 
-    const modalData: ModalData = {
-      component,
-      props,
-      baseURL: options.baseURL,
-      redirectURL,
-      key,
-    }
-
     // Partial reload requesting 'modal' — skip background sub-request,
-    // return just the modal prop with fresh data
+    // return just the modal prop with fresh data. The client already has
+    // the background page loaded, so nativeBack: true tells useModal()
+    // to use history.back() on close instead of a server round-trip.
     if (isInertia && partialComponent && partialData) {
       const requestedProps = partialData.split(',').map((s) => s.trim())
       if (requestedProps.includes('modal')) {
+        const partialModalData: ModalData = {
+          component,
+          props,
+          baseURL: options.baseURL,
+          redirectURL,
+          key,
+          nativeBack: true,
+        }
         const page: PageWithModal = {
           component: partialComponent,
-          props: { modal: modalData, errors: {} },
+          props: { modal: partialModalData, errors: {} },
           url: modalURL,
           version: null,
           flash: {},
@@ -78,6 +81,15 @@ export class ModalService {
           },
         })
       }
+    }
+
+    const modalData: ModalData = {
+      component,
+      props,
+      baseURL: options.baseURL,
+      redirectURL,
+      key,
+      nativeBack: false,
     }
 
     // Fetch background page as an Inertia JSON request to get its component and
@@ -156,6 +168,8 @@ export class ModalService {
     const headers: Record<string, string> = {
       // Always request JSON — we run SSR ourselves with the combined page object
       'x-inertia': 'true',
+      // Eagerly resolve deferred props so the background page renders with data
+      'x-inertia-resolve-deferred': 'true',
       // Deliberately omit x-inertia-version: the InertiaMiddleware version check
       // returns a 409 with no body when versions don't match, which would make
       // JSON.parse fail. Internal sub-requests don't need cache-bust checks.
