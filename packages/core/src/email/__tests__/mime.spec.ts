@@ -390,6 +390,27 @@ describe('buildMimeMessage', () => {
       expect(result.envelope.from).toBe('noreply@example.com')
     })
 
+    it('should extract bare email from formatted addresses in envelope', async () => {
+      const message: ResolvedEmailMessage = {
+        to: ['"John Doe" <john@test.com>', 'bare@test.com'],
+        subject: 'Test',
+        html: '<p>Hi</p>',
+        cc: ['Cc User <cc@test.com>'],
+        bcc: ['bcc@test.com'],
+      }
+      const result = await buildMimeMessage(message, defaultFrom)
+
+      expect(result.envelope.to).toEqual(['john@test.com', 'bare@test.com', 'cc@test.com', 'bcc@test.com'])
+    })
+
+    it('should extract bare email for envelope from address', async () => {
+      const from = { name: 'App', email: 'noreply@example.com' }
+      const message: ResolvedEmailMessage = { to: 'user@test.com', subject: 'Test', html: '<p>Hi</p>' }
+      const result = await buildMimeMessage(message, from)
+
+      expect(result.envelope.from).toBe('noreply@example.com')
+    })
+
     it('should handle string to as single-element array', async () => {
       const message: ResolvedEmailMessage = { to: 'single@test.com', subject: 'Test', html: '<p>Hi</p>' }
       const result = await buildMimeMessage(message, defaultFrom)

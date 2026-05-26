@@ -35,6 +35,11 @@ function encodeHeaderValue(value: string): string {
   return `=?UTF-8?B?${encoded}?=`
 }
 
+function extractEmail(address: string): string {
+  const match = address.match(/<([^>]+)>/)
+  return match ? match[1] : address.trim()
+}
+
 function formatAddress(email: string, name?: string): string {
   if (!name) return email
   const encodedName = isAscii(name) ? `"${name.replace(/"/g, '\\"')}"` : encodeHeaderValue(name)
@@ -105,7 +110,7 @@ export async function buildMimeMessage(
     ? formatAddress(message.from.email, message.from.name)
     : formatAddress(defaultFrom.email, defaultFrom.name)
 
-  const fromEmail = message.from?.email ?? defaultFrom.email
+  const fromEmail = extractEmail(message.from?.email ?? defaultFrom.email)
 
   const toList = Array.isArray(message.to) ? message.to : [message.to]
 
@@ -125,7 +130,7 @@ export async function buildMimeMessage(
     ...toList,
     ...(message.cc ?? []),
     ...(message.bcc ?? []),
-  ]
+  ].map(extractEmail)
 
   const body = buildBodyPart(message.text, message.html)
   const hasAttachments = message.attachments && message.attachments.length > 0
