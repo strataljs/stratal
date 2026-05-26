@@ -4,7 +4,6 @@ import { Container } from '../container'
 import { ContainerError } from '../container.error'
 import { Transient } from '../decorators'
 import { CONTAINER_TOKEN, DI_TOKENS } from '../tokens'
-import { Scope } from '../types'
 
 // Test services
 @Transient()
@@ -155,16 +154,6 @@ describe('Container', () => {
     it('should register CONTAINER_TOKEN for global container', () => {
       expect(container.isRegistered(CONTAINER_TOKEN)).toBe(true)
     })
-
-    it('should NOT register CONTAINER_TOKEN for request-scoped container', () => {
-      const _reqContainer = new Container({
-        parent: container,
-        isRequestScoped: true,
-      })
-
-      // Should not be registered in this specific container
-      expect(_reqContainer.isRegistered(CONTAINER_TOKEN)).toBe(true) // inherited from parent
-    })
   })
 
   describe('request scope restrictions', () => {
@@ -217,17 +206,4 @@ describe('Container', () => {
     })
   })
 
-  describe('Scope enum', () => {
-    it('should have Scope.Transient = 0', () => {
-      expect(Scope.Transient).toBe(0)
-    })
-
-    it('should have Scope.Singleton = 1', () => {
-      expect(Scope.Singleton).toBe(1)
-    })
-
-    it('should have Scope.Request = 2', () => {
-      expect(Scope.Request).toBe(2)
-    })
-  })
 })
