@@ -22,11 +22,11 @@ describe('CronManager', () => {
    * Returns both the class and a mock instance that the container will resolve to.
    */
   const createJobClass = (schedule: string, name?: string) => {
-    const mockInstance = createMock<CronJob>({ schedule })
+    const mockInstance = createMock<CronJob>()
     mockInstance.execute.mockResolvedValue(undefined)
 
     class MockJob implements CronJob {
-      readonly schedule = schedule
+      static schedule = schedule
       execute = mockInstance.execute
       onError = mockInstance.onError
     }

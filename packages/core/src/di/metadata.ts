@@ -1,6 +1,10 @@
 type MetadataTarget = object | string | symbol
 
-const store = new WeakMap<object, Map<MetadataTarget, unknown>>()
+const STORE_KEY = Symbol.for('stratal:metadata:store')
+const g = globalThis as Record<symbol, unknown>
+const store: WeakMap<object, Map<MetadataTarget, unknown>> =
+  (g[STORE_KEY] as WeakMap<object, Map<MetadataTarget, unknown>>) ??
+  (g[STORE_KEY] = new WeakMap<object, Map<MetadataTarget, unknown>>())
 
 function getKeyTarget(target: object, propertyKey?: string | symbol): object {
   if (propertyKey === undefined) return target

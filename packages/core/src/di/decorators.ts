@@ -15,7 +15,11 @@ interface ClassMetadata {
   token?: InjectionToken
 }
 
-const CLASS_METADATA = new WeakMap<object, ClassMetadata>()
+const CLASS_METADATA_KEY = Symbol.for('stratal:di:class-metadata')
+const g = globalThis as Record<symbol, unknown>
+const CLASS_METADATA: WeakMap<object, ClassMetadata> =
+  (g[CLASS_METADATA_KEY] as WeakMap<object, ClassMetadata>) ??
+  (g[CLASS_METADATA_KEY] = new WeakMap<object, ClassMetadata>())
 
 function scopeDecorator(scope: Scope) {
   return <T>(token?: InjectionToken<T>) =>

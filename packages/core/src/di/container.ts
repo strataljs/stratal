@@ -116,6 +116,9 @@ export class Container {
 
   registerValue<T>(token: InjectionToken<T>, value: T): void {
     this.registrations.set(token, { kind: 'value', value })
+    if (this.isRequestScoped) {
+      this.requestCache.clear()
+    }
   }
 
   registerFactory<T>(token: InjectionToken<T>, factory: (container: Container) => T): void {

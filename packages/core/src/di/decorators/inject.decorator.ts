@@ -5,7 +5,11 @@ interface InjectionEntry {
   optional: boolean
 }
 
-const INJECTION_TOKENS = new WeakMap<object, Map<number, InjectionEntry>>()
+const INJECTION_TOKENS_KEY = Symbol.for('stratal:di:injection-tokens')
+const g = globalThis as Record<symbol, unknown>
+const INJECTION_TOKENS: WeakMap<object, Map<number, InjectionEntry>> =
+  (g[INJECTION_TOKENS_KEY] as WeakMap<object, Map<number, InjectionEntry>>) ??
+  (g[INJECTION_TOKENS_KEY] = new WeakMap<object, Map<number, InjectionEntry>>())
 
 export function inject<T>(
   token: InjectionToken<T>,
