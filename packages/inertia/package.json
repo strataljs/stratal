@@ -74,12 +74,11 @@
     "@inertiajs/core": ">=3",
     "@inertiajs/react": ">=3",
     "@inertiajs/vite": ">=3",
-    "@intlify/core-base": ">=11",
+    "@messageformat/core": ">=3",
     "@stratal/testing": ">=0.0.21",
     "hono": ">=4",
     "react": ">=19",
     "react-dom": ">=19",
-    "reflect-metadata": ">=0.2",
     "stratal": ">=0.0.21",
     "vite": ">=8",
     "vitest": ">=4"
@@ -97,7 +96,7 @@
     "@inertiajs/vite": {
       "optional": true
     },
-    "@intlify/core-base": {
+    "@messageformat/core": {
       "optional": true
     },
     "@stratal/testing": {
@@ -119,7 +118,7 @@
     "@inertiajs/core": "^3.1.1",
     "@inertiajs/react": "^3.1.1",
     "@inertiajs/vite": "^3.1.1",
-    "@intlify/core-base": "^11.4.2",
+    "@messageformat/core": "^3.4.0",
     "@stratal/testing": "workspace:*",
     "@types/node": "^25.6.2",
     "@types/react": "^19.2.14",

@@ -5,7 +5,6 @@ import { I18N_TOKENS } from './i18n.tokens'
 import { I18nService } from './services/i18n.service'
 import { MessageLoaderService } from './services/message-loader.service'
 import { MessageRegistry } from './services/message-registry'
-import { setupI18nCompiler } from './utils/setup'
 import { zodErrorMap } from './validation/validation.context'
 import { z } from './validation/zod'
 
@@ -18,7 +17,6 @@ import { z } from './validation/zod'
 })
 export class I18nModule implements OnInitialize {
   onInitialize(_context: ModuleContext): void {
-    setupI18nCompiler()
     z.config({ customError: zodErrorMap })
   }
 

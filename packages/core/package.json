@@ -169,8 +169,7 @@
   "dependencies": {
     "@hono/swagger-ui": "^0.6.1",
     "@hono/zod-openapi": "^1.4.0",
-    "@intlify/core-base": "^11.4.2",
-    "@intlify/message-compiler": "^11.4.2",
+    "@messageformat/core": "^3.4.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@swc-node/register": "^1.11.1",
     "@swc/core": "^1.15.33",
