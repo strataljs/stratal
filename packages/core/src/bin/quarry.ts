@@ -111,6 +111,7 @@ async function main(): Promise<void> {
     script: '',
     modules: true,
     unsafeDevRegistryPath: registryPath,
+    r2Persist: join(process.cwd(), '.wrangler/state/v3/r2'),
   })
 
   await mf.ready
