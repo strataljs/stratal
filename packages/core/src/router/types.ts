@@ -293,3 +293,12 @@ export interface LocalePathConfig {
    */
   defaultLocale: string | null
 }
+
+/**
+ * Locale configuration for URL generation.
+ * Controls whether the default locale gets a path prefix in generated URLs.
+ */
+export interface LocaleUrlConfig {
+  defaultLocale: string | null
+  prefixDefaultLocale: false | true | 'redirect'
+}

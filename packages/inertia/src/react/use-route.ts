@@ -13,12 +13,13 @@
 import type { PageProps } from '@inertiajs/core'
 import { usePage } from '@inertiajs/react'
 import { useMemo } from 'react'
-import type { CurrentRoute, RouteMatcher, RouteName, RouteParams, SerializedRoute, SerializedRoutes, TrailingSlashMode } from 'stratal/router'
+import type { CurrentRoute, LocaleUrlConfig, RouteMatcher, RouteName, RouteParams, SerializedRoute, SerializedRoutes, TrailingSlashMode } from 'stratal/router'
 
 interface RoutesPageProps extends PageProps {
   routes: SerializedRoutes
   trailingSlash?: TrailingSlashMode
   route: CurrentRoute
+  localeConfig?: LocaleUrlConfig
 }
 
 /**
@@ -72,13 +73,18 @@ function encodePathParam(value: string): string {
  * Mirrors `buildRouteUrl()` from `stratal/router` (pure reimplementation to
  * avoid pulling server-side dependencies into the browser bundle).
  */
-function buildUrl(route: SerializedRoute, name: string, params?: Record<string, string>): string {
+function buildUrl(route: SerializedRoute, name: string, params?: Record<string, string>, localeConfig?: LocaleUrlConfig): string {
   const allParams = { ...params }
   const consumedKeys = new Set<string>()
   let url = route.path
 
   if (allParams.locale && route.localePaths?.length) {
-    url = `/${allParams.locale}${url === '/' ? '' : url}`
+    const shouldPrefix = !localeConfig
+      || localeConfig.prefixDefaultLocale === true
+      || allParams.locale !== localeConfig.defaultLocale
+    if (shouldPrefix) {
+      url = `/${allParams.locale}${url === '/' ? '' : url}`
+    }
     consumedKeys.add('locale')
   }
 
@@ -153,6 +159,7 @@ export function resolveUrl<N extends RouteName>(
   routes: SerializedRoutes,
   currentRoute: CurrentRoute,
   trailingSlash: TrailingSlashMode = 'ignore',
+  localeConfig?: LocaleUrlConfig,
 ): string {
   const target = routes[name]
   if (!target) {
@@ -165,7 +172,7 @@ export function resolveUrl<N extends RouteName>(
     ...explicitParams,
   } as Record<string, string>
 
-  return applyTrailingSlash(buildUrl(target, name, merged), trailingSlash)
+  return applyTrailingSlash(buildUrl(target, name, merged, localeConfig), trailingSlash)
 }
 
 /**
@@ -226,12 +233,12 @@ export function matchCurrent(currentRoute: CurrentRoute, name?: RouteMatcher): R
  */
 export function useRoute() {
   const page = usePage<RoutesPageProps>()
-  const { routes, trailingSlash = 'ignore', route: currentRoute } = page.props
+  const { routes, trailingSlash = 'ignore', route: currentRoute, localeConfig } = page.props
 
   const route = useMemo(
     () => <N extends RouteName>(name: N, params?: RouteParams<N>): string =>
-      resolveUrl(name, params, routes, currentRoute, trailingSlash),
-    [routes, trailingSlash, currentRoute],
+      resolveUrl(name, params, routes, currentRoute, trailingSlash, localeConfig),
+    [routes, trailingSlash, currentRoute, localeConfig],
   )
 
   const current = useMemo(

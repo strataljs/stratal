@@ -45,11 +45,17 @@ function createMockContext(overrides: {
     getDefaults: () => overrides.defaults ?? {},
   }
 
+  const mockLocalePathService = {
+    localePathConfig: null,
+    prefixDefaultLocale: false,
+  }
+
   const mockContainer = {
     resolve: (token: symbol) => {
       if (token === ROUTER_TOKENS.RouteRegistry) return mockRegistry
       if (token === DI_TOKENS.Application) return mockApplication
       if (token === ROUTER_TOKENS.Uri) return mockUri
+      if (token === ROUTER_TOKENS.LocalePathService) return mockLocalePathService
       throw new Error(`Unexpected token: ${String(token)}`)
     },
   }

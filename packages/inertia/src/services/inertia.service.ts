@@ -2,7 +2,7 @@ import type { Page } from '@inertiajs/core'
 import type { Application } from 'stratal'
 import { DI_TOKENS, Request, inject } from 'stratal/di'
 import { I18N_TOKENS, type MessageLoaderService } from 'stratal/i18n'
-import { ROUTER_TOKENS, type CurrentRoute, type RegisteredRoute, type RouteRegistry, type RouterContext, type SerializedRoutes, type Uri } from 'stratal/router'
+import { ROUTER_TOKENS, type CurrentRoute, type LocalePathService, type LocaleUrlConfig, type RegisteredRoute, type RouteRegistry, type RouterContext, type SerializedRoutes, type Uri } from 'stratal/router'
 import type { InertiaMergeOptions, InertiaOnceOptions } from '../augment/router-context'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { INERTIA_TOKENS } from '../inertia.tokens'
@@ -191,9 +191,15 @@ export class InertiaService {
       const name = registry.findNameByRoute(ctx.c.req.method, ctx.c.req.routePath) ?? null
       const params = { ...ctx.param() }
 
+      const localePathService = container.resolve<LocalePathService>(ROUTER_TOKENS.LocalePathService)
+
       shared.routes = this.serializeRoutes(registry.named())
       shared.trailingSlash = application.config.trailingSlash ?? 'ignore'
       shared.route = { name, params, defaults: uri.getDefaults() } satisfies CurrentRoute
+      shared.localeConfig = {
+        defaultLocale: localePathService.localePathConfig?.defaultLocale ?? null,
+        prefixDefaultLocale: localePathService.prefixDefaultLocale,
+      } satisfies LocaleUrlConfig
     }
 
     return { shared, sharedKeys: Object.keys(shared) }
