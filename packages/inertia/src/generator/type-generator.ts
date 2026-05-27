@@ -328,38 +328,223 @@ function unwrapAs(node: Node | undefined, SK: TsMorphModule['SyntaxKind']): Node
   return node
 }
 
+export interface I18nDetectionResult {
+  enabled: boolean
+  only: string[]
+}
+
 export function detectI18nConfig(
   project: Project,
   SK: TsMorphModule['SyntaxKind'],
-  moduleFilePath: string,
-): boolean {
-  const sourceFile = project.getSourceFile(moduleFilePath)
-  if (!sourceFile) return false
+  srcDir: string,
+): I18nDetectionResult {
+  const none: I18nDetectionResult = { enabled: false, only: [] }
+  const normalizedSrcDir = srcDir.replace(/\\/g, '/')
 
-  const callExpressions = sourceFile.getDescendantsOfKind(SK.CallExpression)
+  for (const sourceFile of project.getSourceFiles()) {
+    const filePath = sourceFile.getFilePath()
+    if (!filePath.startsWith(normalizedSrcDir)) continue
+    if (filePath.includes('__tests__') || filePath.includes('.spec.') || filePath.includes('.test.')) continue
 
-  for (const call of callExpressions) {
-    const expr = call.getExpression()
-    if (!expr.isKind(SK.PropertyAccessExpression)) continue
+    const callExpressions = sourceFile.getDescendantsOfKind(SK.CallExpression)
 
-    const propName = expr.getName()
-    if (propName !== 'forRoot' && propName !== 'forRootAsync') continue
+    for (const call of callExpressions) {
+      const expr = call.getExpression()
+      if (!expr.isKind(SK.PropertyAccessExpression)) continue
 
-    const objExpr = expr.getExpression()
-    if (!objExpr.isKind(SK.Identifier) || objExpr.getText() !== 'InertiaModule') continue
+      const propName = expr.getName()
+      if (propName !== 'forRoot' && propName !== 'forRootAsync') continue
 
-    const args = call.getArguments()
-    if (args.length === 0) continue
+      const objExpr = expr.getExpression()
+      if (!objExpr.isKind(SK.Identifier) || objExpr.getText() !== 'InertiaModule') continue
 
-    const optionsLiteral = resolveModuleOptionsLiteral(args[0], SK)
-    if (!optionsLiteral) continue
+      const args = call.getArguments()
+      if (args.length === 0) continue
 
-    if (optionsLiteral.isKind(SK.ObjectLiteralExpression) && optionsLiteral.getProperty('i18n')) {
-      return true
+      // 1. AST-based: direct object literals (same-file forRoot / forRootAsync with inline useFactory)
+      const optionsLiteral = resolveModuleOptionsLiteral(args[0], SK)
+      if (optionsLiteral?.isKind(SK.ObjectLiteralExpression)) {
+        const i18nProp = optionsLiteral.getProperty('i18n')
+        if (!i18nProp) continue
+        return { enabled: true, only: extractOnlyFromLiteral(i18nProp, SK) }
+      }
+
+      // 2. AST-based cross-file: follow identifier.asProvider() → registerAs factory
+      const configLiteral = resolveConfigLiteralFromAsProvider(args[0], SK)
+      if (configLiteral?.isKind(SK.ObjectLiteralExpression)) {
+        const i18nProp = configLiteral.getProperty('i18n')
+        if (i18nProp) return { enabled: true, only: extractOnlyFromLiteral(i18nProp, SK) }
+      }
+
+      // 3. Type-based fallback: check if the resolved type has an i18n property
+      const optionsType = resolveOptionsType(args[0], propName)
+      if (optionsType?.getProperty('i18n')) {
+        return { enabled: true, only: extractOnlyFromType(optionsType, args[0]) }
+      }
     }
   }
 
-  return false
+  return none
+}
+
+function resolveConfigLiteralFromAsProvider(
+  arg: Node,
+  SK: TsMorphModule['SyntaxKind'],
+): Node | null {
+  if (!arg.isKind(SK.CallExpression)) return null
+
+  const callExpr = arg.getExpression()
+  if (!callExpr.isKind(SK.PropertyAccessExpression)) return null
+  if (callExpr.getName() !== 'asProvider') return null
+
+  const configIdentifier = callExpr.getExpression()
+  if (!configIdentifier.isKind(SK.Identifier)) return null
+
+  const varDecl = resolveToVariableDeclaration(configIdentifier, SK)
+  if (!varDecl) return null
+
+  return extractLiteralFromRegisterAs(varDecl, SK)
+}
+
+function resolveToVariableDeclaration(
+  identifier: Node,
+  SK: TsMorphModule['SyntaxKind'],
+): Node | null {
+  const symbol = identifier.getSymbol()
+  if (!symbol) return null
+
+  for (const decl of symbol.getDeclarations()) {
+    if (decl.isKind(SK.VariableDeclaration)) return decl
+
+    if (decl.isKind(SK.ImportSpecifier)) {
+      const sourceFile = decl.getImportDeclaration().getModuleSpecifierSourceFile()
+      if (!sourceFile) continue
+
+      const exportName = decl.getName()
+      const exported = sourceFile.getExportedDeclarations().get(exportName)
+      if (!exported) continue
+
+      for (const exportDecl of exported) {
+        if (exportDecl.isKind(SK.VariableDeclaration)) return exportDecl
+      }
+    }
+  }
+
+  return null
+}
+
+function extractLiteralFromRegisterAs(
+  varDecl: Node,
+  SK: TsMorphModule['SyntaxKind'],
+): Node | null {
+  if (!varDecl.isKind(SK.VariableDeclaration)) return null
+
+  const init = varDecl.getInitializer()
+  if (!init?.isKind(SK.CallExpression)) return null
+
+  const factoryArgs = init.getArguments()
+  if (factoryArgs.length < 2) return null
+
+  const factory = factoryArgs[1]
+  if (!factory.isKind(SK.ArrowFunction) && !factory.isKind(SK.FunctionExpression)) return null
+
+  const body = factory.getBody()
+
+  if (body.isKind(SK.ParenthesizedExpression)) {
+    const inner = unwrapAs(body.getExpression(), SK)
+    if (inner?.isKind(SK.ObjectLiteralExpression)) return inner
+  }
+
+  const unwrapped = unwrapAs(body, SK)
+  if (unwrapped?.isKind(SK.ObjectLiteralExpression)) return unwrapped
+
+  if (body.isKind(SK.Block)) {
+    const returnStatements = body.getDescendantsOfKind(SK.ReturnStatement)
+    for (let i = returnStatements.length - 1; i >= 0; i--) {
+      const ret = returnStatements[i]
+      const retExpr = ret.getExpression()
+      if (!retExpr) continue
+      if (retExpr.isKind(SK.ParenthesizedExpression)) {
+        const inner = unwrapAs(retExpr.getExpression(), SK)
+        if (inner?.isKind(SK.ObjectLiteralExpression)) return inner
+        continue
+      }
+      const direct = unwrapAs(retExpr, SK)
+      if (direct?.isKind(SK.ObjectLiteralExpression)) return direct
+    }
+  }
+
+  return null
+}
+
+function extractOnlyFromLiteral(i18nProp: Node, SK: TsMorphModule['SyntaxKind']): string[] {
+  const only: string[] = []
+  if (!i18nProp.isKind(SK.PropertyAssignment)) return only
+  const init = i18nProp.getInitializer()
+  if (!init?.isKind(SK.ObjectLiteralExpression)) return only
+  const onlyProp = init.getProperty('only')
+  if (!onlyProp?.isKind(SK.PropertyAssignment)) return only
+  const onlyInit = onlyProp.getInitializer()
+  if (!onlyInit?.isKind(SK.ArrayLiteralExpression)) return only
+  for (const el of onlyInit.getElements()) {
+    if (el.isKind(SK.StringLiteral)) {
+      only.push(el.getLiteralValue())
+    }
+  }
+  return only
+}
+
+function resolveOptionsType(arg: Node, methodName: string): Type | null {
+  const argType = arg.getType()
+
+  if (methodName === 'forRoot') {
+    return argType
+  }
+
+  // forRootAsync: arg is FactoryProvider-shaped — drill through useFactory return type
+  const useFactorySymbol = argType.getProperty('useFactory')
+  if (!useFactorySymbol) return null
+
+  const useFactoryType = useFactorySymbol.getTypeAtLocation(arg)
+  const signatures = useFactoryType.getCallSignatures()
+  if (signatures.length === 0) return null
+
+  const returnType = signatures[0].getReturnType()
+
+  // Return type is T | Promise<T> — find the branch with i18n
+  if (returnType.isUnion()) {
+    for (const member of returnType.getUnionTypes()) {
+      if (member.getProperty('i18n')) return member
+    }
+    return null
+  }
+
+  return returnType
+}
+
+function extractOnlyFromType(optionsType: Type, locationNode: Node): string[] {
+  const i18nSymbol = optionsType.getProperty('i18n')
+  if (!i18nSymbol) return []
+
+  const i18nType = i18nSymbol.getTypeAtLocation(locationNode)
+  const onlySymbol = i18nType.getProperty('only')
+  if (!onlySymbol) return []
+
+  const onlyType = onlySymbol.getTypeAtLocation(locationNode)
+  const elementType = onlyType.getNumberIndexType()
+  if (!elementType) return []
+
+  const result: string[] = []
+  if (elementType.isUnion()) {
+    for (const member of elementType.getUnionTypes()) {
+      if (member.isStringLiteral()) {
+        result.push(member.getLiteralValue() as string)
+      }
+    }
+  } else if (elementType.isStringLiteral()) {
+    result.push(elementType.getLiteralValue() as string)
+  }
+  return result
 }
 
 // --- Extract ctx.flash() call types ---
@@ -476,7 +661,7 @@ export interface GenerateTypesInput {
   pages: PageTypeInfo[]
   sharedData: SharedDataTypeInfo | null
   shareCallTypes: Map<string, string>
-  hasI18n: boolean
+  i18n: I18nDetectionResult
   flashTypes: FlashTypeInfo | null
 }
 
@@ -522,7 +707,7 @@ function resolvePagePropsTypeNames(pages: PageTypeInfo[]): Map<string, string> {
 }
 
 export function generateInertiaTypes(input: GenerateTypesInput): string {
-  const { pages, sharedData, shareCallTypes, hasI18n, flashTypes } = input
+  const { pages, sharedData, shareCallTypes, i18n, flashTypes } = input
 
   // Compute type names with collision resolution
   const typeNames = resolvePagePropsTypeNames(pages)
@@ -550,6 +735,12 @@ export function generateInertiaTypes(input: GenerateTypesInput): string {
     lines.push(`    '${page.componentName}': ${typeName}`)
   }
   lines.push('  }')
+  if (i18n.enabled && i18n.only.length > 0) {
+    const prefixUnion = i18n.only.map((p) => `'${p}'`).join(' | ')
+    lines.push('  interface InertiaI18nConfig {')
+    lines.push(`    translationKeys: import('stratal/i18n').FilterByPrefix<import('stratal/i18n').MessageKeys, ${prefixUnion}>`)
+    lines.push('  }')
+  }
   lines.push('}')
 
   // Build InertiaConfig augmentation
@@ -574,7 +765,7 @@ export function generateInertiaTypes(input: GenerateTypesInput): string {
   }
 
   // From i18n detection (non-optional)
-  if (hasI18n) {
+  if (i18n.enabled) {
     sharedMembers.push('      locale: string')
     sharedMembers.push('      translations: Record<string, string>')
   }
@@ -616,6 +807,11 @@ function widenLiteralType(type: Type, tsObj: TsObj, fallbackLocation?: Node): st
 }
 
 function typeToString(type: Type, tsObj: TsObj, fallbackLocation?: Node): string {
+  // Preserve MessageKeys as InertiaTranslationKeys — narrows automatically via i18n.only augmentation
+  if (type.isUnion() && type.getAliasSymbol?.()?.getName() === 'MessageKeys') {
+    return "import('@stratal/inertia').InertiaTranslationKeys"
+  }
+
   // Always expand objects/unions/intersections so getText() can't leak inline
   // index signatures (e.g. StratalRouteMap params' `[key: string]: ...`).
   if (type.isObject() || type.isUnion() || type.isIntersection()) {
@@ -707,6 +903,9 @@ function expandTypeToInline(
     }
 
     if (type.isUnion()) {
+      if (type.getAliasSymbol?.()?.getName() === 'MessageKeys') {
+        return "import('@stratal/inertia').InertiaTranslationKeys"
+      }
       return type.getUnionTypes().map((t) => expandTypeToInline(t, tsObj, fallbackLocation, visiting)).join(' | ')
     }
 
@@ -783,10 +982,8 @@ export async function runTypeGeneration(cwd: string): Promise<{ outputPath: stri
     ? extractSharedDataType(project, SyntaxKind, ts, moduleFilePath)
     : null
 
-  // 3. i18n detection
-  const hasI18n = moduleFilePath
-    ? detectI18nConfig(project, SyntaxKind, moduleFilePath)
-    : false
+  // 3. i18n detection (scans all source files for InertiaModule.forRoot*)
+  const i18n = detectI18nConfig(project, SyntaxKind, srcDir)
 
   // 4. Per-request .share() calls
   const shareCallTypes = extractShareCallTypes(project, SyntaxKind, ts, srcDir)
@@ -799,7 +996,7 @@ export async function runTypeGeneration(cwd: string): Promise<{ outputPath: stri
     pages,
     sharedData,
     shareCallTypes,
-    hasI18n,
+    i18n,
     flashTypes,
   })
   writeInertiaTypes(outputPath, content)

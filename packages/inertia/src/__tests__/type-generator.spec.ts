@@ -1,6 +1,6 @@
 import { Project, SyntaxKind, ts } from 'ts-morph'
 import { describe, expect, it } from 'vitest'
-import { extractControllerPageTypes } from '../generator/type-generator'
+import { detectI18nConfig, extractControllerPageTypes, generateInertiaTypes } from '../generator/type-generator'
 
 const FIXTURE_HEADER = `
 export interface InertiaDeferredProp<T = unknown> {
@@ -93,5 +93,177 @@ declare function findMany(): ZenStackPromise<Array<{ id: string; title: string }
     expect(propsType).not.toContain('ZenStackPromise')
     expect(propsType).not.toContain('then:')
     expect(propsType).not.toContain('toStringTag')
+  })
+})
+
+function createModuleProject(moduleSource: string) {
+  const project = new Project({
+    useInMemoryFileSystem: true,
+    compilerOptions: {
+      target: ts.ScriptTarget.ESNext,
+      module: ts.ModuleKind.ESNext,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      strict: true,
+    },
+  })
+
+  project.createSourceFile('/src/app.module.ts', moduleSource)
+  return project
+}
+
+describe('detectI18nConfig', () => {
+  it('extracts only prefixes from forRoot', () => {
+    const project = createModuleProject(`
+      declare class InertiaModule {
+        static forRoot(options: any): any
+      }
+
+      InertiaModule.forRoot({
+        rootView: 'app',
+        i18n: { only: ['common', 'nav'] },
+      })
+    `)
+
+    const result = detectI18nConfig(project, SyntaxKind, '/src')
+    expect(result.enabled).toBe(true)
+    expect(result.only).toEqual(['common', 'nav'])
+  })
+
+  it('returns empty only when i18n has no only property', () => {
+    const project = createModuleProject(`
+      declare class InertiaModule {
+        static forRoot(options: any): any
+      }
+
+      InertiaModule.forRoot({
+        rootView: 'app',
+        i18n: {},
+      })
+    `)
+
+    const result = detectI18nConfig(project, SyntaxKind, '/src')
+    expect(result.enabled).toBe(true)
+    expect(result.only).toEqual([])
+  })
+
+  it('returns disabled when no i18n property exists', () => {
+    const project = createModuleProject(`
+      declare class InertiaModule {
+        static forRoot(options: any): any
+      }
+
+      InertiaModule.forRoot({
+        rootView: 'app',
+      })
+    `)
+
+    const result = detectI18nConfig(project, SyntaxKind, '/src')
+    expect(result.enabled).toBe(false)
+    expect(result.only).toEqual([])
+  })
+
+  it('extracts only prefixes from forRootAsync with cross-file config', () => {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+      compilerOptions: {
+        target: ts.ScriptTarget.ESNext,
+        module: ts.ModuleKind.ESNext,
+        moduleResolution: ts.ModuleResolutionKind.Bundler,
+        strict: true,
+      },
+    })
+
+    project.createSourceFile('/src/config/inertia.config.ts', `
+      interface FactoryProvider<T> {
+        provide: symbol
+        useFactory: (...deps: any[]) => T
+        inject?: symbol[]
+      }
+
+      interface ConfigNamespace<TConfig> {
+        readonly KEY: symbol
+        readonly factory: (env: any) => TConfig
+        asProvider(): FactoryProvider<TConfig>
+      }
+
+      declare function registerAs<TConfig extends object>(
+        namespace: string,
+        factory: (env: any) => TConfig,
+      ): ConfigNamespace<TConfig>
+
+      interface InertiaModuleOptions {
+        rootView: string
+        i18n?: { only?: string[] }
+      }
+
+      export const inertiaConfig = registerAs('inertia', (env: any) => {
+        return {
+          rootView: 'app',
+          i18n: {
+            only: ['shared', 'admin', 'process'],
+          },
+        } satisfies InertiaModuleOptions
+      })
+    `)
+
+    project.createSourceFile('/src/app.module.ts', `
+      import { inertiaConfig } from './config/inertia.config'
+
+      declare class InertiaModule {
+        static forRootAsync(provider: any): any
+      }
+
+      InertiaModule.forRootAsync(inertiaConfig.asProvider())
+    `)
+
+    const result = detectI18nConfig(project, SyntaxKind, '/src')
+    expect(result.enabled).toBe(true)
+    expect(result.only).toEqual(['shared', 'admin', 'process'])
+  })
+})
+
+describe('generateInertiaTypes', () => {
+  it('emits InertiaI18nConfig augmentation when only prefixes are present', () => {
+    const output = generateInertiaTypes({
+      pages: [],
+      sharedData: null,
+      shareCallTypes: new Map(),
+      i18n: { enabled: true, only: ['common', 'nav'] },
+      flashTypes: null,
+    })
+
+    expect(output).toContain('interface InertiaI18nConfig')
+    expect(output).toContain("'common' | 'nav'")
+    expect(output).toContain('FilterByPrefix')
+    expect(output).toContain('locale: string')
+    expect(output).toContain('translations: Record<string, string>')
+  })
+
+  it('omits InertiaI18nConfig augmentation when only is empty', () => {
+    const output = generateInertiaTypes({
+      pages: [],
+      sharedData: null,
+      shareCallTypes: new Map(),
+      i18n: { enabled: true, only: [] },
+      flashTypes: null,
+    })
+
+    expect(output).not.toContain('InertiaI18nConfig')
+    expect(output).toContain('locale: string')
+    expect(output).toContain('translations: Record<string, string>')
+  })
+
+  it('omits i18n shared props when i18n is disabled', () => {
+    const output = generateInertiaTypes({
+      pages: [],
+      sharedData: null,
+      shareCallTypes: new Map(),
+      i18n: { enabled: false, only: [] },
+      flashTypes: null,
+    })
+
+    expect(output).not.toContain('InertiaI18nConfig')
+    expect(output).not.toContain('locale')
+    expect(output).not.toContain('translations')
   })
 })

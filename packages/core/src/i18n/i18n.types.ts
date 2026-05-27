@@ -95,6 +95,15 @@ export type Prefixes<T extends string> = T extends `${infer Head}.${infer Tail}`
   : T
 
 /**
+ * Filter a string union to only keys matching the given dot-notation prefixes.
+ * A key matches a prefix if it equals the prefix or starts with `${prefix}.`.
+ */
+export type FilterByPrefix<Keys extends string, Prefix extends string> =
+  Keys extends `${Prefix}.${string}` ? Keys
+  : Keys extends Prefix ? Keys
+  : never
+
+/**
  * Valid dot-notation prefixes for message keys
  *
  * Used to filter which message namespaces are shared with the frontend.

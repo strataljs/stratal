@@ -12,6 +12,8 @@ export type {
     InertiaAlwaysProp,
     InertiaDeferredProp,
     InertiaFullPageProps,
+    InertiaI18nConfig,
+    InertiaTranslationKeys,
     InertiaMergeProp,
     InertiaMergeStrategy,
     InertiaOnceProp,
