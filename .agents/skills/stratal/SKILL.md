@@ -5,7 +5,7 @@ license: MIT
 compatibility: Designed for AI Agents. Requires Node.js 22+, npm.
 metadata:
   author: Temitayo Fadojutimi
-  version: "2.0"
+  version: "2.1"
 ---
 
 # Stratal Framework
@@ -56,6 +56,9 @@ Run `npx quarry help` to see all commands. Always use these to inspect your app 
 | `npx quarry event:list` | List all event listeners |
 | `npx quarry schedule:list` | List all cron schedules |
 | `npx quarry queue:list` | List all queue consumers |
+| `npx quarry queue:failed` | List failed queue jobs |
+| `npx quarry queue:retry` | Retry failed queue jobs (single or all) |
+| `npx quarry queue:purge` | Delete failed queue jobs without retrying |
 | `npx quarry db:seed:list` | List all seeders |
 | `npx quarry mcp:tools` | Preview MCP tools from your API |
 | `npx quarry mcp:serve` | Start MCP stdio server exposing routes as tools |
@@ -301,6 +304,8 @@ See `references/quarry-cli.md` for all MCP flags and options.
 
 **User says "Expose my API as MCP tools"** -> Run `npx quarry mcp:serve`. Use `--tag` or `--path` flags to filter. Preview with `npx quarry mcp:tools`.
 
+**User says "Retry failed queue jobs" / "See failed messages" / "Purge dead letters"** -> Read `references/queues-and-cron.md`. Run `npx quarry queue:failed` to list, `npx quarry queue:retry --all` to retry all, `npx quarry queue:purge --all` to delete all.
+
 **User says "List all routes" / "Debug my app"** -> Run `npx quarry route:list`. Also try `event:list`, `schedule:list`, `queue:list` to inspect other registrations.
 
 **User says "Set up i18n with Accept-Language header"** -> Read `references/errors-and-i18n.md`. Configure `I18nModule.forRoot({ detection: { strategy: 'header' } })`. Register messages with `I18nModule.registerMessages()`.
@@ -342,7 +347,7 @@ Load these when the task needs deeper knowledge:
 | `references/database.md` | DatabaseModule, ZenStack, connections, plugins, transactions |
 | `references/auth-and-rbac.md` | Better Auth, AuthContext, access control, AuthGuard, rate-limit interop (`registry.forPath()` + auto-wired `customStorage` / `customRules`) |
 | `references/events.md` | Event listeners, @On/@Listener, database events, wildcards |
-| `references/queues-and-cron.md` | Queue consumers, senders, cron jobs, wrangler config |
+| `references/queues-and-cron.md` | Queue consumers, senders, failed job management, cron jobs, wrangler config |
 | `references/seeders.md` | Database seeders, calling other seeders |
 | `references/middleware-and-guards.md` | RouteConfigurable, middleware registration with Router, guards, @UseGuards |
 | `references/rate-limiter.md` | Named rate limiters, `RateLimiterModule.forRoot()`, `Limit` value class (incl. `perSeconds`), `router.throttle()`, `@RateLimit` decorator, typed-KV custom stores, 429 headers |
@@ -364,7 +369,7 @@ Load these when the task needs deeper knowledge:
 
 **`z.cuid2()` accepts `'sw'`, `'a'`, or any short lowercase string** -> Zod 4.3.6's regex is `/^[0-9a-z]+$/`. Use `cuid2()` from `stratal/validation` instead.
 
-**Cron job not firing** -> `schedule` must be a `static` class property (not instance property). Also verify the string matches `wrangler.jsonc` trigger exactly.
+**Cron job not firing** -> `schedule` must be a `static` class property (not instance property). Also verify the string matches `wrangler.jsonc` trigger exactly. Jobs without a static `schedule` property log a warning and are skipped at boot.
 
 **Queue messages not consumed** -> Check: consumer in `consumers` array (not `providers`), `messageTypes` matches dispatched `type`, `QueueModule.registerQueue('BINDING_NAME')` called, and `'BINDING_NAME'` matches the `binding` field under `queues.producers[]` in `wrangler.jsonc` exactly (UPPER_SNAKE_CASE, no transformation).
 

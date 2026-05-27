@@ -14,6 +14,7 @@ import { DI_TOKENS } from 'stratal/di'
       inject: [DI_TOKENS.CloudflareEnv],
       useFactory: (env) => ({
         provider: 'cloudflare',  // 'cloudflare' | 'sync'
+        store: { binding: 'QUEUE_STORE' },  // KV for failed jobs + idempotency
       }),
     }),
     QueueModule.registerQueue('NOTIFICATIONS_QUEUE'),
@@ -145,6 +146,93 @@ await this.queue.dispatch({
 
 Stratal code only references the `binding` value (`NOTIFICATIONS_QUEUE`). The `queue` value is wrangler's routing identifier and can vary per environment (e.g. `notifications-queue-dev`) without touching application code.
 
+## QueueModuleOptions
+
+```typescript
+interface QueueModuleOptions {
+  provider: 'cloudflare' | 'sync'
+  store: {
+    binding: string  // KV namespace binding (e.g. 'QUEUE_STORE')
+  }
+  idempotency?: {
+    ttl?: number  // Seconds. Default: 86400 (24h)
+  }
+  maxRetries?: number  // Default: 3
+}
+```
+
+The `store` field is required — it points to a KV namespace used for idempotency keys and failed job storage. Add the binding to `wrangler.jsonc`:
+
+```jsonc
+{
+  "kv_namespaces": [
+    { "binding": "QUEUE_STORE", "id": "..." }
+  ]
+}
+```
+
+## Failed Job Management
+
+When a consumer throws after exhausting retries, the message is persisted to KV as a `FailedJob`.
+
+### FailedJob Type
+
+```typescript
+interface FailedJob {
+  id: string
+  queue: string
+  type: string
+  consumer: string
+  attempts: number
+  failedAt: string
+  message: QueueMessage
+  error: { name: string; message: string; stack?: string }
+}
+```
+
+### CLI Commands
+
+```bash
+# List failed jobs (default limit: 50)
+npx quarry queue:failed
+npx quarry queue:failed --queue=NOTIFICATIONS_QUEUE --limit=100
+
+# Retry a single job by ID
+npx quarry queue:retry <message-id>
+
+# Retry all failed jobs
+npx quarry queue:retry --all
+npx quarry queue:retry --all --queue=NOTIFICATIONS_QUEUE
+
+# Delete a single failed job
+npx quarry queue:purge <message-id>
+
+# Delete all failed jobs
+npx quarry queue:purge --all
+npx quarry queue:purge --all --queue=NOTIFICATIONS_QUEUE
+```
+
+### QueueStore API
+
+Inject via `QUEUE_TOKENS.QueueStore` for programmatic access:
+
+```typescript
+import { QUEUE_TOKENS } from 'stratal/queue'
+import type { QueueStore } from 'stratal/queue'
+
+@Transient()
+export class MyService {
+  constructor(@inject(QUEUE_TOKENS.QueueStore) private store: QueueStore) {}
+
+  async inspectFailures() {
+    const { keys, cursor } = await this.store.listFailedJobs({ limit: 50 })
+    const job = await this.store.getFailedJob(keys[0].id)
+    await this.store.removeFailedJob(keys[0].id)
+    await this.store.purgeFailedJobs()
+  }
+}
+```
+
 ## Cron Jobs
 
 Declare `schedule` as a **static** property on the class.
@@ -204,4 +292,4 @@ interface CronJob {
 }
 ```
 
-Declare `static schedule` on the class — it is not part of the interface.
+Declare `static schedule` on the class — it is not part of the interface. Jobs without a static `schedule` property log a warning and are skipped at boot.

@@ -64,6 +64,9 @@ npx quarry ./custom/entry.ts --env staging route:list
 | `event:list` | List all registered event listeners |
 | `schedule:list` | List all cron job schedules |
 | `queue:list` | List all queue consumers |
+| `queue:failed {--queue=} {--limit=}` | List failed queue jobs |
+| `queue:retry {id?} {--all} {--queue=}` | Retry failed queue jobs |
+| `queue:purge {id?} {--all} {--queue=}` | Delete failed queue jobs without retrying |
 | `db:seed {name*} {--all}` | Run a specific seeder/seeders or all seeders |
 | `db:seed:list` | List all available seeders |
 | `api` | Serve the OpenAPI spec |
@@ -98,6 +101,16 @@ npx quarry schedule:list
 
 # See what queue consumers are registered
 npx quarry queue:list
+
+# List failed queue jobs
+npx quarry queue:failed
+npx quarry queue:failed --queue=NOTIFICATIONS_QUEUE
+
+# Retry all failed jobs
+npx quarry queue:retry --all
+
+# Purge all failed jobs
+npx quarry queue:purge --all
 
 # List all available seeders
 npx quarry db:seed:list
