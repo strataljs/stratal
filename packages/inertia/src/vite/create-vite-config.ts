@@ -49,6 +49,7 @@ try {
 } catch {}
 
 const baseConfig = {
+  publicDir: 'src/inertia/public',
   plugins: [
     cloudflare(${cloudflareArgs}),
     ...(inertiaPlugin ? [inertiaPlugin] : []),

@@ -99,6 +99,9 @@ export function stratalInertia(options?: StratalInertiaPluginOptions): Plugin[] 
     stratalInertiaTypes(),
     {
       name: 'stratal:optimize-deps-fix',
+      config(config) {
+        config.publicDir ??= 'src/inertia/public';
+      },
       configEnvironment(name: string, env: EnvironmentOptions) {
         const existing = env.optimizeDeps?.exclude ?? []
         const existingInclude = env.optimizeDeps?.include ?? []
