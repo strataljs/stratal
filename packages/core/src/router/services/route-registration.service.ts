@@ -1,7 +1,6 @@
 import type { Context, MiddlewareHandler } from 'hono';
 import type { UpgradeWebSocket, WSContext, WSEvents } from 'hono/ws';
-import { inject } from '../../di';
-import { type Container, getMethodInjections } from '../../di';
+import { type Container, getMethodInjections, inject } from '../../di';
 import { Singleton } from '../../di/decorators';
 import { DI_TOKENS } from '../../di/tokens';
 import {
@@ -30,7 +29,6 @@ import {
 import {
     ResponseValidationError,
 } from '../errors';
-import { RouterError } from '../router.error';
 import type { HonoApp } from '../hono-app';
 import type { Middleware } from '../middleware.interface';
 import { createDomainMiddleware } from '../middleware/domain.middleware';
@@ -38,6 +36,7 @@ import { createMiddlewareChain } from '../middleware/middleware-chain';
 import { type RegisteredRoute, type RouteRegistry } from '../route-registry';
 import { RouterContext } from '../router-context';
 import type { RouterResolver } from '../router-resolver';
+import { RouterError } from '../router.error';
 import { ROUTER_TOKENS } from '../router.tokens';
 import { commonErrorSchemas } from '../schemas/common.schemas';
 import type {
@@ -583,9 +582,14 @@ export class RouteRegistrationService {
       const runGuards = guardChain
         ? () => guardChain(c, runHandler)
         : runHandler
+      const runGuardsWithOverrideCheck = async () => {
+        const override = c.get('validationSuccessResponse')
+        if (override) return void (captured = override)
+        return runGuards()
+      }
       const runScoped = scopedChain
-        ? () => scopedChain(c, runGuards)
-        : runGuards
+        ? () => scopedChain(c, runGuardsWithOverrideCheck)
+        : runGuardsWithOverrideCheck
 
       const result = await runScoped()
       // A middleware (scoped or guard) may short-circuit by returning a
