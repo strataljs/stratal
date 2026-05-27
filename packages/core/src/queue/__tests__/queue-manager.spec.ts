@@ -63,7 +63,7 @@ describe('QueueManager', () => {
       consumerRegistry.register(consumer)
 
       const batch = createMockBatch([
-        { id: '1', timestamp: Date.now(), type: 'email.send', payload: { to: 'test@example.com' } },
+        { id: '1', type: 'email.send', payload: { to: 'test@example.com' } },
       ])
 
       await queueManager.processBatch('notifications-queue', batch)
@@ -82,7 +82,7 @@ describe('QueueManager', () => {
       consumerRegistry.register(consumer)
 
       const batch = createMockBatch([
-        { id: '1', timestamp: Date.now(), type: 'email.send', payload: {} },
+        { id: '1', type: 'email.send', payload: {} },
       ])
 
       await queueManager.processBatch('notifications-queue', batch)
@@ -98,7 +98,7 @@ describe('QueueManager', () => {
       consumerRegistry.register(consumer)
 
       const batch = createMockBatch([
-        { id: '1', timestamp: Date.now(), type: 'email.send', payload: {} },
+        { id: '1', type: 'email.send', payload: {} },
       ])
 
       await queueManager.processBatch('notifications-queue', batch)
@@ -117,7 +117,7 @@ describe('QueueManager', () => {
       consumerRegistry.register(consumer)
 
       const batch = createMockBatch([
-        { id: '1', timestamp: Date.now(), type: 'email.send', payload: {} },
+        { id: '1', type: 'email.send', payload: {} },
       ], 3)
 
       await queueManager.processBatch('notifications-queue', batch)
@@ -141,7 +141,7 @@ describe('QueueManager', () => {
       consumerRegistry.register(consumer2)
 
       const batch = createMockBatch([
-        { id: '1', timestamp: Date.now(), type: 'user.created', payload: { userId: 'u1' } },
+        { id: '1', type: 'user.created', payload: { userId: 'u1' } },
       ])
 
       await queueManager.processBatch('events-queue', batch)
@@ -155,9 +155,9 @@ describe('QueueManager', () => {
       consumerRegistry.register(consumer)
 
       const batch = createMockBatch([
-        { id: '1', timestamp: Date.now(), type: 'email.send', payload: { to: 'a@example.com' } },
-        { id: '2', timestamp: Date.now(), type: 'email.send', payload: { to: 'b@example.com' } },
-        { id: '3', timestamp: Date.now(), type: 'email.send', payload: { to: 'c@example.com' } },
+        { id: '1', type: 'email.send', payload: { to: 'a@example.com' } },
+        { id: '2', type: 'email.send', payload: { to: 'b@example.com' } },
+        { id: '3', type: 'email.send', payload: { to: 'c@example.com' } },
       ])
 
       await queueManager.processBatch('notifications-queue', batch)
@@ -173,7 +173,7 @@ describe('QueueManager', () => {
       consumerRegistry.register(consumer)
 
       const batch = createMockBatch([
-        { id: '1', timestamp: Date.now(), type: 'unknown.type', payload: {} },
+        { id: '1', type: 'unknown.type', payload: {} },
       ])
 
       await queueManager.processBatch('notifications-queue', batch)
@@ -188,7 +188,7 @@ describe('QueueManager', () => {
       consumerRegistry.register(consumer)
 
       const batch = createMockBatch([
-        { id: '1', timestamp: Date.now(), type: 'any.message.type', payload: {} },
+        { id: '1', type: 'any.message.type', payload: {} },
       ])
 
       await queueManager.processBatch('events-queue', batch)
@@ -207,7 +207,7 @@ describe('QueueManager', () => {
       consumerRegistry.register(consumer2)
 
       const batch = createMockBatch([
-        { id: '1', timestamp: Date.now(), type: 'email.send', payload: {} },
+        { id: '1', type: 'email.send', payload: {} },
       ])
 
       await queueManager.processBatch('notifications-queue', batch)
@@ -223,7 +223,7 @@ describe('QueueManager', () => {
       consumerRegistry.register(consumer)
 
       const batch = createMockBatch([
-        { id: '1', timestamp: Date.now(), type: 'email.send', payload: {} },
+        { id: '1', type: 'email.send', payload: {} },
       ])
 
       await queueManager.processBatch('notifications-queue', batch)
@@ -239,7 +239,6 @@ describe('QueueManager', () => {
       const batch = createMockBatch([
         {
           id: '1',
-          timestamp: Date.now(),
           type: 'order.process',
           payload: {},
           metadata: { idempotencyKey: 'order:123' },

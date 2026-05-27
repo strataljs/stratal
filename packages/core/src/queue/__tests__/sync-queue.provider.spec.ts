@@ -15,7 +15,6 @@ describe('SyncQueueProvider', () => {
 
   const createMessage = <T>(type: string, payload: T): QueueMessage<T> => ({
     id: 'test-id-123',
-    timestamp: Date.now(),
     type,
     payload,
   })

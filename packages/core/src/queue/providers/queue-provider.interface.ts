@@ -28,7 +28,7 @@ export interface IQueueProvider {
    * - SyncQueueProvider: Finds matching consumers and calls handle() directly
    *
    * @param binding - Queue binding identifier
-   * @param message - Complete message with id, timestamp, and metadata
+   * @param message - Complete message with id and metadata
    */
   send<T>(binding: string, message: QueueMessage<T>): Promise<void>
 }

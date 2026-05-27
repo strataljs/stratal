@@ -47,7 +47,6 @@ export class QueueRetryCommand extends Command {
     await this.provider.send(job.queue, {
       ...job.message,
       id: crypto.randomUUID(),
-      timestamp: Date.now(),
     })
     await this.store.removeFailedJob(id)
     this.success(`Retried job ${id}`)
@@ -72,7 +71,6 @@ export class QueueRetryCommand extends Command {
         await this.provider.send(job.queue, {
           ...job.message,
           id: crypto.randomUUID(),
-          timestamp: Date.now(),
         })
         await this.store.removeFailedJob(key.id)
         count++

@@ -37,7 +37,6 @@ describe('EmailConsumer', () => {
     overrides?: Partial<QueueMessage<SendEmailInput>>
   ): QueueMessage<SendEmailInput> => ({
     id: 'msg-1',
-    timestamp: Date.now(),
     type: 'email.send',
     payload: {
       to: 'user@example.com',

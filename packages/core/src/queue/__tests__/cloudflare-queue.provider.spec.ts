@@ -42,7 +42,6 @@ describe('CloudflareQueueProvider', () => {
 
   const createMessage = <T>(type: string, payload: T): QueueMessage<T> => ({
     id: 'test-id-123',
-    timestamp: Date.now(),
     type,
     payload,
   })
@@ -92,7 +91,6 @@ describe('CloudflareQueueProvider', () => {
     it('should send message with metadata', async () => {
       const message: QueueMessage<{ to: string }> = {
         id: 'test-id-123',
-        timestamp: Date.now(),
         type: 'email.send',
         payload: { to: 'test@example.com' },
         metadata: {

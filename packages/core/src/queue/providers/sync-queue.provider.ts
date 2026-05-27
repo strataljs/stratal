@@ -27,7 +27,6 @@ import type { IQueueProvider } from './queue-provider.interface'
  * const provider = new SyncQueueProvider(registry)
  * await provider.send('NOTIFICATIONS_QUEUE', {
  *   id: '123',
- *   timestamp: Date.now(),
  *   type: 'email.send',
  *   payload: { to: 'test@example.com' }
  * })
@@ -47,7 +46,7 @@ export class SyncQueueProvider implements IQueueProvider {
    * If any consumer throws, onError() is called and the error is re-thrown.
    *
    * @param _binding - Queue binding (not used for routing, consumers match by message type)
-   * @param message - Complete message with id, timestamp, and payload
+   * @param message - Complete message with id and payload
    * @throws Re-throws any error from consumer.handle() after calling onError()
    */
   async send<T>(_binding: string, message: QueueMessage<T>): Promise<void> {

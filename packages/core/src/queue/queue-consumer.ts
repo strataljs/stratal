@@ -7,8 +7,6 @@
 export interface QueueMessage<T = unknown> {
   /** Unique message identifier (UUID) */
   id: string
-  /** Timestamp when message was dispatched (milliseconds since epoch) */
-  timestamp: number
   /** Message type for routing to consumers */
   type: string
   /** Message payload */

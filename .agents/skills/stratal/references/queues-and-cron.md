@@ -82,11 +82,11 @@ export class AuditConsumer implements IQueueConsumer {
 ```typescript
 interface QueueMessage<T = unknown> {
   id: string           // UUID (auto-generated)
-  timestamp: number    // Epoch ms (auto-generated)
   type: string         // Message type for routing
   payload: T           // Message data
   metadata?: {
     locale?: string
+    idempotencyKey?: string
     [key: string]: unknown
   }
 }
@@ -118,13 +118,20 @@ export class NotificationService {
 
 ### DispatchMessage
 
-When dispatching, `id` and `timestamp` are auto-generated:
+When dispatching, `id` and `metadata.idempotencyKey` are auto-generated. The idempotency key is a deterministic SHA-256 hash of `type` + `payload`, so identical dispatches are deduplicated automatically. Override with a custom key via `metadata.idempotencyKey`:
 
 ```typescript
+// Auto-generated idempotency key (hash of type + payload)
 await this.queue.dispatch({
   type: 'email.send',
   payload: { to: 'user@example.com', subject: 'Hello' },
-  metadata: { priority: 'high' },
+})
+
+// Custom idempotency key
+await this.queue.dispatch({
+  type: 'order.process',
+  payload: { orderId: '123' },
+  metadata: { idempotencyKey: 'order:123' },
 })
 ```
 

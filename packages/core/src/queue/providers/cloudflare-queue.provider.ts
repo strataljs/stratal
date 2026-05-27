@@ -29,7 +29,7 @@ export class CloudflareQueueProvider implements IQueueProvider {
    * Send a message to a Cloudflare Queue
    *
    * @param binding - Queue binding identifier (e.g., 'NOTIFICATIONS_QUEUE')
-   * @param message - Complete message with id, timestamp, and payload
+   * @param message - Complete message with id and payload
    * @throws {QueueError} If the binding is not configured on env
    */
   async send<T>(binding: string, message: QueueMessage<T>): Promise<void> {
