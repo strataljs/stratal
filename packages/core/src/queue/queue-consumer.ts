@@ -16,6 +16,7 @@ export interface QueueMessage<T = unknown> {
   /** Optional metadata including locale for i18n */
   metadata?: {
     locale?: string
+    idempotencyKey?: string
     [key: string]: unknown
   }
 }

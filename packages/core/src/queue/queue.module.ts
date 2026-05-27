@@ -33,6 +33,7 @@ import { QueueManager } from './queue-manager'
 import type { QueueBinding } from './queue-binding'
 import { QueueRegistry } from './queue-registry'
 import type { IQueueSender } from './queue-sender.interface'
+import { QueueStore } from './queue-store'
 import { QUEUE_TOKENS } from './queue.tokens'
 import { QueueProviderFactory } from './services'
 
@@ -46,6 +47,25 @@ export interface QueueModuleOptions {
    * - 'sync': Testing provider that processes messages immediately
    */
   provider: 'cloudflare' | 'sync'
+
+  /**
+   * KV binding for queue state (idempotency keys + failed jobs)
+   */
+  store: {
+    /** KV namespace binding name (e.g. 'QUEUE_STORE') */
+    binding: string
+  }
+
+  /**
+   * Idempotency configuration
+   */
+  idempotency?: {
+    /** TTL in seconds for idempotency keys. Default: 86400 (24h) */
+    ttl?: number
+  }
+
+  /** Max retry attempts before storing as failed job. Default: 3 */
+  maxRetries?: number
 }
 
 @Module({
@@ -54,6 +74,7 @@ export interface QueueModuleOptions {
     QueueManager,
     { provide: QUEUE_TOKENS.QueueProviderFactory, useClass: QueueProviderFactory },
     { provide: QUEUE_TOKENS.QueueRegistry, useClass: QueueRegistry },
+    { provide: QUEUE_TOKENS.QueueStore, useClass: QueueStore },
   ],
 })
 export class QueueModule {

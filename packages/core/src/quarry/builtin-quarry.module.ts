@@ -11,7 +11,10 @@ import { I18nSearchCommand } from './commands/i18n-search.command'
 import { I18nStatsCommand } from './commands/i18n-stats.command'
 import { McpServeCommand } from './commands/mcp-serve.command'
 import { McpToolsCommand } from './commands/mcp-tools.command'
+import { QueueFailedCommand } from './commands/queue-failed.command'
 import { QueueListCommand } from './commands/queue-list.command'
+import { QueuePurgeCommand } from './commands/queue-purge.command'
+import { QueueRetryCommand } from './commands/queue-retry.command'
 import { RouteListCommand } from './commands/route-list.command'
 import { RouteTypesCommand } from './commands/route-types.command'
 import { ScheduleListCommand } from './commands/schedule-list.command'
@@ -35,6 +38,9 @@ import { ScheduleListCommand } from './commands/schedule-list.command'
     EventListCommand,
     ScheduleListCommand,
     QueueListCommand,
+    QueueFailedCommand,
+    QueueRetryCommand,
+    QueuePurgeCommand,
     McpServeCommand,
     McpToolsCommand,
     ApiCommand,

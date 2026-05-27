@@ -20,7 +20,7 @@ describe('QueueProviderFactory', () => {
 
   describe('create', () => {
     it('should return CloudflareQueueProvider for cloudflare config', () => {
-      const options: QueueModuleOptions = { provider: 'cloudflare' }
+      const options: QueueModuleOptions = { provider: 'cloudflare', store: { binding: 'QUEUE_STORE' } }
       factory = new QueueProviderFactory(mockEnv, registry, options)
 
       const provider = factory.create()
@@ -29,7 +29,7 @@ describe('QueueProviderFactory', () => {
     })
 
     it('should return SyncQueueProvider for sync config', () => {
-      const options: QueueModuleOptions = { provider: 'sync' }
+      const options: QueueModuleOptions = { provider: 'sync', store: { binding: 'QUEUE_STORE' } }
       factory = new QueueProviderFactory(mockEnv, registry, options)
 
       const provider = factory.create()
@@ -45,7 +45,7 @@ describe('QueueProviderFactory', () => {
     })
 
     it('should create new provider instance each time', () => {
-      const options: QueueModuleOptions = { provider: 'sync' }
+      const options: QueueModuleOptions = { provider: 'sync', store: { binding: 'QUEUE_STORE' } }
       factory = new QueueProviderFactory(mockEnv, registry, options)
 
       const provider1 = factory.create()
@@ -58,7 +58,7 @@ describe('QueueProviderFactory', () => {
     })
 
     it('should pass correct dependencies to CloudflareQueueProvider', () => {
-      const options: QueueModuleOptions = { provider: 'cloudflare' }
+      const options: QueueModuleOptions = { provider: 'cloudflare', store: { binding: 'QUEUE_STORE' } }
       factory = new QueueProviderFactory(mockEnv, registry, options)
 
       const provider = factory.create()
@@ -68,7 +68,7 @@ describe('QueueProviderFactory', () => {
     })
 
     it('should pass correct dependencies to SyncQueueProvider', () => {
-      const options: QueueModuleOptions = { provider: 'sync' }
+      const options: QueueModuleOptions = { provider: 'sync', store: { binding: 'QUEUE_STORE' } }
       factory = new QueueProviderFactory(mockEnv, registry, options)
 
       const provider = factory.create()

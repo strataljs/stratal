@@ -4,23 +4,42 @@ import type { LoggerService } from '../../logger'
 import { ConsumerRegistry } from '../consumer-registry'
 import type { IQueueConsumer, QueueMessage } from '../queue-consumer'
 import { QueueManager } from '../queue-manager'
+import type { QueueStore } from '../queue-store'
+import type { QueueModuleOptions } from '../queue.module'
 
 describe('QueueManager', () => {
   let queueManager: QueueManager
   let consumerRegistry: ConsumerRegistry
   let mockLogger: DeepMocked<LoggerService>
+  let mockStore: DeepMocked<QueueStore>
+  const mockOptions: QueueModuleOptions = {
+    provider: 'cloudflare',
+    store: { binding: 'QUEUE_STORE' },
+    maxRetries: 3,
+  }
 
   beforeEach(() => {
     vi.clearAllMocks()
     consumerRegistry = new ConsumerRegistry()
     mockLogger = createMock<LoggerService>()
-    queueManager = new QueueManager(consumerRegistry, mockLogger as unknown as LoggerService)
+    mockStore = createMock<QueueStore>()
+    mockStore.isProcessed.mockResolvedValue(false)
+    mockStore.markProcessed.mockResolvedValue(undefined)
+    mockStore.storeFailedJob.mockResolvedValue(undefined)
+    mockStore.removeFailedJob.mockResolvedValue(undefined)
+    queueManager = new QueueManager(
+      consumerRegistry,
+      mockLogger as unknown as LoggerService,
+      mockStore as unknown as QueueStore,
+      mockOptions,
+    )
   })
 
-  const createMockBatch = (messages: QueueMessage[]): DeepMocked<MessageBatch> => {
+  const createMockBatch = (messages: QueueMessage[], attempts = 1): DeepMocked<MessageBatch> => {
     const mockMessages = messages.map((body) => {
       const msg = createMock<Message>()
       ;(msg as unknown as { body: QueueMessage }).body = body
+      ;(msg as unknown as { attempts: number }).attempts = attempts
       return msg
     })
 
@@ -71,7 +90,7 @@ describe('QueueManager', () => {
       expect(batch.messages[0].ack).toHaveBeenCalled()
     })
 
-    it('should call retry() and onError() on consumer failure', async () => {
+    it('should call retry() and onError() on consumer failure when retries remain', async () => {
       const error = new Error('Processing failed')
       const consumer = createConsumer(['email.send'])
       consumer.handle.mockRejectedValue(error)
@@ -86,6 +105,32 @@ describe('QueueManager', () => {
 
       expect(consumer.onError).toHaveBeenCalledWith(error, expect.objectContaining({ id: '1' }))
       expect(batch.messages[0].retry).toHaveBeenCalled()
+      expect(batch.messages[0].ack).not.toHaveBeenCalled()
+      expect(mockStore.storeFailedJob).not.toHaveBeenCalled()
+    })
+
+    it('should store failed job and ack when retries exhausted', async () => {
+      const error = new Error('Processing failed')
+      const consumer = createConsumer(['email.send'])
+      consumer.handle.mockRejectedValue(error)
+      consumer.onError!.mockResolvedValue(undefined)
+      consumerRegistry.register(consumer)
+
+      const batch = createMockBatch([
+        { id: '1', timestamp: Date.now(), type: 'email.send', payload: {} },
+      ], 3)
+
+      await queueManager.processBatch('notifications-queue', batch)
+
+      expect(mockStore.storeFailedJob).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: '1',
+          queue: 'notifications-queue',
+          error: expect.objectContaining({ message: 'Processing failed' }),
+        }),
+      )
+      expect(batch.messages[0].ack).toHaveBeenCalled()
+      expect(batch.messages[0].retry).not.toHaveBeenCalled()
     })
 
     it('should handle multiple consumers for same message type', async () => {
@@ -123,7 +168,7 @@ describe('QueueManager', () => {
       expect(batch.messages[2].ack).toHaveBeenCalled()
     })
 
-    it('should skip messages with no matching consumers', async () => {
+    it('should ack messages with no matching consumers', async () => {
       const consumer = createConsumer(['email.send'])
       consumerRegistry.register(consumer)
 
@@ -134,6 +179,8 @@ describe('QueueManager', () => {
       await queueManager.processBatch('notifications-queue', batch)
 
       expect(consumer.handle).not.toHaveBeenCalled()
+      expect(batch.messages[0].ack).toHaveBeenCalled()
+      expect(mockStore.markProcessed).toHaveBeenCalledWith('1')
     })
 
     it('should route wildcard consumers', async () => {
@@ -167,6 +214,42 @@ describe('QueueManager', () => {
 
       expect(consumer1.handle).toHaveBeenCalled()
       expect(consumer2.handle).toHaveBeenCalled()
+      expect(batch.messages[0].retry).toHaveBeenCalled()
+    })
+
+    it('should skip already-processed messages', async () => {
+      mockStore.isProcessed.mockResolvedValue(true)
+      const consumer = createConsumer(['email.send'])
+      consumerRegistry.register(consumer)
+
+      const batch = createMockBatch([
+        { id: '1', timestamp: Date.now(), type: 'email.send', payload: {} },
+      ])
+
+      await queueManager.processBatch('notifications-queue', batch)
+
+      expect(consumer.handle).not.toHaveBeenCalled()
+      expect(batch.messages[0].ack).toHaveBeenCalled()
+    })
+
+    it('should use custom idempotencyKey from metadata', async () => {
+      const consumer = createConsumer(['order.process'])
+      consumerRegistry.register(consumer)
+
+      const batch = createMockBatch([
+        {
+          id: '1',
+          timestamp: Date.now(),
+          type: 'order.process',
+          payload: {},
+          metadata: { idempotencyKey: 'order:123' },
+        },
+      ])
+
+      await queueManager.processBatch('orders-queue', batch)
+
+      expect(mockStore.isProcessed).toHaveBeenCalledWith('order:123')
+      expect(mockStore.markProcessed).toHaveBeenCalledWith('order:123')
     })
   })
 })
