@@ -14,7 +14,7 @@ import { DI_TOKENS } from 'stratal/di'
       inject: [DI_TOKENS.CloudflareEnv],
       useFactory: (env) => ({
         provider: 'cloudflare',  // 'cloudflare' | 'sync'
-        store: { binding: 'QUEUE_STORE' },  // KV for failed jobs + idempotency
+        // store defaults to { binding: 'CACHE' } if omitted
       }),
     }),
     QueueModule.registerQueue('NOTIFICATIONS_QUEUE'),
@@ -158,8 +158,8 @@ Stratal code only references the `binding` value (`NOTIFICATIONS_QUEUE`). The `q
 ```typescript
 interface QueueModuleOptions {
   provider: 'cloudflare' | 'sync'
-  store: {
-    binding: string  // KV namespace binding (e.g. 'QUEUE_STORE')
+  store?: {
+    binding?: string  // KV namespace binding. Default: 'CACHE'
   }
   idempotency?: {
     ttl?: number  // Seconds. Default: 86400 (24h)
@@ -168,12 +168,12 @@ interface QueueModuleOptions {
 }
 ```
 
-The `store` field is required — it points to a KV namespace used for idempotency keys and failed job storage. Add the binding to `wrangler.jsonc`:
+The `store` field is optional — it defaults to the `CACHE` KV binding. Override `store.binding` only if the KV namespace uses a different binding name. Add the binding to `wrangler.jsonc`:
 
 ```jsonc
 {
   "kv_namespaces": [
-    { "binding": "QUEUE_STORE", "id": "..." }
+    { "binding": "CACHE", "id": "..." }
   ]
 }
 ```

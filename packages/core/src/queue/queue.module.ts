@@ -25,17 +25,17 @@
  * - `sync`: Testing provider that processes messages immediately
  */
 
-import { DI_TOKENS } from '../di/tokens'
-import { Module } from '../module'
-import type { AsyncModuleOptions, DynamicModule, InjectionToken } from '../module/types'
-import { ConsumerRegistry } from './consumer-registry'
-import { QueueManager } from './queue-manager'
-import type { QueueBinding } from './queue-binding'
-import { QueueRegistry } from './queue-registry'
-import type { IQueueSender } from './queue-sender.interface'
-import { QueueStore } from './queue-store'
-import { QUEUE_TOKENS } from './queue.tokens'
-import { QueueProviderFactory } from './services'
+import { DI_TOKENS } from '../di/tokens';
+import { Module } from '../module';
+import type { AsyncModuleOptions, DynamicModule, InjectionToken } from '../module/types';
+import { ConsumerRegistry } from './consumer-registry';
+import type { QueueBinding } from './queue-binding';
+import { QueueManager } from './queue-manager';
+import { QueueRegistry } from './queue-registry';
+import type { IQueueSender } from './queue-sender.interface';
+import { QueueStore } from './queue-store';
+import { QUEUE_TOKENS } from './queue.tokens';
+import { QueueProviderFactory } from './services';
 
 /**
  * Queue module configuration options
@@ -49,11 +49,14 @@ export interface QueueModuleOptions {
   provider: 'cloudflare' | 'sync'
 
   /**
-   * KV binding for queue state (idempotency keys + failed jobs)
+   * KV binding for queue state (idempotency keys + failed jobs).
+   * Defaults to the `CACHE` binding if omitted.
    */
-  store: {
-    /** KV namespace binding name (e.g. 'QUEUE_STORE') */
-    binding: string
+  store?: {
+    /** KV namespace binding name.`
+     * @default CACHE
+     */
+    binding?: string
   }
 
   /**

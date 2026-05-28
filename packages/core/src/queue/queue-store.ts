@@ -1,11 +1,11 @@
-import { inject } from '../di'
-import { Transient } from '../di/decorators'
-import { type StratalEnv } from '../env'
-import { DI_TOKENS } from '../di/tokens'
-import type { FailedJob, FailedJobMetadata } from './failed-job'
-import { QueueError } from './queue.error'
-import type { QueueModuleOptions } from './queue.module'
-import { QUEUE_TOKENS } from './queue.tokens'
+import { inject } from '../di';
+import { Transient } from '../di/decorators';
+import { DI_TOKENS } from '../di/tokens';
+import { type StratalEnv } from '../env';
+import type { FailedJob, FailedJobMetadata } from './failed-job';
+import { QueueError } from './queue.error';
+import type { QueueModuleOptions } from './queue.module';
+import { QUEUE_TOKENS } from './queue.tokens';
 
 const IDEM_PREFIX = 'queue:idem:'
 const FAILED_PREFIX = 'queue:failed:'
@@ -19,7 +19,7 @@ export class QueueStore {
     @inject(DI_TOKENS.CloudflareEnv) env: StratalEnv,
     @inject(QUEUE_TOKENS.QueueModuleOptions) options: QueueModuleOptions,
   ) {
-    const binding = options.store.binding
+    const binding = options.store?.binding ?? 'CACHE'
     const kv = (env as unknown as Record<string, unknown>)[binding] as KVNamespace | undefined
 
     if (!kv) {

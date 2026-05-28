@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createMock, type DeepMocked } from '@stratal/testing/mocks'
-import type { LoggerService } from '../../logger'
-import { ConsumerRegistry } from '../consumer-registry'
-import type { IQueueConsumer, QueueMessage } from '../queue-consumer'
-import { QueueManager } from '../queue-manager'
-import type { QueueStore } from '../queue-store'
-import type { QueueModuleOptions } from '../queue.module'
+import { createMock, type DeepMocked } from '@stratal/testing/mocks';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { LoggerService } from '../../logger';
+import { ConsumerRegistry } from '../consumer-registry';
+import type { IQueueConsumer, QueueMessage } from '../queue-consumer';
+import { QueueManager } from '../queue-manager';
+import type { QueueStore } from '../queue-store';
+import type { QueueModuleOptions } from '../queue.module';
 
 describe('QueueManager', () => {
   let queueManager: QueueManager
@@ -14,7 +14,7 @@ describe('QueueManager', () => {
   let mockStore: DeepMocked<QueueStore>
   const mockOptions: QueueModuleOptions = {
     provider: 'cloudflare',
-    store: { binding: 'QUEUE_STORE' },
+    store: { binding: 'CACHE' },
     maxRetries: 3,
   }
 
