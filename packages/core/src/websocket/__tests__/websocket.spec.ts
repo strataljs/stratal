@@ -243,5 +243,45 @@ describe('WebSocket Support', () => {
 
       expect(() => ctx.body()).toThrow(WebSocketError)
     })
+
+    describe('trySend()', () => {
+      const makeContext = (loggerWarn: ReturnType<typeof vi.fn>) =>
+        createMock<Context<RouterEnv>>({
+          get: vi.fn((key: string) => {
+            if (key === 'requestContainer') return { resolve: vi.fn(() => ({ warn: loggerWarn })) }
+            return undefined
+          }) as unknown as Context<RouterEnv>['get'],
+        })
+
+      it('should send and return true when the socket is OPEN', () => {
+        const loggerWarn = vi.fn()
+        const ws = createMock<WSContext>({ send: vi.fn(), readyState: 1 })
+        const ctx = new GatewayContext(makeContext(loggerWarn), ws)
+
+        expect(ctx.trySend('hello')).toBe(true)
+        expect(ws.send).toHaveBeenCalledWith('hello')
+        expect(loggerWarn).not.toHaveBeenCalled()
+      })
+
+      it('should skip, log a warning, and return false when the socket is CLOSED', () => {
+        const loggerWarn = vi.fn()
+        const ws = createMock<WSContext>({ send: vi.fn(), readyState: 3 })
+        const ctx = new GatewayContext(makeContext(loggerWarn), ws)
+
+        expect(ctx.trySend('hello')).toBe(false)
+        expect(ws.send).not.toHaveBeenCalled()
+        expect(loggerWarn).toHaveBeenCalledWith('Skipped WebSocket send on non-open socket', { readyState: 3 })
+      })
+
+      it('should skip when the socket is CLOSING', () => {
+        const loggerWarn = vi.fn()
+        const ws = createMock<WSContext>({ send: vi.fn(), readyState: 2 })
+        const ctx = new GatewayContext(makeContext(loggerWarn), ws)
+
+        expect(ctx.trySend('hello')).toBe(false)
+        expect(ws.send).not.toHaveBeenCalled()
+        expect(loggerWarn).toHaveBeenCalledWith('Skipped WebSocket send on non-open socket', { readyState: 2 })
+      })
+    })
   })
 })

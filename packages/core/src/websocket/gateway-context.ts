@@ -1,9 +1,13 @@
 import type { Context } from 'hono'
 import type { WSContext, WSReadyState } from 'hono/ws'
+import { LOGGER_TOKENS, type LoggerService } from '../logger'
 import type { ContextQueryResult } from '../router/router-context'
 import { RouterContext } from '../router/router-context'
 import type { RouterEnv } from '../router/types'
 import { WebSocketError } from './websocket.error'
+
+/** WebSocket OPEN ready state (`WSReadyState` is a type-only union in hono/ws). */
+const WS_OPEN = 1
 
 /**
  * WebSocket gateway context
@@ -30,6 +34,25 @@ export class GatewayContext extends RouterContext {
   /** Send data through the WebSocket connection */
   send(data: string | ArrayBuffer | Uint8Array<ArrayBuffer>): void {
     this.ws.send(data)
+  }
+
+  /**
+   * Send only if the socket is still open. Returns `false` (and logs a warning)
+   * when the socket is closing/closed — e.g. inside `@OnError`, which fires on a
+   * transport error after the socket is already dead, or after an `await` in
+   * `@OnMessage` when the client disconnected mid-handler. Use this for
+   * fire-and-forget acks/errors instead of `send()`, which throws on a closed
+   * socket ("Can't call WebSocket send() after close()").
+   */
+  trySend(data: string | ArrayBuffer | Uint8Array<ArrayBuffer>): boolean {
+    if (this.ws.readyState !== WS_OPEN) {
+      this.getContainer()
+        .resolve<LoggerService>(LOGGER_TOKENS.LoggerService)
+        .warn('Skipped WebSocket send on non-open socket', { readyState: this.ws.readyState })
+      return false
+    }
+    this.ws.send(data)
+    return true
   }
 
   /** Close the WebSocket connection */
