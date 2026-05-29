@@ -13,17 +13,20 @@ Maintainer rules for `@stratal/feature-flags`. Consumer API depth lives in
 ## Layout
 
 - Server entry: `src/index.ts` → `dist/index.mjs` (`.` export). The worker
-  entrypoint: `FeatureFlagModule`, `FeatureFlagService`, `FeatureFlagInertiaModule`,
+  entrypoint: `FeatureFlagModule`, `FeatureFlagService`, `FeatureFlagShareMiddleware`,
   tokens, error, types.
 - React entry: `src/react.ts` → `dist/react.mjs` (`./react` export). Client hooks.
-- Inertia auto-share: `src/inertia/` — re-exported from `src/index.ts`.
+- Inertia share middleware: `src/feature-flag-share.middleware.ts` — exported from
+  `src/index.ts`. **Not** registered by `FeatureFlagModule`; consumers register it
+  themselves (scoped or global) so a stalled Flagship binding can't block every route.
 
 ## Boundaries (don't cross-import)
 
 - `src/index.ts` and its tree must not import React.
-- `src/inertia/*` must import `@stratal/inertia` **type-only** (it only calls the
-  runtime `ctx.share` macro + resolves `FeatureFlagService`). Keep these files
-  side-effect-free so `FeatureFlagInertiaModule` tree-shakes away when unused.
+- `feature-flag-share.middleware.ts` self-declares the `ctx.share` type and only
+  calls the runtime macro behind a `typeof` guard — **zero** compile/runtime
+  dependency on `@stratal/inertia`. Keep it that way (and side-effect-free) so it
+  tree-shakes away when unused.
 - `src/react/*` must not import worker code.
 - `"sideEffects": false` in package.json is load-bearing for tree-shaking — keep it.
 

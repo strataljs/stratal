@@ -1,16 +1,9 @@
-import { Transient, inject } from 'stratal/di'
-import type { Middleware, Next, RouterContext } from 'stratal/router'
-import { FEATURE_FLAG_TOKENS } from './feature-flags.tokens'
-import type { FeatureFlagService } from './services/feature-flag.service'
+/// <reference types="@stratal/inertia" />
 
-// `ctx.share` is contributed at runtime by `@stratal/inertia` (an optional peer).
-// Declared here so this package types the call without importing Inertia; the
-// signature matches Inertia's, so the declarations merge when both are present.
-declare module 'stratal/router' {
-  interface RouterContext {
-    share(key: string, value: unknown): void
-  }
-}
+import { Transient, inject } from 'stratal/di';
+import type { Middleware, Next, RouterContext } from 'stratal/router';
+import { FEATURE_FLAG_TOKENS } from './feature-flags.tokens';
+import type { FeatureFlagService } from './services/feature-flag.service';
 
 /**
  * Evaluates the declared flag manifest for the default app and shares it as the
@@ -18,8 +11,18 @@ declare module 'stratal/router' {
  *
  * Only runs on `GET` requests — page renders (full visits and partial reloads)
  * are always `GET`, so mutating API calls don't trigger evaluation. No-ops when
- * Inertia is not installed (`ctx.share` absent), so `FeatureFlagModule` is safe
- * in pure-API workers. Registered by `FeatureFlagModule`.
+ * Inertia is not installed (`ctx.share` absent).
+ *
+ * Register it yourself, scoped to where flags are actually needed — a Flagship
+ * stall then only affects those routes, not the whole app:
+ *
+ * ```typescript
+ * configureRoutes(router: Router): void {
+ *   // only the controllers that render flag-aware pages
+ *   router.group([DashboardController], (r) => r.middleware(FeatureFlagShareMiddleware))
+ *   // ...or app-wide: router.use(FeatureFlagShareMiddleware)
+ * }
+ * ```
  */
 @Transient()
 export class FeatureFlagShareMiddleware implements Middleware {

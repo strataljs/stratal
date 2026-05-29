@@ -7,7 +7,7 @@ interface FeatureFlagsPageProps extends PageProps {
 }
 
 /**
- * Returns the full map of feature flags shared by `FeatureFlagInertiaModule`.
+ * Returns the full map of feature flags shared by `FeatureFlagShareMiddleware`.
  */
 export function useFeatureFlags(): Record<string, unknown> {
   return usePage<FeatureFlagsPageProps>().props.featureFlags ?? {}

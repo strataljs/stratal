@@ -16,7 +16,7 @@ Stratal is a modular Cloudflare Workers framework. ESM-only. Packages:
 - `@stratal/testing` — test utilities, mocks, HTTP client
 - `@stratal/inertia` — Inertia.js server adapter for React SSR
 - `@stratal/inertia-modal` — backend-driven modal pages for Inertia
-- `@stratal/feature-flags` — Cloudflare Flagship feature flags + Inertia auto-share + React hooks
+- `@stratal/feature-flags` — Cloudflare Flagship feature flags + Inertia sharing + React hooks
 
 ## Critical Rules
 
@@ -327,7 +327,7 @@ See `references/quarry-cli.md` for all MCP flags and options.
 
 **User says "Add rate limiting" / "Throttle this endpoint" / "429 too many requests"** -> Read `references/rate-limiter.md`. Import `RateLimiterModule.forRoot({ store: 'kv', binding: 'RATE_LIMITS' })`. Define limiters in `OnInitialize` via `registry.for('name', ctx => Limit.perMinute(60).by(...))`. Attach with `router.throttle('name')` or `@RateLimit('name')`. For better-auth path rules → `references/auth-and-rbac.md` "Rate-limit interop".
 
-**User says "Add feature flags" / "Use Flagship" / "toggle a feature"** -> Read `references/feature-flags.md`. Install `@stratal/feature-flags`, add the `flagship` binding to wrangler, import `FeatureFlagModule.forRoot({ apps: [{ binding: 'FLAGS', flags: {...} }] })`, inject `FeatureFlagService`. With Inertia installed it auto-shares flags — read them via `useFlag` from `@stratal/feature-flags/react`.
+**User says "Add feature flags" / "Use Flagship" / "toggle a feature"** -> Read `references/feature-flags.md`. Install `@stratal/feature-flags`, add the `flagship` binding to wrangler, import `FeatureFlagModule.forRoot({ apps: [{ binding: 'FLAGS', flags: {...} }] })`, inject `FeatureFlagService`. To expose flags to Inertia, register `FeatureFlagShareMiddleware` (scoped via `router.middleware(...)` or global via `router.use(...)`) and read them via `useFlag` from `@stratal/feature-flags/react`.
 
 ## Reference Loading Guide
 
@@ -341,7 +341,7 @@ Load these when the task needs deeper knowledge:
 | `references/errors-and-i18n.md` | ExceptionHandler, ApplicationError, HttpException, domain error classes, i18n, withZodI18n(), withI18n() |
 | `references/inertia.md` | Inertia.js setup, rendering, props, SSR, type safety, Vite |
 | `references/inertia-modal.md` | Backend-driven modal pages: `ModalModule`, `ctx.inertiaModal()`, `<Modal>`, `useModal()` |
-| `references/feature-flags.md` | Cloudflare Flagship: `FeatureFlagModule`, `FeatureFlagService`, flag manifest, `use()`, `all()`, Inertia auto-share, `useFlag`/`useFeatureFlags` |
+| `references/feature-flags.md` | Cloudflare Flagship: `FeatureFlagModule`, `FeatureFlagService`, flag manifest, `use()`, `all()`, `FeatureFlagShareMiddleware` (Inertia sharing), `useFlag`/`useFeatureFlags` |
 | `references/websocket.md` | WebSocket gateways: `@Gateway`, `@OnMessage`, `GatewayContext` |
 | `references/workers.md` | Durable Objects, Workflows, Service Bindings — DI-aware base classes |
 | `references/database.md` | DatabaseModule, ZenStack, connections, plugins, transactions |

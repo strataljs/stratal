@@ -1,7 +1,5 @@
 import { Module } from 'stratal/module'
 import type { AsyncModuleOptions, DynamicModule } from 'stratal/module'
-import type { RouteConfigurable, Router } from 'stratal/router'
-import { FeatureFlagShareMiddleware } from './feature-flag-share.middleware'
 import { FEATURE_FLAG_TOKENS } from './feature-flags.tokens'
 import { FeatureFlagService } from './services/feature-flag.service'
 import type { FeatureFlagModuleOptions } from './types'
@@ -13,10 +11,10 @@ import type { FeatureFlagModuleOptions } from './types'
  * Declare your apps (and the flags you use) once; inject {@link FeatureFlagService}
  * to evaluate them.
  *
- * When `@stratal/inertia` is also present, declared flags are auto-shared to
- * every Inertia page as the `featureFlags` prop (read them with `useFlag` /
- * `useFeatureFlags` from `@stratal/feature-flags/react`) — no extra wiring. In
- * a pure-API worker the auto-share middleware is a no-op.
+ * To expose flags to an Inertia frontend, register {@link FeatureFlagShareMiddleware}
+ * yourself — scope it to the controllers that render pages (`router.middleware(...)`)
+ * or app-wide (`router.use(...)`) from a module's `configureRoutes`. It is not
+ * registered for you, so a stalled Flagship binding never blocks unrelated routes.
  *
  * @example
  * ```typescript
@@ -37,12 +35,7 @@ import type { FeatureFlagModuleOptions } from './types'
     { provide: FEATURE_FLAG_TOKENS.FeatureFlagService, useClass: FeatureFlagService },
   ],
 })
-export class FeatureFlagModule implements RouteConfigurable {
-  /** Auto-shares declared flags to every Inertia page (no-op without Inertia). */
-  configureRoutes(router: Router): void {
-    router.use(FeatureFlagShareMiddleware)
-  }
-
+export class FeatureFlagModule {
   /** Configure with static options. */
   static forRoot(options: FeatureFlagModuleOptions): DynamicModule {
     return {

@@ -1,5 +1,6 @@
-// Module (also registers the Inertia auto-share middleware)
+// Module
 export { FeatureFlagModule } from './feature-flags.module'
+// Inertia share middleware — register it yourself (scoped or global)
 export { FeatureFlagShareMiddleware } from './feature-flag-share.middleware'
 
 // Service

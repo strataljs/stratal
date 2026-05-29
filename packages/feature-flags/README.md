@@ -1,6 +1,6 @@
 # @stratal/feature-flags
 
-[Cloudflare Flagship](https://developers.cloudflare.com/flagship/) feature flags for the [Stratal](https://stratal.dev) framework, using the native Worker **binding API** — with zero-config [Inertia.js](https://inertiajs.com) auto-sharing and typed React hooks.
+[Cloudflare Flagship](https://developers.cloudflare.com/flagship/) feature flags for the [Stratal](https://stratal.dev) framework, using the native Worker **binding API** — with opt-in [Inertia.js](https://inertiajs.com) sharing and typed React hooks.
 
 ## Install
 
@@ -31,7 +31,7 @@ import { FeatureFlagModule } from '@stratal/feature-flags'
 export class AppModule {}
 ```
 
-When `@stratal/inertia` is installed, declared flags are auto-shared to every Inertia page — no extra wiring.
+To expose flags to an Inertia frontend, register `FeatureFlagShareMiddleware` where you want them — scoped to your page-rendering controllers (`router.middleware(...)`) or app-wide (`router.use(...)`).
 
 Evaluate on the server:
 

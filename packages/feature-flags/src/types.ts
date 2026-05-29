@@ -46,7 +46,7 @@ export interface FeatureFlagRegistry {}
  * A declared set of flags and their default values.
  *
  * Flagship has no enumeration API, so the flags you intend to evaluate (and
- * auto-share to the frontend) must be declared once here. The default also
+ * share to the frontend) must be declared once here. The default also
  * doubles as the type hint used to pick the evaluation method in `all()`.
  */
 export type FlagManifest = Record<string, FlagValue>
@@ -57,7 +57,7 @@ export type FlagManifest = Record<string, FlagValue>
 export interface FeatureFlagApp {
   /** Flagship binding name from your Wrangler config (type-checked against `StratalEnv`). */
   binding: FlagshipBindingName
-  /** Declared flags + defaults for this app. Used for manifest defaults and Inertia auto-share. */
+  /** Declared flags + defaults for this app. Used for manifest defaults and Inertia sharing. */
   flags?: FlagManifest
 }
 

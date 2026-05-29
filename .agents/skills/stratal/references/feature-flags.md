@@ -1,6 +1,6 @@
 # Feature Flags (Cloudflare Flagship)
 
-`@stratal/feature-flags` evaluates [Cloudflare Flagship](https://developers.cloudflare.com/flagship/) feature flags through the native Worker **binding API** (no OpenFeature SDK). It adds manifest defaults, a per-request evaluation context, multi-app support, zero-config Inertia auto-sharing, and typed React hooks.
+`@stratal/feature-flags` evaluates [Cloudflare Flagship](https://developers.cloudflare.com/flagship/) feature flags through the native Worker **binding API** (no OpenFeature SDK). It adds manifest defaults, a per-request evaluation context, multi-app support, opt-in Inertia sharing, and typed React hooks.
 
 Install: `npm install @stratal/feature-flags`
 
@@ -27,7 +27,7 @@ declare module 'stratal' {
 
 ## 2. Register the module
 
-Flagship has **no API to list flags** — declare the flags you use once in each app's `flags` manifest. The declared default is reused on every evaluation and the manifest is what gets auto-shared to the frontend.
+Flagship has **no API to list flags** — declare the flags you use once in each app's `flags` manifest. The declared default is reused on every evaluation and the manifest is what gets shared to the frontend.
 
 ```typescript
 import { FeatureFlagModule } from '@stratal/feature-flags'
@@ -102,21 +102,30 @@ Switch apps with `use(binding)`, which returns a new immutable instance bound to
 const exp = await this.flags.use('EXPERIMENT_FLAGS').getBooleanValue('layout-v2')
 ```
 
-## 4. Inertia auto-share (frontend)
+## 4. Inertia sharing (frontend)
 
-When `@stratal/inertia` is installed, `FeatureFlagModule` automatically evaluates the default app's manifest on every page render (GET) and shares it as the `featureFlags` prop — no extra module, no `InertiaModule` option. In a pure-API worker the auto-share is a no-op.
+`FeatureFlagShareMiddleware` evaluates the default app's manifest on each page render (GET) and shares it as the `featureFlags` prop. It is **not** registered for you — register it from a module's `configureRoutes`, scoped to the controllers that render flag-aware pages (`router.middleware(...)`) or app-wide (`router.use(...)`):
 
 ```typescript
-import { FeatureFlagModule } from '@stratal/feature-flags'
+import { FeatureFlagModule, FeatureFlagShareMiddleware } from '@stratal/feature-flags'
+import type { RouteConfigurable, Router } from 'stratal/router'
 
 @Module({
   imports: [
     InertiaModule.forRoot({ rootView }),
     FeatureFlagModule.forRoot({ apps: [{ binding: 'FLAGS', flags: { 'new-checkout': false } }] }),
   ],
+  controllers: [DashboardController],
 })
-export class AppModule {}
+export class DashboardModule implements RouteConfigurable {
+  configureRoutes(router: Router): void {
+    router.middleware(FeatureFlagShareMiddleware)        // only this module's controllers
+    // ...or app-wide from the root module: router.use(FeatureFlagShareMiddleware)
+  }
+}
 ```
+
+The middleware no-ops on non-GET requests and when `@stratal/inertia` isn't installed.
 
 Read flags in React with `@stratal/feature-flags/react`:
 

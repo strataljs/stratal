@@ -123,7 +123,7 @@ export class FeatureFlagService {
   /**
    * Evaluates every flag declared in the current app's manifest and returns a
    * `{ key: value }` map. The evaluation method is chosen from each declared
-   * default's type. Powers the Inertia auto-share.
+   * default's type. Powers `FeatureFlagShareMiddleware`.
    */
   async all(context?: FlagshipEvaluationContext): Promise<Record<string, FlagValue>> {
     const merged = await this.context(context)
