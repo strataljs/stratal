@@ -1,7 +1,7 @@
 {
-  "name": "@stratal/inertia",
-  "version": "0.0.22",
-  "description": "Inertia.js v3 server adapter for Stratal framework — server-driven React SPAs",
+  "name": "@stratal/feature-flags",
+  "version": "0.0.21",
+  "description": "Cloudflare Flagship feature flags for the Stratal framework — binding API wrapper with Inertia.js auto-sharing",
   "type": "module",
   "license": "MIT",
   "author": "Temitayo Fadojutimi",
@@ -9,19 +9,18 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/strataljs/stratal.git",
-    "directory": "packages/inertia"
+    "directory": "packages/feature-flags"
   },
   "bugs": {
     "url": "https://github.com/strataljs/stratal/issues"
   },
   "keywords": [
     "stratal",
-    "inertia",
-    "inertiajs",
-    "react",
-    "ssr",
+    "feature-flags",
+    "flagship",
     "cloudflare-workers",
-    "server-driven-spa"
+    "inertia",
+    "react"
   ],
   "engines": {
     "node": ">=22.0.0"
@@ -30,9 +29,9 @@
     "access": "public",
     "provenance": true
   },
+  "sideEffects": false,
   "files": [
     "dist",
-    "global.d.ts",
     "README.md"
   ],
   "exports": {
@@ -40,21 +39,9 @@
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
     },
-    "./quarry": {
-      "types": "./dist/quarry.d.mts",
-      "import": "./dist/quarry.mjs"
-    },
     "./react": {
       "types": "./dist/react.d.mts",
       "import": "./dist/react.mjs"
-    },
-    "./testing": {
-      "types": "./dist/testing.d.mts",
-      "import": "./dist/testing.mjs"
-    },
-    "./vite": {
-      "types": "./dist/vite.d.mts",
-      "import": "./dist/vite.mjs"
     },
     "./package.json": "./package.json"
   },
@@ -66,37 +53,19 @@
     "lint": "npx oxlint .",
     "lint:fix": "npx oxlint --fix ."
   },
-  "dependencies": {
-    "intl-messageformat": "^11.2.7",
-    "ts-morph": "^28.0.0"
-  },
   "peerDependencies": {
-    "@cloudflare/vite-plugin": ">=1.0.0",
-    "@inertiajs/core": ">=3",
     "@inertiajs/react": ">=3",
-    "@inertiajs/vite": ">=3",
-    "@stratal/testing": ">=0.0.22",
+    "@stratal/inertia": ">=0.0.21",
     "hono": ">=4",
     "react": ">=19",
     "react-dom": ">=19",
-    "stratal": ">=0.0.22",
-    "vite": ">=8",
-    "vitest": ">=4"
+    "stratal": ">=0.0.21"
   },
   "peerDependenciesMeta": {
-    "@cloudflare/vite-plugin": {
-      "optional": true
-    },
-    "@inertiajs/core": {
-      "optional": true
-    },
     "@inertiajs/react": {
       "optional": true
     },
-    "@inertiajs/vite": {
-      "optional": true
-    },
-    "@stratal/testing": {
+    "@stratal/inertia": {
       "optional": true
     },
     "react": {
@@ -104,30 +73,21 @@
     },
     "react-dom": {
       "optional": true
-    },
-    "vitest": {
-      "optional": true
     }
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.36.3",
     "@cloudflare/workers-types": "4.20260528.1",
     "@inertiajs/core": "^3.1.1",
     "@inertiajs/react": "^3.1.1",
-    "@inertiajs/vite": "^3.1.1",
-    "@stratal/testing": "workspace:*",
     "@types/node": "^25.6.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@vitest/runner": "~4.1.5",
-    "@vitest/snapshot": "~4.1.5",
     "hono": "^4.12.18",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "stratal": "workspace:*",
     "tsdown": "^0.22.0",
     "typescript": "^6.0.3",
-    "vite": "^8.0.11",
     "vitest": "~4.1.5"
   }
 }

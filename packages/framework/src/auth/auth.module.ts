@@ -57,6 +57,9 @@ import { AccessService } from '../access-control/services/access.service'
 import { AC_TOKENS } from '../access-control/tokens'
 import type { AccessControlOptions } from '../access-control/types'
 import { AuthContext } from '../context/auth-context'
+// Side-effect import: registers the `user()` macro on `RouterContext` and its
+// type augmentation, backed by the request-scoped `AuthContext`.
+import '../context/router-context.augment'
 import { AUTH_OPTIONS, AUTH_SERVICE } from './auth.tokens'
 import { SessionVerificationMiddleware } from './middleware/session-verification.middleware'
 // Side-effect import: registers `forPath`/`pathEntries` macros on

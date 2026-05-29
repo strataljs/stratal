@@ -179,10 +179,14 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
+    "@react-email/render": ">=2",
     "react": ">=19",
     "react-dom": ">=19"
   },
   "peerDependenciesMeta": {
+    "@react-email/render": {
+      "optional": true
+    },
     "react": {
       "optional": true
     },
@@ -192,7 +196,8 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.16.3",
-    "@cloudflare/workers-types": "4.20260510.1",
+    "@cloudflare/workers-types": "4.20260528.1",
+    "@react-email/render": "^2.0.8",
     "@stratal/testing": "workspace:*",
     "@types/node": "^25.6.2",
     "@types/react": "^19.2.14",

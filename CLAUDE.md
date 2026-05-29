@@ -11,6 +11,7 @@ Maintainer-facing instructions for working on the Stratal monorepo with Claude o
 | `packages/framework` | `@stratal/framework` | Auth (Better Auth), Database (ZenStack), access control (Casbin), RBAC, factories, guards |
 | `packages/inertia` | `@stratal/inertia` | Inertia.js v3 server adapter for React SSR on CF Workers |
 | `packages/inertia-modal` | `@stratal/inertia-modal` | Backend-driven modal primitive built on `@stratal/inertia` |
+| `packages/feature-flags` | `@stratal/feature-flags` | Cloudflare Flagship feature flags (binding API), Inertia auto-share, React hooks |
 
 Per-package contributor rules: `packages/<name>/CLAUDE.md` — auto-load when working in that directory.
 

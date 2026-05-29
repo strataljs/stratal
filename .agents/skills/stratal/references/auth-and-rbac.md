@@ -51,6 +51,17 @@ export class ProfileService {
 
 Prefer `@UseGuards(AuthGuard())` on controllers over manually checking `authContext.isAuthenticated()` — the guard throws proper 401 errors automatically.
 
+#### `ctx.user()` shorthand
+
+`AuthModule` augments `RouterContext` with `ctx.user()`, a shorthand for `AuthContext.requireUser()` (throws `UserNotAuthenticatedError` if unauthenticated). Use it where you have the context directly — controllers, middleware, or resolver callbacks — without injecting `AuthContext`:
+
+```typescript
+async show(ctx: RouterContext) {
+  const userId = ctx.user().id
+  return ctx.json(await this.service.forUser(userId))
+}
+```
+
 #### AuthContext API
 
 | Method | Returns | Notes |

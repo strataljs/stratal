@@ -284,6 +284,14 @@ InertiaModule.forRoot({
 
 Resolvers are called per-request. Static values are shared across all requests.
 
+### Per-request sharing with `ctx.share`
+
+From middleware or a controller, add a shared prop for the current request with `ctx.share(key, value)`. It is merged into every Inertia page rendered during that request — useful for contributing data without passing it through each controller.
+
+```typescript
+ctx.share('featureFlags', { 'new-checkout': true })
+```
+
 ## Flash Messages
 
 Flash data is stored between requests and automatically shared as Inertia props via the `flash` object.

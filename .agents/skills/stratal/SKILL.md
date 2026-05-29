@@ -1,11 +1,11 @@
 ---
 name: stratal
-description: "Build Cloudflare Workers applications with the Stratal framework. Use when code imports from 'stratal', '@stratal/framework', '@stratal/testing', '@stratal/inertia', or '@stratal/inertia-modal', when creating modules, controllers, services, routes, queue consumers, cron jobs, seeders, gateways, Durable Objects, Workflows, or CLI commands, or when user mentions Stratal, asks to 'create a module', 'add an endpoint', 'set up auth', 'configure database', 'set up Inertia', 'add a modal route', 'add a WebSocket gateway', 'use Durable Objects', 'use Cloudflare Workflows', 'configure storage', 'write tests', or 'run quarry'. Covers DI, routing with OpenAPI, error handling, i18n, testing, auth, RBAC, Inertia.js SSR, backend-driven modals, WebSocket gateways, Durable Object / Workflow / RPC base classes, R2 storage, and MCP server. Do NOT use for generic Hono apps, plain Cloudflare Workers, or NestJS."
+description: "Build Cloudflare Workers applications with the Stratal framework. Use when code imports from 'stratal', '@stratal/framework', '@stratal/testing', '@stratal/inertia', '@stratal/inertia-modal', or '@stratal/feature-flags', when creating modules, controllers, services, routes, queue consumers, cron jobs, seeders, gateways, Durable Objects, Workflows, or CLI commands, or when user mentions Stratal, asks to 'create a module', 'add an endpoint', 'set up auth', 'configure database', 'set up Inertia', 'add a modal route', 'add a WebSocket gateway', 'use Durable Objects', 'use Cloudflare Workflows', 'configure storage', 'add feature flags', 'set up Flagship', 'write tests', or 'run quarry'. Covers DI, routing with OpenAPI, error handling, i18n, testing, auth, RBAC, Inertia.js SSR, backend-driven modals, WebSocket gateways, Durable Object / Workflow / RPC base classes, R2 storage, Cloudflare Flagship feature flags, and MCP server. Do NOT use for generic Hono apps, plain Cloudflare Workers, or NestJS."
 license: MIT
 compatibility: Designed for AI Agents. Requires Node.js 22+, npm.
 metadata:
   author: Temitayo Fadojutimi
-  version: "2.1"
+  version: "2.2"
 ---
 
 # Stratal Framework
@@ -16,6 +16,7 @@ Stratal is a modular Cloudflare Workers framework. ESM-only. Packages:
 - `@stratal/testing` — test utilities, mocks, HTTP client
 - `@stratal/inertia` — Inertia.js server adapter for React SSR
 - `@stratal/inertia-modal` — backend-driven modal pages for Inertia
+- `@stratal/feature-flags` — Cloudflare Flagship feature flags + Inertia auto-share + React hooks
 
 ## Critical Rules
 
@@ -246,8 +247,6 @@ Inertia: `@stratal/inertia`, `@stratal/inertia/quarry` (CLI-only: `InertiaQuarry
 3. Pass to entry point: `new Stratal({ module: AppModule, exceptionHandler: AppExceptionHandler })`
 4. Create custom error classes: extend `ApplicationError` for 500 errors, extend `HttpException` for non-500 errors with baked-in status
 
-See `references/errors-and-i18n.md` for the full ExceptionHandler API.
-
 ### Set Up Inertia.js SSR
 
 1. Install: `npm install @stratal/inertia`
@@ -267,8 +266,6 @@ See `references/inertia.md` for props, shared data, flash messages, i18n integra
 3. In a controller, return `ctx.inertiaModal('Page/Component', props, { baseURL: '/parent' })`
 4. In `src/inertia/app.tsx`, call `resolver.set(name => pages['./pages/' + name + '.tsx']?.())` before `createInertiaApp`, and pass `resolve: resolver.resolve`
 5. Place `<Modal />` once in your layout
-
-See `references/inertia-modal.md` for the full backend + frontend setup, `useModal()`, and partial reloads.
 
 ### Expose API as MCP Server
 
@@ -330,6 +327,8 @@ See `references/quarry-cli.md` for all MCP flags and options.
 
 **User says "Add rate limiting" / "Throttle this endpoint" / "429 too many requests"** -> Read `references/rate-limiter.md`. Import `RateLimiterModule.forRoot({ store: 'kv', binding: 'RATE_LIMITS' })`. Define limiters in `OnInitialize` via `registry.for('name', ctx => Limit.perMinute(60).by(...))`. Attach with `router.throttle('name')` or `@RateLimit('name')`. For better-auth path rules → `references/auth-and-rbac.md` "Rate-limit interop".
 
+**User says "Add feature flags" / "Use Flagship" / "toggle a feature"** -> Read `references/feature-flags.md`. Install `@stratal/feature-flags`, add the `flagship` binding to wrangler, import `FeatureFlagModule.forRoot({ apps: [{ binding: 'FLAGS', flags: {...} }] })`, inject `FeatureFlagService`. With Inertia installed it auto-shares flags — read them via `useFlag` from `@stratal/feature-flags/react`.
+
 ## Reference Loading Guide
 
 Load these when the task needs deeper knowledge:
@@ -342,6 +341,7 @@ Load these when the task needs deeper knowledge:
 | `references/errors-and-i18n.md` | ExceptionHandler, ApplicationError, HttpException, domain error classes, i18n, withZodI18n(), withI18n() |
 | `references/inertia.md` | Inertia.js setup, rendering, props, SSR, type safety, Vite |
 | `references/inertia-modal.md` | Backend-driven modal pages: `ModalModule`, `ctx.inertiaModal()`, `<Modal>`, `useModal()` |
+| `references/feature-flags.md` | Cloudflare Flagship: `FeatureFlagModule`, `FeatureFlagService`, flag manifest, `use()`, `all()`, Inertia auto-share, `useFlag`/`useFeatureFlags` |
 | `references/websocket.md` | WebSocket gateways: `@Gateway`, `@OnMessage`, `GatewayContext` |
 | `references/workers.md` | Durable Objects, Workflows, Service Bindings — DI-aware base classes |
 | `references/database.md` | DatabaseModule, ZenStack, connections, plugins, transactions |
