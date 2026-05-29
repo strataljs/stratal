@@ -21,7 +21,7 @@ export { HonoApp } from './hono-app'
 
 // Router services
 export {
-  LocalePathService, RouteRegistrationService,
+  LocalePathService, LocaleUrlService, RouteRegistrationService,
   VersioningService, type ResolvedPath
 } from './services'
 
@@ -37,6 +37,8 @@ export type { CurrentRoute, RouteMatcher, RouteName, RouteParams, RoutePrefixes,
 // Route URL generation
 export { route } from './route-url'
 export { buildRouteUrl, Uri, type SignedUriOptions, type UriOptions } from './uri'
+export { applyLocalePrefix, shouldPrefixLocale, stripLocalePrefix } from './locale-url'
+export { applyTrailingSlash } from './trailing-slash'
 
 // Router (replaces MiddlewareConfigurable — route + middleware configuration)
 export { Router, type RouteConfigurable, type RouterGroupConfig } from './router'

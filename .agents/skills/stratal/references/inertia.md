@@ -391,6 +391,28 @@ i18n: { only: ['common.actions'] }           // Nested prefix
 i18n: {}                                      // All messages (omit only)
 ```
 
+### Hreflang Link Tags (Automatic)
+
+When i18n detection uses `path` or `querystring` and at least two locales are configured, Inertia auto-emits `<link rel="alternate" hreflang="…" href="…" />` tags into the SSR head for every locale plus an `x-default`. URLs honor the app-wide `trailingSlash` mode. No configuration knob — if your i18n setup produces URL-distinct locale variants, the tags appear.
+
+Path strategy (`locales: ['en', 'fr']`, `defaultLocale: 'en'`, `prefixDefaultLocale: false`) on `/users`:
+
+```html
+<link rel="alternate" hreflang="en" href="https://example.com/users" />
+<link rel="alternate" hreflang="fr" href="https://example.com/fr/users" />
+<link rel="alternate" hreflang="x-default" href="https://example.com/users" />
+```
+
+Querystring strategy (same locales) on `/users`:
+
+```html
+<link rel="alternate" hreflang="en" href="https://example.com/users" />
+<link rel="alternate" hreflang="fr" href="https://example.com/users?locale=fr" />
+<link rel="alternate" hreflang="x-default" href="https://example.com/users" />
+```
+
+Cookie/header strategies emit nothing — those don't have URL-distinct locale variants.
+
 ## Client-Side URL Generation (useRoute)
 
 Share named routes with the frontend for Ziggy-like URL building in React components.

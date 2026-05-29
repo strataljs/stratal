@@ -29,6 +29,7 @@ import { RouteRegistry } from './router/route-registry'
 import { RouterResolver } from './router/router-resolver'
 import { ROUTER_TOKENS } from './router/router.tokens'
 import { LocalePathService } from './router/services/locale-path.service'
+import { LocaleUrlService } from './router/services/locale-url.service'
 import { RouteRegistrationService } from './router/services/route-registration.service'
 import { VersioningService } from './router/services/versioning.service'
 import type { TrailingSlashMode, VersioningOptions } from './router/types'
@@ -139,6 +140,7 @@ export class Application {
     this._container.register(ROUTER_TOKENS.VersioningService, VersioningService)
     this._container.register(ROUTER_TOKENS.HonoApp, HonoApp)
     this._container.register(ROUTER_TOKENS.LocalePathService, LocalePathService)
+    this._container.register(ROUTER_TOKENS.LocaleUrlService, LocaleUrlService)
     this._container.register(ROUTER_TOKENS.RouteRegistry, RouteRegistry)
     this._container.register(ROUTER_TOKENS.Uri, Uri)
 

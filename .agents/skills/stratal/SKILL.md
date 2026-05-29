@@ -5,7 +5,7 @@ license: MIT
 compatibility: Designed for AI Agents. Requires Node.js 22+, npm.
 metadata:
   author: Temitayo Fadojutimi
-  version: "2.2"
+  version: "2.3"
 ---
 
 # Stratal Framework
@@ -257,7 +257,7 @@ Inertia: `@stratal/inertia`, `@stratal/inertia/quarry` (CLI-only: `InertiaQuarry
 6. For frontend i18n: add `i18n: { only: ['common', 'nav'] }` and use `useI18n()` from `@stratal/inertia/react`
 7. Run `npx quarry inertia:dev` for development
 
-See `references/inertia.md` for props, shared data, flash messages, i18n integration, type safety, and Vite setup.
+See `references/inertia.md` for props, shared data, flash messages, i18n integration (incl. auto-emitted hreflang link tags for SEO), type safety, and Vite setup.
 
 ### Set Up Backend Modals
 
@@ -306,6 +306,8 @@ See `references/quarry-cli.md` for all MCP flags and options.
 **User says "List all routes" / "Debug my app"** -> Run `npx quarry route:list`. Also try `event:list`, `schedule:list`, `queue:list` to inspect other registrations.
 
 **User says "Set up i18n with Accept-Language header"** -> Read `references/errors-and-i18n.md`. Configure `I18nModule.forRoot({ detection: { strategy: 'header' } })`. Register messages with `I18nModule.registerMessages()`.
+
+**User says "Add hreflang tags" / "Localized SEO" / "Alternate language URLs"** -> Read `references/inertia.md` (Hreflang section). No setup needed beyond Inertia + `I18nModule.forRoot({ locales, defaultLocale, detection: { strategy: 'path' | 'querystring' } })`. Tags auto-emit into the SSR head when ≥2 locales are configured.
 
 **User says "Check if all translations are complete" / "Audit i18n" / "Missing translations"** -> Run `npx quarry i18n:check`. Use `--locale=fr` to check a single locale, `--prefix=common` to filter by namespace. See `references/quarry-cli.md` for all i18n commands.
 

@@ -2,6 +2,7 @@ import { inject } from '../di';
 import type { Application } from '../application';
 import { Request } from '../di/decorators';
 import { DI_TOKENS } from '../di/tokens';
+import { applyLocalePrefix } from './locale-url';
 import { RouterError } from './router.error';
 import type { RouteName, RouteParams } from './route-map';
 import type { RegisteredRoute, RouteRegistry } from './route-registry';
@@ -59,15 +60,8 @@ export function buildRouteUrl(
   const consumedKeys = new Set<string>()
   let url = route.path
 
-  // When locale is provided and route has locale variants, prepend locale segment
-  // — but skip the prefix for the default locale when prefixDefaultLocale is false/'redirect'
   if (allParams.locale && route.localePaths?.length) {
-    const shouldPrefix = !localeConfig
-      || localeConfig.prefixDefaultLocale === true
-      || allParams.locale !== localeConfig.defaultLocale
-    if (shouldPrefix) {
-      url = `/${allParams.locale}${url === '/' ? '' : url}`
-    }
+    url = applyLocalePrefix(url, allParams.locale, localeConfig)
     consumedKeys.add('locale')
   }
 

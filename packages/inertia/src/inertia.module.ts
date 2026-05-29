@@ -6,6 +6,7 @@ import { augmentRouterContext } from './augment/router-context'
 import type { InertiaModuleOptions } from './inertia.options'
 import { INERTIA_TOKENS } from './inertia.tokens'
 import { InertiaMiddleware } from './middleware/inertia.middleware'
+import { HreflangService } from './services/hreflang.service'
 import { InertiaService } from './services/inertia.service'
 import { ManifestService } from './services/manifest.service'
 import { SsrRendererService } from './services/ssr-renderer.service'
@@ -17,6 +18,7 @@ import { TemplateService } from './services/template.service'
     { provide: INERTIA_TOKENS.TemplateService, useClass: TemplateService },
     { provide: INERTIA_TOKENS.ManifestService, useClass: ManifestService },
     { provide: INERTIA_TOKENS.SsrRenderer, useClass: SsrRendererService },
+    { provide: INERTIA_TOKENS.HreflangService, useClass: HreflangService },
   ],
 })
 export class InertiaModule implements RouteConfigurable, OnInitialize, OnException {
