@@ -582,14 +582,9 @@ export class RouteRegistrationService {
       const runGuards = guardChain
         ? () => guardChain(c, runHandler)
         : runHandler
-      const runGuardsWithOverrideCheck = async () => {
-        const override = c.get('validationSuccessResponse')
-        if (override) return void (captured = override)
-        return runGuards()
-      }
       const runScoped = scopedChain
-        ? () => scopedChain(c, runGuardsWithOverrideCheck)
-        : runGuardsWithOverrideCheck
+        ? () => scopedChain(c, runGuards)
+        : runGuards
 
       const result = await runScoped()
       // A middleware (scoped or guard) may short-circuit by returning a
@@ -906,6 +901,13 @@ export class RouteRegistrationService {
     responseSchema: ZodType | null = null,
   ): (c: Context<RouterEnv>) => Promise<Response> {
     const handler = async (c: Context<RouterEnv>) => {
+      // Precognition short-circuit: HandlePrecognitiveRequests middleware
+      // sets `validationSuccessResponse` for `Precognition: true` requests.
+      // If we reach here, every request validator has passed — return the
+      // 204 without invoking the controller body.
+      const override = c.get('validationSuccessResponse')
+      if (override) return override
+
       const ctx = new RouterContext(c)
       const requestContainer = ctx.getContainer()
       const controller = requestContainer.resolve<IController>(ControllerClass)

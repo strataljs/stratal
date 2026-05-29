@@ -59,12 +59,10 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
       // For the redirect modes, the trailing-slash middleware runs first and
       // canonicalises via 308 before matching reaches the registered route.
       strict: false,
-      defaultHook: (result, c) => {
+      defaultHook: (result) => {
         if (!result.success) {
           throw new SchemaValidationError(result.error)
         }
-        const override = c.get('validationSuccessResponse')
-        if (override) return override
       },
     })
 
