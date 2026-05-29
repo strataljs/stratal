@@ -6,6 +6,7 @@ import { type InjectionToken } from 'stratal/module'
 import { SEEDER_TOKENS, SeederError, type Seeder, type SeederRegistry } from 'stratal/seeder'
 import { STORAGE_TOKENS } from 'stratal/storage'
 import { expect } from 'vitest'
+import { FEATURE_FLAG_SERVICE_TOKEN, type FakeFeatureFlagService } from '../feature-flags'
 import type { FakeStorageService } from '../storage'
 import { TestHttpClient } from './http/test-http-client'
 import { TestCommandRequest } from './quarry/test-command-request'
@@ -82,6 +83,14 @@ export class TestingModule {
    */
   get storage(): FakeStorageService {
     return this.get<FakeStorageService>(STORAGE_TOKENS.StorageService)
+  }
+
+  /**
+   * Get the fake feature-flag service to configure flags in tests
+   * (e.g. `module.featureFlags.set('my-flag', true)`).
+   */
+  get featureFlags(): FakeFeatureFlagService {
+    return this.get<FakeFeatureFlagService>(FEATURE_FLAG_SERVICE_TOKEN)
   }
 
   /**

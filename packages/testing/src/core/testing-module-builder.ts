@@ -11,6 +11,7 @@ import { LogLevel } from 'stratal/logger'
 import { type InjectionToken, Module, type ModuleClass, type ModuleOptions } from 'stratal/module'
 import { STORAGE_TOKENS } from 'stratal/storage'
 import { FakeStorageService } from '../storage'
+import { FEATURE_FLAG_SERVICE_TOKEN, FakeFeatureFlagService } from '../feature-flags'
 import { ProviderOverrideBuilder, type ProviderOverrideConfig } from './override'
 import { Test } from './test'
 import { TestingModule } from './testing-module'
@@ -128,6 +129,10 @@ export class TestingModuleBuilder {
 
     // Auto-register FakeStorageService after initialize so it replaces module-registered StorageService
     app.container.registerSingleton(STORAGE_TOKENS.StorageService, FakeStorageService)
+
+    // Auto-register FakeFeatureFlagService so feature-gated code resolves without a
+    // real Cloudflare Flagship binding. Inert for apps that don't use feature flags.
+    app.container.registerSingleton(FEATURE_FLAG_SERVICE_TOKEN, FakeFeatureFlagService)
 
     // Apply user overrides AFTER initialize so they replace module-registered providers
     for (const override of this.overrides) {
