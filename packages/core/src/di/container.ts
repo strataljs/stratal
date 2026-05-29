@@ -55,6 +55,7 @@ export class Container {
   private readonly registrations = new Map<InjectionToken, Registration>()
   private readonly singletons = new Map<InjectionToken, unknown>()
   private readonly requestCache = new Map<InjectionToken, unknown>()
+  private readonly requestCacheDeps = new Map<InjectionToken, Set<InjectionToken>>()
   private readonly parent: Container | null
   private readonly isRequestScoped: boolean
 
@@ -117,7 +118,7 @@ export class Container {
   registerValue<T>(token: InjectionToken<T>, value: T): void {
     this.registrations.set(token, { kind: 'value', value })
     if (this.isRequestScoped) {
-      this.requestCache.delete(token)
+      this.invalidateRequestCache(token)
     }
   }
 
@@ -228,9 +229,53 @@ export class Container {
     this.registrations.clear()
     this.singletons.clear()
     this.requestCache.clear()
+    this.requestCacheDeps.clear()
   }
 
   // ── Internal ──────────────────────────────────────────────────
+
+  /**
+   * Direct constructor dependency tokens of a class, with lazy tokens unwrapped
+   * to the concrete token they resolve to. Recorded when a request-scoped
+   * instance is cached so {@link invalidateRequestCache} can find dependents.
+   */
+  private collectDependencyTokens(Class: Constructor): Set<InjectionToken> {
+    const deps = new Set<InjectionToken>()
+    for (const { token } of getInjectionTokens(Class).values()) {
+      deps.add(isLazyToken(token) ? token.factory() : token)
+    }
+    return deps
+  }
+
+  /**
+   * Evict a token from the request cache along with every cached request-scoped
+   * instance that transitively depends on it. Re-registering a value must
+   * rebuild its dependents (so they pick up the new value) while leaving
+   * unrelated cached services intact.
+   */
+  private invalidateRequestCache(token: InjectionToken): void {
+    const invalidated = new Set<InjectionToken>([token])
+
+    let changed = true
+    while (changed) {
+      changed = false
+      for (const [cachedToken, deps] of this.requestCacheDeps) {
+        if (invalidated.has(cachedToken)) continue
+        for (const dep of deps) {
+          if (invalidated.has(dep)) {
+            invalidated.add(cachedToken)
+            changed = true
+            break
+          }
+        }
+      }
+    }
+
+    for (const t of invalidated) {
+      this.requestCache.delete(t)
+      this.requestCacheDeps.delete(t)
+    }
+  }
 
   private resolveRegistration(token: InjectionToken, reg: Registration): unknown {
     switch (reg.kind) {
@@ -271,6 +316,7 @@ export class Container {
         if (this.requestCache.has(token)) return this.requestCache.get(token)
         const instance = this.instantiate(useClass)
         this.requestCache.set(token, instance)
+        this.requestCacheDeps.set(token, this.collectDependencyTokens(useClass))
         return instance
       }
       // Resolving a request-scoped service from global container — treat as transient
