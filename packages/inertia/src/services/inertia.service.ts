@@ -6,6 +6,7 @@ import { ROUTER_TOKENS, type CurrentRoute, type LocalePathService, type LocaleUr
 import type { InertiaMergeOptions, InertiaOnceOptions } from '../augment/router-context'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { INERTIA_TOKENS } from '../inertia.tokens'
+import type { SeoData } from '../seo/types'
 import type {
   InertiaAlwaysProp,
   InertiaDeferredProp,
@@ -23,6 +24,7 @@ import {
   INERTIA_PROP_OPTIONAL,
 } from '../types'
 import type { HreflangService } from './hreflang.service'
+import type { SeoService } from './seo.service'
 import type { SsrRendererService } from './ssr-renderer.service'
 import type { TemplateService } from './template.service'
 
@@ -35,10 +37,15 @@ export class InertiaService {
     @inject(INERTIA_TOKENS.TemplateService) private readonly template: TemplateService,
     @inject(INERTIA_TOKENS.SsrRenderer) private readonly ssr: SsrRendererService,
     @inject(INERTIA_TOKENS.HreflangService) private readonly hreflang: HreflangService,
+    @inject(INERTIA_TOKENS.SeoService) private readonly seoService: SeoService,
   ) { }
 
   share(key: string, value: unknown): void {
     this.sharedData[key] = value
+  }
+
+  seo(data: SeoData): void {
+    this.seoService.set(data)
   }
 
   location(url: string): Response {
@@ -91,11 +98,17 @@ export class InertiaService {
     // Resolve shared data from module options
     const { shared: resolvedShared, sharedKeys } = await this.resolveSharedData(ctx)
 
+    // Resolve SEO once: shared as the `seo` prop (drives client `<Seo/>` sync)
+    // and rendered into <head> below for the initial paint. Only attach it when
+    // there is actual metadata so pages without SEO keep a clean payload.
+    const resolvedSeo = await this.seoService.resolve(ctx)
+    const hasSeo = Object.keys(resolvedSeo).length > 0
+
     // Merge shared data with route props
-    const allProps = { ...resolvedShared, ...this.sharedData, ...props }
+    const allProps = { ...resolvedShared, ...this.sharedData, ...(hasSeo ? { seo: resolvedSeo } : {}), ...props }
 
     // Track all shared prop keys (module config + per-request .share())
-    const allSharedKeys = [...sharedKeys, ...Object.keys(this.sharedData)]
+    const allSharedKeys = [...sharedKeys, ...Object.keys(this.sharedData), ...(hasSeo ? ['seo'] : [])]
 
     // Process props: handle optional, deferred, merge, once, always
     const result = await this.processProps(allProps, ctx, component, isInertia)
@@ -146,8 +159,9 @@ export class InertiaService {
     const ssrResult = ssrDisabled
       ? { head: [] as string[], body: '' }
       : await this.ssr.render(page)
+    const seoTags = this.seoService.tagsFor(resolvedSeo)
     const hreflangLinks = this.hreflang.buildLinks(reqUrl)
-    const html = this.template.render(page, [...ssrResult.head, ...hreflangLinks], ssrResult.body)
+    const html = this.template.render(page, [...ssrResult.head, ...seoTags, ...hreflangLinks], ssrResult.body)
 
     return new Response(html, {
       status,

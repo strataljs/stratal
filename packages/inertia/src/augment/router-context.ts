@@ -1,6 +1,7 @@
 import type { RedirectStatusCode } from 'hono/utils/http-status'
 import { RouterContext } from 'stratal/router'
 import type { InertiaService } from '../services/inertia.service'
+import type { SeoData } from '../seo/types'
 import type {
   InertiaAlwaysProp,
   InertiaDeferredProp,
@@ -53,6 +54,13 @@ declare module 'stratal/router' {
      * to contribute data to the frontend without a controller passing it through.
      */
     share(key: string, value: unknown): void
+    /**
+     * Sets SEO metadata (title, description, Open Graph, Twitter, etc.) for the
+     * page rendered in this request. Merges with module-level defaults and any
+     * earlier `seo()` calls. The resolved tags are injected into `<head>` and
+     * shared as the `seo` prop for `<Seo/>` from `@stratal/inertia/react`.
+     */
+    seo(data: SeoData): void
     /** Disables server-side rendering for the current request. */
     withoutSsr(): void
   }
@@ -114,6 +122,11 @@ export function augmentRouterContext(resolveService: (ctx: RouterContext) => Ine
   RouterContext.macro('share', function (this: RouterContext, key: string, value: unknown) {
     const service = resolveService(this)
     service.share(key, value)
+  })
+
+  RouterContext.macro('seo', function (this: RouterContext, data: SeoData) {
+    const service = resolveService(this)
+    service.seo(data)
   })
 
   RouterContext.macro('withoutSsr', function (this: RouterContext) {

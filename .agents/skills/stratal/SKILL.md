@@ -1,11 +1,11 @@
 ---
 name: stratal
-description: "Build Cloudflare Workers applications with the Stratal framework. Use when code imports from 'stratal', '@stratal/framework', '@stratal/testing', '@stratal/inertia', '@stratal/inertia-modal', or '@stratal/feature-flags', when creating modules, controllers, services, routes, queue consumers, cron jobs, seeders, gateways, Durable Objects, Workflows, or CLI commands, or when user mentions Stratal, asks to 'create a module', 'add an endpoint', 'set up auth', 'configure database', 'set up Inertia', 'add a modal route', 'add a WebSocket gateway', 'use Durable Objects', 'use Cloudflare Workflows', 'configure storage', 'add feature flags', 'set up Flagship', 'write tests', or 'run quarry'. Covers DI, routing with OpenAPI, error handling, i18n, testing, auth, RBAC, Inertia.js SSR, backend-driven modals, WebSocket gateways, Durable Object / Workflow / RPC base classes, R2 storage, Cloudflare Flagship feature flags, and MCP server. Do NOT use for generic Hono apps, plain Cloudflare Workers, or NestJS."
+description: "Build Cloudflare Workers applications with the Stratal framework. Use when code imports from 'stratal', '@stratal/framework', '@stratal/testing', '@stratal/inertia', '@stratal/inertia-modal', or '@stratal/feature-flags', when creating modules, controllers, services, routes, queue consumers, cron jobs, seeders, gateways, Durable Objects, Workflows, or CLI commands, or when user mentions Stratal, asks to 'create a module', 'add an endpoint', 'set up auth', 'configure database', 'set up Inertia', 'add SEO', 'add a modal route', 'add a WebSocket gateway', 'use Durable Objects', 'use Cloudflare Workflows', 'configure storage', 'add feature flags', 'set up Flagship', 'write tests', or 'run quarry'. Covers DI, routing with OpenAPI, error handling, i18n, testing, auth, RBAC, Inertia.js SSR, backend-driven modals, WebSocket gateways, Durable Object / Workflow / RPC base classes, R2 storage, Cloudflare Flagship feature flags, and MCP server. Do NOT use for generic Hono apps, plain Cloudflare Workers, or NestJS."
 license: MIT
 compatibility: Designed for AI Agents. Requires Node.js 22+, npm.
 metadata:
   author: Temitayo Fadojutimi
-  version: "2.3"
+  version: "2.4"
 ---
 
 # Stratal Framework
@@ -255,9 +255,10 @@ Inertia: `@stratal/inertia`, `@stratal/inertia/quarry` (CLI-only: `InertiaQuarry
 4. Use `@InertiaGet('/')` / `@InertiaPost('/')` and `ctx.inertia('page/Name', props)` in controllers (or `@InertiaRoute()` for convention routing)
 5. For flash messages: add `flash: { store: new CookieFlashStore({ secret: env.FLASH_SECRET }) }` and use `ctx.flash(key, value)`
 6. For frontend i18n: add `i18n: { only: ['common', 'nav'] }` and use `useI18n()` from `@stratal/inertia/react`
-7. Run `npx quarry inertia:dev` for development
+7. For SEO: call `ctx.seo({ title, description, openGraph, ... })` in controllers; mount `<Seo/>` from `@stratal/inertia/react` once in the client entry (scaffolded by `inertia:install`)
+8. Run `npx quarry inertia:dev` for development
 
-See `references/inertia.md` for props, shared data, flash messages, i18n integration (incl. auto-emitted hreflang link tags for SEO), type safety, and Vite setup.
+See `references/inertia.md` for props, shared data, flash messages, i18n integration (incl. auto-emitted hreflang link tags for SEO), backend-driven SEO (`ctx.seo()`, `<Seo/>`), type safety, and Vite setup.
 
 ### Set Up Backend Modals
 
@@ -309,6 +310,8 @@ See `references/quarry-cli.md` for all MCP flags and options.
 
 **User says "Add hreflang tags" / "Localized SEO" / "Alternate language URLs"** -> Read `references/inertia.md` (Hreflang section). No setup needed beyond Inertia + `I18nModule.forRoot({ locales, defaultLocale, detection: { strategy: 'path' | 'querystring' } })`. Tags auto-emit into the SSR head when ≥2 locales are configured.
 
+**User says "Set the page title/description" / "Add SEO / Open Graph / meta tags" / "Set page metadata"** -> Read `references/inertia.md` (SEO section). Call `ctx.seo({ title, description, openGraph, twitter, ... })` in the controller; add app-wide defaults + `titleTemplate` via `InertiaModule.forRoot({ seo: { ... } })`; mount `<Seo/>` from `@stratal/inertia/react` once in the client entry for client-side navigation updates.
+
 **User says "Check if all translations are complete" / "Audit i18n" / "Missing translations"** -> Run `npx quarry i18n:check`. Use `--locale=fr` to check a single locale, `--prefix=common` to filter by namespace. See `references/quarry-cli.md` for all i18n commands.
 
 **User says "Generate URLs for routes"** -> Read `references/routing.md`. Use `ctx.route('name', params)` in controllers. Use standalone `route()` from `stratal/router` outside controllers. Run `npx quarry route:types` for type safety.
@@ -341,7 +344,7 @@ Load these when the task needs deeper knowledge:
 | `references/modules-and-di.md` | Provider types, scopes, container API, dynamic modules |
 | `references/routing.md` | RouteConfig, RouterContext API, named routes, URL generation, signed URLs, domain routing, Router fluent API, OpenAPI, versioning |
 | `references/errors-and-i18n.md` | ExceptionHandler, ApplicationError, HttpException, domain error classes, i18n, withZodI18n(), withI18n() |
-| `references/inertia.md` | Inertia.js setup, rendering, props, SSR, type safety, Vite |
+| `references/inertia.md` | Inertia.js setup, rendering, props, SSR, SEO (`ctx.seo()`, `<Seo/>`), type safety, Vite |
 | `references/inertia-modal.md` | Backend-driven modal pages: `ModalModule`, `ctx.inertiaModal()`, `<Modal>`, `useModal()` |
 | `references/feature-flags.md` | Cloudflare Flagship: `FeatureFlagModule`, `FeatureFlagService`, flag manifest, `use()`, `all()`, `FeatureFlagShareMiddleware` (Inertia sharing), `useFlag`/`useFeatureFlags` |
 | `references/websocket.md` | WebSocket gateways: `@Gateway`, `@OnMessage`, `GatewayContext` |

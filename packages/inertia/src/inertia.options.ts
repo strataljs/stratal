@@ -1,6 +1,8 @@
 import type { InertiaAppSSRResponse, Page } from '@inertiajs/core'
 import type { MessageKeyPrefix } from 'stratal/i18n'
+import type { RouterContext } from 'stratal/router'
 import type { FlashStore } from './flash/flash-store'
+import type { SeoData } from './seo/types'
 
 interface SsrBundleModule {
   render(page: Page): Promise<InertiaAppSSRResponse>
@@ -54,6 +56,53 @@ export interface InertiaFlashOptions {
   store: FlashStore
 }
 
+/**
+ * Configuration for backend-driven SEO metadata.
+ *
+ * Set on {@link InertiaModuleOptions.seo}. Controllers contribute per-page
+ * metadata via `ctx.seo()`; the module merges it over these defaults, applies
+ * the title template, injects the resulting tags into `<head>`, and shares the
+ * resolved data as the `seo` prop (consumed by `<Seo/>` from
+ * `@stratal/inertia/react`).
+ *
+ * Both `defaults` and `titleTemplate` accept a static value or a `ctx`-aware
+ * resolver function (optionally async), so they can pull from the database or
+ * elsewhere for personalization — mirroring {@link InertiaModuleOptions.sharedData}.
+ *
+ * @example
+ * ```typescript
+ * InertiaModule.forRoot({
+ *   rootView,
+ *   seo: {
+ *     defaults: { openGraph: { siteName: 'Acme' }, twitter: { card: 'summary_large_image' } },
+ *     titleTemplate: '%s — Acme',
+ *   },
+ * })
+ *
+ * // Dynamic / personalized:
+ * InertiaModule.forRoot({
+ *   rootView,
+ *   seo: {
+ *     titleTemplate: async (title, ctx) => `${title} — ${(await ctx.user()).name}'s Workspace`,
+ *   },
+ * })
+ * ```
+ */
+export interface InertiaSeoOptions {
+  /**
+   * App-wide default SEO metadata, merged under each page's `ctx.seo()` values.
+   * Provide a static object or a (possibly async) resolver receiving the request `ctx`.
+   */
+  defaults?: SeoData | ((ctx: RouterContext) => SeoData | Promise<SeoData>)
+  /**
+   * Template applied to a page-provided title. The string form replaces `%s`
+   * with the page title (e.g. `'%s — Acme'`); a bare default title is used as-is.
+   * The function form receives the resolved title and the request `ctx` and
+   * returns the final title (full control, may be async).
+   */
+  titleTemplate?: string | ((title: string | undefined, ctx: RouterContext) => string | Promise<string>)
+}
+
 export interface InertiaModuleOptions {
   rootView: string
   version?: string
@@ -91,6 +140,12 @@ export interface InertiaModuleOptions {
    * ```
    */
   routes?: boolean
+  /**
+   * SEO configuration: app-wide defaults and a title template for backend-driven
+   * page metadata. Pages set their metadata via `ctx.seo()`; the frontend reads
+   * it with `<Seo/>` / `useSeo()` from `@stratal/inertia/react`.
+   */
+  seo?: InertiaSeoOptions
   /**
    * Client entry path relative to project root (default: `src/inertia/app.tsx`).
    * Used in dev mode to inject the entry script tag.

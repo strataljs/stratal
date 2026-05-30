@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { InertiaModuleOptions } from '../inertia.options'
 import type { HreflangService } from '../services/hreflang.service'
 import { InertiaService } from '../services/inertia.service'
+import type { SeoService } from '../services/seo.service'
 import type { SsrRendererService } from '../services/ssr-renderer.service'
 import type { TemplateService } from '../services/template.service'
 
@@ -92,6 +93,7 @@ describe('InertiaService', () => {
   let mockTemplate: TemplateService
   let mockSsr: SsrRendererService
   let mockHreflang: HreflangService
+  let mockSeo: SeoService
 
   const options: InertiaModuleOptions = {
     rootView: '<html>@inertia</html>',
@@ -111,7 +113,12 @@ describe('InertiaService', () => {
       buildLinks: vi.fn().mockReturnValue([]),
     } as unknown as HreflangService
 
-    service = new InertiaService(options, mockTemplate, mockSsr, mockHreflang)
+    mockSeo = {
+      resolve: vi.fn().mockResolvedValue({}),
+      tagsFor: vi.fn().mockReturnValue([]),
+    } as unknown as SeoService
+
+    service = new InertiaService(options, mockTemplate, mockSsr, mockHreflang, mockSeo)
   })
 
   describe('render()', () => {
@@ -227,6 +234,7 @@ describe('InertiaService', () => {
         mockTemplate,
         mockSsr,
         mockHreflang,
+        mockSeo,
       )
       const ctx = createMockContext({ isInertia: true })
 
@@ -491,7 +499,7 @@ describe('InertiaService', () => {
         },
       }
 
-      const ssrService = new InertiaService(ssrOptions, mockTemplate, mockSsr, mockHreflang)
+      const ssrService = new InertiaService(ssrOptions, mockTemplate, mockSsr, mockHreflang, mockSeo)
       const ctx = createMockContext({ url: 'http://localhost/admin/dashboard' })
 
       await ssrService.render(ctx, 'AdminDashboard', {})
@@ -510,7 +518,7 @@ describe('InertiaService', () => {
         },
       }
 
-      const ssrService = new InertiaService(ssrOptions, mockTemplate, mockSsr, mockHreflang)
+      const ssrService = new InertiaService(ssrOptions, mockTemplate, mockSsr, mockHreflang, mockSeo)
       const ctx = createMockContext({ url: 'http://localhost/home' })
 
       await ssrService.render(ctx, 'Home', {})
@@ -563,6 +571,33 @@ describe('InertiaService', () => {
     })
   })
 
+  describe('seo injection', () => {
+    it('shares the resolved seo prop and injects its tags into the head', async () => {
+      ;(mockSeo.resolve as ReturnType<typeof vi.fn>).mockResolvedValue({ title: 'Dashboard' })
+      ;(mockSeo.tagsFor as ReturnType<typeof vi.fn>).mockReturnValue(['<title data-seo>Dashboard</title>'])
+      ;(mockSsr.render as ReturnType<typeof vi.fn>).mockResolvedValue({ head: ['<meta charset="utf-8" />'], body: '' })
+
+      const ctx = createMockContext()
+      await service.render(ctx, 'Home', { message: 'Hello' })
+
+      expect(mockSeo.resolve).toHaveBeenCalledWith(ctx)
+      const [page, headArg] = (mockTemplate.render as ReturnType<typeof vi.fn>).mock.calls[0]
+      expect((page as Page).props).toMatchObject({ seo: { title: 'Dashboard' }, message: 'Hello' })
+      expect((page as Page).sharedProps).toContain('seo')
+      // SEO tags sit between the SSR head and the hreflang links.
+      expect(headArg).toEqual(['<meta charset="utf-8" />', '<title data-seo>Dashboard</title>'])
+    })
+
+    it('omits the seo prop and tags when no metadata is set', async () => {
+      const ctx = createMockContext({ isInertia: true })
+      const response = await service.render(ctx, 'Home', { message: 'Hello' })
+
+      const body = await parsePageJson(response)
+      expect(body.props).not.toHaveProperty('seo')
+      expect(body.sharedProps ?? []).not.toContain('seo')
+    })
+  })
+
   describe('routes shared prop', () => {
     const sampleRoute: RegisteredRoute = {
       method: 'get',
@@ -590,7 +625,7 @@ describe('InertiaService', () => {
         version: '1.0',
         routes: true,
       }
-      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockHreflang)
+      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockHreflang, mockSeo)
       const ctx = createMockContext({ isInertia: true, routes: [sampleRoute] })
 
       const response = await routesService.render(ctx, 'Home', {})
@@ -608,7 +643,7 @@ describe('InertiaService', () => {
         version: '1.0',
         routes: true,
       }
-      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockHreflang)
+      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockHreflang, mockSeo)
       const ctx = createMockContext({
         isInertia: true,
         routes: [sampleRoute],
@@ -627,7 +662,7 @@ describe('InertiaService', () => {
         version: '1.0',
         routes: true,
       }
-      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockHreflang)
+      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockHreflang, mockSeo)
       const tenantRoute: RegisteredRoute = {
         name: 'dashboard.index',
         method: 'get',
@@ -662,7 +697,7 @@ describe('InertiaService', () => {
         version: '1.0',
         routes: true,
       }
-      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockHreflang)
+      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockHreflang, mockSeo)
       const ctx = createMockContext({
         isInertia: true,
         routes: [sampleRoute],
@@ -681,7 +716,7 @@ describe('InertiaService', () => {
         version: '1.0',
         routes: true,
       }
-      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockHreflang)
+      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockHreflang, mockSeo)
       const ctx = createMockContext({
         isInertia: true,
         routes: [sampleRoute],

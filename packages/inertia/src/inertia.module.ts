@@ -9,6 +9,7 @@ import { InertiaMiddleware } from './middleware/inertia.middleware'
 import { HreflangService } from './services/hreflang.service'
 import { InertiaService } from './services/inertia.service'
 import { ManifestService } from './services/manifest.service'
+import { SeoService } from './services/seo.service'
 import { SsrRendererService } from './services/ssr-renderer.service'
 import { TemplateService } from './services/template.service'
 
@@ -19,6 +20,7 @@ import { TemplateService } from './services/template.service'
     { provide: INERTIA_TOKENS.ManifestService, useClass: ManifestService },
     { provide: INERTIA_TOKENS.SsrRenderer, useClass: SsrRendererService },
     { provide: INERTIA_TOKENS.HreflangService, useClass: HreflangService },
+    { provide: INERTIA_TOKENS.SeoService, useClass: SeoService },
   ],
 })
 export class InertiaModule implements RouteConfigurable, OnInitialize, OnException {
