@@ -394,7 +394,9 @@ i18n: {}                                      // All messages (omit only)
 
 ### Hreflang Link Tags (Automatic)
 
-When i18n detection uses `path` or `querystring` and at least two locales are configured, Inertia auto-emits `<link rel="alternate" hreflang="…" href="…" />` tags into the SSR head for every locale plus an `x-default`. URLs honor the app-wide `trailingSlash` mode. No configuration knob — if your i18n setup produces URL-distinct locale variants, the tags appear.
+When i18n detection uses `path` or `querystring` and at least two locales are configured, Inertia auto-emits `<link rel="alternate" hreflang="…" href="…" />` tags for every locale plus an `x-default`. URLs honor the app-wide `trailingSlash` mode. No configuration knob — if your i18n setup produces URL-distinct locale variants, the tags appear.
+
+These ride the [SEO](#seo) pipeline: they're injected into `<head>` on the initial render and re-synced on every Inertia client navigation, so the alternates always point at the current URL (no stale links after an SPA visit).
 
 Path strategy (`locales: ['en', 'fr']`, `defaultLocale: 'en'`, `prefixDefaultLocale: false`) on `/users`:
 

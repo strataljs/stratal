@@ -98,10 +98,15 @@ export interface InertiaSeoOptions {
   /**
    * Template applied to a page-provided title. The string form replaces `%s`
    * with the page title (e.g. `'%s — Acme'`); a bare default title is used as-is.
-   * The function form receives the resolved title and the request `ctx` and
-   * returns the final title (full control, may be async).
+   * The function form receives the resolved title (possibly `undefined` when no
+   * page or default title is set) and the request `ctx`, and returns the final
+   * title (full control, may be async). Return `undefined` to leave the title
+   * unset — useful for conditionally skipping the template (e.g. for a subset of
+   * routes that build their own title).
    */
-  titleTemplate?: string | ((title: string | undefined, ctx: RouterContext) => string | Promise<string>)
+  titleTemplate?:
+    | string
+    | ((title: string | undefined, ctx: RouterContext) => string | undefined | Promise<string | undefined>)
 }
 
 export interface InertiaModuleOptions {

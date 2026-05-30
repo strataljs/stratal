@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import type { RouterContext } from 'stratal/router'
 import type { InertiaModuleOptions } from '../inertia.options'
+import type { HreflangService } from '../services/hreflang.service'
 import { SeoService } from '../services/seo.service'
+import type { SeoLinkTag } from '../seo/types'
 
-function createService(options: Partial<InertiaModuleOptions> = {}): SeoService {
-  return new (SeoService as any)({ rootView: '', ...options })
+function createService(
+  options: Partial<InertiaModuleOptions> = {},
+  hreflangLinks: SeoLinkTag[] = [],
+): SeoService {
+  const hreflang = { buildLinks: () => hreflangLinks } as unknown as HreflangService
+  return new (SeoService as any)({ rootView: '', ...options }, hreflang)
 }
 
-const ctx = {} as RouterContext
+const ctx = { c: { req: { url: 'http://localhost/users' } } } as unknown as RouterContext
 
 describe('SeoService', () => {
   it('returns an empty object when nothing is set', async () => {
@@ -71,6 +77,15 @@ describe('SeoService', () => {
       expect((await service.resolve(ctx)).title).toBe('Hi!')
       expect(received).toEqual(['Hi', ctx])
     })
+
+    it('leaves the title unset when the function returns undefined', async () => {
+      const service = createService({
+        seo: { titleTemplate: (title) => (title === 'skip' ? undefined : `${title} — Acme`) },
+      })
+      service.set({ title: 'skip' })
+
+      expect((await service.resolve(ctx)).title).toBeUndefined()
+    })
   })
 
   it('resolves an async defaults function with ctx', async () => {
@@ -80,6 +95,35 @@ describe('SeoService', () => {
     service.set({ title: 'Page' })
 
     expect(await service.resolve(ctx)).toEqual({ title: 'Page', openGraph: { siteName: 'Dynamic' } })
+  })
+
+  describe('hreflang', () => {
+    const links: SeoLinkTag[] = [
+      { rel: 'alternate', hreflang: 'en', href: 'http://localhost/users' },
+      { rel: 'alternate', hreflang: 'fr', href: 'http://localhost/fr/users' },
+      { rel: 'alternate', hreflang: 'x-default', href: 'http://localhost/users' },
+    ]
+
+    it('appends hreflang alternates to the resolved link array', async () => {
+      const service = createService({}, links)
+
+      expect((await service.resolve(ctx)).link).toEqual(links)
+    })
+
+    it('places hreflang links after user-supplied links', async () => {
+      const userLink: SeoLinkTag = { rel: 'canonical', href: 'http://localhost/users' }
+      const service = createService({}, links)
+      service.set({ link: [userLink] })
+
+      expect((await service.resolve(ctx)).link).toEqual([userLink, ...links])
+    })
+
+    it('adds no link array when no hreflang alternates apply', async () => {
+      const service = createService({}, [])
+      service.set({ title: 'Home' })
+
+      expect((await service.resolve(ctx)).link).toBeUndefined()
+    })
   })
 
   it('renders resolved data to head-tag strings via tagsFor', async () => {

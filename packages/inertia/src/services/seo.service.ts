@@ -4,6 +4,7 @@ import type { InertiaModuleOptions, InertiaSeoOptions } from '../inertia.options
 import { INERTIA_TOKENS } from '../inertia.tokens'
 import { buildSeoTags, descriptorToHtml } from '../seo/build-seo-tags'
 import type { SeoData } from '../seo/types'
+import type { HreflangService } from './hreflang.service'
 
 /**
  * Request-scoped accumulator for page SEO metadata.
@@ -19,6 +20,7 @@ export class SeoService {
 
   constructor(
     @inject(INERTIA_TOKENS.Options) private readonly options: InertiaModuleOptions,
+    @inject(INERTIA_TOKENS.HreflangService) private readonly hreflang: HreflangService,
   ) { }
 
   /** Merges the given metadata into the request's accumulated SEO data. */
@@ -30,6 +32,8 @@ export class SeoService {
    * Resolves the final SEO data: module defaults (base) merged with the
    * request's accumulated data, then the title template applied. Resolver
    * functions for `defaults`/`titleTemplate` are awaited with the request `ctx`.
+   * Locale-aware `hreflang` alternates are appended last so they ride the same
+   * head injection and SPA reconciliation as the rest of the SEO tags.
    */
   async resolve(ctx: RouterContext): Promise<SeoData> {
     const seo: InertiaSeoOptions | undefined = this.options.seo
@@ -46,6 +50,14 @@ export class SeoService {
     } else if (typeof template === 'string' && this.accumulated.title != null) {
       // Only wrap a page-provided title; a bare default title is used as-is.
       resolved.title = template.replace('%s', this.accumulated.title)
+    }
+
+    // Append hreflang alternates for the current URL after any user-set links so
+    // user links keep their document order. Computed fresh per request — never
+    // stored on `accumulated`.
+    const hreflang = this.hreflang.buildLinks(new URL(ctx.c.req.url))
+    if (hreflang.length > 0) {
+      resolved.link = [...(resolved.link ?? []), ...hreflang]
     }
 
     return resolved

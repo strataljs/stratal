@@ -3,9 +3,10 @@ import { CONTAINER_TOKEN, type Container, DI_TOKENS, Singleton, inject } from 's
 import { I18N_TOKENS } from 'stratal/i18n'
 import type { I18nModuleOptions } from 'stratal/i18n'
 import { ROUTER_TOKENS, applyTrailingSlash, type LocaleUrlService, type TrailingSlashMode } from 'stratal/router'
+import type { SeoLinkTag } from '../seo/types'
 
 /**
- * Builds `<link rel="alternate" hreflang="…">` tags for the SSR head.
+ * Produces `rel="alternate" hreflang="…"` link descriptors for the SEO pipeline.
  *
  * Activated when i18n detection produces URL-distinct locale variants:
  * - `path` strategy with ≥2 locales → locale-prefixed pathname variants
@@ -14,6 +15,11 @@ import { ROUTER_TOKENS, applyTrailingSlash, type LocaleUrlService, type Trailing
  * Returns `[]` for cookie/header strategies (no URL distinction) and for
  * single-locale apps. Emits an additional `x-default` link pointing at the
  * default-locale URL.
+ *
+ * The descriptors are merged into the resolved {@link SeoData} by
+ * {@link import('./seo.service').SeoService}, so hreflang rides the same
+ * `<head>` injection (initial render) and client reconciliation (SPA
+ * navigation) as the rest of the SEO tags — no separate head path.
  *
  * Every generated `href` runs through {@link applyTrailingSlash} with the
  * app-wide mode so hreflang URLs match the canonical form the rest of the
@@ -25,7 +31,7 @@ export class HreflangService {
     @inject(CONTAINER_TOKEN) private readonly container: Container,
   ) { }
 
-  buildLinks(currentUrl: URL): string[] {
+  buildLinks(currentUrl: URL): SeoLinkTag[] {
     const i18n = this.container.tryResolve<I18nModuleOptions>(I18N_TOKENS.Options)
     if (!i18n) return []
     const locales = i18n.locales ?? ['en']
@@ -54,7 +60,7 @@ export class HreflangService {
     defaultLocale: string,
     localeUrl: LocaleUrlService,
     trailingSlash: TrailingSlashMode,
-  ): string[] {
+  ): SeoLinkTag[] {
     const basePath = localeUrl.stripPrefix(url.pathname)
     const links = locales.map((locale) =>
       this.linkTag(locale, this.compose(url, localeUrl.applyPrefix(basePath, locale), url.search, trailingSlash)),
@@ -68,7 +74,7 @@ export class HreflangService {
     locales: string[],
     defaultLocale: string,
     trailingSlash: TrailingSlashMode,
-  ): string[] {
+  ): SeoLinkTag[] {
     const params = new URLSearchParams(url.search)
     params.delete('locale')
     const baseQs = params.toString()
@@ -91,7 +97,7 @@ export class HreflangService {
     return baseQs ? `?${baseQs}&${tail}` : `?${tail}`
   }
 
-  private linkTag(hreflang: string, href: string): string {
-    return `<link rel="alternate" hreflang="${hreflang}" href="${href}" />`
+  private linkTag(hreflang: string, href: string): SeoLinkTag {
+    return { rel: 'alternate', hreflang, href }
   }
 }

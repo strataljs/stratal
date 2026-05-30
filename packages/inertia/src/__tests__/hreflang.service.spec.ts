@@ -5,6 +5,11 @@ import { ROUTER_TOKENS, type LocaleUrlService } from 'stratal/router'
 import { describe, expect, it } from 'vitest'
 import { HreflangService } from '../services/hreflang.service'
 
+/** Shorthand for the `SeoLinkTag` descriptor `buildLinks` now returns. */
+function alt(hreflang: string, href: string) {
+  return { rel: 'alternate', hreflang, href }
+}
+
 interface StubOptions {
   /** Omit to simulate an app that never configured i18n (token unregistered). */
   i18n?: I18nModuleOptions
@@ -99,9 +104,9 @@ describe('HreflangService', () => {
       const service = createService(stub)
       const links = service.buildLinks(new URL('http://localhost/users'))
       expect(links).toEqual([
-        '<link rel="alternate" hreflang="en" href="http://localhost/users" />',
-        '<link rel="alternate" hreflang="fr" href="http://localhost/fr/users" />',
-        '<link rel="alternate" hreflang="x-default" href="http://localhost/users" />',
+        alt('en', 'http://localhost/users'),
+        alt('fr', 'http://localhost/fr/users'),
+        alt('x-default', 'http://localhost/users'),
       ])
     })
 
@@ -109,9 +114,9 @@ describe('HreflangService', () => {
       const service = createService(stub)
       const links = service.buildLinks(new URL('http://localhost/fr/users/123'))
       expect(links).toEqual([
-        '<link rel="alternate" hreflang="en" href="http://localhost/users/123" />',
-        '<link rel="alternate" hreflang="fr" href="http://localhost/fr/users/123" />',
-        '<link rel="alternate" hreflang="x-default" href="http://localhost/users/123" />',
+        alt('en', 'http://localhost/users/123'),
+        alt('fr', 'http://localhost/fr/users/123'),
+        alt('x-default', 'http://localhost/users/123'),
       ])
     })
 
@@ -119,7 +124,7 @@ describe('HreflangService', () => {
       const service = createService(stub)
       const links = service.buildLinks(new URL('http://localhost/users?page=2&sort=name'))
       for (const link of links) {
-        expect(link).toContain('?page=2&sort=name')
+        expect(link.href).toContain('?page=2&sort=name')
       }
     })
   })
@@ -134,9 +139,9 @@ describe('HreflangService', () => {
       const service = createService(stub)
       const links = service.buildLinks(new URL('http://localhost/en/users'))
       expect(links).toEqual([
-        '<link rel="alternate" hreflang="en" href="http://localhost/en/users" />',
-        '<link rel="alternate" hreflang="fr" href="http://localhost/fr/users" />',
-        '<link rel="alternate" hreflang="x-default" href="http://localhost/en/users" />',
+        alt('en', 'http://localhost/en/users'),
+        alt('fr', 'http://localhost/fr/users'),
+        alt('x-default', 'http://localhost/en/users'),
       ])
     })
   })
@@ -150,9 +155,9 @@ describe('HreflangService', () => {
       const service = createService(stub)
       const links = service.buildLinks(new URL('http://localhost/users'))
       expect(links).toEqual([
-        '<link rel="alternate" hreflang="en" href="http://localhost/users" />',
-        '<link rel="alternate" hreflang="fr" href="http://localhost/users?locale=fr" />',
-        '<link rel="alternate" hreflang="x-default" href="http://localhost/users" />',
+        alt('en', 'http://localhost/users'),
+        alt('fr', 'http://localhost/users?locale=fr'),
+        alt('x-default', 'http://localhost/users'),
       ])
     })
 
@@ -160,9 +165,9 @@ describe('HreflangService', () => {
       const service = createService(stub)
       const links = service.buildLinks(new URL('http://localhost/users?locale=fr&page=2'))
       expect(links).toEqual([
-        '<link rel="alternate" hreflang="en" href="http://localhost/users?page=2" />',
-        '<link rel="alternate" hreflang="fr" href="http://localhost/users?page=2&locale=fr" />',
-        '<link rel="alternate" hreflang="x-default" href="http://localhost/users?page=2" />',
+        alt('en', 'http://localhost/users?page=2'),
+        alt('fr', 'http://localhost/users?page=2&locale=fr'),
+        alt('x-default', 'http://localhost/users?page=2'),
       ])
     })
   })
@@ -177,9 +182,9 @@ describe('HreflangService', () => {
       const service = createService({ ...base, trailingSlash: 'always' })
       const links = service.buildLinks(new URL('http://localhost/users'))
       expect(links).toEqual([
-        '<link rel="alternate" hreflang="en" href="http://localhost/users/" />',
-        '<link rel="alternate" hreflang="fr" href="http://localhost/fr/users/" />',
-        '<link rel="alternate" hreflang="x-default" href="http://localhost/users/" />',
+        alt('en', 'http://localhost/users/'),
+        alt('fr', 'http://localhost/fr/users/'),
+        alt('x-default', 'http://localhost/users/'),
       ])
     })
 
@@ -187,16 +192,16 @@ describe('HreflangService', () => {
       const service = createService({ ...base, trailingSlash: 'never' })
       const links = service.buildLinks(new URL('http://localhost/users/'))
       expect(links).toEqual([
-        '<link rel="alternate" hreflang="en" href="http://localhost/users" />',
-        '<link rel="alternate" hreflang="fr" href="http://localhost/fr/users" />',
-        '<link rel="alternate" hreflang="x-default" href="http://localhost/users" />',
+        alt('en', 'http://localhost/users'),
+        alt('fr', 'http://localhost/fr/users'),
+        alt('x-default', 'http://localhost/users'),
       ])
     })
 
     it("'ignore' leaves URLs untouched", () => {
       const service = createService({ ...base, trailingSlash: 'ignore' })
       const links = service.buildLinks(new URL('http://localhost/users'))
-      expect(links[0]).toBe('<link rel="alternate" hreflang="en" href="http://localhost/users" />')
+      expect(links[0]).toEqual(alt('en', 'http://localhost/users'))
     })
   })
 })

@@ -23,7 +23,6 @@ import {
   INERTIA_PROP_ONCE,
   INERTIA_PROP_OPTIONAL,
 } from '../types'
-import type { HreflangService } from './hreflang.service'
 import type { SeoService } from './seo.service'
 import type { SsrRendererService } from './ssr-renderer.service'
 import type { TemplateService } from './template.service'
@@ -36,7 +35,6 @@ export class InertiaService {
     @inject(INERTIA_TOKENS.Options) private readonly options: InertiaModuleOptions,
     @inject(INERTIA_TOKENS.TemplateService) private readonly template: TemplateService,
     @inject(INERTIA_TOKENS.SsrRenderer) private readonly ssr: SsrRendererService,
-    @inject(INERTIA_TOKENS.HreflangService) private readonly hreflang: HreflangService,
     @inject(INERTIA_TOKENS.SeoService) private readonly seoService: SeoService,
   ) { }
 
@@ -160,8 +158,7 @@ export class InertiaService {
       ? { head: [] as string[], body: '' }
       : await this.ssr.render(page)
     const seoTags = this.seoService.tagsFor(resolvedSeo)
-    const hreflangLinks = this.hreflang.buildLinks(reqUrl)
-    const html = this.template.render(page, [...ssrResult.head, ...seoTags, ...hreflangLinks], ssrResult.body)
+    const html = this.template.render(page, [...ssrResult.head, ...seoTags], ssrResult.body)
 
     return new Response(html, {
       status,

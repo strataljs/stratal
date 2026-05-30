@@ -51,4 +51,34 @@ describe('seo-runtime', () => {
 
     expect(document.head.querySelector('[data-seo]')).toBeNull()
   })
+
+  it('syncs hreflang alternates carried in the seo link array on navigation', () => {
+    navigate({
+      seo: {
+        link: [
+          { rel: 'alternate', hreflang: 'en', href: 'http://localhost/users' },
+          { rel: 'alternate', hreflang: 'fr', href: 'http://localhost/fr/users' },
+        ],
+      },
+    })
+
+    const first = document.head.querySelectorAll('link[rel="alternate"][data-seo]')
+    expect(first).toHaveLength(2)
+    expect(first[1].getAttribute('hreflang')).toBe('fr')
+    expect(first[1].getAttribute('href')).toBe('http://localhost/fr/users')
+
+    // Navigating to a new URL replaces the alternates — no stale links remain.
+    navigate({
+      seo: {
+        link: [
+          { rel: 'alternate', hreflang: 'en', href: 'http://localhost/posts' },
+          { rel: 'alternate', hreflang: 'fr', href: 'http://localhost/fr/posts' },
+        ],
+      },
+    })
+
+    const second = document.head.querySelectorAll('link[rel="alternate"][data-seo]')
+    expect(second).toHaveLength(2)
+    expect(second[0].getAttribute('href')).toBe('http://localhost/posts')
+  })
 })
