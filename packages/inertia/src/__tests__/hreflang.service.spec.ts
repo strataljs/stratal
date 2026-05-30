@@ -6,7 +6,8 @@ import { describe, expect, it } from 'vitest'
 import { HreflangService } from '../services/hreflang.service'
 
 interface StubOptions {
-  i18n: I18nModuleOptions
+  /** Omit to simulate an app that never configured i18n (token unregistered). */
+  i18n?: I18nModuleOptions
   /** When provided, simulates path-based locale detection being active. */
   pathConfig?: { allLocales: string[]; defaultLocale: string | null; prefixDefaultLocale: false | true | 'redirect' }
   trailingSlash?: 'always' | 'never' | 'ignore'
@@ -43,12 +44,23 @@ function createService(stub: StubOptions): HreflangService {
     config: { trailingSlash: stub.trailingSlash },
   } as unknown as Application
 
+  const resolve = (token: symbol) => {
+    if (token === I18N_TOKENS.Options) {
+      if (!stub.i18n) throw new Error(`No provider for ${String(token)}`)
+      return stub.i18n
+    }
+    if (token === ROUTER_TOKENS.LocaleUrlService) return localeUrl
+    if (token === DI_TOKENS.Application) return application
+    throw new Error(`Unexpected token: ${String(token)}`)
+  }
   const container = {
-    resolve: (token: symbol) => {
-      if (token === I18N_TOKENS.Options) return stub.i18n
-      if (token === ROUTER_TOKENS.LocaleUrlService) return localeUrl
-      if (token === DI_TOKENS.Application) return application
-      throw new Error(`Unexpected token: ${String(token)}`)
+    resolve,
+    tryResolve: (token: symbol) => {
+      try {
+        return resolve(token)
+      } catch {
+        return undefined
+      }
     },
   }
 
@@ -59,6 +71,11 @@ function createService(stub: StubOptions): HreflangService {
 
 describe('HreflangService', () => {
   describe('activation guards', () => {
+    it('returns [] when i18n is not configured (no Options provider)', () => {
+      const service = createService({})
+      expect(service.buildLinks(new URL('http://localhost/users'))).toEqual([])
+    })
+
     it('returns [] when only one locale is configured', () => {
       const service = createService({ i18n: { locales: ['en'], defaultLocale: 'en' } })
       expect(service.buildLinks(new URL('http://localhost/users'))).toEqual([])

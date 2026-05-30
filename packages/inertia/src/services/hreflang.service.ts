@@ -26,7 +26,8 @@ export class HreflangService {
   ) { }
 
   buildLinks(currentUrl: URL): string[] {
-    const i18n = this.container.resolve<I18nModuleOptions>(I18N_TOKENS.Options)
+    const i18n = this.container.tryResolve<I18nModuleOptions>(I18N_TOKENS.Options)
+    if (!i18n) return []
     const locales = i18n.locales ?? ['en']
     if (locales.length < 2) return []
     const defaultLocale = i18n.defaultLocale ?? 'en'
