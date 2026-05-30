@@ -58,7 +58,8 @@ declare module 'stratal/router' {
      * Sets SEO metadata (title, description, Open Graph, Twitter, etc.) for the
      * page rendered in this request. Merges with module-level defaults and any
      * earlier `seo()` calls. The resolved tags are injected into `<head>` and
-     * shared as the `seo` prop for `<Seo/>` from `@stratal/inertia/react`.
+     * shared as the `seo` prop; the client head is kept in sync automatically
+     * by the runtime the `stratalInertia()` Vite plugin injects.
      */
     seo(data: SeoData): void
     /** Disables server-side rendering for the current request. */

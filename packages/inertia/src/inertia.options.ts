@@ -62,8 +62,9 @@ export interface InertiaFlashOptions {
  * Set on {@link InertiaModuleOptions.seo}. Controllers contribute per-page
  * metadata via `ctx.seo()`; the module merges it over these defaults, applies
  * the title template, injects the resulting tags into `<head>`, and shares the
- * resolved data as the `seo` prop (consumed by `<Seo/>` from
- * `@stratal/inertia/react`).
+ * resolved data as the `seo` prop. The client head stays in sync automatically
+ * via the runtime the `stratalInertia()` Vite plugin injects; read the data in a
+ * component with `useSeo()` from `@stratal/inertia/react`.
  *
  * Both `defaults` and `titleTemplate` accept a static value or a `ctx`-aware
  * resolver function (optionally async), so they can pull from the database or

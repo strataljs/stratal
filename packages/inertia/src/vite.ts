@@ -157,8 +157,29 @@ export function stratalInertia(options?: StratalInertiaPluginOptions): Plugin[] 
         }
       },
     },
+    injectSeoRuntime({ entries }),
     injectClientManifestIntoWorker({ clientManifestPath }),
   ]
+}
+
+// Injects the client-side SEO head-sync runtime into the browser entry so
+// backend `ctx.seo()` metadata stays in sync across Inertia navigations with
+// zero app wiring. The runtime is a side-effect import (`@stratal/inertia/seo-runtime`)
+// prepended to each configured client entry; it only reaches the browser bundle
+// because the worker/SSR builds never transform these entry files.
+function injectSeoRuntime(args: { entries: string[] }): Plugin {
+  const runtime = '@stratal/inertia/seo-runtime'
+  const targets = args.entries.map((entry) => entry.replace(/^\//, ''))
+
+  return {
+    name: 'stratal:inertia-inject-seo-runtime',
+    transform(code, id) {
+      const file = id.split('?')[0]
+      if (!targets.some((target) => file.endsWith(target))) return null
+      if (code.includes(runtime)) return null
+      return { code: `import '${runtime}';\n${code}`, map: null }
+    },
+  }
 }
 
 // Reads the manifest produced by the standalone browser-bundle build (run

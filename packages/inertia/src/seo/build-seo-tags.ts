@@ -2,7 +2,7 @@ import type { SeoData, SeoTagDescriptor } from './types'
 
 /**
  * Marker attribute stamped on every SEO-managed head element. The server emits
- * it on injected tags and the client `<Seo/>` component uses it to find and
+ * it on injected tags and the client head-sync runtime uses it to find and
  * reconcile the same tags across SPA navigations.
  */
 export const DATA_SEO_ATTR = 'data-seo'

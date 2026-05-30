@@ -98,7 +98,7 @@ export class InertiaService {
     // Resolve shared data from module options
     const { shared: resolvedShared, sharedKeys } = await this.resolveSharedData(ctx)
 
-    // Resolve SEO once: shared as the `seo` prop (drives client `<Seo/>` sync)
+    // Resolve SEO once: shared as the `seo` prop (drives the client head-sync runtime)
     // and rendered into <head> below for the initial paint. Only attach it when
     // there is actual metadata so pages without SEO keep a clean payload.
     const resolvedSeo = await this.seoService.resolve(ctx)

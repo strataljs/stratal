@@ -416,7 +416,7 @@ Cookie/header strategies emit nothing — those don't have URL-distinct locale v
 
 ## SEO
 
-Set page metadata (title, description, Open Graph, Twitter, etc.) from the backend. The module injects the tags into `<head>` for the initial response (works with and without SSR), shares the resolved metadata as a `seo` prop, and the `<Seo/>` component keeps `document.head` in sync across client-side navigations.
+Set page metadata (title, description, Open Graph, Twitter, etc.) from the backend. The module injects the tags into `<head>` for the initial response (works with and without SSR), shares the resolved metadata as a `seo` prop, and keeps `document.head` in sync across client-side navigations automatically (the `stratalInertia()` Vite plugin injects a head-sync runtime into the client bundle — no app wiring).
 
 ### Set metadata with `ctx.seo()`
 
@@ -474,26 +474,20 @@ seo: {
 }
 ```
 
-### Frontend: keep the head in sync on navigation
+### Frontend: head sync is automatic
 
-Server injection covers the first paint and crawlers. To update the head during Inertia SPA navigations, mount `<Seo/>` once near the root of your client entry (`inertia:install` scaffolds this automatically):
+Server injection covers the first paint and crawlers. Client-side navigation updates are wired automatically — no app code: the `stratalInertia()` Vite plugin injects a runtime into the client entry that listens for Inertia `navigate` events and reconciles `document.head` from the shared `seo` prop. There is nothing to mount in `app.tsx`.
+
+Optionally, read the resolved metadata inside a component with `useSeo()` from `@stratal/inertia/react`:
 
 ```tsx
-// src/inertia/app.tsx
-import { createInertiaApp } from '@inertiajs/react'
-import { Seo } from '@stratal/inertia/react'
-import { createRoot, hydrateRoot } from 'react-dom/client'
+import { useSeo } from '@stratal/inertia/react'
 
-createInertiaApp({
-  resolve: async (name) => { /* ... */ },
-  setup({ el, App, props }) {
-    const app = <><Seo /><App {...props} /></>
-    el.hasChildNodes() ? hydrateRoot(el, app) : createRoot(el).render(app)
-  },
-})
+function DebugSeo() {
+  const seo = useSeo()
+  return <pre>{seo.title}</pre>
+}
 ```
-
-`<Seo/>` renders nothing; it reconciles `document.head` from the shared `seo` prop. Use `useSeo()` from `@stratal/inertia/react` to read the resolved metadata in a component.
 
 ## Client-Side URL Generation (useRoute)
 
@@ -647,7 +641,8 @@ The `stratalInertia()` Vite plugin (included in `createViteConfig`) accepts:
 - `@stratal/inertia` — Main module, service, decorators, flash stores, types
 - `@stratal/inertia/quarry` — CLI-only: `InertiaQuarryModule`, build/dev/types/install commands, `runTypeGeneration`
 - `@stratal/inertia/vite` — Vite configuration and plugins
-- `@stratal/inertia/react` — React hooks and components (`useI18n`, `useRoute`, `Seo`, `useSeo`)
+- `@stratal/inertia/react` — React hooks (`useI18n`, `useRoute`, `useSeo`)
+- `@stratal/inertia/seo-runtime` — client SEO head-sync runtime; auto-injected into the client entry by `stratalInertia()`, not imported manually
 - `@stratal/inertia/testing` — Test response assertions for Inertia pages
 
 ## Precognition

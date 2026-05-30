@@ -8,6 +8,7 @@ export default defineConfig({
     'src/index.ts',
     'src/vite.ts',
     'src/react.ts',
+    'src/seo-runtime.ts',
     'src/testing.ts',
     'src/quarry.ts',
     'src/generator/type-generator.worker.ts',

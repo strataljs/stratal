@@ -3,7 +3,7 @@
  *
  * These types are framework-free (no DI, worker, or React imports) so the same
  * definitions can be shared by the server-side {@link import('../services/seo.service').SeoService}
- * and the client-side `<Seo/>` component.
+ * and the client-side head-sync runtime.
  */
 
 /** Open Graph metadata. Maps to `<meta property="og:*">` tags. */

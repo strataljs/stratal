@@ -48,6 +48,10 @@
       "types": "./dist/react.d.mts",
       "import": "./dist/react.mjs"
     },
+    "./seo-runtime": {
+      "types": "./dist/seo-runtime.d.mts",
+      "import": "./dist/seo-runtime.mjs"
+    },
     "./testing": {
       "types": "./dist/testing.d.mts",
       "import": "./dist/testing.mjs"

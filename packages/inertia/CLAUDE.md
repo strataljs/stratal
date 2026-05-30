@@ -11,7 +11,7 @@ Maintainer rules for `@stratal/inertia`.
 - Quarry commands: `src/commands/inertia-{build,dev,install,types}.command.ts` — registered as providers in `InertiaModule` and invoked via `quarry inertia:*`.
 - Type augmentation: `src/augment/{router-context,router-variables,test-response}.ts` — extends Stratal's types. Re-exported from package root via the `global.d.ts` reference (see Build hook).
 - Decorators: `src/decorators/`. Flash store: `src/flash/`. Services: `src/services/`. Templates: `src/templates/`.
-- SEO core: `src/seo/` — framework-free `types.ts` + `build-seo-tags.ts` (descriptor builder + HTML renderer) shared by server (`SeoService`) and client. `apply-seo-to-head.ts` is browser-only (carries `/// <reference lib="dom" />`); only `react/seo.ts` imports it, never server code.
+- SEO core: `src/seo/` — framework-free `types.ts` + `build-seo-tags.ts` (descriptor builder + HTML renderer) shared by server (`SeoService`) and client. `apply-seo-to-head.ts` is browser-only (carries `/// <reference lib="dom" />`). Client head sync runs through `src/seo-runtime.ts` (a side-effect entry, `@stratal/inertia/seo-runtime`) which registers an Inertia `navigate` listener; the `stratalInertia()` Vite plugin injects it into the client entry, so consumers need no app wiring. Never import the `seo/` DOM code or the runtime from server code.
 
 ## Build hook (don't break it)
 
