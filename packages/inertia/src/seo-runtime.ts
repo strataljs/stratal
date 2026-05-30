@@ -12,7 +12,15 @@ import { router } from '@inertiajs/core'
 import { applySeoToHead } from './seo/apply-seo-to-head'
 import type { SeoData } from './seo/types'
 
-router.on('navigate', (event) => {
-  const seo = (event.detail.page.props as { seo?: SeoData }).seo
-  applySeoToHead(seo ?? {})
-})
+// Guard against duplicate registration when the module is re-evaluated (e.g.
+// dev-server HMR, or the runtime injected into more than one client entry).
+const INSTALLED_KEY = '__stratalInertiaSeoInstalled'
+const globalScope = globalThis as Record<string, unknown>
+
+if (!globalScope[INSTALLED_KEY]) {
+  globalScope[INSTALLED_KEY] = true
+  router.on('navigate', (event) => {
+    const seo = (event.detail.page.props as { seo?: SeoData }).seo
+    applySeoToHead(seo ?? {})
+  })
+}
