@@ -1,6 +1,6 @@
 import { inject } from '../di'
 import type { Container } from '../di/container'
-import { Transient } from '../di/decorators'
+import { Singleton } from '../di/decorators'
 import { DI_TOKENS } from '../di/tokens'
 import { createCliExceptionContext } from '../errors/exception-context'
 import type { ExceptionHandler } from '../errors/exception-handler'
@@ -21,7 +21,7 @@ import type { CommandInput, CommandResult, ParsedSignature, Quarry } from './typ
  *
  * Users should inject and type as `Quarry` (the interface), which only exposes `call()`.
  */
-@Transient(DI_TOKENS.Quarry)
+@Singleton(DI_TOKENS.Quarry)
 export class QuarryRegistry implements Quarry {
   private commands = new Map<string, Constructor<Command>>()
   private signatures = new Map<string, ParsedSignature>()

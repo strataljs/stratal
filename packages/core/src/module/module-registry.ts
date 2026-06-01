@@ -182,7 +182,11 @@ export class ModuleRegistry {
       logger: this.logger,
     }
 
-    for (const registered of this.modules) {
+    // Snapshot: a module's onInitialize may lazily load another module
+    // (LazyModuleLoader.load → registerLazy), which pushes to this.modules and
+    // initializes it itself. Iterating a snapshot prevents the batch loop from
+    // re-visiting (and double-initializing) those lazily-added modules.
+    for (const registered of [...this.modules]) {
       if (!registered.hasLifecycle) continue
 
       const instance = new registered.moduleClass()

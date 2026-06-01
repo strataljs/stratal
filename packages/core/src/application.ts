@@ -7,15 +7,15 @@ import { type StratalEnv } from './env'
 import { DefaultExceptionHandler } from './errors/default-exception-handler'
 import { createCliExceptionContext, createCronExceptionContext, createQueueExceptionContext } from './errors/exception-context'
 import type { ExceptionHandler } from './errors/exception-handler'
-import type { EventHandler } from './events'
-import { EventRegistry, getListenerHandlers } from './events'
+import type { EventHandler, EventRegistry } from './events'
+import { getListenerHandlers } from './events'
 import type { StratalExecutionContext } from './execution-context'
 import { JsonFormatter, LOGGER_TOKENS, LoggerService, LogLevel, PrettyFormatter } from './logger'
 import { LazyModuleLoader } from './module/lazy-module-loader'
 import { ModuleRegistry } from './module/module-registry'
 import type { DynamicModule, ModuleClass } from './module/types'
 import type { Command } from './quarry/command'
-import { QuarryRegistry } from './quarry/quarry-registry'
+import type { QuarryRegistry } from './quarry/quarry-registry'
 import type { CommandInput, CommandResult } from './quarry/types'
 import type { ConsumerRegistry } from './queue/consumer-registry'
 import type { IQueueConsumer, QueueMessage } from './queue/queue-consumer'
@@ -25,7 +25,8 @@ import type { HonoApp } from './router/hono-app'
 import { ROUTER_TOKENS } from './router/router.tokens'
 import type { TrailingSlashMode, VersioningOptions } from './router/types'
 import type { Seeder } from './seeder/seeder'
-import { SEEDER_TOKENS, SeederRegistry } from './seeder/seeder-registry'
+import { SEEDER_TOKENS } from './seeder/seeder-registry'
+import type { SeederRegistry } from './seeder/seeder-registry'
 import type { Constructor } from './types'
 
 export interface ApplicationConfig {
@@ -106,9 +107,20 @@ export class Application {
   }
 
   private async initializeInternal(): Promise<void> {
-    // Register the user's root module (traverses imports). Built-in subsystems
-    // (i18n, queue, cache, openapi, cron, router) are NOT registered here —
-    // they load on demand at their trigger points.
+    // Eager subsystem modules — Quarry/Seeder are resolved synchronously
+    // post-init (CLI runner, test harness), so they must be registered before
+    // initialize() completes. Dynamic import keeps application.ts free of static
+    // subsystem imports (uniform with the other built-ins). They load at boot
+    // regardless, so this is for consistency, not cold-start deferral.
+    const [{ QuarryModule }, { SeederModule }] = await Promise.all([
+      import('./quarry/quarry.module'),
+      import('./seeder/seeder.module'),
+    ])
+    this.moduleRegistry.registerAll([QuarryModule, SeederModule])
+
+    // Register the user's root module (traverses imports). Other built-in
+    // subsystems (i18n, queue, cache, openapi, cron, events, router) load on
+    // demand at their trigger points.
     this.moduleRegistry.register(this.appConfig.module)
 
     // Initialize all modules (only those with lifecycle hooks)
@@ -166,22 +178,21 @@ export class Application {
   }
 
   /**
-   * Register event listeners. Needed by the HTTP, queue, and scheduled paths
-   * (handlers emit events). Independent of the queue subsystem so HTTP-only
-   * apps never load queue code.
+   * Load the events subsystem and wire listeners. Needed by the HTTP, queue,
+   * and scheduled paths (handlers emit events). Independent of the queue
+   * subsystem so HTTP-only apps never load queue code. EventsModule is
+   * registered before the (possibly empty) listener wiring so `emit()` works
+   * even with zero listeners; dedups against the framework's own load.
    */
   private initializeEventListeners(): Promise<void> {
-    this.eventsInitPromise ??= runWithContainer(this._container, () => {
+    this.eventsInitPromise ??= runWithContainer(this._container, async () => {
+      const { EventsModule } = await import('./events/events.module')
+      await this.moduleRegistry.registerLazy(EventsModule)
       this.registerEventListeners()
-      return Promise.resolve()
     })
     return this.eventsInitPromise
   }
 
-  /**
-   * Load the queue subsystem on demand (first queue/scheduled trigger). i18n is
-   * ensured first because the queue registry depends on it.
-   */
   /**
    * Wire event and queue handlers for a non-HTTP request scope (Durable
    * Objects, Workflows, WorkerEntrypoints), which may emit events or dispatch
@@ -192,6 +203,10 @@ export class Application {
     await this.initializeQueue()
   }
 
+  /**
+   * Load the queue subsystem on demand (first queue/scheduled trigger). i18n is
+   * ensured first because the queue registry depends on it.
+   */
   private initializeQueue(): Promise<void> {
     this.queueInitPromise ??= runWithContainer(this._container, async () => {
       await this.ensureI18n()
@@ -223,8 +238,8 @@ export class Application {
    */
   private ensureCron(): Promise<CronManager> {
     this.cronInitPromise ??= runWithContainer(this._container, async () => {
-      const { CronManager } = await import('./cron/cron-manager')
-      this._container.registerSingleton(DI_TOKENS.Cron, CronManager)
+      const { CronModule } = await import('./cron/cron.module')
+      this.moduleRegistry.register(CronModule)
       this.cronManager = this._container.resolve<CronManager>(DI_TOKENS.Cron)
       this.registerCronJobs(this.cronManager)
     })
@@ -392,15 +407,19 @@ export class Application {
     this._container.registerSingleton(LOGGER_TOKENS.LoggerService, LoggerService)
   }
 
+  /**
+   * Bootstrap kernel — registered imperatively because they cannot be expressed
+   * as ordinary module providers: ExceptionHandler is a user-overridable forced
+   * singleton (a module ClassProvider derives scope from the class decorator,
+   * which a user handler may not carry), and LazyModuleLoader is the loader
+   * itself. Subsystem registries (events/cron/quarry/seeder) are modules.
+   */
   private registerCoreServices(): void {
     this._container.registerSingleton(
       DI_TOKENS.ExceptionHandler,
       (this.appConfig.exceptionHandler ?? DefaultExceptionHandler) as Constructor,
     )
-    this._container.registerSingleton(DI_TOKENS.EventRegistry, EventRegistry)
-    this._container.registerSingleton(DI_TOKENS.Quarry, QuarryRegistry)
     this._container.registerSingleton(DI_TOKENS.LazyModuleLoader, LazyModuleLoader)
-    this._container.registerValue(SEEDER_TOKENS.SeederRegistry, new SeederRegistry(this))
   }
 
   private initializeExceptionHandler(): void {

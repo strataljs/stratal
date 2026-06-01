@@ -1,5 +1,5 @@
 import { inject } from '../di'
-import { Transient } from '../di/decorators'
+import { Singleton } from '../di/decorators'
 import { DI_TOKENS } from '../di/tokens'
 import { LOGGER_TOKENS, type LoggerService } from '../logger'
 import type {
@@ -11,7 +11,7 @@ import type {
   RegisteredHandler
 } from './types'
 
-@Transient()
+@Singleton(DI_TOKENS.EventRegistry)
 export class EventRegistry implements IEventRegistry {
   private handlers = new Map<string, RegisteredHandler[]>()
 

@@ -114,6 +114,35 @@ describe('Lazy module loading', () => {
       expect(container.resolve(VALUE_TOKEN)).toEqual({ configured: true })
     })
 
+    it('does not double-run onInitialize when load() is triggered inside an onInitialize', async () => {
+      let lazyInitCount = 0
+
+      @Module({ providers: [{ provide: NESTED_TOKEN, useClass: NestedService }] })
+      class LoadedDuringInitModule implements OnInitialize {
+        onInitialize(_ctx: ModuleContext): void {
+          lazyInitCount++
+        }
+      }
+
+      @Module({ providers: [{ provide: LAZY_TOKEN, useClass: LazyService }] })
+      class TriggeringModule implements OnInitialize {
+        async onInitialize(ctx: ModuleContext): Promise<void> {
+          // Simulate a module that lazily loads another during the batch
+          // initialize() loop (e.g. via LazyModuleLoader).
+          const reg = ctx.container.resolve<ModuleRegistry>(DI_TOKENS.ModuleRegistry)
+          await reg.registerLazy(LoadedDuringInitModule)
+        }
+      }
+
+      container.registerValue(DI_TOKENS.ModuleRegistry, registry)
+      registry.register(TriggeringModule)
+      await registry.initialize()
+
+      // registerLazy ran it once; the snapshotted batch loop must not re-run it.
+      expect(lazyInitCount).toBe(1)
+      expect(container.resolve<NestedService>(NESTED_TOKEN)).toBeInstanceOf(NestedService)
+    })
+
     it('dedups against an eagerly registered module', async () => {
       let initCount = 0
 
