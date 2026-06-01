@@ -1,5 +1,5 @@
-import { fixPgCjs, stratalTest } from '@stratal/testing/vitest-plugin'
-import { defineConfig } from 'vitest/config'
+import { fixPgCjs, stratalTest } from '@stratal/testing/vitest-plugin';
+import { defineConfig } from 'vitest/config';
 
 const DATABASE_URL = process.env.DATABASE_URL
 if (!DATABASE_URL) {

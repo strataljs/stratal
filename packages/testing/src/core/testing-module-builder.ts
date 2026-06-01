@@ -209,8 +209,21 @@ export class TestingModuleBuilder {
     const name = deriveDbName(base)
     await createDatabaseFromTemplate(adminConnectionString, name, deriveTemplateName(base))
 
-    // Reassign the binding to a fresh object — never mutate the shared cloudflare env.
-    bindings[bindingName] = { ...db, connectionString: buildConnectionString(base, name) }
+    // Point the binding at the per-file database by overriding only its
+    // connectionString. Clone with the original prototype + descriptors so the
+    // Hyperdrive binding's methods (e.g. `connect()`) and other fields survive,
+    // and never mutate the shared cloudflare env object.
+    const isolated = Object.create(
+      Object.getPrototypeOf(db) as object | null,
+      Object.getOwnPropertyDescriptors(db),
+    ) as Record<string, unknown>
+    Object.defineProperty(isolated, 'connectionString', {
+      value: buildConnectionString(base, name),
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    })
+    bindings[bindingName] = isolated
 
     return { name, adminConnectionString }
   }

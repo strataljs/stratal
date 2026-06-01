@@ -76,8 +76,7 @@ export default createTestDatabaseGlobalSetup({
 
 Notes:
 - Run tests with `npx dotenv -- vitest run` so `.env`'s `DATABASE_URL` reaches `vitest.config.ts` and `globalSetup`.
-- Set the mode once via the `STRATAL_TEST_DB_ISOLATION` env var (`shared` | `database`) if you prefer not to hardcode `isolation` in two places.
-- The Hyperdrive `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_<binding>` override is wrangler-`dev`-only and is **not** honored in tests — set the connection string via `miniflare.hyperdrives.DB`.
+- The isolated binding defaults to `DB`. For a differently-named Hyperdrive binding, set `database: { isolation: 'database', binding: 'MY_DB' }` (typed to your declared Hyperdrive bindings).
 - Requires Postgres and the `pg` package (an optional peer of `@stratal/testing`).
 
 ### Setup File
