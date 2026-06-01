@@ -1,12 +1,12 @@
-import { inject } from '../di';
 import type { Application } from '../application';
+import { inject } from '../di';
 import { Request } from '../di/decorators';
 import { DI_TOKENS } from '../di/tokens';
 import { applyLocalePrefix } from './locale-url';
-import { RouterError } from './router.error';
 import type { RouteName, RouteParams } from './route-map';
 import type { RegisteredRoute, RouteRegistry } from './route-registry';
 import type { RouterContext } from './router-context';
+import { RouterError } from './router.error';
 import { ROUTER_TOKENS } from './router.tokens';
 import type { LocalePathService } from './services/locale-path.service';
 import { signUrl, verifySignedUrl, type SignedUrlOptions } from './signed-url';
@@ -129,7 +129,7 @@ export function buildRouteUrl(
  * uri.route('posts.index') // auto-fills :locale param
  * ```
  */
-@Request()
+@Request(ROUTER_TOKENS.Uri)
 export class Uri {
   private _defaults: Record<string, string> = {}
   private readonly trailingSlash: TrailingSlashMode
