@@ -15,6 +15,8 @@ ref.get(ReportService)
 
 The loaded module's nested `imports` and `providers` are registered into the global container and its `onInitialize` hook runs once. Repeat loads return the cached `ModuleRef`. Controllers, queue consumers, and cron jobs declared by a lazily loaded module are skipped (with a warning) — that wiring is finalized at bootstrap.
 
+If a lazy module provides a token that another module has already bound on the global container, the existing binding is kept and the colliding lazy provider is ignored (with a warning) — a lazy module cannot silently clobber an already-registered token.
+
 ### Breaking Changes
 
 - **Built-in subsystems are no longer registered eagerly at boot.** `I18nModule`, `QueueModule`, `CacheModule`, `OpenAPIModule`, the cron manager, and router services are now loaded via dynamic `import()` at their trigger points (i18n/routing on the first HTTP request, queue on the first batch, cron on the first scheduled invocation or when the app declares jobs). HTTP-only apps no longer evaluate queue/cron code at cold start.

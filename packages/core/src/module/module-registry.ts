@@ -9,6 +9,7 @@ import { getModuleOptions } from './module.decorator'
 import type { ExceptionHandler } from '../errors/exception-handler'
 import type {
   DynamicModule,
+  InjectionToken,
   ModuleClass,
   ModuleContext,
   ModuleOptions,
@@ -136,7 +137,7 @@ export class ModuleRegistry {
     { includeHttpWiring }: { includeHttpWiring: boolean },
   ): RegisteredModule {
     for (const provider of options.providers ?? []) {
-      this.registerProvider(provider)
+      this.registerProvider(provider, { lazy: !includeHttpWiring, moduleName: moduleClass.name })
     }
 
     if (includeHttpWiring) {
@@ -341,7 +342,25 @@ export class ModuleRegistry {
     )
   }
 
-  private registerProvider(provider: Provider): void {
+  private registerProvider(
+    provider: Provider,
+    { lazy = false, moduleName }: { lazy?: boolean; moduleName?: string } = {},
+  ): void {
+    if (lazy) {
+      const token = this.providerToken(provider)
+      // A lazy module registers onto the shared root container. If its token is
+      // already bound (by an eagerly-registered or previously-loaded module),
+      // overriding would silently clobber that binding — and break any
+      // shared-singleton rendezvous. Keep the existing binding and warn.
+      if (token !== null && this.container.isRegistered(token)) {
+        this.logger.warn(
+          `Lazy module ${moduleName ?? '(unknown)'} provides ${this.describeToken(token)}, ` +
+            `which is already registered by another module — keeping the existing binding and ignoring the lazy provider.`,
+        )
+        return
+      }
+    }
+
     if (typeof provider === 'function') {
       this.container.register(provider as Constructor)
       this.collectIfListener(provider as Constructor)
@@ -363,6 +382,20 @@ export class ModuleRegistry {
     } else if ('useExisting' in provider) {
       this.container.registerExisting(provider.provide, provider.useExisting)
     }
+  }
+
+  /** The DI token a provider binds, for collision detection. */
+  private providerToken(provider: Provider): InjectionToken | null {
+    if (typeof provider === 'function') return provider as Constructor
+    if ('provide' in provider) return provider.provide
+    return null
+  }
+
+  private describeToken(token: InjectionToken): string {
+    if (typeof token === 'function') return token.name
+    if (typeof token === 'symbol') return token.toString()
+    if (typeof token === 'string') return token
+    return 'lazy token'
   }
 
   private collectIfCommand(providerClass: Constructor): void {

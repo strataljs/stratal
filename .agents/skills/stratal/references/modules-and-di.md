@@ -202,6 +202,7 @@ Semantics:
 - Repeat `load()` of the same module returns the cached `ModuleRef` — no re-registration, no second `onInitialize`.
 - **Controllers, queue consumers, and cron jobs declared by a lazily loaded module are skipped** (with a warning) — route/queue/cron wiring is finalized at bootstrap and cannot be extended at runtime. Use lazy modules for providers/services only.
 - Singletons resolve to one shared instance regardless of how many times the module is loaded.
+- If a lazy module provides a token already bound by another module, the existing binding is kept and the colliding provider is ignored (logged as a warning) — a lazy module cannot override an already-registered token.
 
 Distinct from `lazy()` (below), which defers a single class reference to break circular dependencies. `LazyModuleLoader` defers an entire module's evaluation and registration.
 

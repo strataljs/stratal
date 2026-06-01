@@ -143,6 +143,23 @@ describe('Lazy module loading', () => {
       expect(container.resolve<NestedService>(NESTED_TOKEN)).toBeInstanceOf(NestedService)
     })
 
+    it('keeps the existing binding and warns when a lazy provider collides with one from another module', async () => {
+      @Module({ providers: [{ provide: LAZY_TOKEN, useClass: NestedService }] })
+      class FirstModule {}
+
+      @Module({ providers: [{ provide: LAZY_TOKEN, useClass: LazyService }] })
+      class CollidingLazyModule {}
+
+      // FirstModule eagerly binds LAZY_TOKEN -> NestedService.
+      registry.register(FirstModule)
+      // A different lazy module tries to bind the same token.
+      await registry.registerLazy(CollidingLazyModule)
+
+      // Existing binding wins; the colliding lazy provider is ignored.
+      expect(container.resolve(LAZY_TOKEN)).toBeInstanceOf(NestedService)
+      expect(mockLogger.warn).toHaveBeenCalledOnce()
+    })
+
     it('dedups against an eagerly registered module', async () => {
       let initCount = 0
 
