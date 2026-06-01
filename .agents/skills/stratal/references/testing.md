@@ -17,6 +17,69 @@ export default defineConfig({
 
 Add `fixPgCjs()` and `fixNobleHashesCjs()` when the project uses `@stratal/framework` (ZenStack). Both are no-ops if the relevant packages aren't installed.
 
+### Parallel tests with an isolated database per file
+
+By default tests share one database and run serially (`isolation: 'shared'`). Pass `database: { isolation: 'database' }` to give **each test file its own database**, cloned from a migrated template and dropped on teardown — this enables file parallelism automatically.
+
+```typescript
+// vitest.config.ts
+import { fixNobleHashesCjs, fixPgCjs, stratalTest } from '@stratal/testing/vitest-plugin'
+import { defineConfig } from 'vitest/config'
+
+const DATABASE_URL = process.env.DATABASE_URL
+if (!DATABASE_URL) throw new Error('DATABASE_URL is required to run e2e tests')
+
+export default defineConfig({
+  plugins: [fixPgCjs(), fixNobleHashesCjs()],
+  test: {
+    projects: [
+      {
+        plugins: [
+          stratalTest({
+            wrangler: { configPath: './test/wrangler.jsonc' },
+            miniflare: { hyperdrives: { DB: DATABASE_URL } },
+            database: { isolation: 'database' }, // 'shared' (default) | 'database'
+          }),
+        ],
+        test: {
+          name: 'e2e',
+          include: ['test/e2e/**/*.spec.ts'],
+          globalSetup: ['./test/global-setup.ts'],
+        },
+      },
+    ],
+  },
+})
+```
+
+Wire `globalSetup` to build the template (database mode) or migrate the base database (shared mode) with `createTestDatabaseGlobalSetup` from `@stratal/testing/database`. It reads `DATABASE_URL` and calls your `migrate` callback against the connection string to migrate:
+
+```typescript
+// test/global-setup.ts
+import { execFileSync } from 'node:child_process'
+import { resolve } from 'node:path'
+import { createTestDatabaseGlobalSetup } from '@stratal/testing/database'
+
+const schemaPath = resolve(import.meta.dirname, 'schema.zmodel')
+const zenstackBin = resolve(import.meta.dirname, '../../../node_modules/.bin/zenstack')
+
+export default createTestDatabaseGlobalSetup({
+  isolation: 'database',
+  migrate: (connectionString) => {
+    execFileSync(zenstackBin, ['db', 'push', '--force-reset', `--schema=${schemaPath}`, '--accept-data-loss'], {
+      stdio: 'inherit',
+      env: { ...process.env, DATABASE_URL: connectionString },
+    })
+  },
+})
+```
+
+Notes:
+- Run tests with `npx dotenv -- vitest run` so `.env`'s `DATABASE_URL` reaches `vitest.config.ts` and `globalSetup`.
+- Set the mode once via the `STRATAL_TEST_DB_ISOLATION` env var (`shared` | `database`) if you prefer not to hardcode `isolation` in two places.
+- The Hyperdrive `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_<binding>` override is wrangler-`dev`-only and is **not** honored in tests — set the connection string via `miniflare.hyperdrives.DB`.
+- Requires Postgres and the `pg` package (an optional peer of `@stratal/testing`).
+
 ### Setup File
 
 ```typescript
@@ -234,6 +297,8 @@ await module.assertDatabaseHas('note', { title: 'Test' })
 // Assert a record does not exist
 await module.assertDatabaseMissing('note', { title: 'Deleted' })
 ```
+
+With `database` isolation (see Setup), each test **file** gets its own database cloned from the migrated template, and it is dropped automatically on `module.close()`. `truncateDb()` still resets rows between tests **within** a file.
 
 ## MockFetch (MSW)
 

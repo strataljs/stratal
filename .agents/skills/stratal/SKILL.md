@@ -5,7 +5,7 @@ license: MIT
 compatibility: Designed for AI Agents. Requires Node.js 22+, npm.
 metadata:
   author: Temitayo Fadojutimi
-  version: "2.4"
+  version: "2.5"
 ---
 
 # Stratal Framework
@@ -284,6 +284,8 @@ See `references/quarry-cli.md` for all MCP flags and options.
 
 **User says "Write tests for my service"** -> Read `references/testing.md`. Use `Test.createTestingModule()` with provider overrides. Use `module.http` for HTTP tests, `module.get()` for unit tests.
 
+**User says "Run my tests in parallel with isolated databases"** -> Read `references/testing.md`. Pass `database: { isolation: 'database' }` to `stratalTest()` and wire `globalSetup` with `createTestDatabaseGlobalSetup` from `@stratal/testing/database`. Each file gets its own database cloned from a migrated template, dropped on teardown.
+
 **User says "Set up the database"** -> Read `references/database.md`. Configure `DatabaseModule.forRootAsync()` with ZenStack.
 
 **User says "Add custom error handling"** -> Read `references/errors-and-i18n.md`. Create `ExceptionHandler` subclass, implement `register()`, pass to `Stratal` constructor.
@@ -356,7 +358,7 @@ Load these when the task needs deeper knowledge:
 | `references/seeders.md` | Database seeders, calling other seeders |
 | `references/middleware-and-guards.md` | RouteConfigurable, middleware registration with Router, guards, @UseGuards |
 | `references/rate-limiter.md` | Named rate limiters, `RateLimiterModule.forRoot()`, `Limit` value class (incl. `perSeconds`), `router.throttle()`, `@RateLimit` decorator, typed-KV custom stores, 429 headers |
-| `references/testing.md` | TestingModule, TestHttpClient, mocks, factories |
+| `references/testing.md` | TestingModule, TestHttpClient, mocks, factories, parallel per-file database isolation |
 | `references/infrastructure.md` | Cache (KV), Logger, Email (SMTP), Storage (R2 — multi-disk, presigned URLs), OpenAPI |
 | `references/config.md` | ConfigService, registerAs(), namespaces |
 | `references/incremental-adoption.md` | Mounting Stratal into existing Hono app |

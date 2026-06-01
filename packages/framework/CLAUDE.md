@@ -24,7 +24,7 @@ Maintainer rules for `@stratal/framework`.
   - **unit** — node env, `src/**/__tests__/**/*.spec.ts`
   - **e2e** — `test/e2e/**/*.spec.ts`, Miniflare + Hyperdrive→Postgres
 - E2E needs Docker Postgres on port 5438: `yarn workspace @stratal/framework test:db`. CI runs Postgres as a service container.
-- E2E is non-parallel (`fileParallelism: false`) — keep it that way; Hyperdrive shares connection state across files.
+- E2E runs **in parallel with one database per test file** via `stratalTest({ database: { isolation: 'database' } })`. `test/global-setup.ts` builds a migrated template (`createTestDatabaseGlobalSetup` from `@stratal/testing/database`); each file clones it and drops it on teardown. `DATABASE_URL` is the single source of truth — test scripts wrap with `npx dotenv` so it reaches `vitest.config.ts` and global setup. Don't reintroduce `fileParallelism: false`.
 - Coverage provider: `istanbul` (different from core's v8 — don't unify without intent).
 
 ## Conventions

@@ -6,6 +6,7 @@ import { type InjectionToken } from 'stratal/module'
 import { SEEDER_TOKENS, SeederError, type Seeder, type SeederRegistry } from 'stratal/seeder'
 import { STORAGE_TOKENS } from 'stratal/storage'
 import { expect } from 'vitest'
+import { dropDatabase } from '../database'
 import { FEATURE_FLAG_SERVICE_TOKEN, type FakeFeatureFlagService } from '../feature-flags'
 import type { FakeStorageService } from '../storage'
 import { TestHttpClient } from './http/test-http-client'
@@ -42,6 +43,17 @@ import { TestWsRequest } from './ws/test-ws-request'
  * await module.close()
  * ```
  */
+/**
+ * Identifies a per-file database created for test isolation, so it can be
+ * dropped on teardown. Produced by the testing module builder.
+ */
+export interface IsolatedDatabase {
+  /** Name of the cloned database. */
+  name: string
+  /** Admin (maintenance-database) connection string used to drop it. */
+  adminConnectionString: string
+}
+
 export class TestingModule {
   private _http: TestHttpClient | null = null
   private readonly _requestContainer: Container
@@ -50,6 +62,7 @@ export class TestingModule {
     private readonly app: Application,
     private readonly env: StratalEnv,
     private readonly ctx: StratalExecutionContext,
+    private readonly isolatedDatabase: IsolatedDatabase | null = null,
   ) {
     const mockContext = this.app.createMockRouterContext()
     this._requestContainer = this.app.container.createRequestScope(mockContext)
@@ -218,5 +231,10 @@ export class TestingModule {
   async close(): Promise<void> {
     this._requestContainer.dispose()
     await this.app.shutdown()
+    // Drop the per-file database AFTER shutdown so the app's pool connection is
+    // released; `WITH (FORCE)` evicts any that lingers. Best-effort.
+    if (this.isolatedDatabase) {
+      await dropDatabase(this.isolatedDatabase.adminConnectionString, this.isolatedDatabase.name)
+    }
   }
 }

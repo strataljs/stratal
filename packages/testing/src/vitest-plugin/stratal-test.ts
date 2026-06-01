@@ -2,11 +2,51 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 
 import { cloudflareTest } from '@cloudflare/vitest-pool-workers'
+import type { StratalEnv } from 'stratal'
 import type { Plugin, UserConfig } from 'vite'
+import type { TestUserConfig } from 'vitest/config'
+import { BINDING_ENV_VAR, DEFAULT_DB_BINDING, ISOLATION_ENV_VAR, normalizeIsolation, type DatabaseIsolation } from '../database'
 
 const require = createRequire(import.meta.url)
 
 type CloudflareTestOptions = Parameters<typeof cloudflareTest>[0]
+
+/** String keys of `StratalEnv` whose value is a Hyperdrive binding. */
+type HyperdriveKeys = Extract<
+  { [K in keyof StratalEnv]-?: StratalEnv[K] extends Hyperdrive ? K : never }[keyof StratalEnv],
+  string
+>
+
+/**
+ * Names of declared Hyperdrive bindings, drawn from the consumer's augmented
+ * `StratalEnv` (which extends `Cloudflare.Env`). Falls back to `string` only
+ * when no Hyperdrive binding is declared (nothing to constrain to).
+ */
+type HyperdriveBindingName = [HyperdriveKeys] extends [never] ? string : HyperdriveKeys
+
+/** Stratal-specific test database configuration for {@link stratalTest}. */
+export interface StratalTestDatabaseOptions {
+  /**
+   * Database isolation mode for parallel runs. Defaults to `'shared'`.
+   *
+   * - `'shared'` — all test files share one database (serial; today's behaviour).
+   * - `'database'` — each test file gets its own database cloned from a migrated
+   *   template (dropped on teardown), and file parallelism is enabled.
+   *
+   * Pair with `createTestDatabaseGlobalSetup({ isolation })` from
+   * `@stratal/testing/database` in your Vitest `globalSetup`.
+   */
+  isolation?: DatabaseIsolation
+  /**
+   * Name of the Hyperdrive binding to isolate per test file. Defaults to `'DB'`.
+   * Constrained to Hyperdrive binding names declared on `Cloudflare.Env` /
+   * `StratalEnv`.
+   */
+  binding?: HyperdriveBindingName
+}
+
+type WorkersPoolOptions = Exclude<CloudflareTestOptions, (...args: never[]) => unknown>
+type StratalTestOptions = WorkersPoolOptions & { database?: StratalTestDatabaseOptions }
 
 const pgCjsResolvers = new Map<string, () => string>([
   ['pg-protocol', () => require.resolve('pg-protocol')],
@@ -115,10 +155,10 @@ export const fixNobleHashesCjs = (): Plugin => {
   }
 }
 
-const stratalPlugin: Plugin = {
+const createStratalPlugin = (isolation: DatabaseIsolation): Plugin => ({
   name: 'stratal-test',
   config() {
-    return {
+    const config: UserConfig & { test?: TestUserConfig } = {
       resolve: {
         alias: {
           tslib: 'tslib/tslib.es6.mjs',
@@ -130,21 +170,51 @@ const stratalPlugin: Plugin = {
       ssr: {
         noExternal: ['@zenstackhq/better-auth'],
       },
-    } satisfies UserConfig
+    }
+
+    // In 'database' mode each test file owns its database, so enable file
+    // parallelism + isolation. In 'shared' mode leave these untouched so the
+    // project's own defaults stand (forcing them would alter maxWorkers and
+    // can collide with sibling projects' sequence.groupOrder).
+    if (isolation === 'database') {
+      config.test = { fileParallelism: true, isolate: true }
+    }
+
+    return config
   },
-}
+})
 
 /**
  * Returns Vite plugins for Stratal tests running in the Cloudflare Workers (workerd) environment.
  *
- * Includes the cloudflare pool plugin and Stratal alias plugin.
- * Use inside a project-level `plugins` array.
+ * Includes the cloudflare pool plugin and Stratal alias plugin. Pass
+ * `database: { isolation: 'database' }` to give each test file its own
+ * database (cloned from a migrated template, dropped on teardown) and enable
+ * file parallelism. Use inside a project-level `plugins` array.
  *
  * **Note:** `fixPgCjs()` must be registered separately at the root `defineConfig` level.
  *
- * @param options - Same options as `cloudflareTest()` from `@cloudflare/vitest-pool-workers`
+ * @param options - `cloudflareTest()` options plus Stratal `database` options
  * @returns An array of Vite plugins
  */
-export function stratalTest(options: CloudflareTestOptions = {}): Plugin[] {
-  return [cloudflareTest(options) as unknown as Plugin, stratalPlugin]
+export function stratalTest(options: StratalTestOptions = {}): Plugin[] {
+  const { database, ...cfOptions } = options
+  const isolation = normalizeIsolation(database?.isolation)
+  const binding = database?.binding ?? DEFAULT_DB_BINDING
+
+  // Expose the mode + binding name to the worker as env vars so
+  // TestingModule.compile() can decide whether and what to provision.
+  const merged = {
+    ...cfOptions,
+    miniflare: {
+      ...cfOptions.miniflare,
+      bindings: {
+        ...(cfOptions.miniflare?.bindings as Record<string, unknown> | undefined),
+        [ISOLATION_ENV_VAR]: isolation,
+        [BINDING_ENV_VAR]: binding,
+      },
+    },
+  }
+
+  return [cloudflareTest(merged) as unknown as Plugin, createStratalPlugin(isolation)]
 }

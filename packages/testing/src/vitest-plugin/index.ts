@@ -1,1 +1,1 @@
-export { fixNobleHashesCjs, fixPgCjs, stratalTest } from './stratal-test.js'
+export { fixNobleHashesCjs, fixPgCjs, stratalTest, type StratalTestDatabaseOptions } from './stratal-test.js'

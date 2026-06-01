@@ -10,11 +10,22 @@ import { type Container } from 'stratal/di'
 import { LogLevel } from 'stratal/logger'
 import { type InjectionToken, Module, type ModuleClass, type ModuleOptions } from 'stratal/module'
 import { STORAGE_TOKENS } from 'stratal/storage'
+import {
+  BINDING_ENV_VAR,
+  buildConnectionString,
+  createDatabaseFromTemplate,
+  DEFAULT_DB_BINDING,
+  deriveAdminConnectionString,
+  deriveDbName,
+  deriveTemplateName,
+  ISOLATION_ENV_VAR,
+  normalizeIsolation,
+} from '../database'
 import { FakeStorageService } from '../storage'
 import { FEATURE_FLAG_SERVICE_TOKEN, FakeFeatureFlagService } from '../feature-flags'
 import { ProviderOverrideBuilder, type ProviderOverrideConfig } from './override'
 import { Test } from './test'
-import { TestingModule } from './testing-module'
+import { TestingModule, type IsolatedDatabase } from './testing-module'
 
 /**
  * Configuration for creating a testing module
@@ -102,6 +113,12 @@ export class TestingModuleBuilder {
       },
     }
 
+    // When database isolation is enabled, clone the migrated template into a
+    // fresh per-file database and point this app's DB binding at it. The clone
+    // is dropped in TestingModule.close(). No-op in 'shared' mode or when the
+    // app has no DB binding.
+    const isolatedDb = await this.setupIsolatedDatabase(env)
+
     // Build root module from config
     const baseModules = Test.getBaseModules()
     const allImports = [...baseModules, ...(this.config.imports ?? [])]
@@ -161,7 +178,41 @@ export class TestingModuleBuilder {
       }
     }
 
-    return new TestingModule(app, env, ctx)
+    return new TestingModule(app, env, ctx, isolatedDb)
+  }
+
+  /**
+   * When `STRATAL_TEST_DB_ISOLATION=database`, create a fresh database cloned
+   * from the migrated template and rewrite the Hyperdrive binding's
+   * `connectionString` to target it. The binding name is configurable via
+   * `stratalTest({ database: { binding } })` (defaults to `DB`). Returns the
+   * created name + admin connection so `close()` can drop it, or `null` when
+   * isolation is off. Throws if isolation is on but the binding is missing — a
+   * misconfiguration, not a case to skip.
+   */
+  private async setupIsolatedDatabase(env: StratalEnv): Promise<IsolatedDatabase | null> {
+    const bindings = env as unknown as Record<string, unknown>
+    const isolation = normalizeIsolation(bindings[ISOLATION_ENV_VAR] as string | undefined)
+    if (isolation !== 'database') return null
+
+    const bindingName = (bindings[BINDING_ENV_VAR] as string | undefined) ?? DEFAULT_DB_BINDING
+    const db = bindings[bindingName] as { connectionString?: string } | undefined
+    const base = db?.connectionString
+    if (!base) {
+      throw new Error(
+        `Database isolation is 'database' but no \`${bindingName}\` Hyperdrive binding with a connectionString was found. ` +
+          `Provide it via \`stratalTest({ miniflare: { hyperdrives: { ${bindingName} } } })\`, or set isolation to 'shared'.`,
+      )
+    }
+
+    const adminConnectionString = deriveAdminConnectionString(base)
+    const name = deriveDbName(base)
+    await createDatabaseFromTemplate(adminConnectionString, name, deriveTemplateName(base))
+
+    // Reassign the binding to a fresh object — never mutate the shared cloudflare env.
+    bindings[bindingName] = { ...db, connectionString: buildConnectionString(base, name) }
+
+    return { name, adminConnectionString }
   }
 
   /**

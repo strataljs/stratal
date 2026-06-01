@@ -1,16 +1,27 @@
 import { execFileSync } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 
-export default function setup() {
-  const schemaPath = resolve(import.meta.dirname, 'schema.zmodel')
-  const zenstackBin = resolve(import.meta.dirname, '../../../node_modules/.bin/zenstack')
-  const nodeBinDir = dirname(process.execPath)
+import { createTestDatabaseGlobalSetup } from '@stratal/testing/database'
 
-  execFileSync(zenstackBin, ['db', 'push', '--force-reset', `--schema=${schemaPath}`, '--accept-data-loss'], {
-    stdio: 'inherit',
-    env: {
-      ...process.env,
-      PATH: `${nodeBinDir}:${process.env.PATH ?? ''}`,
-    },
-  })
-}
+const schemaPath = resolve(import.meta.dirname, 'schema.zmodel')
+const zenstackBin = resolve(import.meta.dirname, '../../../node_modules/.bin/zenstack')
+const nodeBinDir = dirname(process.execPath)
+
+/**
+ * In 'database' mode `connectionString` targets the template database; in
+ * 'shared' mode it targets the base database. Either way, ZenStack reads the
+ * datasource url from `DATABASE_URL`, so we push the schema against it.
+ */
+export default createTestDatabaseGlobalSetup({
+  isolation: 'database',
+  migrate: (connectionString) => {
+    execFileSync(zenstackBin, ['db', 'push', '--force-reset', `--schema=${schemaPath}`, '--accept-data-loss'], {
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        DATABASE_URL: connectionString,
+        PATH: `${nodeBinDir}:${process.env.PATH ?? ''}`,
+      },
+    })
+  },
+})

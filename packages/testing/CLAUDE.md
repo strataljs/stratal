@@ -8,6 +8,7 @@ Maintainer rules for `@stratal/testing`.
 - Vitest plugin: `src/vitest-plugin/` — `stratalTest()` wraps `@cloudflare/vitest-pool-workers` with Stratal defaults (tslib alias, ZenStack mocks, SSR externals, `fixPgCjs()`).
 - Mocks: `src/mocks/` (each ships as its own sub-path entry).
 - Storage fake: `src/storage/`.
+- Database isolation: `src/database/` (`@stratal/testing/database`) — `createTestDatabaseGlobalSetup` (node global setup) + per-file clone/drop helpers. `pg` imported dynamically (optional peer). The builder (`src/core/testing-module-builder.ts`) provisions a per-file DB and rewrites `env.DB.connectionString`; `TestingModule.close()` drops it.
 
 ## Conventions
 
