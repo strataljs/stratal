@@ -5,7 +5,7 @@ license: MIT
 compatibility: Designed for AI Agents. Requires Node.js 22+, npm.
 metadata:
   author: Temitayo Fadojutimi
-  version: "2.5"
+  version: "2.6"
 ---
 
 # Stratal Framework
@@ -330,6 +330,8 @@ See `references/quarry-cli.md` for all MCP flags and options.
 
 **User says "Always trailing slash on URLs" / "Force no trailing slash"** -> Read `references/routing.md`. Set `trailingSlash: 'always'` or `'never'` in the `Stratal` constructor. Default `'ignore'` matches both forms with no redirect.
 
+**User says "Lazily load a module" / "Load a module on demand" / "Reduce cold start"** -> Read `references/modules-and-di.md` (Lazy Module Loading). Inject `DI_TOKENS.LazyModuleLoader`, call `loader.load(() => import('./x.module').then(m => m.XModule))`, resolve providers via `ref.get(Token)`. Lazy modules register providers only — controllers/consumers/jobs are skipped.
+
 **User says "I have an existing Hono app"** -> Read `references/incremental-adoption.md`. Mount Stratal as sub-app via `stratal.hono`.
 
 **User says "Add rate limiting" / "Throttle this endpoint" / "429 too many requests"** -> Read `references/rate-limiter.md`. Import `RateLimiterModule.forRoot({ store: 'kv', binding: 'RATE_LIMITS' })`. Define limiters in `OnInitialize` via `registry.for('name', ctx => Limit.perMinute(60).by(...))`. Attach with `router.throttle('name')` or `@RateLimit('name')`. For better-auth path rules → `references/auth-and-rbac.md` "Rate-limit interop".
@@ -343,7 +345,7 @@ Load these when the task needs deeper knowledge:
 | Reference | When to Load |
 |-----------|-------------|
 | `references/quarry-cli.md` | CLI commands, MCP server setup, custom command creation, debugging |
-| `references/modules-and-di.md` | Provider types, scopes, container API, dynamic modules |
+| `references/modules-and-di.md` | Provider types, scopes, container API, dynamic modules, lazy module loading (`LazyModuleLoader`) |
 | `references/routing.md` | RouteConfig, RouterContext API, named routes, URL generation, signed URLs, domain routing, Router fluent API, OpenAPI, versioning |
 | `references/errors-and-i18n.md` | ExceptionHandler, ApplicationError, HttpException, domain error classes, i18n, withZodI18n(), withI18n() |
 | `references/inertia.md` | Inertia.js setup, rendering, props, SSR, SEO (`ctx.seo()`, auto head-sync), type safety, Vite |
