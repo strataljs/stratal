@@ -1,6 +1,6 @@
 import { Project, SyntaxKind, ts } from 'ts-morph'
 import { describe, expect, it } from 'vitest'
-import { detectI18nConfig, extractControllerPageTypes, generateInertiaTypes } from '../generator/type-generator'
+import { detectI18nConfig, extractControllerPageTypes, extractFlashTypes, generateInertiaTypes } from '../generator/type-generator'
 
 const FIXTURE_HEADER = `
 export interface InertiaDeferredProp<T = unknown> {
@@ -265,5 +265,67 @@ describe('generateInertiaTypes', () => {
     expect(output).not.toContain('InertiaI18nConfig')
     expect(output).not.toContain('locale')
     expect(output).not.toContain('translations')
+  })
+})
+
+/**
+ * Build an in-memory project containing a controller body of `ctx.flash(...)`
+ * calls and run the flash-type extractor against it.
+ */
+function extractFlash(controllerBody: string): Map<string, string> {
+  const project = new Project({
+    useInMemoryFileSystem: true,
+    compilerOptions: {
+      target: ts.ScriptTarget.ESNext,
+      module: ts.ModuleKind.ESNext,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      strict: true,
+    },
+  })
+
+  project.createSourceFile(
+    '/src/demo.controller.ts',
+    `
+declare const ctx: { flash: (key: string, value: unknown) => void }
+declare const cond: boolean
+
+export class DemoController {
+  handle() {
+    ${controllerBody}
+  }
+}
+`,
+  )
+
+  const info = extractFlashTypes(project, SyntaxKind, ts, '/src')
+  return new Map((info?.members ?? []).map((m) => [m.name, m.type]))
+}
+
+describe('extractFlashTypes', () => {
+  it('collects keys from string-literal flash calls', () => {
+    const members = extractFlash(`
+      ctx.flash('success', 'saved')
+      ctx.flash('error', 'failed')
+    `)
+
+    expect([...members.keys()].sort()).toEqual(['error', 'success'])
+  })
+
+  it('collects both branches of a conditional flash key', () => {
+    const members = extractFlash(`
+      ctx.flash(cond ? 'success' : 'error', 'message')
+    `)
+
+    expect([...members.keys()].sort()).toEqual(['error', 'success'])
+    expect(members.get('success')).toBe('string')
+    expect(members.get('error')).toBe('string')
+  })
+
+  it('collects every branch of a nested conditional flash key', () => {
+    const members = extractFlash(`
+      ctx.flash(cond ? 'success' : cond ? 'info' : 'error', 'message')
+    `)
+
+    expect([...members.keys()].sort()).toEqual(['error', 'info', 'success'])
   })
 })

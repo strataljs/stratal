@@ -549,6 +549,29 @@ function extractOnlyFromType(optionsType: Type, locationNode: Node): string[] {
 
 // --- Extract ctx.flash() call types ---
 
+/**
+ * Collect every string-literal value a flash-key argument can resolve to.
+ *
+ * A direct string literal yields a single key. A conditional expression
+ * (`cond ? 'a' : 'b'`, including nested ternaries) contributes the literals
+ * from each branch. Non-literal keys (variables, template strings) yield
+ * nothing — they can't be statically known.
+ */
+function collectFlashKeyLiterals(node: Node, SK: TsMorphModule['SyntaxKind']): string[] {
+  const stringLiteral = node.asKind(SK.StringLiteral)
+  if (stringLiteral) return [stringLiteral.getLiteralValue()]
+
+  const conditional = node.asKind(SK.ConditionalExpression)
+  if (conditional) {
+    return [
+      ...collectFlashKeyLiterals(conditional.getWhenTrue(), SK),
+      ...collectFlashKeyLiterals(conditional.getWhenFalse(), SK),
+    ]
+  }
+
+  return []
+}
+
 export function extractFlashTypes(
   project: Project,
   SK: TsMorphModule['SyntaxKind'],
@@ -572,14 +595,17 @@ export function extractFlashTypes(
       const args = call.getArguments()
       if (args.length < 2) continue
 
-      const keyArg = args[0]
-      if (!keyArg.isKind(SK.StringLiteral)) continue
-      const key = keyArg.getLiteralValue()
-
-      if (flashMembers.has(key)) continue
+      // The key may be a plain string literal or a conditional expression
+      // selecting between several literals (e.g. `cond ? 'success' : 'error'`).
+      // Every literal a branch can produce is a real flash key.
+      const keys = collectFlashKeyLiterals(args[0], SK)
+      if (keys.length === 0) continue
 
       const valueType = widenLiteralType(args[1].getType(), tsObj)
-      flashMembers.set(key, valueType)
+      for (const key of keys) {
+        if (flashMembers.has(key)) continue
+        flashMembers.set(key, valueType)
+      }
     }
   }
 
