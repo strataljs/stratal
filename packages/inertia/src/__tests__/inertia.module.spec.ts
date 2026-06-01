@@ -103,3 +103,94 @@ describe('InertiaModule onException — errorPage', () => {
     expect(result).toBeUndefined()
   })
 })
+
+describe('InertiaModule onException — read navigations vs mutations', () => {
+  // Capture the two `renderable()` registrations in order:
+  // [0] SchemaValidationError, [1] ApplicationError.
+  function captureRenderables() {
+    const module = new InertiaModule()
+    const renderables: ((error: unknown, context: unknown) => unknown)[] = []
+    const mockHandler = {
+      renderable: vi.fn((_cls: unknown, cb: (error: unknown, context: unknown) => unknown) => {
+        renderables.push(cb)
+      }),
+      errorPage: vi.fn(),
+    }
+    module.onException(mockHandler as never)
+    return { schema: renderables[0], application: renderables[1] }
+  }
+
+  function makeCtx(method: string, headers: Record<string, string>) {
+    const flash = vi.fn()
+    const redirect = vi.fn(
+      (url: string, status: number) => new Response(null, { status, headers: { location: url } }),
+    )
+    const ctx = {
+      c: { req: { method } },
+      header: (name: string) => headers[name.toLowerCase()],
+      flash,
+      redirect,
+    }
+    return { context: { type: 'http', ctx } as never, flash, redirect }
+  }
+
+  const inertiaHeaders = { 'x-inertia': 'true', referer: 'https://example.com/admin/pages/abc' }
+  const appError = { message: 'Not found' }
+  const schemaError = { issues: [{ path: 'name', message: 'Required' }] }
+
+  it('ApplicationError on a GET falls through to the errorPage pipeline (no redirect loop)', () => {
+    const { application } = captureRenderables()
+    const { context, flash, redirect } = makeCtx('GET', inertiaHeaders)
+
+    expect(application(appError, context)).toBeUndefined()
+    expect(flash).not.toHaveBeenCalled()
+    expect(redirect).not.toHaveBeenCalled()
+  })
+
+  it('ApplicationError on a HEAD falls through too', () => {
+    const { application } = captureRenderables()
+    const { context, redirect } = makeCtx('HEAD', inertiaHeaders)
+
+    expect(application(appError, context)).toBeUndefined()
+    expect(redirect).not.toHaveBeenCalled()
+  })
+
+  it('ApplicationError on a POST mutation still flashes _form + redirects back', () => {
+    const { application } = captureRenderables()
+    const { context, flash, redirect } = makeCtx('POST', inertiaHeaders)
+
+    const result = application(appError, context)
+
+    expect(flash).toHaveBeenCalledWith('errors', { _form: 'Not found' })
+    expect(redirect).toHaveBeenCalledWith('/admin/pages/abc', 303)
+    expect(result).toBeInstanceOf(Response)
+  })
+
+  it('SchemaValidationError on a GET falls through to the errorPage pipeline', () => {
+    const { schema } = captureRenderables()
+    const { context, flash, redirect } = makeCtx('GET', inertiaHeaders)
+
+    expect(schema(schemaError, context)).toBeUndefined()
+    expect(flash).not.toHaveBeenCalled()
+    expect(redirect).not.toHaveBeenCalled()
+  })
+
+  it('SchemaValidationError on a PATCH mutation still flashes field errors + redirects back', () => {
+    const { schema } = captureRenderables()
+    const { context, flash, redirect } = makeCtx('PATCH', inertiaHeaders)
+
+    const result = schema(schemaError, context)
+
+    expect(flash).toHaveBeenCalledWith('errors', { name: 'Required' })
+    expect(redirect).toHaveBeenCalledWith('/admin/pages/abc', 303)
+    expect(result).toBeInstanceOf(Response)
+  })
+
+  it('non-Inertia GET still defers (returns undefined) so the HTML error page renders', () => {
+    const { application } = captureRenderables()
+    const { context, redirect } = makeCtx('GET', {})
+
+    expect(application(appError, context)).toBeUndefined()
+    expect(redirect).not.toHaveBeenCalled()
+  })
+})
