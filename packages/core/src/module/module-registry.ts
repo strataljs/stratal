@@ -46,20 +46,8 @@ export class ModuleRegistry {
 
   register(moduleOrDynamic: ModuleClass | DynamicModule): void {
     const { moduleClass, options } = this.resolveModule(moduleOrDynamic)
-    const isDynamic = this.isDynamicModule(moduleOrDynamic)
 
-    if (this.registeredClasses.has(moduleClass)) {
-      if (isDynamic) {
-        this.logger.debug(`Module ${moduleClass.name} already registered, registering DynamicModule providers`)
-        const { module: _, ...dynamicRest } = moduleOrDynamic
-        for (const provider of dynamicRest.providers ?? []) {
-          this.registerProvider(provider)
-        }
-      } else {
-        this.logger.debug(`Module ${moduleClass.name} already registered, skipping`)
-      }
-      return
-    }
+    if (this.handleAlreadyRegistered(moduleClass, moduleOrDynamic)) return
 
     this.registeredClasses.add(moduleClass)
     this.logger.info(`Registering module: ${moduleClass.name}`)
@@ -68,24 +56,109 @@ export class ModuleRegistry {
       this.register(ImportedModule)
     }
 
+    this.registerModuleNode(moduleClass, options, { includeHttpWiring: true })
+  }
+
+  /**
+   * Register a module on demand (NestJS-style lazy loading). Registers nested
+   * imports recursively and providers, then runs `onInitialize` immediately
+   * (the bootstrap-time batch {@link initialize} has already completed).
+   *
+   * Controllers, queue consumers, and cron jobs are SKIPPED — route, queue, and
+   * cron wiring is finalized at bootstrap and cannot be extended at runtime.
+   */
+  async registerLazy(moduleOrDynamic: ModuleClass | DynamicModule): Promise<void> {
+    const { moduleClass, options } = this.resolveModule(moduleOrDynamic)
+
+    if (this.handleAlreadyRegistered(moduleClass, moduleOrDynamic)) return
+
+    this.registeredClasses.add(moduleClass)
+    this.logger.info(`Lazily registering module: ${moduleClass.name}`)
+
+    for (const ImportedModule of options.imports ?? []) {
+      await this.registerLazy(ImportedModule)
+    }
+
+    const registered = this.registerModuleNode(moduleClass, options, { includeHttpWiring: false })
+
+    if (registered.hasLifecycle) {
+      const instance = new registered.moduleClass()
+      registered.instance = instance
+      if (this.hasOnInitialize(instance)) {
+        const context: ModuleContext = { container: this.container, logger: this.logger }
+        this.logger.info(`Initializing (lazy): ${registered.moduleClass.name}`)
+        await instance.onInitialize(context)
+      }
+    }
+  }
+
+  registerAll(modules: (ModuleClass | DynamicModule)[]): void {
+    for (const module of modules) {
+      this.register(module)
+    }
+  }
+
+  hasRegistered(moduleClass: Constructor): boolean {
+    return this.registeredClasses.has(moduleClass)
+  }
+
+  /**
+   * Handle re-registration of an already-known module. For a DynamicModule,
+   * its extra providers are wired (without re-running lifecycle); for a plain
+   * class it is a no-op. Returns true when the module was already registered.
+   */
+  private handleAlreadyRegistered(
+    moduleClass: Constructor,
+    moduleOrDynamic: ModuleClass | DynamicModule,
+  ): boolean {
+    if (!this.registeredClasses.has(moduleClass)) return false
+
+    if (this.isDynamicModule(moduleOrDynamic)) {
+      this.logger.debug(`Module ${moduleClass.name} already registered, registering DynamicModule providers`)
+      const { module: _, ...dynamicRest } = moduleOrDynamic
+      for (const provider of dynamicRest.providers ?? []) {
+        this.registerProvider(provider)
+      }
+    } else {
+      this.logger.debug(`Module ${moduleClass.name} already registered, skipping`)
+    }
+    return true
+  }
+
+  /**
+   * Register a single module's providers (and, for eager registration, its
+   * controllers/consumers/jobs), detect lifecycle hooks, and record it.
+   * Assumes the module's `imports` have already been registered by the caller.
+   */
+  private registerModuleNode(
+    moduleClass: Constructor,
+    options: ModuleOptions,
+    { includeHttpWiring }: { includeHttpWiring: boolean },
+  ): RegisteredModule {
     for (const provider of options.providers ?? []) {
       this.registerProvider(provider)
     }
 
-    for (const controller of options.controllers ?? []) {
-      this.container.register(controller)
-      this.allControllers.push(controller)
-    }
+    if (includeHttpWiring) {
+      for (const controller of options.controllers ?? []) {
+        this.container.register(controller)
+        this.allControllers.push(controller)
+      }
 
-    for (const consumer of options.consumers ?? []) {
-      this.container.register(consumer)
-      this.allConsumers.push(consumer)
-      this.logger.info(`Collected consumer: ${consumer.name}`, { queueCount: this.allConsumers.length })
-    }
+      for (const consumer of options.consumers ?? []) {
+        this.container.register(consumer)
+        this.allConsumers.push(consumer)
+        this.logger.info(`Collected consumer: ${consumer.name}`, { queueCount: this.allConsumers.length })
+      }
 
-    for (const job of options.jobs ?? []) {
-      this.container.register(job)
-      this.allJobs.push(job)
+      for (const job of options.jobs ?? []) {
+        this.container.register(job)
+        this.allJobs.push(job)
+      }
+    } else if (options.controllers?.length || options.consumers?.length || options.jobs?.length) {
+      this.logger.warn(
+        `Lazy module ${moduleClass.name} declares controllers/consumers/jobs which are skipped — route, queue, and cron wiring is finalized at bootstrap`,
+      )
     }
 
     const hasLifecycle =
@@ -94,13 +167,9 @@ export class ModuleRegistry {
       'onException' in moduleClass.prototype ||
       'configureRoutes' in moduleClass.prototype
 
-    this.modules.push({ moduleClass, options, instance: null, hasLifecycle })
-  }
-
-  registerAll(modules: (ModuleClass | DynamicModule)[]): void {
-    for (const module of modules) {
-      this.register(module)
-    }
+    const registered: RegisteredModule = { moduleClass, options, instance: null, hasLifecycle }
+    this.modules.push(registered)
+    return registered
   }
 
   async initialize(): Promise<void> {
@@ -236,7 +305,7 @@ export class ModuleRegistry {
     )
   }
 
-  private resolveModule(moduleOrDynamic: ModuleClass | DynamicModule): {
+  resolveModule(moduleOrDynamic: ModuleClass | DynamicModule): {
     moduleClass: Constructor
     options: ModuleOptions
   } {
@@ -259,7 +328,7 @@ export class ModuleRegistry {
     return { moduleClass, options }
   }
 
-  private isDynamicModule(value: unknown): value is DynamicModule {
+  isDynamicModule(value: unknown): value is DynamicModule {
     return (
       typeof value === 'object' &&
       value !== null &&

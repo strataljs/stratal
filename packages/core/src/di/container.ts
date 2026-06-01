@@ -353,6 +353,15 @@ export class Container {
     return this.parent?.findRegistration(token)
   }
 
+  /**
+   * The global (non-request-scoped) container at the top of the parent chain.
+   * Lazy module loading registers providers here so singletons persist across
+   * requests even when `load()` is called from within a request scope.
+   */
+  getRootContainer(): Container {
+    return this.getRoot()
+  }
+
   private getRoot(): Container {
     if (!this.parent) return this
     return this.parent.getRoot()
