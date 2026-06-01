@@ -1,4 +1,3 @@
-import { render } from '@react-email/render'
 import type { ReactElement } from 'react'
 import { inject } from '../../di'
 import { Transient } from '../../di/decorators'
@@ -49,9 +48,18 @@ export class EmailService {
    * @param input - Email message details
    */
   async send({ template, ...input }: SendEmailInputWithTemplate): Promise<void> {
+    // `@react-email/render` (plus its html-to-text/htmlparser2 deps) is heavy and
+    // only needed when a React template is supplied. Defer it to a dynamic import
+    // so it lands in its own chunk and is never parsed/evaluated at worker cold
+    // start — email sending is off the request hot path.
+    let html: string | undefined
+    if (template) {
+      const { render } = await import('@react-email/render')
+      html = await render(template)
+    }
     await this.queue.dispatch({
       type: 'email.send',
-      payload: { ...input, html: template ? await render(template) : undefined },
+      payload: { ...input, html },
     })
   }
 
