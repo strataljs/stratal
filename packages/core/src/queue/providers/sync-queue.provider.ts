@@ -1,8 +1,9 @@
 import { inject } from '../../di'
+import { getContainer } from '../../di/container-storage'
 import { Transient } from '../../di/decorators'
 import { DI_TOKENS } from '../../di/tokens'
 import { type ConsumerRegistry } from '../consumer-registry'
-import type { QueueMessage } from '../queue-consumer'
+import type { IQueueConsumer, QueueMessage } from '../queue-consumer'
 import type { IQueueProvider } from './queue-provider.interface'
 
 /**
@@ -50,8 +51,13 @@ export class SyncQueueProvider implements IQueueProvider {
    * @throws Re-throws any error from consumer.handle() after calling onError()
    */
   async send<T>(_binding: string, message: QueueMessage<T>): Promise<void> {
-    // Consumers are matched by message type, not queue name
-    const consumers = this.registry.getConsumers(message.type)
+    // Consumers are matched by message type, not queue name. A fresh instance is
+    // resolved per message from the active request scope so request-scoped
+    // consumer dependencies bind correctly (dispatch always runs inside one).
+    const container = getContainer()
+    const consumers = this.registry
+      .getConsumerClasses(message.type)
+      .map((ConsumerClass) => container.resolve<IQueueConsumer>(ConsumerClass))
 
     // Process synchronously - call each matching consumer
     for (const consumer of consumers) {

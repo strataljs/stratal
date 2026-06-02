@@ -14,6 +14,8 @@ const nodeBinDir = dirname(process.execPath)
  */
 export default createTestDatabaseGlobalSetup({
   isolation: 'database',
+  // Fingerprint source: the template is rebuilt only when the schema changes.
+  schema: schemaPath,
   migrate: (connectionString) => {
     execFileSync(zenstackBin, ['db', 'push', '--force-reset', `--schema=${schemaPath}`, '--accept-data-loss'], {
       stdio: 'inherit',

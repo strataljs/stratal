@@ -45,11 +45,42 @@ describe('seo-runtime', () => {
     expect(document.head.querySelectorAll('meta[name="description"]')).toHaveLength(1)
   })
 
-  it('clears managed tags when a page has no seo', () => {
+  it('clears managed tags when navigating to a page whose seo prop is empty', () => {
     navigate({ seo: { description: 'x' } })
-    navigate({})
+    // The backend always shares `seo`; an empty object means "no metadata".
+    navigate({ seo: {} })
 
     expect(document.head.querySelector('[data-seo]')).toBeNull()
+  })
+
+  it('resets the title to the default and clears stale tags when navigating to a no-SEO page', () => {
+    navigate({ seo: { title: 'Article', description: 'body' } })
+    expect(document.title).toBe('Article')
+
+    // The backend resolves an empty title to '' (the configured default fallback),
+    // so the runtime must overwrite the previous page's title rather than leave it.
+    navigate({ seo: { title: '' } })
+
+    expect(document.title).toBe('')
+    // Stale meta/link tags are cleared; the managed <title> remains (now empty,
+    // still marked) so the title is always overwritten rather than left stale.
+    expect(document.head.querySelector('meta[name="description"]')).toBeNull()
+    expect(document.head.querySelector('link[data-seo]')).toBeNull()
+    expect(document.head.querySelector('meta[data-seo]')).toBeNull()
+    const title = document.head.querySelector('title[data-seo]')
+    expect(title?.textContent).toBe('')
+  })
+
+  it('does not touch the head on a partial reload that omits the seo prop', () => {
+    navigate({ seo: { title: 'Dashboard', description: 'stats' } })
+    expect(document.title).toBe('Dashboard')
+
+    // A partial reload that requests only some other prop omits `seo` entirely.
+    // The runtime must leave the managed head untouched (no wipe).
+    navigate({ message: 'partial update' })
+
+    expect(document.title).toBe('Dashboard')
+    expect(document.head.querySelector('meta[name="description"]')?.getAttribute('content')).toBe('stats')
   })
 
   it('syncs hreflang alternates carried in the seo link array on navigation', () => {

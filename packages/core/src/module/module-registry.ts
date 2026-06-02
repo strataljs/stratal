@@ -168,10 +168,19 @@ export class ModuleRegistry {
         this.container.register(job)
         this.allJobs.push(job)
       }
-    } else if (options.controllers?.length || options.consumers?.length || options.jobs?.length) {
-      this.logger.warn(
-        `Lazy module ${moduleClass.name} declares controllers/consumers/jobs which are skipped — route, queue, and cron wiring is finalized at bootstrap`,
-      )
+    } else {
+      const skipped: string[] = []
+      if (options.controllers?.length) skipped.push('controllers')
+      if (options.consumers?.length) skipped.push('consumers')
+      if (options.jobs?.length) skipped.push('jobs')
+      if ('configureRoutes' in moduleClass.prototype) skipped.push('configureRoutes')
+      if ('onException' in moduleClass.prototype) skipped.push('onException')
+      if (skipped.length) {
+        this.logger.warn(
+          `Lazy module ${moduleClass.name} declares ${skipped.join('/')} which are skipped — ` +
+            `route, queue, cron, and exception-handler wiring is finalized at bootstrap`,
+        )
+      }
     }
 
     const hasLifecycle =
@@ -426,7 +435,11 @@ export class ModuleRegistry {
 
   private collectIfListener(providerClass: Constructor): void {
     if (isListener(providerClass)) {
-      this.container.registerSingleton(providerClass)
+      // Register with the listener's own scope (`@Listener()` applies
+      // `@Transient()`) rather than forcing a singleton: listeners are resolved
+      // fresh per event from the emitting request scope, so a listener may inject
+      // request-scoped providers (i18n, queue senders, auth context, …).
+      this.container.register(providerClass)
       this.allListeners.push(providerClass)
       this.logger.debug(`Collected listener: ${providerClass.name}`)
     }

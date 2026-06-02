@@ -26,14 +26,22 @@
  */
 
 import { DI_TOKENS } from '../di/tokens';
+import { type StratalEnv } from '../env';
 import { Module } from '../module';
-import type { AsyncModuleOptions, DynamicModule, InjectionToken } from '../module/types';
+import type {
+  AsyncModuleOptions,
+  DynamicModule,
+  InjectionToken,
+  ModuleContext,
+  OnInitialize,
+} from '../module/types';
 import { ConsumerRegistry } from './consumer-registry';
 import type { QueueBinding } from './queue-binding';
 import { QueueManager } from './queue-manager';
 import { QueueRegistry } from './queue-registry';
 import type { IQueueSender } from './queue-sender.interface';
-import { QueueStore } from './queue-store';
+import { QueueError } from './queue.error';
+import { DEFAULT_STORE_BINDING, QueueStore } from './queue-store';
 import { QUEUE_TOKENS } from './queue.tokens';
 import { QueueProviderFactory } from './services';
 
@@ -60,11 +68,31 @@ export interface QueueModuleOptions {
   }
 
   /**
-   * Idempotency configuration
+   * Idempotency configuration.
+   *
+   * Messages are auto-idempotent: every dispatch carries an idempotency key
+   * (an explicit `metadata.idempotencyKey`, otherwise a deterministic SHA-256
+   * hash of `type` + `payload`), and a message that has already been processed
+   * is skipped. `ttl` bounds how long processed keys are remembered.
    */
   idempotency?: {
-    /** TTL in seconds for idempotency keys. Default: 86400 (24h) */
+    /** TTL in seconds for processed idempotency keys. Default: 86400 (24h) */
     ttl?: number
+  }
+
+  /**
+   * Failed-job configuration.
+   *
+   * Failed jobs persist indefinitely until retried or purged. To bound growth,
+   * register the opt-in `FailedJobCleanupJob` cron in a module's `jobs` array;
+   * it deletes failed jobs older than `retention`.
+   */
+  failedJobs?: {
+    /**
+     * Age in seconds beyond which `FailedJobCleanupJob` deletes a failed job.
+     * Default: 604800 (7d). Has no effect unless the cron is registered.
+     */
+    retention?: number
   }
 
   /** Max retry attempts before storing as failed job. Default: 3 */
@@ -80,7 +108,35 @@ export interface QueueModuleOptions {
     { provide: QUEUE_TOKENS.QueueStore, useClass: QueueStore },
   ],
 })
-export class QueueModule {
+export class QueueModule implements OnInitialize {
+  /**
+   * Fail fast at boot if the configured KV store binding is missing, rather
+   * than letting every queue invocation hard-fail lazily. The binding backs
+   * idempotency claims and failed-job storage, so without it the queue
+   * subsystem cannot function.
+   */
+  onInitialize({ container }: ModuleContext): void {
+    const options = container.resolve<QueueModuleOptions>(QUEUE_TOKENS.QueueModuleOptions)
+
+    // Only the `cloudflare` provider persists idempotency claims and failed jobs
+    // to KV. The `sync` provider (dev/CLI) processes inline and never touches the
+    // store, so it must not require the binding.
+    if (options.provider !== 'cloudflare') return
+
+    const binding = options.store?.binding ?? DEFAULT_STORE_BINDING
+    const env = container.resolve<StratalEnv>(DI_TOKENS.CloudflareEnv)
+    const kv = (env as unknown as Record<string, unknown>)[binding]
+
+    if (!kv) {
+      throw new QueueError(
+        `Queue KV store binding "${binding}" was not found in the environment. ` +
+          `The queue subsystem persists idempotency claims and failed jobs to KV. ` +
+          `Add a kv_namespaces entry for "${binding}" in wrangler.jsonc, or set ` +
+          `QueueModule.forRootAsync({ ..., store: { binding: 'YOUR_KV' } }) to point at an existing namespace.`,
+      )
+    }
+  }
+
   /**
    * Configure queue infrastructure with async factory.
    *

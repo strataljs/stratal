@@ -1,6 +1,9 @@
 import { createMock, type DeepMocked } from '@stratal/testing/mocks';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Container } from '../../di/container';
+import { runWithContainer } from '../../di/container-storage';
 import type { LoggerService } from '../../logger';
+import type { Constructor } from '../../types';
 import { ConsumerRegistry } from '../consumer-registry';
 import type { IQueueConsumer, QueueMessage } from '../queue-consumer';
 import { QueueManager } from '../queue-manager';
@@ -12,6 +15,8 @@ describe('QueueManager', () => {
   let consumerRegistry: ConsumerRegistry
   let mockLogger: DeepMocked<LoggerService>
   let mockStore: DeepMocked<QueueStore>
+  let instances: Map<Constructor<IQueueConsumer>, IQueueConsumer>
+  let scope: Container
   const mockOptions: QueueModuleOptions = {
     provider: 'cloudflare',
     store: { binding: 'CACHE' },
@@ -27,6 +32,10 @@ describe('QueueManager', () => {
     mockStore.markProcessed.mockResolvedValue(undefined)
     mockStore.storeFailedJob.mockResolvedValue(undefined)
     mockStore.removeFailedJob.mockResolvedValue(undefined)
+    instances = new Map()
+    scope = {
+      resolve: (token: Constructor<IQueueConsumer>) => instances.get(token),
+    } as unknown as Container
     queueManager = new QueueManager(
       consumerRegistry,
       mockLogger as unknown as LoggerService,
@@ -34,6 +43,18 @@ describe('QueueManager', () => {
       mockOptions,
     )
   })
+
+  // Register a mock consumer behind a throwaway class token and make the ambient
+  // scope resolve that token to the instance (QueueManager resolves a fresh
+  // consumer per message from the request scope in production).
+  const register = (consumer: IQueueConsumer): void => {
+    const token = class {} as unknown as Constructor<IQueueConsumer>
+    instances.set(token, consumer)
+    consumerRegistry.register(token, consumer.messageTypes)
+  }
+
+  const process = (queue: string, batch: MessageBatch): Promise<void> =>
+    runWithContainer(scope, () => queueManager.processBatch(queue, batch))
 
   const createMockBatch = (messages: QueueMessage[], attempts = 1): DeepMocked<MessageBatch> => {
     const mockMessages = messages.map((body) => {
@@ -60,13 +81,13 @@ describe('QueueManager', () => {
   describe('processBatch', () => {
     it('should route messages to consumers by type', async () => {
       const consumer = createConsumer(['email.send'])
-      consumerRegistry.register(consumer)
+      register(consumer)
 
       const batch = createMockBatch([
         { id: '1', type: 'email.send', payload: { to: 'test@example.com' } },
       ])
 
-      await queueManager.processBatch('notifications-queue', batch)
+      await process('notifications-queue', batch)
 
       expect(consumer.handle).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -79,13 +100,13 @@ describe('QueueManager', () => {
 
     it('should call ack() on successful processing', async () => {
       const consumer = createConsumer(['email.send'])
-      consumerRegistry.register(consumer)
+      register(consumer)
 
       const batch = createMockBatch([
         { id: '1', type: 'email.send', payload: {} },
       ])
 
-      await queueManager.processBatch('notifications-queue', batch)
+      await process('notifications-queue', batch)
 
       expect(batch.messages[0].ack).toHaveBeenCalled()
     })
@@ -95,13 +116,13 @@ describe('QueueManager', () => {
       const consumer = createConsumer(['email.send'])
       consumer.handle.mockRejectedValue(error)
       consumer.onError!.mockResolvedValue(undefined)
-      consumerRegistry.register(consumer)
+      register(consumer)
 
       const batch = createMockBatch([
         { id: '1', type: 'email.send', payload: {} },
       ])
 
-      await queueManager.processBatch('notifications-queue', batch)
+      await process('notifications-queue', batch)
 
       expect(consumer.onError).toHaveBeenCalledWith(error, expect.objectContaining({ id: '1' }))
       expect(batch.messages[0].retry).toHaveBeenCalled()
@@ -114,7 +135,7 @@ describe('QueueManager', () => {
       const consumer = createConsumer(['email.send'])
       consumer.handle.mockRejectedValue(error)
       consumer.onError!.mockResolvedValue(undefined)
-      consumerRegistry.register(consumer)
+      register(consumer)
 
       // maxRetries is 3, attempts is 1-based: delivery 4 is the first that
       // exceeds the 3-retry budget, so this is where the job is given up on.
@@ -122,7 +143,7 @@ describe('QueueManager', () => {
         { id: '1', type: 'email.send', payload: {} },
       ], 4)
 
-      await queueManager.processBatch('notifications-queue', batch)
+      await process('notifications-queue', batch)
 
       expect(mockStore.storeFailedJob).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -139,14 +160,14 @@ describe('QueueManager', () => {
       const consumer = createConsumer(['email.send'])
       consumer.handle.mockRejectedValue(new Error('Processing failed'))
       consumer.onError!.mockResolvedValue(undefined)
-      consumerRegistry.register(consumer)
+      register(consumer)
 
       // attempts === maxRetries (3): the 3rd delivery still has a retry left.
       const batch = createMockBatch([
         { id: '1', type: 'email.send', payload: {} },
       ], 3)
 
-      await queueManager.processBatch('notifications-queue', batch)
+      await process('notifications-queue', batch)
 
       expect(batch.messages[0].retry).toHaveBeenCalled()
       expect(batch.messages[0].ack).not.toHaveBeenCalled()
@@ -157,14 +178,14 @@ describe('QueueManager', () => {
       const consumer1 = createConsumer(['user.created'])
       const consumer2 = createConsumer(['user.created'])
 
-      consumerRegistry.register(consumer1)
-      consumerRegistry.register(consumer2)
+      register(consumer1)
+      register(consumer2)
 
       const batch = createMockBatch([
         { id: '1', type: 'user.created', payload: { userId: 'u1' } },
       ])
 
-      await queueManager.processBatch('events-queue', batch)
+      await process('events-queue', batch)
 
       expect(consumer1.handle).toHaveBeenCalled()
       expect(consumer2.handle).toHaveBeenCalled()
@@ -172,7 +193,7 @@ describe('QueueManager', () => {
 
     it('should process all messages in batch', async () => {
       const consumer = createConsumer(['email.send'])
-      consumerRegistry.register(consumer)
+      register(consumer)
 
       const batch = createMockBatch([
         { id: '1', type: 'email.send', payload: { to: 'a@example.com' } },
@@ -180,7 +201,7 @@ describe('QueueManager', () => {
         { id: '3', type: 'email.send', payload: { to: 'c@example.com' } },
       ])
 
-      await queueManager.processBatch('notifications-queue', batch)
+      await process('notifications-queue', batch)
 
       expect(consumer.handle).toHaveBeenCalledTimes(3)
       expect(batch.messages[0].ack).toHaveBeenCalled()
@@ -190,13 +211,13 @@ describe('QueueManager', () => {
 
     it('should ack messages with no matching consumers', async () => {
       const consumer = createConsumer(['email.send'])
-      consumerRegistry.register(consumer)
+      register(consumer)
 
       const batch = createMockBatch([
         { id: '1', type: 'unknown.type', payload: {} },
       ])
 
-      await queueManager.processBatch('notifications-queue', batch)
+      await process('notifications-queue', batch)
 
       expect(consumer.handle).not.toHaveBeenCalled()
       expect(batch.messages[0].ack).toHaveBeenCalled()
@@ -205,13 +226,13 @@ describe('QueueManager', () => {
 
     it('should route wildcard consumers', async () => {
       const consumer = createConsumer(['*'])
-      consumerRegistry.register(consumer)
+      register(consumer)
 
       const batch = createMockBatch([
         { id: '1', type: 'any.message.type', payload: {} },
       ])
 
-      await queueManager.processBatch('events-queue', batch)
+      await process('events-queue', batch)
 
       expect(consumer.handle).toHaveBeenCalled()
     })
@@ -223,14 +244,14 @@ describe('QueueManager', () => {
 
       const consumer2 = createConsumer(['email.send'])
 
-      consumerRegistry.register(consumer1)
-      consumerRegistry.register(consumer2)
+      register(consumer1)
+      register(consumer2)
 
       const batch = createMockBatch([
         { id: '1', type: 'email.send', payload: {} },
       ])
 
-      await queueManager.processBatch('notifications-queue', batch)
+      await process('notifications-queue', batch)
 
       expect(consumer1.handle).toHaveBeenCalled()
       expect(consumer2.handle).toHaveBeenCalled()
@@ -240,13 +261,13 @@ describe('QueueManager', () => {
     it('should skip already-processed messages', async () => {
       mockStore.isProcessed.mockResolvedValue(true)
       const consumer = createConsumer(['email.send'])
-      consumerRegistry.register(consumer)
+      register(consumer)
 
       const batch = createMockBatch([
         { id: '1', type: 'email.send', payload: {} },
       ])
 
-      await queueManager.processBatch('notifications-queue', batch)
+      await process('notifications-queue', batch)
 
       expect(consumer.handle).not.toHaveBeenCalled()
       expect(batch.messages[0].ack).toHaveBeenCalled()
@@ -254,7 +275,7 @@ describe('QueueManager', () => {
 
     it('should use custom idempotencyKey from metadata', async () => {
       const consumer = createConsumer(['order.process'])
-      consumerRegistry.register(consumer)
+      register(consumer)
 
       const batch = createMockBatch([
         {
@@ -265,10 +286,32 @@ describe('QueueManager', () => {
         },
       ])
 
-      await queueManager.processBatch('orders-queue', batch)
+      await process('orders-queue', batch)
 
       expect(mockStore.isProcessed).toHaveBeenCalledWith('order:123')
       expect(mockStore.markProcessed).toHaveBeenCalledWith('order:123')
+    })
+
+    it('should not abort the batch when persisting a failed job throws', async () => {
+      mockStore.storeFailedJob.mockRejectedValue(new Error('KV down'))
+      const consumer = createConsumer(['email.send'])
+      consumer.handle.mockRejectedValue(new Error('Processing failed'))
+      consumer.onError!.mockResolvedValue(undefined)
+      register(consumer)
+
+      // attempts = maxRetries + 1 (4): the failed-job path runs.
+      const batch = createMockBatch([
+        { id: '1', type: 'email.send', payload: {} },
+        { id: '2', type: 'email.send', payload: {} },
+      ], 4)
+
+      await process('notifications-queue', batch)
+
+      // Both messages still get acked despite the KV failure.
+      expect(mockStore.storeFailedJob).toHaveBeenCalledTimes(2)
+      expect(batch.messages[0].ack).toHaveBeenCalled()
+      expect(batch.messages[1].ack).toHaveBeenCalled()
+      expect(mockLogger.error).toHaveBeenCalled()
     })
   })
 })

@@ -99,6 +99,27 @@ describe('EmailConsumer', () => {
       )
     })
 
+    it('should throw on invalid base64 attachment content rather than ship corrupt data', async () => {
+      const message = createMessage({
+        payload: {
+          to: 'user@example.com',
+          subject: 'Test',
+          html: '<h1>Hello</h1>',
+          attachments: [
+            {
+              // Contains characters outside the base64 alphabet — must be rejected.
+              filename: 'bad.pdf',
+              content: 'not valid base64!!!@@@',
+              contentType: 'application/pdf',
+            },
+          ],
+        } as SendEmailInput,
+      })
+
+      await expect(consumer.handle(message)).rejects.toThrow(/invalid base64/i)
+      expect(mockProvider.send).not.toHaveBeenCalled()
+    })
+
     it('should resolve storage attachments: downloads and passes stream', async () => {
       const mockStream = createMock<ReadableStream>()
       mockStorage.download.mockResolvedValue({

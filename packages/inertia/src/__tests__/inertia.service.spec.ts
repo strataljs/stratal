@@ -127,7 +127,7 @@ describe('InertiaService', () => {
 
       const body = await parsePageJson(response)
       expect(body.component).toBe('Home')
-      expect(body.props).toEqual({ message: 'Hello', errors: {} })
+      expect(body.props).toEqual({ message: 'Hello', seo: {}, errors: {} })
       expect(body.version).toBe('1.0')
       expect(body.flash).toEqual({})
     })
@@ -181,7 +181,7 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ message: 'Hello', errors: {} })
+      expect(body.props).toEqual({ message: 'Hello', seo: {}, errors: {} })
       expect(body.props).not.toHaveProperty('extra')
     })
 
@@ -200,7 +200,7 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ user: { name: 'John', permissions: ['read'] }, errors: {} })
+      expect(body.props).toEqual({ user: { name: 'John', permissions: ['read'] }, seo: {}, errors: {} })
       expect(body.props).not.toHaveProperty('extra')
     })
 
@@ -219,7 +219,7 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ user: { settings: { theme: 'dark' } }, errors: {} })
+      expect(body.props).toEqual({ user: { settings: { theme: 'dark' } }, seo: {}, errors: {} })
     })
 
     it('should set version to null when not configured', async () => {
@@ -264,7 +264,7 @@ describe('InertiaService', () => {
       const response = await service.render(ctx, 'Home', { message: 'Hello' })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ appName: 'MyApp', message: 'Hello', errors: {} })
+      expect(body.props).toEqual({ appName: 'MyApp', message: 'Hello', seo: {}, errors: {} })
     })
 
     it('should track shared prop keys in sharedProps field', async () => {
@@ -288,7 +288,7 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ name: 'John', errors: {} })
+      expect(body.props).toEqual({ name: 'John', seo: {}, errors: {} })
     })
   })
 
@@ -321,7 +321,7 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ comments: ['comment1'], errors: {} })
+      expect(body.props).toEqual({ comments: ['comment1'], seo: {}, errors: {} })
       expect(body).not.toHaveProperty('deferredProps')
     })
 
@@ -355,7 +355,7 @@ describe('InertiaService', () => {
 
       const body = await parsePageJson(response)
       expect(body.mergeProps).toEqual(['items'])
-      expect(body.props).toEqual({ items: [1, 2, 3], errors: {} })
+      expect(body.props).toEqual({ items: [1, 2, 3], seo: {}, errors: {} })
     })
 
     it('should exclude merge props from partial reloads when not requested', async () => {
@@ -373,7 +373,7 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ stats: { total: 5 }, errors: {} })
+      expect(body.props).toEqual({ stats: { total: 5 }, seo: {}, errors: {} })
       expect(body).not.toHaveProperty('mergeProps')
     })
 
@@ -392,7 +392,7 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ items: [4, 5, 6], errors: {} })
+      expect(body.props).toEqual({ items: [4, 5, 6], seo: {}, errors: {} })
       expect(body.mergeProps).toEqual(['items'])
     })
 
@@ -537,13 +537,39 @@ describe('InertiaService', () => {
       expect(headArg).toEqual(['<meta charset="utf-8" />', '<title data-seo>Dashboard</title>'])
     })
 
-    it('omits the seo prop and tags when no metadata is set', async () => {
+    it('always shares the seo prop even when resolve returns empty metadata', async () => {
+      // SeoService.resolve always settles on a title (here mocked to `{}`); the
+      // service still shares `seo` so the client runtime never sees a missing
+      // key. The prop is persistent — present on every response.
       const ctx = createMockContext({ isInertia: true })
       const response = await service.render(ctx, 'Home', { message: 'Hello' })
 
       const body = await parsePageJson(response)
-      expect(body.props).not.toHaveProperty('seo')
-      expect(body.sharedProps ?? []).not.toContain('seo')
+      expect(body.props).toHaveProperty('seo')
+      expect(body.props.seo).toEqual({})
+      expect(body.sharedProps ?? []).toContain('seo')
+    })
+
+    it('carries the seo prop on partial reloads that do not request it', async () => {
+      ;(mockSeo.resolve as ReturnType<typeof vi.fn>).mockResolvedValue({ title: 'Dashboard' })
+
+      // Partial reload requesting only `message` — `seo` is an always prop, so
+      // it must still be present (not filtered out), otherwise the client head
+      // would be wiped on a partial reload.
+      const ctx = createMockContext({
+        isInertia: true,
+        headers: {
+          'x-inertia-partial-component': 'Home',
+          'x-inertia-partial-data': 'message',
+        },
+      })
+
+      const response = await service.render(ctx, 'Home', { message: 'Hello', other: 'dropped' })
+
+      const body = await parsePageJson(response)
+      expect(body.props).toHaveProperty('seo', { title: 'Dashboard' })
+      expect(body.props).toHaveProperty('message', 'Hello')
+      expect(body.props).not.toHaveProperty('other')
     })
   })
 

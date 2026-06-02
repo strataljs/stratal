@@ -1,5 +1,8 @@
+import { Container, DI_TOKENS } from 'stratal/di'
+import { ROUTER_TOKENS, type RouterContext } from 'stratal/router'
 import { describe, expect, it, vi } from 'vitest'
 import { FeatureFlagError } from '../feature-flags.error'
+import { FEATURE_FLAG_TOKENS } from '../feature-flags.tokens'
 import { FeatureFlagService } from '../services/feature-flag.service'
 import type { FeatureFlagModuleOptions } from '../types'
 
@@ -18,11 +21,8 @@ function makeBinding() {
   }
 }
 
-function setup(options: Partial<FeatureFlagModuleOptions> = {}, ctx: unknown = null) {
-  const flags = makeBinding()
-  const experiment = makeBinding()
-  const env = { FLAGS: flags, EXPERIMENT_FLAGS: experiment } as never
-  const opts: FeatureFlagModuleOptions = {
+function makeOptions(options: Partial<FeatureFlagModuleOptions> = {}): FeatureFlagModuleOptions {
+  return {
     apps: [
       { binding: 'FLAGS', flags: { 'new-checkout': false, 'checkout-flow': 'v1', 'max-uploads': 5 } },
       { binding: 'EXPERIMENT_FLAGS', flags: { 'layout-v2': false } },
@@ -30,8 +30,13 @@ function setup(options: Partial<FeatureFlagModuleOptions> = {}, ctx: unknown = n
     default: 'FLAGS',
     ...options,
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- direct construction for unit testing (bypasses DI)
-  const service = new FeatureFlagService(opts, env, ctx as any)
+}
+
+function setup(options: Partial<FeatureFlagModuleOptions> = {}, ctx: RouterContext | undefined = undefined) {
+  const flags = makeBinding()
+  const experiment = makeBinding()
+  const env = { FLAGS: flags, EXPERIMENT_FLAGS: experiment } as never
+  const service = new FeatureFlagService(makeOptions(options), env, ctx)
   return { service, flags, experiment }
 }
 
@@ -55,20 +60,20 @@ describe('FeatureFlagService', () => {
   })
 
   it('merges the default context into every evaluation', async () => {
-    const { service, flags } = setup({ context: (c) => ({ userId: (c as unknown as { userId: string }).userId }) }, { userId: 'u1' })
+    const { service, flags } = setup({ context: (c) => ({ userId: (c as unknown as { userId: string }).userId }) }, { userId: 'u1' } as unknown as RouterContext)
     await service.getBooleanValue('new-checkout', false)
     expect(flags.getBooleanValue).toHaveBeenCalledWith('new-checkout', false, { userId: 'u1' })
   })
 
   it('lets per-call context override the default context', async () => {
-    const { service, flags } = setup({ context: () => ({ userId: 'u1', plan: 'free' }) }, { userId: 'u1' })
+    const { service, flags } = setup({ context: () => ({ userId: 'u1', plan: 'free' }) }, { userId: 'u1' } as unknown as RouterContext)
     await service.getBooleanValue('new-checkout', false, { userId: 'u2' })
     expect(flags.getBooleanValue).toHaveBeenCalledWith('new-checkout', false, { userId: 'u2', plan: 'free' })
   })
 
   it('skips the default-context resolver outside request scope', async () => {
     const resolver = vi.fn(() => ({ userId: 'u1' }))
-    const { service, flags } = setup({ context: resolver }, null)
+    const { service, flags } = setup({ context: resolver }, undefined)
     await service.getBooleanValue('new-checkout', false)
     expect(resolver).not.toHaveBeenCalled()
     expect(flags.getBooleanValue).toHaveBeenCalledWith('new-checkout', false, undefined)
@@ -106,7 +111,41 @@ describe('FeatureFlagService', () => {
   it('throws when the configured binding is missing from the environment', () => {
     expect(() =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- env intentionally missing the binding
-      new FeatureFlagService({ apps: [{ binding: 'FLAGS' }] }, {} as any, null as any),
+      new FeatureFlagService({ apps: [{ binding: 'FLAGS' }] }, {} as any, undefined),
     ).toThrow(FeatureFlagError)
+  })
+
+  describe('DI resolution', () => {
+    /** Registers the service plus its dependencies in a fresh global container. */
+    function container(options: Partial<FeatureFlagModuleOptions> = {}) {
+      const flags = makeBinding()
+      const c = new Container()
+      c.registerValue(FEATURE_FLAG_TOKENS.Options, makeOptions(options))
+      c.registerValue(DI_TOKENS.CloudflareEnv, { FLAGS: flags } as never)
+      c.register(FEATURE_FLAG_TOKENS.FeatureFlagService, FeatureFlagService)
+      return { c, flags }
+    }
+
+    it('resolves from a non-request (global) container with an undefined request context', async () => {
+      const resolver = vi.fn(() => ({ userId: 'u1' }))
+      const { c, flags } = container({ context: resolver })
+      const service = c.resolve<FeatureFlagService>(FEATURE_FLAG_TOKENS.FeatureFlagService)
+
+      // The RouterContext token is unregistered globally; isOptional yields undefined
+      // rather than throwing, so the default-context resolver is skipped.
+      await service.getBooleanValue('new-checkout', false)
+      expect(resolver).not.toHaveBeenCalled()
+      expect(flags.getBooleanValue).toHaveBeenCalledWith('new-checkout', false, undefined)
+    })
+
+    it('resolves the default context from RouterContext inside a request scope', async () => {
+      const { c, flags } = container({ context: (ctx) => ({ userId: (ctx as unknown as { userId: string }).userId }) })
+      const child = new Container({ parent: c, isRequestScoped: true })
+      child.registerValue(ROUTER_TOKENS.RouterContext, { userId: 'u1' } as unknown as RouterContext)
+
+      const service = child.resolve<FeatureFlagService>(FEATURE_FLAG_TOKENS.FeatureFlagService)
+      await service.getBooleanValue('new-checkout', false)
+      expect(flags.getBooleanValue).toHaveBeenCalledWith('new-checkout', false, { userId: 'u1' })
+    })
   })
 })

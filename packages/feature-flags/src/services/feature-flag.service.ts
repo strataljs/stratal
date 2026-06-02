@@ -47,7 +47,7 @@ export class FeatureFlagService {
   constructor(
     @inject(FEATURE_FLAG_TOKENS.Options) private readonly options: FeatureFlagModuleOptions,
     @inject(DI_TOKENS.CloudflareEnv) private readonly env: StratalEnv,
-    @inject(ROUTER_TOKENS.RouterContext) private readonly routerContext: RouterContext | null,
+    @inject(ROUTER_TOKENS.RouterContext, { isOptional: true }) private readonly routerContext: RouterContext | undefined,
     // Only passed by `use()`; DI never injects it. Lets `use()` bind exactly once
     // instead of binding to the default in the constructor and re-binding after.
     initialBinding?: string,

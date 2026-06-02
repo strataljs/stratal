@@ -20,7 +20,12 @@ const globalScope = globalThis as Record<string, unknown>
 if (!globalScope[INSTALLED_KEY]) {
   globalScope[INSTALLED_KEY] = true
   router.on('navigate', (event) => {
-    const seo = (event.detail.page.props as { seo?: SeoData }).seo
-    applySeoToHead(seo ?? {})
+    const props = event.detail.page.props as { seo?: SeoData }
+    // The backend shares `seo` as an always-evaluated prop, so it is present on
+    // every response — including partial reloads. Only reconcile the head when
+    // the key is actually present; never act on a guessed-empty value, which
+    // would wipe managed tags a partial reload didn't intend to touch.
+    if (!('seo' in props)) return
+    applySeoToHead(props.seo ?? {})
   })
 }

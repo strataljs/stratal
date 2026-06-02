@@ -100,22 +100,36 @@ export class SmtpClient {
       }
     }
 
+    // Bytes the server pipelined after a reply's terminating line must survive
+    // across readResponse() calls, or the next read drops them and the protocol
+    // desyncs. This leftover persists for the lifetime of this send().
+    let leftover = ''
+
     const readResponse = async (): Promise<{ code: number; text: string }> => {
-      let buffer = ''
+      let buffer = leftover
+      leftover = ''
       while (true) {
+        // The leftover may already contain a complete reply (the server packed
+        // multiple replies into one TCP segment), so scan before reading more.
+        const newlineIdx = buffer.indexOf('\r\n')
+        if (newlineIdx !== -1) {
+          const lines = buffer.split('\r\n')
+          let consumed = 0
+          for (let i = 0; i < lines.length - 1; i++) {
+            const line = lines[i]
+            consumed += line.length + 2 // include the '\r\n'
+            // A terminating reply line has a space (not '-') after the 3-digit code.
+            if (line[3] === ' ') {
+              const code = parseInt(line.slice(0, 3), 10)
+              leftover = buffer.slice(consumed)
+              return { code, text: buffer.slice(0, consumed) }
+            }
+          }
+        }
+
         const result = await readChunk()
         if (result.done) throw new EmailError('SMTP connection closed unexpectedly')
         buffer += decoder.decode(result.value, { stream: true })
-
-        const lines = buffer.split('\r\n')
-        for (let i = 0; i < lines.length - 1; i++) {
-          const line = lines[i]
-          const code = parseInt(line.slice(0, 3), 10)
-          if (line[3] === ' ') {
-            return { code, text: buffer }
-          }
-        }
-        buffer = lines[lines.length - 1]
       }
     }
 

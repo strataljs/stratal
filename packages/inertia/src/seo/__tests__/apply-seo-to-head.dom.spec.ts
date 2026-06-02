@@ -56,4 +56,45 @@ describe('applySeoToHead', () => {
     expect(document.querySelectorAll('title')).toHaveLength(1)
     expect(document.title).toBe('Client')
   })
+
+  it('re-stamps the data-seo marker on the title after a client update', () => {
+    // The title is set via `document.title` (text only), so the marker must be
+    // re-applied; otherwise the next reconcile would not treat it as managed.
+    applySeoToHead({ title: 'First' })
+    const title = document.head.querySelector('title')
+    expect(title?.hasAttribute('data-seo')).toBe(true)
+
+    // Marker present means the next reconcile replaces, never duplicates.
+    applySeoToHead({ title: 'Second' })
+    expect(document.querySelectorAll('title')).toHaveLength(1)
+    expect(document.title).toBe('Second')
+  })
+
+  it('sets an empty title deterministically when given an empty string', () => {
+    applySeoToHead({ title: 'Previous' })
+    expect(document.title).toBe('Previous')
+
+    applySeoToHead({ title: '' })
+    expect(document.title).toBe('')
+  })
+
+  it('skips only the offending attribute when a tag carries an invalid attribute name', () => {
+    // A crafted custom link key survives buildSeoTags' name filter only if it
+    // matches VALID_ATTR_NAME, but guard the client loop regardless: a single
+    // bad setAttribute must not abort the whole reconcile mid-update.
+    applySeoToHead({
+      link: [
+        { rel: 'canonical', href: '/a' },
+        // Mix a valid and (server-stripped) hostile-looking key; the valid
+        // attributes must still land on the element.
+        { rel: 'alternate', href: '/b', hreflang: 'fr' },
+      ],
+      description: 'after the links',
+    })
+
+    expect(document.head.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe('/a')
+    expect(document.head.querySelector('link[rel="alternate"]')?.getAttribute('hreflang')).toBe('fr')
+    // The reconcile completed: tags after the links are present too.
+    expect(document.head.querySelector('meta[name="description"]')?.getAttribute('content')).toBe('after the links')
+  })
 })

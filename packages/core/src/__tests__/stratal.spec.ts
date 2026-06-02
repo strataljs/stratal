@@ -400,6 +400,23 @@ class CommandTriggeredListener {
   }
 }
 
+const requestScopedListenerRan: string[] = []
+
+// Regression: a @Listener that injects a request-scoped provider (@InjectQueue →
+// request-scoped QueueRegistry). Listeners are resolved fresh per event from the
+// emitting request scope, so this must NOT crash at boot (listeners are no longer
+// instantiated during initialize()) and must run within the emitting request.
+@Listener()
+class RequestScopedQueueListener {
+  constructor(@InjectQueue('TEST_QUEUE') private readonly queue: IQueueSender) {}
+
+  @On('command.test.event' as never)
+  handle(ctx: EventContext<never>): void {
+    void this.queue
+    requestScopedListenerRan.push((ctx as { data?: { tag?: string } }).data?.tag ?? 'no-tag')
+  }
+}
+
 @Transient()
 class DispatchingCommand extends Command {
   static command = 'test:dispatch'
@@ -418,13 +435,47 @@ class DispatchingCommand extends Command {
   }
 }
 
+const requestScopedConsumerHandled: string[] = []
+
+// Regression: a consumer that injects a request-scoped provider (@InjectQueue →
+// request-scoped QueueRegistry). Consumers are resolved fresh per message inside
+// the request scope, so this must instantiate at boot (to read messageTypes) and
+// at dispatch without "resolved outside a request scope" crashing the app.
+@Transient()
+class RequestScopedDepConsumer implements IQueueConsumer<{ tag: string }> {
+  readonly messageTypes = ['command.requestscoped.message']
+
+  constructor(@InjectQueue('TEST_QUEUE') private readonly queue: IQueueSender) {
+    void this.queue
+  }
+
+  handle(message: QueueMessage<{ tag: string }>): Promise<void> {
+    requestScopedConsumerHandled.push(message.payload.tag)
+    return Promise.resolve()
+  }
+}
+
+@Transient()
+class RequestScopedDispatchCommand extends Command {
+  static command = 'test:dispatch-rs'
+  static description = 'Dispatches a message handled by a request-scoped consumer'
+
+  constructor(@InjectQueue('TEST_QUEUE') private readonly queue: IQueueSender) {
+    super()
+  }
+
+  async handle(): Promise<void> {
+    await this.queue.dispatch({ type: 'command.requestscoped.message', payload: { tag: 'rs' } })
+  }
+}
+
 @Module({
   imports: [
     QueueModule.forRootAsync({ useFactory: () => ({ provider: 'sync' }) }),
     QueueModule.registerQueue('TEST_QUEUE'),
   ],
-  providers: [DispatchingCommand, CommandTriggeredListener],
-  consumers: [CommandTriggeredConsumer],
+  providers: [DispatchingCommand, RequestScopedDispatchCommand, CommandTriggeredListener, RequestScopedQueueListener],
+  consumers: [CommandTriggeredConsumer, RequestScopedDepConsumer],
 })
 class CommandQueueModule { }
 
@@ -434,6 +485,8 @@ describe('handleCommand (queue + event processing)', () => {
   beforeEach(async () => {
     commandQueueHandled.length = 0
     commandEventFired.length = 0
+    requestScopedConsumerHandled.length = 0
+    requestScopedListenerRan.length = 0
     app = new Application({
       module: CommandQueueModule,
       logging: { level: LogLevel.ERROR },
@@ -453,10 +506,26 @@ describe('handleCommand (queue + event processing)', () => {
     expect(commandQueueHandled).toEqual(['from-command'])
   })
 
+  it('boots and runs a @Listener that injects a request-scoped provider', async () => {
+    // Regression: app.initialize() (above) must not crash wiring a listener with
+    // a request-scoped dependency, and the listener must run within the request.
+    await app.handleCommand('test:dispatch')
+
+    expect(requestScopedListenerRan).toEqual(['from-command'])
+  })
+
   it('fires @Listener() handlers for events emitted from a CLI command', async () => {
     await app.handleCommand('test:dispatch')
 
     expect(commandEventFired).toEqual(['from-command'])
+  })
+
+  it('boots and dispatches to a consumer that injects a request-scoped provider', async () => {
+    // Regression: app.initialize() (above) must not crash registering a consumer
+    // with a request-scoped dependency, and the consumer must handle the message.
+    await app.handleCommand('test:dispatch-rs')
+
+    expect(requestScopedConsumerHandled).toEqual(['rs'])
   })
 })
 

@@ -390,6 +390,43 @@ describe('SmtpClient', () => {
     })
   })
 
+  describe('Pipelined responses', () => {
+    it('should parse two replies packed into a single TCP segment', async () => {
+      // Mailpit-style: no STARTTLS, no AUTH. The server pipelines the greeting
+      // and the EHLO reply into ONE chunk, and later pipelines the final DATA
+      // acceptance together with the QUIT reply. A per-call buffer would discard
+      // the trailing reply and desync; the persistent leftover must recover it.
+      const segments = [
+        '220 mailpit\r\n250 OK\r\n', // greeting + EHLO in one segment
+        '250 OK\r\n', // MAIL FROM
+        '250 OK\r\n', // RCPT TO
+        '354 Go\r\n', // DATA
+        '250 OK id=<pipe@host>\r\n221 Bye\r\n', // body acceptance + QUIT in one segment
+      ]
+      let idx = 0
+      const readable = new ReadableStream({
+        pull(controller) {
+          if (idx < segments.length) controller.enqueue(encoder.encode(segments[idx++]))
+        },
+      })
+      const socket = {
+        readable,
+        writable: new WritableStream({ write() { /* no-op */ } }),
+        startTls: () => { /* no-op */ },
+        close: vi.fn(() => Promise.resolve()),
+        closed: Promise.resolve(),
+      }
+      mockedConnect.mockReturnValue(socket as any)
+
+      const client = new SmtpClient({ url: 'smtp://localhost:1025' })
+      const result = await client.send('test', sendOptions)
+
+      // messageId comes from the body acceptance line that was packed with QUIT;
+      // proves the pipelined reply was parsed rather than dropped.
+      expect(result.messageId).toBe('pipe@host')
+    })
+  })
+
   describe('URL parsing', () => {
     it('should default to port 587 for smtp:// URLs', async () => {
       const { socket } = createMockSocket([

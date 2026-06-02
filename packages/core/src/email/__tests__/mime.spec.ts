@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildMimeMessage } from '../smtp/mime'
+import { buildMimeMessage, MAX_ATTACHMENT_SIZE_BYTES } from '../smtp/mime'
+import { EmailError } from '../email.error'
 import type { ResolvedEmailMessage } from '../contracts'
 
 const defaultFrom = { name: 'Test App', email: 'noreply@example.com' }
@@ -402,6 +403,112 @@ describe('buildMimeMessage', () => {
 
       expect(result.raw).toContain("filename*=UTF-8''")
       expect(result.raw).toContain('r%C3%A9sum%C3%A9.pdf')
+    })
+
+    it('should neutralize CR/LF embedded in a non-ASCII subject (no injected header)', async () => {
+      const message: ResolvedEmailMessage = {
+        to: 'user@example.com',
+        // Non-ASCII forces RFC 2047 encoding; the CRLF must be stripped BEFORE
+        // base64 so it can't survive inside the encoded-word.
+        subject: 'Héllo\r\nBcc: attacker@evil.com',
+        html: '<p>Hi</p>',
+      }
+      const result = await buildMimeMessage(message, defaultFrom)
+      const headers = parseHeaders(result.raw)
+
+      expect(result.raw).not.toContain('\r\nBcc:')
+      const encoded = headers['Subject'].match(/=\?UTF-8\?B\?([^?]+)\?=/)![1]
+      const decoded = Buffer.from(encoded, 'base64').toString('utf-8')
+      expect(decoded).not.toContain('\r')
+      expect(decoded).not.toContain('\n')
+      expect(decoded).toBe('HélloBcc: attacker@evil.com')
+    })
+
+    it('should neutralize CR/LF embedded in a non-ASCII display name', async () => {
+      const from = { name: 'Ünïcödé\r\nBcc: attacker@evil.com', email: 'test@example.com' }
+      const message: ResolvedEmailMessage = { to: 'user@example.com', subject: 'Test', html: '<p>Hi</p>' }
+      const result = await buildMimeMessage(message, from)
+
+      expect(result.raw).not.toContain('\r\nBcc:')
+      const headers = parseHeaders(result.raw)
+      const encoded = headers['From'].match(/=\?UTF-8\?B\?([^?]+)\?=/)![1]
+      const decoded = Buffer.from(encoded, 'base64').toString('utf-8')
+      expect(decoded).toBe('ÜnïcödéBcc: attacker@evil.com')
+    })
+
+    it('should fold a long non-ASCII subject into multiple encoded-words each <=75 chars', async () => {
+      const message: ResolvedEmailMessage = {
+        to: 'user@example.com',
+        subject: 'Ünïcödé '.repeat(40), // long, non-ASCII → must fold
+        html: '<p>Hi</p>',
+      }
+      const result = await buildMimeMessage(message, defaultFrom)
+      const [headerBlock] = result.raw.split('\r\n\r\n')
+
+      // The Subject is folded across continuation lines (CRLF + single space).
+      const subjectLines: string[] = []
+      let capturing = false
+      for (const line of headerBlock.split('\r\n')) {
+        if (line.startsWith('Subject:')) { capturing = true; subjectLines.push(line); continue }
+        if (capturing && line.startsWith(' ')) { subjectLines.push(line); continue }
+        if (capturing) break
+      }
+
+      expect(subjectLines.length).toBeGreaterThan(1)
+      const words = result.raw.match(/=\?UTF-8\?B\?[^?]+\?=/g)!
+      expect(words.length).toBeGreaterThan(1)
+      for (const word of words) {
+        expect(word.length).toBeLessThanOrEqual(75)
+      }
+
+      // Round-trips back to the original (concatenate decoded bytes from each word).
+      const reassembled = words
+        .map(w => Buffer.from(w.match(/=\?UTF-8\?B\?([^?]+)\?=/)![1], 'base64'))
+      const decoded = Buffer.concat(reassembled).toString('utf-8')
+      expect(decoded).toBe('Ünïcödé '.repeat(40))
+    })
+
+    it('should throw when an envelope (to) address contains CR/LF', async () => {
+      const message: ResolvedEmailMessage = {
+        to: 'victim@example.com\r\nRCPT TO:<attacker@evil.com>',
+        subject: 'Test',
+        html: '<p>Hi</p>',
+      }
+      await expect(buildMimeMessage(message, defaultFrom)).rejects.toThrow(EmailError)
+    })
+
+    it('should throw when an envelope (cc) address contains CR/LF', async () => {
+      const message: ResolvedEmailMessage = {
+        to: 'user@example.com',
+        subject: 'Test',
+        html: '<p>Hi</p>',
+        cc: ['ok@example.com', 'bad@example.com\r\nDATA'],
+      }
+      await expect(buildMimeMessage(message, defaultFrom)).rejects.toThrow(/SMTP command injection/i)
+    })
+  })
+
+  describe('Attachment size limit', () => {
+    it('should throw when an attachment exceeds the max size', async () => {
+      const oversize = Buffer.alloc(MAX_ATTACHMENT_SIZE_BYTES + 1, 0)
+      const message: ResolvedEmailMessage = {
+        to: 'user@example.com',
+        subject: 'Test',
+        html: '<p>Hi</p>',
+        attachments: [{ filename: 'big.bin', content: oversize, contentType: 'application/octet-stream' }],
+      }
+      await expect(buildMimeMessage(message, defaultFrom)).rejects.toThrow(/maximum size/i)
+    })
+
+    it('should accept an attachment exactly at the max size', async () => {
+      const atLimit = Buffer.alloc(MAX_ATTACHMENT_SIZE_BYTES, 0)
+      const message: ResolvedEmailMessage = {
+        to: 'user@example.com',
+        subject: 'Test',
+        html: '<p>Hi</p>',
+        attachments: [{ filename: 'limit.bin', content: atLimit, contentType: 'application/octet-stream' }],
+      }
+      await expect(buildMimeMessage(message, defaultFrom)).resolves.toBeDefined()
     })
   })
 

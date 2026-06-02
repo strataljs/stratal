@@ -4,8 +4,26 @@ import { LOGGER_TOKENS, type LoggerService } from '../../logger'
 import type { IQueueConsumer, QueueMessage } from '../../queue/queue-consumer'
 import { STORAGE_TOKENS, type StorageService } from '../../storage'
 import type { EmailAttachment, ResolvedEmailAttachment, SendEmailInput } from '../contracts'
+import { EmailError } from '../email.error'
 import { EMAIL_TOKENS } from '../email.tokens'
 import type { EmailProviderFactory } from '../services/email-provider-factory'
+
+/**
+ * Strictly decode a base64 attachment payload. `Buffer.from(_, 'base64')` is
+ * lenient and silently drops invalid characters, which would ship a corrupt
+ * attachment. We re-encode and compare (modulo canonical padding) to reject
+ * malformed input loudly instead.
+ */
+function decodeBase64Attachment(content: string, filename: string): Buffer {
+  const buffer = Buffer.from(content, 'base64')
+  // Canonicalise the input (strip padding) and the round-tripped output, then
+  // compare: any dropped/invalid byte produces a mismatch.
+  const normalize = (value: string): string => value.replace(/=+$/, '')
+  if (normalize(buffer.toString('base64')) !== normalize(content)) {
+    throw new EmailError(`Invalid base64 content for attachment "${filename}"`)
+  }
+  return buffer
+}
 
 /**
  * Email Consumer
@@ -109,7 +127,7 @@ export class EmailConsumer implements IQueueConsumer<SendEmailInput> {
       if ('content' in attachment) {
         return {
           filename: attachment.filename,
-          content: Buffer.from(attachment.content, 'base64'),
+          content: decodeBase64Attachment(attachment.content, attachment.filename),
           contentType: attachment.contentType,
         }
       }

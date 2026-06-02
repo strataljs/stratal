@@ -97,16 +97,18 @@ export class InertiaService {
     const { shared: resolvedShared, sharedKeys } = await this.resolveSharedData(ctx)
 
     // Resolve SEO once: shared as the `seo` prop (drives the client head-sync runtime)
-    // and rendered into <head> below for the initial paint. Only attach it when
-    // there is actual metadata so pages without SEO keep a clean payload.
+    // and rendered into <head> below for the initial paint. Wrapped as an ALWAYS
+    // prop so it is present on every response — including partial reloads that
+    // don't request it — otherwise the client runtime would see a missing `seo`
+    // key and wipe the managed head tags even though nothing changed.
     const resolvedSeo = await this.seoService.resolve(ctx)
-    const hasSeo = Object.keys(resolvedSeo).length > 0
 
-    // Merge shared data with route props
-    const allProps = { ...resolvedShared, ...this.sharedData, ...(hasSeo ? { seo: resolvedSeo } : {}), ...props }
+    // Merge shared data with route props. `seo` is always-evaluated so it can
+    // never be filtered out by partial-reload prop selection.
+    const allProps = { ...resolvedShared, ...this.sharedData, seo: this.always(() => resolvedSeo), ...props }
 
-    // Track all shared prop keys (module config + per-request .share())
-    const allSharedKeys = [...sharedKeys, ...Object.keys(this.sharedData), ...(hasSeo ? ['seo'] : [])]
+    // Track all shared prop keys (module config + per-request .share() + seo)
+    const allSharedKeys = [...sharedKeys, ...Object.keys(this.sharedData), 'seo']
 
     // Process props: handle optional, deferred, merge, once, always
     const result = await this.processProps(allProps, ctx, component, isInertia)

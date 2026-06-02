@@ -1,5 +1,6 @@
 import { inject } from '../di'
 import type { Container } from '../di/container'
+import { getContainer } from '../di/container-storage'
 import { Singleton } from '../di/decorators'
 import { DI_TOKENS } from '../di/tokens'
 import { createCliExceptionContext } from '../errors/exception-context'
@@ -54,8 +55,10 @@ export class QuarryRegistry implements Quarry {
     let command: Command | undefined
 
     try {
-      // Resolve a fresh instance per invocation to avoid shared mutable state
-      command = this.container.resolve<Command>(CommandClass)
+      // Resolve from the active request scope (handleCommand runs call() inside
+      // runInRequestScope), not the global container — commands may inject
+      // request-scoped providers (e.g. @InjectQueue → QueueRegistry).
+      command = getContainer().resolve<Command>(CommandClass)
 
       setCommandQuarry(command, this)
       setCommandInputs(command, mergedInput)

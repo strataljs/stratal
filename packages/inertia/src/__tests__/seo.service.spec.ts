@@ -16,15 +16,32 @@ function createService(
 const ctx = { c: { req: { url: 'http://localhost/users' } } } as unknown as RouterContext
 
 describe('SeoService', () => {
-  it('returns an empty object when nothing is set', async () => {
-    expect(await createService().resolve(ctx)).toEqual({})
+  it('always resolves a string title even when nothing is set', async () => {
+    // The title is deterministic: an empty string when no page/default title is
+    // present, so the client always sets `document.title` and never leaves a
+    // stale title from the previous page.
+    expect(await createService().resolve(ctx)).toEqual({ title: '' })
   })
 
   it('merges defaults under the per-request data', async () => {
     const service = createService({ seo: { defaults: { description: 'default', robots: 'index' } } })
     service.set({ description: 'page' })
 
-    expect(await service.resolve(ctx)).toEqual({ description: 'page', robots: 'index' })
+    expect(await service.resolve(ctx)).toEqual({ title: '', description: 'page', robots: 'index' })
+  })
+
+  it('falls back to an empty title with only a default title template (no page/default title)', async () => {
+    const service = createService({ seo: { titleTemplate: '%s — Acme' } })
+
+    // No page title and no default title: the string template only wraps a
+    // page-provided title, so the resolved title settles on ''.
+    expect((await service.resolve(ctx)).title).toBe('')
+  })
+
+  it('uses the configured default title when no page title is set', async () => {
+    const service = createService({ seo: { defaults: { title: 'Acme Home' } } })
+
+    expect((await service.resolve(ctx)).title).toBe('Acme Home')
   })
 
   it('deep-merges openGraph/twitter and concatenates meta/link', async () => {
@@ -34,6 +51,7 @@ describe('SeoService', () => {
     service.set({ openGraph: { title: 'Page' }, twitter: { card: 'summary' }, meta: [{ name: 'b', content: '2' }] })
 
     expect(await service.resolve(ctx)).toEqual({
+      title: '',
       openGraph: { siteName: 'Acme', image: 'd.png', title: 'Page' },
       twitter: { card: 'summary' },
       meta: [{ name: 'a', content: '1' }, { name: 'b', content: '2' }],
@@ -85,13 +103,15 @@ describe('SeoService', () => {
       expect(received).toEqual(['Hi', ctx])
     })
 
-    it('leaves the title unset when the function returns undefined', async () => {
+    it('falls back to an empty title when the function returns undefined', async () => {
+      // The template may opt out by returning undefined, but the resolved title
+      // still settles on '' so the client title is always deterministic.
       const service = createService({
         seo: { titleTemplate: (title) => (title === 'skip' ? undefined : `${title} — Acme`) },
       })
       service.set({ title: 'skip' })
 
-      expect((await service.resolve(ctx)).title).toBeUndefined()
+      expect((await service.resolve(ctx)).title).toBe('')
     })
   })
 

@@ -6,7 +6,7 @@ import type { OpenAPIHono, OpenAPIObject, PathItemObject } from '../../i18n/vali
 import { ROUTER_CONTEXT_KEYS, SECURITY_SCHEMES } from '../../router/constants'
 import type { RouterEnv } from '../../router/types'
 import { OPENAPI_TOKENS } from '../openapi.tokens'
-import type { IOpenAPIConfigService, OpenAPIEffectiveConfig } from '../types'
+import type { IOpenAPIConfigService, IOpenAPIConfigStore, OpenAPIEffectiveConfig } from '../types'
 
 /**
  * OpenAPI Service
@@ -68,11 +68,16 @@ export class OpenAPIService {
    * Setup OpenAPI documentation endpoints
    */
   setupEndpoints(app: OpenAPIHono<RouterEnv>, container: Container): void {
-    const configService = container.resolve<IOpenAPIConfigService>(OPENAPI_TOKENS.ConfigService)
-    const config = configService.getEffectiveConfig()
+    // Endpoints are mounted at bootstrap (no request scope), so read the static
+    // mount paths from the singleton config store — request overrides (info /
+    // routeFilter) never affect jsonPath/ui and are resolved per request inside
+    // the handlers below via the request-scoped config service.
+    const config = container.resolve<IOpenAPIConfigStore>(OPENAPI_TOKENS.ConfigStore).getBaseConfig()
+    const jsonPath = config.jsonPath
+    const ui = config.ui
 
     // OpenAPI JSON spec endpoint
-    app.get(config.jsonPath, (c) => {
+    app.get(jsonPath, (c) => {
       const requestContainer = c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER)
       const fullSpec = this.getSpec(app, requestContainer)
 
@@ -89,9 +94,9 @@ export class OpenAPIService {
     this.nameLastHandler(app, 'OpenAPI', 'spec')
 
     // Docs UI endpoint
-    if (config.ui !== false) {
-      const uiPath = config.ui?.path ?? '/api/docs'
-      const uiRenderer = config.ui?.renderer
+    if (ui !== false) {
+      const uiPath = ui?.path ?? '/api/docs'
+      const uiRenderer = ui?.renderer
 
       app.get(uiPath, async (c, next) => {
         const requestContainer = c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER)

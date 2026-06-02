@@ -11,26 +11,31 @@ const IDEM_PREFIX = 'queue:idem:'
 const FAILED_PREFIX = 'queue:failed:'
 const DEFAULT_IDEMPOTENCY_TTL = 86400
 
+/** Default KV binding name used for queue state when none is configured. */
+export const DEFAULT_STORE_BINDING = 'CACHE'
+
 @Transient(QUEUE_TOKENS.QueueStore)
 export class QueueStore {
   private readonly kv: KVNamespace
+  private readonly idempotencyTtl: number
 
   constructor(
     @inject(DI_TOKENS.CloudflareEnv) env: StratalEnv,
     @inject(QUEUE_TOKENS.QueueModuleOptions) options: QueueModuleOptions,
   ) {
-    const binding = options.store?.binding ?? 'CACHE'
+    const binding = options.store?.binding ?? DEFAULT_STORE_BINDING
     const kv = (env as unknown as Record<string, unknown>)[binding] as KVNamespace | undefined
 
+    // The binding is validated to exist at module initialization
+    // (QueueModule.onInitialize). If it is somehow absent here, fail loudly
+    // rather than degrading.
     if (!kv) {
-      throw new QueueError(`KV binding "${binding}" was not found in the environment`)
+      throw new QueueError(`Queue KV store binding "${binding}" was not found in the environment`)
     }
 
     this.kv = kv
     this.idempotencyTtl = options.idempotency?.ttl ?? DEFAULT_IDEMPOTENCY_TTL
   }
-
-  private readonly idempotencyTtl: number
 
   async isProcessed(key: string): Promise<boolean> {
     return (await this.kv.get(`${IDEM_PREFIX}${key}`)) !== null
@@ -74,10 +79,14 @@ export class QueueStore {
       cursor: options?.cursor,
     })
 
-    const keys = result.keys.map((key) => ({
-      id: key.name.slice(FAILED_PREFIX.length),
-      metadata: key.metadata!,
-    }))
+    // Skip keys without metadata: a partially-written entry (or one written by
+    // an older code path) is unusable for listing and must not crash the page.
+    const keys = result.keys
+      .filter((key): key is typeof key & { metadata: FailedJobMetadata } => key.metadata != null)
+      .map((key) => ({
+        id: key.name.slice(FAILED_PREFIX.length),
+        metadata: key.metadata,
+      }))
 
     return {
       keys,
@@ -93,5 +102,30 @@ export class QueueStore {
       await Promise.all(result.keys.map((key) => this.kv.delete(key.name)))
       cursor = result.list_complete ? undefined : result.cursor
     } while (cursor)
+  }
+
+  /**
+   * Delete failed jobs older than `retentionSeconds` (by their `failedAt`
+   * timestamp). Returns the number removed. Backs the opt-in
+   * {@link FailedJobCleanupJob} cron — failed jobs otherwise persist
+   * indefinitely until retried or purged.
+   */
+  async purgeFailedJobsOlderThan(retentionSeconds: number): Promise<number> {
+    const cutoff = Date.now() - retentionSeconds * 1000
+    let cursor: string | undefined
+    let removed = 0
+
+    do {
+      const result = await this.kv.list<FailedJobMetadata>({ prefix: FAILED_PREFIX, cursor })
+      const expired = result.keys.filter((key) => {
+        const failedAt = key.metadata?.failedAt
+        return failedAt !== undefined && Date.parse(failedAt) < cutoff
+      })
+      await Promise.all(expired.map((key) => this.kv.delete(key.name)))
+      removed += expired.length
+      cursor = result.list_complete ? undefined : result.cursor
+    } while (cursor)
+
+    return removed
   }
 }

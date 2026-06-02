@@ -1,3 +1,4 @@
+import { EmailError } from '../email.error'
 import type { ResolvedEmailAttachment, ResolvedEmailMessage } from '../contracts'
 
 interface MimeEnvelope {
@@ -10,19 +11,20 @@ interface MimeResult {
   envelope: MimeEnvelope
 }
 
+/**
+ * Hard cap on a single attachment's resolved size (20 MB). Attachments are fully
+ * buffered into memory before base64 encoding, so an unbounded attachment would
+ * let a single message exhaust the Worker's memory. Exceeding this throws.
+ */
+export const MAX_ATTACHMENT_SIZE_BYTES = 20 * 1024 * 1024
+
 function generateBoundary(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-  let result = '----=_Part_'
-  for (let i = 0; i < 24; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return result
+  return `----=_Part_${crypto.randomUUID().replace(/-/g, '')}`
 }
 
 function generateMessageId(fromEmail: string): string {
   const domain = fromEmail.split('@')[1] || 'localhost'
-  const unique = `${Date.now()}.${Math.random().toString(36).slice(2, 10)}`
-  return `<${unique}@${domain}>`
+  return `<${crypto.randomUUID()}@${domain}>`
 }
 
 function isAscii(str: string): boolean {
@@ -34,11 +36,47 @@ function stripCrlf(value: string): string {
   return value.replace(/[\r\n]/g, '')
 }
 
+/**
+ * Encode a header value as one or more RFC 2047 base64 encoded-words, folding so
+ * no produced line exceeds the 76-char limit strict MTAs enforce. The UTF-8 byte
+ * stream is chunked at <=45 source bytes per encoded-word (<=60 base64 chars,
+ * keeping `=?UTF-8?B?...?=` <=75 chars) WITHOUT splitting a multibyte sequence.
+ * Multiple encoded-words are folded with CRLF + a single space.
+ */
+function encodeEncodedWords(clean: string): string {
+  const bytes = Buffer.from(clean, 'utf-8')
+  const MAX_SOURCE_BYTES = 45
+  const words: string[] = []
+  let i = 0
+  while (i < bytes.length) {
+    let end = Math.min(i + MAX_SOURCE_BYTES, bytes.length)
+    // Don't split a multibyte UTF-8 sequence: continuation bytes are 0b10xxxxxx.
+    // Back off `end` until it sits on a sequence boundary (or we hit the start).
+    while (end > i && end < bytes.length && (bytes[end] & 0xc0) === 0x80) {
+      end--
+    }
+    const slice = bytes.subarray(i, end)
+    words.push(`=?UTF-8?B?${slice.toString('base64')}?=`)
+    i = end
+  }
+  return words.join('\r\n ')
+}
+
 function encodeHeaderValue(value: string): string {
   const clean = stripCrlf(value)
   if (isAscii(clean)) return clean
-  const encoded = Buffer.from(value, 'utf-8').toString('base64')
-  return `=?UTF-8?B?${encoded}?=`
+  return encodeEncodedWords(clean)
+}
+
+/**
+ * Validate an envelope address (used verbatim in `MAIL FROM`/`RCPT TO` SMTP
+ * commands). Raw CR/LF would allow SMTP command injection, so we throw rather
+ * than silently strip — a corrupted envelope must never reach the wire.
+ */
+function assertNoCrlf(address: string): void {
+  if (/[\r\n]/.test(address)) {
+    throw new EmailError('Email envelope address contains CR/LF, which would allow SMTP command injection')
+  }
 }
 
 /**
@@ -68,7 +106,12 @@ function encodeMimeParam(param: string, value: string): string {
   return `${param}*=UTF-8''${encoded}`
 }
 
+/**
+ * Extract the bare address for the SMTP envelope and validate it has no raw
+ * CR/LF before it is written into a `MAIL FROM`/`RCPT TO` command.
+ */
 function extractEmail(address: string): string {
+  assertNoCrlf(address)
   const match = address.match(/<([^>]+)>/)
   return match ? match[1] : address.trim()
 }
@@ -77,7 +120,7 @@ function formatAddress(email: string, name?: string): string {
   const cleanEmail = stripCrlf(email)
   if (!name) return cleanEmail
   const cleanName = stripCrlf(name)
-  const encodedName = isAscii(cleanName) ? `"${escapeQuotedString(cleanName)}"` : encodeHeaderValue(name)
+  const encodedName = isAscii(cleanName) ? `"${escapeQuotedString(cleanName)}"` : encodeHeaderValue(cleanName)
   return `${encodedName} <${cleanEmail}>`
 }
 
@@ -94,9 +137,15 @@ function wrapBase64(base64: string): string {
 }
 
 async function resolveContent(content: ResolvedEmailAttachment['content']): Promise<Buffer> {
-  if (Buffer.isBuffer(content)) return content
-  const response = new Response(content)
-  return Buffer.from(await response.arrayBuffer())
+  const buffer = Buffer.isBuffer(content)
+    ? content
+    : Buffer.from(await new Response(content).arrayBuffer())
+  if (buffer.byteLength > MAX_ATTACHMENT_SIZE_BYTES) {
+    throw new EmailError(
+      `Email attachment exceeds the maximum size of ${MAX_ATTACHMENT_SIZE_BYTES} bytes (got ${buffer.byteLength} bytes)`,
+    )
+  }
+  return buffer
 }
 
 /** Base64-encode a text body so arbitrary content (long lines, leading dots,

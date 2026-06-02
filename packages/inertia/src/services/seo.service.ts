@@ -34,6 +34,11 @@ export class SeoService {
    * functions for `defaults`/`titleTemplate` are awaited with the request `ctx`.
    * Locale-aware `hreflang` alternates are appended last so they ride the same
    * head injection and SPA reconciliation as the rest of the SEO tags.
+   *
+   * The resolved `title` is ALWAYS a string (falling back to `''`). This makes
+   * the `<title>` descriptor deterministic: every navigation — including to a
+   * page with no SEO — produces a title, so the client head-sync sets
+   * `document.title` rather than leaving the previous page's title stale.
    */
   async resolve(ctx: RouterContext): Promise<SeoData> {
     const seo: InertiaSeoOptions | undefined = this.options.seo
@@ -53,6 +58,11 @@ export class SeoService {
       // and `$`-sequences in the title (`$&`, `$$`, …) are treated literally.
       resolved.title = template.split('%s').join(this.accumulated.title)
     }
+
+    // Always settle on a string title so `buildSeoTags` emits a `<title>` on
+    // every response. Without this, navigating to a page with no title would
+    // skip the title descriptor and the client would keep the prior title.
+    resolved.title ??= ''
 
     // Append hreflang alternates for the current URL after any user-set links so
     // user links keep their document order. Computed fresh per request — never

@@ -1,10 +1,11 @@
 import { inject } from '../di'
+import { getContainer } from '../di/container-storage'
 import { Transient } from '../di/decorators'
 import { DI_TOKENS } from '../di/tokens'
 import { LOGGER_TOKENS, type LoggerService } from '../logger'
 import { type ConsumerRegistry } from './consumer-registry'
 import type { FailedJob } from './failed-job'
-import type { QueueMessage } from './queue-consumer'
+import type { IQueueConsumer, QueueMessage } from './queue-consumer'
 import type { QueueModuleOptions } from './queue.module'
 import type { QueueStore } from './queue-store'
 import { QUEUE_TOKENS } from './queue.tokens'
@@ -34,7 +35,13 @@ export class QueueManager {
         continue
       }
 
-      const consumers = this.registry.getConsumers(queueMessage.type)
+      // Resolve a fresh consumer instance per message from the active request
+      // scope (handleQueue runs processBatch inside runInRequestScope), so
+      // request-scoped consumer dependencies bind to this message's scope.
+      const container = getContainer()
+      const consumers = this.registry
+        .getConsumerClasses(queueMessage.type)
+        .map((ConsumerClass) => container.resolve<IQueueConsumer>(ConsumerClass))
 
       const results = await Promise.allSettled(
         consumers.map((consumer) => consumer.handle(queueMessage)),
@@ -92,7 +99,18 @@ export class QueueManager {
             failedAt: new Date().toISOString(),
           }
 
-          await this.store.storeFailedJob(failedJob)
+          // A KV failure while persisting the failed job must not abort the
+          // rest of the batch — log and ack so the message isn't redelivered
+          // forever.
+          try {
+            await this.store.storeFailedJob(failedJob)
+          } catch (error) {
+            this.logger.error(
+              'Failed to persist failed queue job',
+              error instanceof Error ? error : new Error(String(error)),
+              { queue: queueName, messageId: queueMessage.id, type: queueMessage.type },
+            )
+          }
           message.ack()
         } else {
           message.retry()

@@ -19,7 +19,6 @@ interface ClassRegistration {
 interface LazyClassRegistration {
   kind: 'lazy'
   factory: () => Constructor
-  scope: Scope
 }
 
 interface ValueRegistration {
@@ -81,7 +80,6 @@ export class Container {
       this.registrations.set(tokenOrClass, {
         kind: 'lazy',
         factory: lazyToken.factory,
-        scope: Scope.Request,
       })
       return
     }
@@ -110,8 +108,11 @@ export class Container {
     tokenOrClass: InjectionToken<T> | Constructor<T>,
     serviceClass?: Constructor<T>,
   ): void {
-    const token = serviceClass !== undefined ? tokenOrClass : tokenOrClass as Constructor<T>
     const impl = serviceClass ?? tokenOrClass as Constructor<T>
+    const meta = getClassMetadata(impl)
+    const token = serviceClass !== undefined
+      ? tokenOrClass
+      : (meta?.token ?? tokenOrClass as Constructor<T>)
     this.registrations.set(token, { kind: 'class', useClass: impl, scope: Scope.Singleton })
   }
 
@@ -325,7 +326,8 @@ export class Container {
 
       case 'lazy': {
         const useClass = reg.factory()
-        return this.resolveClass(token, { kind: 'class', useClass, scope: reg.scope })
+        const scope = getClassMetadata(useClass)?.scope ?? Scope.Transient
+        return this.resolveClass(token, { kind: 'class', useClass, scope })
       }
 
       case 'class':
@@ -347,14 +349,17 @@ export class Container {
 
     // Request: cache in the request-scoped container
     if (scope === Scope.Request) {
-      if (this.isRequestScoped) {
-        if (this.requestCache.has(token)) return this.requestCache.get(token)
-        const instance = this.instantiate(useClass)
-        this.requestCache.set(token, instance)
-        this.requestCacheDeps.set(token, this.collectDependencyTokens(useClass))
-        return instance
+      if (!this.isRequestScoped) {
+        throw new ContainerError(
+          `Cannot resolve request-scoped provider ${tokenToString(token)} outside a request scope. ` +
+            `Resolve it within an HTTP request, or via runInScope()/runInRequestScope() for queues, cron, and other non-HTTP entrypoints.`,
+        )
       }
-      // Resolving a request-scoped service from global container — treat as transient
+      if (this.requestCache.has(token)) return this.requestCache.get(token)
+      const instance = this.instantiate(useClass)
+      this.requestCache.set(token, instance)
+      this.requestCacheDeps.set(token, this.collectDependencyTokens(useClass))
+      return instance
     }
 
     // Transient: always new instance
@@ -364,19 +369,31 @@ export class Container {
   private instantiate(Class: Constructor): unknown {
     const injections = getInjectionTokens(Class)
 
+    // Without reflect-metadata there is no `design:paramtypes` fallback, so every
+    // constructor dependency must carry an explicit @inject. A required parameter
+    // with no entry would otherwise be silently injected as `undefined`; fail loud.
     if (injections.size === 0) {
+      if (Class.length > 0) {
+        throw new ContainerError(
+          `${Class.name} has ${Class.length} required constructor parameter(s) but none are decorated with @inject. ` +
+            `Every constructor dependency must be explicitly injected.`,
+        )
+      }
       return new Class()
     }
 
     const maxIndex = Math.max(...injections.keys())
     const args: unknown[] = new Array(maxIndex + 1)
 
-    for (const [index, entry] of injections) {
-      if (entry.optional) {
-        args[index] = this.tryResolve(entry.token)
-      } else {
-        args[index] = this.resolve(entry.token)
+    for (let index = 0; index <= maxIndex; index++) {
+      const entry = injections.get(index)
+      if (!entry) {
+        throw new ContainerError(
+          `${Class.name} is missing @inject on constructor parameter ${index}. ` +
+            `Every constructor dependency must be explicitly injected.`,
+        )
       }
+      args[index] = entry.optional ? this.tryResolve(entry.token) : this.resolve(entry.token)
     }
 
     return new Class(...args)

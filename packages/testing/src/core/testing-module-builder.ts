@@ -18,6 +18,7 @@ import {
   deriveAdminConnectionString,
   deriveDbName,
   deriveTemplateName,
+  dropDatabase,
   ISOLATION_ENV_VAR,
   normalizeIsolation,
 } from '../database'
@@ -119,66 +120,79 @@ export class TestingModuleBuilder {
     // app has no DB binding.
     const isolatedDb = await this.setupIsolatedDatabase(env)
 
-    // Build root module from config
-    const baseModules = Test.getBaseModules()
-    const allImports = [...baseModules, ...(this.config.imports ?? [])]
+    // Everything between the clone above and returning the TestingModule (which
+    // owns the drop via close()) can throw — module init, overrides, etc. If it
+    // does, nothing would ever drop the freshly cloned database. Drop it (FORCE)
+    // on failure before rethrowing so a compile() error doesn't leak a database.
+    try {
+      // Build root module from config
+      const baseModules = Test.getBaseModules()
+      const allImports = [...baseModules, ...(this.config.imports ?? [])]
 
-    const rootModule = this.createTestRootModule({
-      imports: allImports,
-      providers: this.config.providers,
-      controllers: this.config.controllers,
-      consumers: this.config.consumers,
-      jobs: this.config.jobs,
-    })
+      const rootModule = this.createTestRootModule({
+        imports: allImports,
+        providers: this.config.providers,
+        controllers: this.config.controllers,
+        consumers: this.config.consumers,
+        jobs: this.config.jobs,
+      })
 
-    const app = new Application({
-      module: rootModule,
-      logging: {
-        level: this.config.logging?.level ?? LogLevel.ERROR,
-        formatter: this.config.logging?.formatter ?? 'pretty',
-      },
-      env,
-      ctx,
-      exceptionHandler: this.config.exceptionHandler,
-    })
+      const app = new Application({
+        module: rootModule,
+        logging: {
+          level: this.config.logging?.level ?? LogLevel.ERROR,
+          formatter: this.config.logging?.formatter ?? 'pretty',
+        },
+        env,
+        ctx,
+        exceptionHandler: this.config.exceptionHandler,
+      })
 
-    await app.initialize()
+      await app.initialize()
 
-    // Auto-register FakeStorageService after initialize so it replaces module-registered StorageService
-    app.container.registerSingleton(STORAGE_TOKENS.StorageService, FakeStorageService)
+      // Auto-register FakeStorageService after initialize so it replaces module-registered StorageService
+      app.container.registerSingleton(STORAGE_TOKENS.StorageService, FakeStorageService)
 
-    // Auto-register FakeFeatureFlagService so feature-gated code resolves without a
-    // real Cloudflare Flagship binding. Inert for apps that don't use feature flags.
-    app.container.registerSingleton(FEATURE_FLAG_SERVICE_TOKEN, FakeFeatureFlagService)
+      // Auto-register FakeFeatureFlagService so feature-gated code resolves without a
+      // real Cloudflare Flagship binding. Inert for apps that don't use feature flags.
+      app.container.registerSingleton(FEATURE_FLAG_SERVICE_TOKEN, FakeFeatureFlagService)
 
-    // Apply user overrides AFTER initialize so they replace module-registered providers
-    for (const override of this.overrides) {
-      switch (override.type) {
-        case 'value':
-          app.container.registerValue(override.token, override.implementation)
-          break
-        case 'class':
-          app.container.registerSingleton(
-            override.token,
-            override.implementation as Constructor
-          )
-          break
-        case 'factory':
-          app.container.registerFactory(
-            override.token,
-            override.implementation as (c: Container) => object
-          )
-          break
-        case 'existing':
-          app.container.registerExisting(
-            override.token,
-            override.implementation as InjectionToken<object>
-          )
-          break
+      // Apply user overrides AFTER initialize so they replace module-registered providers
+      for (const override of this.overrides) {
+        switch (override.type) {
+          case 'value':
+            app.container.registerValue(override.token, override.implementation)
+            break
+          case 'class':
+            app.container.registerSingleton(
+              override.token,
+              override.implementation as Constructor
+            )
+            break
+          case 'factory':
+            app.container.registerFactory(
+              override.token,
+              override.implementation as (c: Container) => object
+            )
+            break
+          case 'existing':
+            app.container.registerExisting(
+              override.token,
+              override.implementation as InjectionToken<object>
+            )
+            break
+        }
       }
-    }
 
-    return new TestingModule(app, env, ctx, isolatedDb)
+      return new TestingModule(app, env, ctx, isolatedDb)
+    } catch (error) {
+      if (isolatedDb) {
+        await dropDatabase(isolatedDb.adminConnectionString, isolatedDb.name).catch(() => {
+          // Best-effort cleanup; the next run's stale-database sweep is the backstop.
+        })
+      }
+      throw error
+    }
   }
 
   /**

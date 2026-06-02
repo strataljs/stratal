@@ -83,7 +83,7 @@ describe('ModuleRegistry - Listener Detection', () => {
     expect(registry.getAllListeners()).toHaveLength(0)
   })
 
-  it('should re-register listener as singleton', () => {
+  it('should register listener with its declared (transient) scope, not as a singleton', () => {
     @Listener()
     class MyListener {
       handle() { return 'handled' }
@@ -94,9 +94,10 @@ describe('ModuleRegistry - Listener Detection', () => {
 
     registry.register(TestModule)
 
-    // Resolving twice should return the same instance
+    // `@Listener()` applies `@Transient()`; the registry honors it (no forced
+    // singleton) so listeners resolve fresh per event from the request scope.
     const instance1 = container.resolve(MyListener)
     const instance2 = container.resolve(MyListener)
-    expect(instance1).toBe(instance2)
+    expect(instance1).not.toBe(instance2)
   })
 })

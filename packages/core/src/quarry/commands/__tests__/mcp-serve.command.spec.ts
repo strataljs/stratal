@@ -73,13 +73,13 @@ const mockOpenAPIService = {
   getSpec: () => testSpec,
 }
 
-const mockConfigService = {
-  getEffectiveConfig: () => ({ info: { title: 'Test API', version: '1.0.0' } }),
+const mockConfigStore = {
+  getBaseConfig: () => ({ info: { title: 'Test API', version: '1.0.0' } }),
 }
 
 const mockContainer = {
   resolve: (token: symbol) => {
-    if (token === OPENAPI_TOKENS.ConfigService) return mockConfigService
+    if (token === OPENAPI_TOKENS.ConfigStore) return mockConfigStore
     return undefined
   },
 }

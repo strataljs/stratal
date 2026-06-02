@@ -238,8 +238,20 @@ export class TestingModule {
       // released; `WITH (FORCE)` evicts any that lingers. Runs even if shutdown
       // throws, otherwise a failed shutdown would leak the database until the
       // next run's stale-database sweep.
+      //
+      // A drop failure here is non-fatal: the next run's connection-guarded sweep
+      // reclaims the database. Swallow it (warn only) so a passing suite isn't
+      // marked failed by a teardown hiccup.
       if (this.isolatedDatabase) {
-        await dropDatabase(this.isolatedDatabase.adminConnectionString, this.isolatedDatabase.name)
+        try {
+          await dropDatabase(this.isolatedDatabase.adminConnectionString, this.isolatedDatabase.name)
+        } catch (error) {
+          console.warn(
+            `[stratal-testing] Failed to drop isolated test database "${this.isolatedDatabase.name}"; ` +
+              'it will be reclaimed by the next run\'s stale-database sweep.',
+            error,
+          )
+        }
       }
     }
   }

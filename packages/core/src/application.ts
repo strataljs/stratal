@@ -1,7 +1,7 @@
 import type { CronJob } from './cron/cron-job'
 import type { CronManager } from './cron/cron-manager'
 import { Container } from './di/container'
-import { runWithContainer } from './di/container-storage'
+import { containerStorage, getContainer, runWithContainer } from './di/container-storage'
 import { DI_TOKENS } from './di/tokens'
 import { type StratalEnv } from './env'
 import { DefaultExceptionHandler } from './errors/default-exception-handler'
@@ -236,7 +236,7 @@ export class Application {
       const { QueueModule } = await import('./queue/queue.module')
       this.moduleRegistry.register(QueueModule as unknown as ModuleClass)
       this.consumerRegistry = this._container.resolve<ConsumerRegistry>(DI_TOKENS.ConsumerRegistry)
-      this.registerQueueConsumers()
+      await this.registerQueueConsumers()
     })
     return this.queueInitPromise
   }
@@ -325,7 +325,10 @@ export class Application {
     return {
       getLocale: () => locale,
       setLocale: () => { /* no-op */ },
-      getContainer: () => this._container,
+      // Inside runInRequestScope the active container is the request-scoped child
+      // (set in AsyncLocalStorage); return it so request-scoped providers resolve
+      // against the scope, not the global container.
+      getContainer: () => containerStorage.getStore() ?? this._container,
     } as unknown as RouterContext
   }
 
@@ -389,11 +392,25 @@ export class Application {
     }
   }
 
-  private registerQueueConsumers(): void {
-    for (const ConsumerClass of this.moduleRegistry.getAllConsumers()) {
-      const consumer = this._container.resolve(ConsumerClass) as IQueueConsumer
-      this.consumerRegistry.register(consumer)
-    }
+  private async registerQueueConsumers(): Promise<void> {
+    const consumerClasses = this.moduleRegistry.getAllConsumers()
+    if (consumerClasses.length === 0) return
+
+    // Consumers are resolved fresh per message at dispatch time (see
+    // QueueManager / SyncQueueProvider). Here we only need each consumer's
+    // declared message types; read them from a throwaway instance built inside a
+    // request scope so a consumer that injects request-scoped providers
+    // (@InjectQueue, i18n, auth context, …) doesn't fail to instantiate at boot.
+    const mockContext = this.createMockRouterContext('en')
+    await this._container.runInRequestScope(mockContext, (requestContainer) => {
+      for (const ConsumerClass of consumerClasses) {
+        const consumer = requestContainer.resolve(ConsumerClass) as IQueueConsumer
+        this.consumerRegistry.register(
+          ConsumerClass as Constructor<IQueueConsumer>,
+          consumer.messageTypes,
+        )
+      }
+    })
   }
 
   private registerCronJobs(cronManager: CronManager): void {
@@ -417,11 +434,23 @@ export class Application {
     const eventRegistry = this._container.resolve<EventRegistry>(DI_TOKENS.EventRegistry)
 
     for (const ListenerClass of listeners) {
-      const instance = this._container.resolve(ListenerClass) as Record<string, ((...args: unknown[]) => unknown)>
       const handlers = getListenerHandlers(ListenerClass)
 
       for (const { methodName, event, options } of handlers) {
-        eventRegistry.on(event, instance[methodName].bind(instance) as EventHandler, options)
+        // Resolve the listener fresh per event from the active scope (events are
+        // emitted inside an HTTP request or runInScope), so request-scoped
+        // listener dependencies bind to the emitting request rather than being
+        // frozen at boot. Listener metadata is read from the class statically —
+        // no instance is created until an event actually fires.
+        const handler: EventHandler = ((...args: unknown[]) => {
+          const instance = getContainer().resolve(ListenerClass) as Record<
+            string,
+            (...a: unknown[]) => unknown
+          >
+          return instance[methodName](...args)
+        }) as EventHandler
+
+        eventRegistry.on(event, handler, options)
       }
     }
   }

@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
+import type { Container } from '../../di/container'
+import { runWithContainer } from '../../di/container-storage'
+import type { Constructor } from '../../types'
 import { ConsumerRegistry } from '../consumer-registry'
 import { SyncQueueProvider } from '../providers/sync-queue.provider'
 import type { IQueueConsumer, QueueMessage } from '../queue-consumer'
@@ -7,10 +10,16 @@ import type { IQueueConsumer, QueueMessage } from '../queue-consumer'
 describe('SyncQueueProvider', () => {
   let provider: SyncQueueProvider
   let registry: ConsumerRegistry
+  let instances: Map<Constructor<IQueueConsumer>, IQueueConsumer>
+  let scope: Container
 
   beforeEach(() => {
     registry = new ConsumerRegistry()
     provider = new SyncQueueProvider(registry)
+    instances = new Map()
+    scope = {
+      resolve: (token: Constructor<IQueueConsumer>) => instances.get(token),
+    } as unknown as Container
   })
 
   const createMessage = <T>(type: string, payload: T): QueueMessage<T> => ({
@@ -18,6 +27,18 @@ describe('SyncQueueProvider', () => {
     type,
     payload,
   })
+
+  // Register a mock consumer instance behind a throwaway class token, and make
+  // the ambient scope resolve that token to the instance (consumers are resolved
+  // per message from the request scope in production).
+  const register = (consumer: IQueueConsumer): void => {
+    const token = class {} as unknown as Constructor<IQueueConsumer>
+    instances.set(token, consumer)
+    registry.register(token, consumer.messageTypes)
+  }
+
+  const send = <T>(binding: string, message: QueueMessage<T>): Promise<void> =>
+    runWithContainer(scope, () => provider.send(binding, message))
 
   const createConsumer = (messageTypes: string[]): DeepMocked<IQueueConsumer> => {
     const consumer = createMock<IQueueConsumer>({
@@ -30,10 +51,10 @@ describe('SyncQueueProvider', () => {
   describe('send', () => {
     it('should find and call matching consumers by message type', async () => {
       const consumer = createConsumer(['email.send'])
-      registry.register(consumer)
+      register(consumer)
 
       const message = createMessage('email.send', { to: 'test@example.com' })
-      await provider.send('notifications-queue', message)
+      await send('notifications-queue', message)
 
       expect(consumer.handle).toHaveBeenCalledTimes(1)
       expect(consumer.handle).toHaveBeenCalledWith(message)
@@ -41,10 +62,10 @@ describe('SyncQueueProvider', () => {
 
     it('should support wildcard (*) message type handlers', async () => {
       const consumer = createConsumer(['*'])
-      registry.register(consumer)
+      register(consumer)
 
       const message = createMessage('any.message.type', { data: 'test' })
-      await provider.send('notifications-queue', message)
+      await send('notifications-queue', message)
 
       expect(consumer.handle).toHaveBeenCalledTimes(1)
       expect(consumer.handle).toHaveBeenCalledWith(message)
@@ -55,12 +76,12 @@ describe('SyncQueueProvider', () => {
       const consumer = createConsumer(['email.send'])
       consumer.handle.mockRejectedValue(testError)
       consumer.onError!.mockResolvedValue(undefined)
-      registry.register(consumer)
+      register(consumer)
 
       const message = createMessage('email.send', { to: 'test@example.com' })
 
       await expect(
-        provider.send('notifications-queue', message)
+        send('notifications-queue', message)
       ).rejects.toThrow('Test error')
 
       expect(consumer.onError).toHaveBeenCalledTimes(1)
@@ -72,12 +93,12 @@ describe('SyncQueueProvider', () => {
       const consumer = createConsumer(['email.send'])
       consumer.handle.mockRejectedValue(testError)
       consumer.onError!.mockResolvedValue(undefined)
-      registry.register(consumer)
+      register(consumer)
 
       const message = createMessage('email.send', { to: 'test@example.com' })
 
       await expect(
-        provider.send('notifications-queue', message)
+        send('notifications-queue', message)
       ).rejects.toThrow('Consumer failed')
     })
 
@@ -88,11 +109,11 @@ describe('SyncQueueProvider', () => {
       })
       consumer2.handle.mockResolvedValue(undefined)
 
-      registry.register(consumer1)
-      registry.register(consumer2)
+      register(consumer1)
+      register(consumer2)
 
       const message = createMessage('email.send', { to: 'test@example.com' })
-      await provider.send('notifications-queue', message)
+      await send('notifications-queue', message)
 
       expect(consumer1.handle).toHaveBeenCalledTimes(1)
       expect(consumer2.handle).toHaveBeenCalledTimes(1)
@@ -102,11 +123,11 @@ describe('SyncQueueProvider', () => {
       const matchingConsumer = createConsumer(['email.send'])
       const nonMatchingConsumer = createConsumer(['sms.send'])
 
-      registry.register(matchingConsumer)
-      registry.register(nonMatchingConsumer)
+      register(matchingConsumer)
+      register(nonMatchingConsumer)
 
       const message = createMessage('email.send', { to: 'test@example.com' })
-      await provider.send('notifications-queue', message)
+      await send('notifications-queue', message)
 
       expect(matchingConsumer.handle).toHaveBeenCalledTimes(1)
       expect(nonMatchingConsumer.handle).not.toHaveBeenCalled()
@@ -117,7 +138,7 @@ describe('SyncQueueProvider', () => {
 
       // Should not throw, just do nothing
       await expect(
-        provider.send('notifications-queue', message)
+        send('notifications-queue', message)
       ).resolves.toBeUndefined()
     })
 
@@ -125,12 +146,12 @@ describe('SyncQueueProvider', () => {
       const consumer = createConsumer(['email.send'])
       consumer.handle.mockRejectedValue('String error')
       consumer.onError!.mockResolvedValue(undefined)
-      registry.register(consumer)
+      register(consumer)
 
       const message = createMessage('email.send', { to: 'test@example.com' })
 
       await expect(
-        provider.send('notifications-queue', message)
+        send('notifications-queue', message)
       ).rejects.toThrow('String error')
 
       expect(consumer.onError).toHaveBeenCalledWith(
@@ -145,13 +166,13 @@ describe('SyncQueueProvider', () => {
 
       const consumer2 = createConsumer(['email.send'])
 
-      registry.register(consumer1)
-      registry.register(consumer2)
+      register(consumer1)
+      register(consumer2)
 
       const message = createMessage('email.send', { to: 'test@example.com' })
 
       await expect(
-        provider.send('notifications-queue', message)
+        send('notifications-queue', message)
       ).rejects.toThrow('First failed')
 
       expect(consumer1.handle).toHaveBeenCalledTimes(1)
@@ -160,13 +181,13 @@ describe('SyncQueueProvider', () => {
 
     it('should route to same consumer from different queues', async () => {
       const consumer = createConsumer(['email.send'])
-      registry.register(consumer)
+      register(consumer)
 
       const message1 = createMessage('email.send', { to: 'a@example.com' })
       const message2 = createMessage('email.send', { to: 'b@example.com' })
 
-      await provider.send('notifications-queue', message1)
-      await provider.send('batch-notifications-queue', message2)
+      await send('notifications-queue', message1)
+      await send('batch-notifications-queue', message2)
 
       // Same consumer handles messages from both queues
       expect(consumer.handle).toHaveBeenCalledTimes(2)
