@@ -5,7 +5,7 @@ license: MIT
 compatibility: Designed for AI Agents. Requires Node.js 22+, npm.
 metadata:
   author: Temitayo Fadojutimi
-  version: "2.6"
+  version: "2.7"
 ---
 
 # Stratal Framework
@@ -284,7 +284,7 @@ See `references/quarry-cli.md` for all MCP flags and options.
 
 **User says "Write tests for my service"** -> Read `references/testing.md`. Use `Test.createTestingModule()` with provider overrides. Use `module.http` for HTTP tests, `module.get()` for unit tests.
 
-**User says "Run my tests in parallel with isolated databases"** -> Read `references/testing.md`. Pass `database: { isolation: 'database' }` to `stratalTest()` and wire `globalSetup` with `createTestDatabaseGlobalSetup` from `@stratal/testing/database`. Each file gets its own database cloned from a migrated template, dropped on teardown.
+**User says "Run my tests in parallel with isolated databases"** -> Read `references/testing.md`. Pass `database: { isolation: 'database' }` to `stratalTest()` and wire `globalSetup` with `createTestDatabaseGlobalSetup` from `@stratal/testing/database`. Pass `schema` (the root `.zmodel` or schema dir) — required in database mode; the migrated template is reused across runs until the schema changes. Each file clones the template and drops it on teardown.
 
 **User says "Set up the database"** -> Read `references/database.md`. Configure `DatabaseModule.forRootAsync()` with ZenStack.
 
@@ -305,6 +305,8 @@ See `references/quarry-cli.md` for all MCP flags and options.
 **User says "Expose my API as MCP tools"** -> Run `npx quarry mcp:serve`. Use `--tag` or `--path` flags to filter. Preview with `npx quarry mcp:tools`.
 
 **User says "Retry failed queue jobs" / "See failed messages" / "Purge dead letters"** -> Read `references/queues-and-cron.md`. Run `npx quarry queue:failed` to list, `npx quarry queue:retry --all` to retry all, `npx quarry queue:purge --all` to delete all.
+
+**User says "Automatically clean up old failed jobs" / "Expire dead-letter jobs" / "Bound failed-job KV growth"** -> Read `references/queues-and-cron.md` (Failed Job Management). Failed jobs persist until retried/purged. Add the opt-in `FailedJobCleanupJob` (import from `stratal/queue`) to a module's `jobs` array, set `QueueModule.forRoot({ failedJobs: { retention } })`, and add a matching cron trigger to `wrangler.jsonc`. Use `failedJobCleanupJob(schedule)` for a custom schedule.
 
 **User says "List all routes" / "Debug my app"** -> Run `npx quarry route:list`. Also try `event:list`, `schedule:list`, `queue:list` to inspect other registrations.
 
@@ -356,11 +358,11 @@ Load these when the task needs deeper knowledge:
 | `references/database.md` | DatabaseModule, ZenStack, connections, plugins, transactions |
 | `references/auth-and-rbac.md` | Better Auth, AuthContext, access control, AuthGuard, rate-limit interop (`registry.forPath()` + auto-wired `customStorage` / `customRules`) |
 | `references/events.md` | Event listeners, @On/@Listener, database events, wildcards |
-| `references/queues-and-cron.md` | Queue consumers, senders, failed job management, cron jobs, wrangler config |
+| `references/queues-and-cron.md` | Queue consumers, senders, auto-idempotent dispatch, failed job management + `FailedJobCleanupJob` cron, cron jobs, wrangler config |
 | `references/seeders.md` | Database seeders, calling other seeders |
 | `references/middleware-and-guards.md` | RouteConfigurable, middleware registration with Router, guards, @UseGuards |
 | `references/rate-limiter.md` | Named rate limiters, `RateLimiterModule.forRoot()`, `Limit` value class (incl. `perSeconds`), `router.throttle()`, `@RateLimit` decorator, typed-KV custom stores, 429 headers |
-| `references/testing.md` | TestingModule, TestHttpClient, mocks, factories, parallel per-file database isolation |
+| `references/testing.md` | TestingModule, TestHttpClient, mocks, factories, parallel per-file database isolation (required `schema`, reused template) |
 | `references/infrastructure.md` | Cache (KV), Logger, Email (SMTP), Storage (R2 — multi-disk, presigned URLs), OpenAPI |
 | `references/config.md` | ConfigService, registerAs(), namespaces |
 | `references/incremental-adoption.md` | Mounting Stratal into existing Hono app |
@@ -371,6 +373,10 @@ Load these when the task needs deeper knowledge:
 **"No injectable constructor"** -> Missing scope decorator (`@Singleton()`, `@Request()`, or `@Transient()`) on the class.
 
 **"Token not registered"** -> Provider not in any module's `providers`, or module not imported.
+
+**"missing @inject on constructor parameter N" / "has N constructor parameter(s) but none are decorated with @inject"** -> Every constructor dependency needs an explicit `@inject(Token)` from `stratal/di` — there is no type-based auto-resolution. Decorate each parameter.
+
+**"Cannot resolve request-scoped provider ... outside a request scope"** -> A `@Request()`-scoped service was resolved at boot or outside an HTTP request. Resolve it inside a request handler; for non-HTTP entrypoints (Durable Objects, Workflows, WorkerEntrypoints) use `this.runInScope(container => …)` (see `references/workers.md`).
 
 **"Cannot mix convention and HTTP decorators"** -> Pick one routing pattern per controller.
 

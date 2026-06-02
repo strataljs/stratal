@@ -476,9 +476,13 @@ seo: {
 }
 ```
 
+The resolved `title` is always a string — it falls back to `''` when no page or default title applies (and even if a `titleTemplate` function returns `undefined`). This keeps client navigation deterministic: moving to a page with no SEO resets `document.title` (to your default or empty) instead of leaving the previous page's title behind. Set a `defaults.title` to control the fallback shown on such pages.
+
 ### Frontend: head sync is automatic
 
 Server injection covers the first paint and crawlers. Client-side navigation updates are wired automatically — no app code: the `stratalInertia()` Vite plugin injects a runtime into the client entry that listens for Inertia `navigate` events and reconciles `document.head` from the shared `seo` prop. There is nothing to mount in `app.tsx`.
+
+The `seo` prop is shared on **every** response — including partial reloads that don't request it — so a partial reload (e.g. polling one prop) never drops `seo` and never wipes the managed head tags. The client runtime only reconciles `document.head` when the `seo` key is actually present on the page.
 
 Optionally, read the resolved metadata inside a component with `useSeo()` from `@stratal/inertia/react`:
 

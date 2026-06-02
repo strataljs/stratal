@@ -162,13 +162,16 @@ interface QueueModuleOptions {
     binding?: string  // KV namespace binding. Default: 'CACHE'
   }
   idempotency?: {
-    ttl?: number  // Seconds. Default: 86400 (24h)
+    ttl?: number  // Seconds a processed idempotency key is remembered. Default: 86400 (24h)
+  }
+  failedJobs?: {
+    retention?: number  // Age (seconds) past which FailedJobCleanupJob deletes a failed job. Default: 604800 (7d)
   }
   maxRetries?: number  // Default: 3
 }
 ```
 
-The `store` field is optional — it defaults to the `CACHE` KV binding. Override `store.binding` only if the KV namespace uses a different binding name. Add the binding to `wrangler.jsonc`:
+The `store` field is optional — it defaults to the `CACHE` KV binding. Override `store.binding` only if the KV namespace uses a different binding name. The configured KV binding is validated at app boot: if it is missing, `QueueModule` throws a `QueueError` during initialization (fail-fast) instead of letting every queue invocation hard-fail. Add the binding to `wrangler.jsonc`:
 
 ```jsonc
 {
@@ -180,7 +183,26 @@ The `store` field is optional — it defaults to the `CACHE` KV binding. Overrid
 
 ## Failed Job Management
 
-When a consumer throws after exhausting retries, the message is persisted to KV as a `FailedJob`.
+When a consumer throws after exhausting retries, the message is persisted to KV as a `FailedJob`. Failed jobs are kept **indefinitely** until retried (`queue:retry`) or purged (`queue:purge`).
+
+### Automatic cleanup (opt-in cron)
+
+To bound KV growth, register the `FailedJobCleanupJob` cron — it deletes failed jobs older than `failedJobs.retention` (default 7 days). It is **not** registered for you:
+
+```typescript
+import { FailedJobCleanupJob, failedJobCleanupJob, QueueModule } from 'stratal/queue'
+
+@Module({
+  imports: [
+    QueueModule.forRoot({ provider: 'cloudflare', failedJobs: { retention: 1209600 } }), // 14 days
+  ],
+  jobs: [FailedJobCleanupJob],                 // daily at 00:00 UTC
+  // ...or a custom schedule: jobs: [failedJobCleanupJob('0 3 * * 0')]
+})
+export class AppModule {}
+```
+
+Add a matching cron trigger to `wrangler.jsonc` (`"0 0 * * *"` for the default schedule).
 
 ### FailedJob Type
 

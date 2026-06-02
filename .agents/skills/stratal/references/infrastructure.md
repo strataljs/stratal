@@ -171,7 +171,7 @@ export class NotificationService {
 }
 ```
 
-Email supports `html` and `text` props. Emails are dispatched via queue for async sending. Attachments supported (inline `Buffer`/`ReadableStream` or storage-backed via `StorageService`).
+Email supports `html` and `text` props. Emails are dispatched via queue for async sending. Attachments supported (inline `Buffer`/`ReadableStream` or storage-backed via `StorageService`). Each attachment is hard-capped at 20 MB (it is fully buffered before base64 encoding); exceeding it throws. Inline attachment `content` must be valid base64 (invalid base64 throws rather than shipping a corrupt file), and envelope addresses containing raw CR/LF are rejected to prevent SMTP command injection.
 
 ## Storage
 
