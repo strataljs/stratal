@@ -48,11 +48,14 @@ export class FeatureFlagService {
     @inject(FEATURE_FLAG_TOKENS.Options) private readonly options: FeatureFlagModuleOptions,
     @inject(DI_TOKENS.CloudflareEnv) private readonly env: StratalEnv,
     @inject(ROUTER_TOKENS.RouterContext) private readonly routerContext: RouterContext | null,
+    // Only passed by `use()`; DI never injects it. Lets `use()` bind exactly once
+    // instead of binding to the default in the constructor and re-binding after.
+    initialBinding?: string,
   ) {
     for (const app of options.apps) {
       this.apps.set(app.binding, app)
     }
-    this.bindTo(options.default ?? options.apps[0]?.binding)
+    this.bindTo(initialBinding ?? options.default ?? options.apps[0]?.binding)
   }
 
   /**
@@ -63,9 +66,7 @@ export class FeatureFlagService {
    */
   use(binding: FlagshipBindingName): FeatureFlagService {
     if (binding === this.bindingName) return this
-    const instance = new FeatureFlagService(this.options, this.env, this.routerContext)
-    instance.bindTo(binding)
-    return instance
+    return new FeatureFlagService(this.options, this.env, this.routerContext, binding)
   }
 
   /** The binding name this instance currently targets. */

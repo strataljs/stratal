@@ -57,7 +57,19 @@ export class ModuleRegistry {
       this.register(ImportedModule)
     }
 
-    this.registerModuleNode(moduleClass, options, { includeHttpWiring: true })
+    const registered = this.registerModuleNode(moduleClass, options, { includeHttpWiring: true })
+
+    // Eager register() is synchronous and assumes the bootstrap initialize()
+    // batch will run lifecycle hooks. If it's called AFTER initialization (e.g. a
+    // built-in subsystem registered on first use), that batch has finished and
+    // won't revisit this module — so a lifecycle hook would be silently dropped.
+    // Surface it instead of failing silently; load such modules via
+    // LazyModuleLoader (registerLazy), which runs onInitialize immediately.
+    if (this.initialized && registered.hasLifecycle) {
+      this.logger.warn(
+        `Module ${moduleClass.name} was registered eagerly after initialization; its onInitialize/onShutdown/configureRoutes hooks will not run. Load it via LazyModuleLoader instead.`,
+      )
+    }
   }
 
   /**

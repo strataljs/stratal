@@ -65,4 +65,23 @@ describe('descriptorToHtml', () => {
     expect(descriptorToHtml({ tag: 'link', attrs: { rel: 'canonical', href: '/x', [DATA_SEO_ATTR]: '' } }))
       .toBe('<link rel="canonical" href="/x" data-seo />')
   })
+
+  it('drops attributes with unsafe names (no tag breakout)', () => {
+    const html = descriptorToHtml({
+      tag: 'link',
+      attrs: { 'rel': 'icon', 'href': '/x', 'onload=alert(1) x': 'y', [DATA_SEO_ATTR]: '' },
+    })
+    expect(html).toBe('<link rel="icon" href="/x" data-seo />')
+    expect(html).not.toContain('onload')
+  })
+})
+
+describe('buildSeoTags — custom link attribute hardening', () => {
+  it('drops unsafe attribute names from custom link entries', () => {
+    const tags = buildSeoTags({ link: [{ 'rel': 'amphtml', 'href': '/amp', 'x onerror=alert(1)': 'boom' } as never] })
+    const link = tags.find((t) => t.tag === 'link')!
+    expect(link.attrs).toHaveProperty('rel', 'amphtml')
+    expect(link.attrs).toHaveProperty('href', '/amp')
+    expect(Object.keys(link.attrs)).not.toContain('x onerror=alert(1)')
+  })
 })

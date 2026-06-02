@@ -49,7 +49,9 @@ export class SeoService {
       resolved.title = await template(resolved.title, ctx)
     } else if (typeof template === 'string' && this.accumulated.title != null) {
       // Only wrap a page-provided title; a bare default title is used as-is.
-      resolved.title = template.replace('%s', this.accumulated.title)
+      // Use split/join rather than String.replace so every `%s` is substituted
+      // and `$`-sequences in the title (`$&`, `$$`, …) are treated literally.
+      resolved.title = template.split('%s').join(this.accumulated.title)
     }
 
     // Append hreflang alternates for the current URL after any user-set links so

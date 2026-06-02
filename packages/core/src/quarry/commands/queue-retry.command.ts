@@ -55,27 +55,33 @@ export class QueueRetryCommand extends Command {
   }
 
   private async retryAll(queueFilter?: string): Promise<number | undefined> {
+    // Collect every matching key across the full listing BEFORE mutating
+    // anything: deleting keys while paginating with a cursor shifts cursor
+    // positions and would cause a single pass to skip jobs.
+    const ids: string[] = []
     let cursor: string | undefined
-    let count = 0
 
     do {
       const result = await this.store.listFailedJobs({ cursor, limit: 100 })
       cursor = result.cursor
-
       for (const key of result.keys) {
         if (queueFilter && key.metadata.queue !== queueFilter) continue
-
-        const job = await this.store.getFailedJob(key.id)
-        if (!job) continue
-
-        await this.provider.send(job.queue, {
-          ...job.message,
-          id: crypto.randomUUID(),
-        })
-        await this.store.removeFailedJob(key.id)
-        count++
+        ids.push(key.id)
       }
     } while (cursor)
+
+    let count = 0
+    for (const id of ids) {
+      const job = await this.store.getFailedJob(id)
+      if (!job) continue
+
+      await this.provider.send(job.queue, {
+        ...job.message,
+        id: crypto.randomUUID(),
+      })
+      await this.store.removeFailedJob(id)
+      count++
+    }
 
     this.success(`Retried ${count} job(s)`)
     return undefined

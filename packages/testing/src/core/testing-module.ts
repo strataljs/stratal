@@ -230,11 +230,17 @@ export class TestingModule {
    */
   async close(): Promise<void> {
     this._requestContainer.dispose()
-    await this.app.shutdown()
-    // Drop the per-file database AFTER shutdown so the app's pool connection is
-    // released; `WITH (FORCE)` evicts any that lingers. Best-effort.
-    if (this.isolatedDatabase) {
-      await dropDatabase(this.isolatedDatabase.adminConnectionString, this.isolatedDatabase.name)
+    try {
+      await this.app.shutdown()
+    }
+    finally {
+      // Drop the per-file database AFTER shutdown so the app's pool connection is
+      // released; `WITH (FORCE)` evicts any that lingers. Runs even if shutdown
+      // throws, otherwise a failed shutdown would leak the database until the
+      // next run's stale-database sweep.
+      if (this.isolatedDatabase) {
+        await dropDatabase(this.isolatedDatabase.adminConnectionString, this.isolatedDatabase.name)
+      }
     }
   }
 }

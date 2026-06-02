@@ -40,6 +40,16 @@ describe('QueueSender', () => {
       expect(key1).toBe(key2)
     })
 
+    it('should produce the same key regardless of payload key order', async () => {
+      // Deduplication must not depend on insertion order of payload keys.
+      await sender.dispatch({ type: 'order.process', payload: { a: 1, b: 2, nested: { x: 1, y: 2 } } })
+      await sender.dispatch({ type: 'order.process', payload: { nested: { y: 2, x: 1 }, b: 2, a: 1 } })
+
+      const key1 = mockProvider.send.mock.calls[0][1].metadata?.idempotencyKey
+      const key2 = mockProvider.send.mock.calls[1][1].metadata?.idempotencyKey
+      expect(key1).toBe(key2)
+    })
+
     it('should produce different keys for different payloads', async () => {
       await sender.dispatch({ type: 'email.send', payload: { to: 'a@example.com' } })
       await sender.dispatch({ type: 'email.send', payload: { to: 'b@example.com' } })

@@ -70,7 +70,13 @@ export class QueueManager {
       const failed = lastError !== undefined
 
       if (failed) {
-        if (message.attempts >= this.maxRetries) {
+        // `message.attempts` is 1-based (the first delivery is attempt 1), so a
+        // message is only out of retries once it has been delivered more than
+        // `maxRetries` times. `maxRetries: 3` therefore means 3 retries after the
+        // initial delivery (4 total attempts). This must be <= the consumer's
+        // `max_retries` in wrangler.jsonc, otherwise Cloudflare dead-letters the
+        // message before this branch ever runs and it never reaches the store.
+        if (message.attempts > this.maxRetries) {
           const failedJob: FailedJob = {
             id: queueMessage.id,
             queue: queueName,

@@ -15,11 +15,27 @@ export class QueueFailedCommand extends Command {
     const queueFilter = this.string('queue')
     const limit = this.number('limit') || 50
 
-    const { keys, cursor } = await this.store.listFailedJobs({ limit })
+    // Without a filter, one page of `limit` keys is the result. With a filter,
+    // keep paginating until we've collected `limit` MATCHING jobs (or run out),
+    // so `--limit` counts matching jobs rather than scanned keys.
+    const filtered: { id: string; metadata: { queue: string; type: string; consumer: string; attempts: number; failedAt: string } }[] = []
+    let cursor: string | undefined
+    let more = false
 
-    const filtered = queueFilter
-      ? keys.filter((k) => k.metadata.queue === queueFilter)
-      : keys
+    do {
+      const result = await this.store.listFailedJobs({ cursor, limit })
+      cursor = result.cursor
+      for (const key of result.keys) {
+        if (queueFilter && key.metadata.queue !== queueFilter) continue
+        if (filtered.length >= limit) {
+          more = true
+          break
+        }
+        filtered.push(key)
+      }
+    } while (cursor && filtered.length < limit)
+
+    if (cursor) more = true
 
     if (filtered.length === 0) {
       this.info('No failed jobs found')
@@ -38,7 +54,7 @@ export class QueueFailedCommand extends Command {
       ]),
     )
 
-    if (cursor) {
+    if (more) {
       this.comment(`Showing first ${limit} results. More jobs available.`)
     }
 

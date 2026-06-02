@@ -111,7 +111,8 @@ describe('buildMimeMessage', () => {
       const headers = parseHeaders(result.raw)
 
       expect(headers['Content-Type']).toBe('text/plain; charset=utf-8')
-      expect(getBody(result.raw)).toBe('Hello')
+      expect(headers['Content-Transfer-Encoding']).toBe('base64')
+      expect(getBody(result.raw)).toBe(Buffer.from('Hello', 'utf-8').toString('base64'))
     })
 
     it('should use text/html for HTML-only messages', async () => {
@@ -120,7 +121,8 @@ describe('buildMimeMessage', () => {
       const headers = parseHeaders(result.raw)
 
       expect(headers['Content-Type']).toBe('text/html; charset=utf-8')
-      expect(getBody(result.raw)).toBe('<p>Hello</p>')
+      expect(headers['Content-Transfer-Encoding']).toBe('base64')
+      expect(getBody(result.raw)).toBe(Buffer.from('<p>Hello</p>', 'utf-8').toString('base64'))
     })
 
     it('should use multipart/alternative for text + HTML', async () => {
@@ -132,8 +134,9 @@ describe('buildMimeMessage', () => {
       const body = getBody(result.raw)
       expect(body).toContain('text/plain; charset=utf-8')
       expect(body).toContain('text/html; charset=utf-8')
-      expect(body).toContain('Hello')
-      expect(body).toContain('<p>Hello</p>')
+      expect(body).toContain('Content-Transfer-Encoding: base64')
+      expect(body).toContain(Buffer.from('Hello', 'utf-8').toString('base64'))
+      expect(body).toContain(Buffer.from('<p>Hello</p>', 'utf-8').toString('base64'))
     })
 
     it('should put text part before HTML part in multipart/alternative', async () => {
@@ -340,6 +343,54 @@ describe('buildMimeMessage', () => {
 
       const bareNewlines = result.raw.replace(/\r\n/g, '').match(/\n/)
       expect(bareNewlines).toBeNull()
+    })
+  })
+
+  describe('Header injection hardening', () => {
+    it('should strip CR/LF from the subject to prevent header injection', async () => {
+      const message: ResolvedEmailMessage = {
+        to: 'user@example.com',
+        subject: 'Hello\r\nBcc: attacker@evil.com',
+        html: '<p>Hi</p>',
+      }
+      const result = await buildMimeMessage(message, defaultFrom)
+      const headers = parseHeaders(result.raw)
+
+      // The text survives inline in the Subject, but must NOT appear as its own
+      // header line (no CRLF before it).
+      expect(result.raw).not.toContain('\r\nBcc:')
+      expect(headers['Subject']).toBe('HelloBcc: attacker@evil.com')
+    })
+
+    it('should strip CR/LF and escape quotes in attachment filenames', async () => {
+      const message: ResolvedEmailMessage = {
+        to: 'user@example.com',
+        subject: 'Test',
+        html: '<p>Hi</p>',
+        attachments: [{
+          filename: 'x";\r\nContent-Type: evil',
+          content: Buffer.from('data'),
+          contentType: 'text/plain',
+        }],
+      }
+      const result = await buildMimeMessage(message, defaultFrom)
+
+      // No injected header line, and the embedded quote is backslash-escaped.
+      expect(result.raw).not.toContain('\r\nContent-Type: evil')
+      expect(result.raw).toContain('filename="x\\";Content-Type: evil"')
+    })
+
+    it('should RFC 2231-encode non-ASCII attachment filenames', async () => {
+      const message: ResolvedEmailMessage = {
+        to: 'user@example.com',
+        subject: 'Test',
+        html: '<p>Hi</p>',
+        attachments: [{ filename: 'résumé.pdf', content: Buffer.from('data'), contentType: 'application/pdf' }],
+      }
+      const result = await buildMimeMessage(message, defaultFrom)
+
+      expect(result.raw).toContain("filename*=UTF-8''")
+      expect(result.raw).toContain('r%C3%A9sum%C3%A9.pdf')
     })
   })
 

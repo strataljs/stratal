@@ -62,6 +62,13 @@ describe('SeoService', () => {
       expect((await service.resolve(ctx)).title).toBe('Acme')
     })
 
+    it('treats $-sequences in the title literally and substitutes every %s', async () => {
+      const service = createService({ seo: { titleTemplate: '%s — Acme (%s)' } })
+      service.set({ title: 'Sale $5 & $& off' })
+
+      expect((await service.resolve(ctx)).title).toBe('Sale $5 & $& off — Acme (Sale $5 & $& off)')
+    })
+
     it('applies a function template with the resolved title and ctx', async () => {
       const received: unknown[] = []
       const service = createService({

@@ -52,10 +52,14 @@ function makeReentrantTransaction<T extends object>(
   activeTransaction: AsyncLocalStorage<ZenStackClientInstance>,
 ): T {
   return new Proxy(client, {
-    get(target, prop) {
+    get(target, prop, receiver) {
       if (prop !== '$transaction') {
-        return Reflect.get(target, prop)
+        // Forward the receiver so getters/methods resolve `this` against the
+        // proxy (correct for layered proxies / accessor properties).
+        return Reflect.get(target, prop, receiver)
       }
+      // Read the original `$transaction` off the target WITHOUT the receiver — a
+      // receiver of the proxy would re-enter this trap and recurse infinitely.
       const transaction = Reflect.get(target, prop) as (
         input: unknown,
         options?: unknown,

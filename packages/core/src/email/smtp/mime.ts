@@ -29,10 +29,36 @@ function isAscii(str: string): boolean {
   return /^[ -~]*$/.test(str)
 }
 
+/** Remove CR/LF so a value can't inject extra headers (header smuggling). */
+function stripCrlf(value: string): string {
+  return value.replace(/[\r\n]/g, '')
+}
+
 function encodeHeaderValue(value: string): string {
-  if (isAscii(value)) return value
+  const clean = stripCrlf(value)
+  if (isAscii(clean)) return clean
   const encoded = Buffer.from(value, 'utf-8').toString('base64')
   return `=?UTF-8?B?${encoded}?=`
+}
+
+/**
+ * Encode a MIME parameter (e.g. `name`/`filename`) safely. ASCII values are
+ * emitted as a quoted-string with `"`/`\` escaped; non-ASCII values use the
+ * RFC 2231 extended syntax (`param*=UTF-8''…`). CR/LF are always stripped so a
+ * crafted filename can't inject headers or break the MIME structure.
+ */
+function encodeMimeParam(param: string, value: string): string {
+  const clean = stripCrlf(value)
+  if (isAscii(clean)) {
+    const escaped = clean.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+    return `${param}="${escaped}"`
+  }
+  const encoded = Array.from(Buffer.from(clean, 'utf-8'))
+    .map((b) => (/[A-Za-z0-9!#$&+\-.^_`|~]/.test(String.fromCharCode(b))
+      ? String.fromCharCode(b)
+      : `%${b.toString(16).toUpperCase().padStart(2, '0')}`))
+    .join('')
+  return `${param}*=UTF-8''${encoded}`
 }
 
 function extractEmail(address: string): string {
@@ -41,9 +67,10 @@ function extractEmail(address: string): string {
 }
 
 function formatAddress(email: string, name?: string): string {
-  if (!name) return email
-  const encodedName = isAscii(name) ? `"${name.replace(/"/g, '\\"')}"` : encodeHeaderValue(name)
-  return `${encodedName} <${email}>`
+  const cleanEmail = stripCrlf(email)
+  if (!name) return cleanEmail
+  const encodedName = isAscii(stripCrlf(name)) ? `"${stripCrlf(name).replace(/"/g, '\\"')}"` : encodeHeaderValue(name)
+  return `${encodedName} <${cleanEmail}>`
 }
 
 function formatDate(date: Date): string {
@@ -64,39 +91,48 @@ async function resolveContent(content: ResolvedEmailAttachment['content']): Prom
   return Buffer.from(await response.arrayBuffer())
 }
 
-function buildBodyPart(text: string | undefined, html: string | undefined): { content: string; contentType: string } {
+/** Base64-encode a text body so arbitrary content (long lines, leading dots,
+ * 8-bit data) is transported safely regardless of line length or SMTP escaping. */
+function encodeTextBody(content: string): string {
+  return wrapBase64(Buffer.from(content, 'utf-8').toString('base64'))
+}
+
+function buildBodyPart(
+  text: string | undefined,
+  html: string | undefined,
+): { content: string; contentType: string; cte?: string } {
   if (text && html) {
     const boundary = generateBoundary()
     const content = [
       `--${boundary}`,
       'Content-Type: text/plain; charset=utf-8',
-      'Content-Transfer-Encoding: 8bit',
+      'Content-Transfer-Encoding: base64',
       '',
-      text,
+      encodeTextBody(text),
       `--${boundary}`,
       'Content-Type: text/html; charset=utf-8',
-      'Content-Transfer-Encoding: 8bit',
+      'Content-Transfer-Encoding: base64',
       '',
-      html,
+      encodeTextBody(html),
       `--${boundary}--`,
     ].join('\r\n')
     return { content, contentType: `multipart/alternative; boundary="${boundary}"` }
   }
 
   if (html) {
-    return { content: html, contentType: 'text/html; charset=utf-8' }
+    return { content: encodeTextBody(html), contentType: 'text/html; charset=utf-8', cte: 'base64' }
   }
 
-  return { content: text ?? '', contentType: 'text/plain; charset=utf-8' }
+  return { content: encodeTextBody(text ?? ''), contentType: 'text/plain; charset=utf-8', cte: 'base64' }
 }
 
 async function buildAttachmentPart(attachment: ResolvedEmailAttachment): Promise<string> {
   const buffer = await resolveContent(attachment.content)
   const base64 = wrapBase64(buffer.toString('base64'))
   return [
-    `Content-Type: ${attachment.contentType || 'application/octet-stream'}; name="${attachment.filename}"`,
+    `Content-Type: ${attachment.contentType || 'application/octet-stream'}; ${encodeMimeParam('name', attachment.filename)}`,
     'Content-Transfer-Encoding: base64',
-    `Content-Disposition: attachment; filename="${attachment.filename}"`,
+    `Content-Disposition: attachment; ${encodeMimeParam('filename', attachment.filename)}`,
     '',
     base64,
   ].join('\r\n')
@@ -116,15 +152,15 @@ export async function buildMimeMessage(
 
   const headers: string[] = [
     `From: ${fromAddr}`,
-    `To: ${toList.join(', ')}`,
+    `To: ${toList.map(stripCrlf).join(', ')}`,
     `Subject: ${encodeHeaderValue(message.subject)}`,
     `Date: ${formatDate(new Date())}`,
     `Message-ID: ${generateMessageId(fromEmail)}`,
     'MIME-Version: 1.0',
   ]
 
-  if (message.replyTo) headers.push(`Reply-To: ${message.replyTo}`)
-  if (message.cc?.length) headers.push(`Cc: ${message.cc.join(', ')}`)
+  if (message.replyTo) headers.push(`Reply-To: ${stripCrlf(message.replyTo)}`)
+  if (message.cc?.length) headers.push(`Cc: ${message.cc.map(stripCrlf).join(', ')}`)
 
   const allRecipients = [
     ...toList,
@@ -137,8 +173,8 @@ export async function buildMimeMessage(
 
   if (!hasAttachments) {
     headers.push(`Content-Type: ${body.contentType}`)
-    if (!body.contentType.startsWith('multipart/')) {
-      headers.push('Content-Transfer-Encoding: 8bit')
+    if (body.cte) {
+      headers.push(`Content-Transfer-Encoding: ${body.cte}`)
     }
 
     return {
@@ -155,8 +191,8 @@ export async function buildMimeMessage(
     `Content-Type: ${body.contentType}`,
   ]
 
-  if (!body.contentType.startsWith('multipart/')) {
-    parts.push('Content-Transfer-Encoding: 8bit')
+  if (body.cte) {
+    parts.push(`Content-Transfer-Encoding: ${body.cte}`)
   }
 
   parts.push('', body.content)

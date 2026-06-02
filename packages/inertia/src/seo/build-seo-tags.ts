@@ -62,7 +62,14 @@ export function buildSeoTags(data: SeoData): SeoTagDescriptor[] {
 
   if (data.link) {
     for (const entry of data.link) {
-      tags.push({ tag: 'link', attrs: { ...entry } })
+      const attrs: Record<string, string> = {}
+      // Custom link entries carry arbitrary keys; drop any whose name isn't a
+      // valid attribute so a crafted key can't break out of the tag (server) or
+      // throw from `setAttribute` (client head-sync).
+      for (const [key, value] of Object.entries(entry)) {
+        if (VALID_ATTR_NAME.test(key)) attrs[key] = value
+      }
+      tags.push({ tag: 'link', attrs })
     }
   }
 
@@ -74,9 +81,18 @@ export function buildSeoTags(data: SeoData): SeoTagDescriptor[] {
   return tags
 }
 
+/**
+ * Valid HTML attribute name. Used to drop any attribute whose name (e.g. a key
+ * spread from a user-supplied custom `meta`/`link` entry) could otherwise break
+ * out of the tag and inject markup — attribute values are escaped, but names are
+ * emitted verbatim, so an unsafe name like `x onload=…` must be rejected.
+ */
+const VALID_ATTR_NAME = /^[A-Za-z_:][\w.:-]*$/
+
 /** Renders a descriptor to an HTML string with attribute/text escaping (server-side). */
 export function descriptorToHtml(d: SeoTagDescriptor): string {
   const attrs = Object.entries(d.attrs)
+    .filter(([key]) => VALID_ATTR_NAME.test(key))
     .map(([key, value]) => (value === '' ? key : `${key}="${escapeAttr(value)}"`))
     .join(' ')
   const open = attrs ? `${d.tag} ${attrs}` : d.tag

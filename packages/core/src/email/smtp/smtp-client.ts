@@ -18,6 +18,15 @@ interface ParsedSmtpUrl {
   password?: string
 }
 
+/** Advertised EHLO capabilities and the SASL mechanisms the server accepts. */
+interface SmtpCapabilities {
+  startTls: boolean
+  auth: Set<string>
+}
+
+/** Abort a server read if it stalls, so a hung endpoint can't wedge the Worker. */
+const RESPONSE_TIMEOUT_MS = 30_000
+
 function parseSmtpUrl(config: SmtpConfig): ParsedSmtpUrl {
   try {
     const parsed = new URL(config.url)
@@ -26,13 +35,28 @@ function parseSmtpUrl(config: SmtpConfig): ParsedSmtpUrl {
       host: parsed.hostname,
       port: parsed.port ? parseInt(parsed.port, 10) : (secure ? 465 : 587),
       secure,
-      username: parsed.username || undefined,
+      username: parsed.username ? decodeURIComponent(parsed.username) : undefined,
       password: parsed.password ? decodeURIComponent(parsed.password) : undefined,
     }
   }
   catch {
     throw new EmailError(`Invalid SMTP URL: ${config.url}`)
   }
+}
+
+/** Parse an EHLO reply into the capabilities/mechanisms it advertises. */
+function parseCapabilities(ehloText: string): SmtpCapabilities {
+  const auth = new Set<string>()
+  let startTls = false
+  for (const rawLine of ehloText.split('\r\n')) {
+    // Lines look like `250-STARTTLS` / `250 AUTH PLAIN LOGIN`; drop the code+sep.
+    const line = rawLine.slice(4).trim().toUpperCase()
+    if (!line) continue
+    const [keyword, ...rest] = line.split(/\s+/)
+    if (keyword === 'STARTTLS') startTls = true
+    if (keyword === 'AUTH') rest.forEach((m) => auth.add(m))
+  }
+  return { startTls, auth }
 }
 
 export class SmtpClient {
@@ -56,12 +80,32 @@ export class SmtpClient {
     const decoder = new TextDecoder()
     const encoder = new TextEncoder()
 
+    const readChunk = async (): Promise<ReadableStreamReadResult<Uint8Array>> => {
+      const read = reader.read() as Promise<ReadableStreamReadResult<Uint8Array>>
+      // Swallow a late settlement if the timeout wins, so it can't become an
+      // unhandled rejection after we've already moved on / closed the socket.
+      read.catch(() => { /* swallow late settlement; the timeout already rejected */ })
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new EmailError(`SMTP timeout: no response within ${RESPONSE_TIMEOUT_MS}ms`)),
+          RESPONSE_TIMEOUT_MS,
+        )
+      })
+      try {
+        return await Promise.race([read, timeout])
+      }
+      finally {
+        clearTimeout(timer)
+      }
+    }
+
     const readResponse = async (): Promise<{ code: number; text: string }> => {
       let buffer = ''
       while (true) {
-        const result = await reader.read()
+        const result = await readChunk()
         if (result.done) throw new EmailError('SMTP connection closed unexpectedly')
-        buffer += decoder.decode(result.value as Uint8Array, { stream: true })
+        buffer += decoder.decode(result.value, { stream: true })
 
         const lines = buffer.split('\r\n')
         for (let i = 0; i < lines.length - 1; i++) {
@@ -94,18 +138,30 @@ export class SmtpClient {
         throw new EmailError(`SMTP server rejected connection: ${greeting.text.trim()}`)
       }
 
-      const ehloResponse = await expectCode(`EHLO ${host}`, 250)
-      const supportsStartTls = ehloResponse.toUpperCase().includes('STARTTLS')
+      let capabilities = parseCapabilities(await expectCode(`EHLO ${host}`, 250))
 
-      if (!implicitTls && supportsStartTls) {
+      // Upgrade to TLS when the server offers STARTTLS, then re-issue EHLO — the
+      // post-TLS capability list is the authoritative one (servers commonly only
+      // advertise AUTH after the channel is encrypted).
+      let encrypted = implicitTls
+      if (!implicitTls && capabilities.startTls) {
         await expectCode('STARTTLS', 220)
         socket.startTls()
-        await expectCode(`EHLO ${host}`, 250)
+        capabilities = parseCapabilities(await expectCode(`EHLO ${host}`, 250))
+        encrypted = true
       }
 
       if (username && password) {
-        const credentials = Buffer.from(`\0${username}\0${password}`).toString('base64')
-        await expectCode(`AUTH PLAIN ${credentials}`, 235)
+        // Never put credentials on the wire in cleartext. If the URL is `smtp://`
+        // and the server didn't offer STARTTLS, this is a misconfiguration (or a
+        // STARTTLS-stripping downgrade attack) — fail loudly rather than leak the
+        // password. Use `smtps://` (implicit TLS) for servers without STARTTLS.
+        if (!encrypted) {
+          throw new EmailError(
+            'Refusing to send SMTP credentials over an unencrypted connection: the server did not offer STARTTLS. Use an smtps:// URL or a server that supports STARTTLS.',
+          )
+        }
+        await this.authenticate(expectCode, capabilities, username, password)
       }
 
       await expectCode(`MAIL FROM:<${options.from}>`, 250)
@@ -126,14 +182,41 @@ export class SmtpClient {
       const messageIdMatch = dataResponse.text.match(/<([^>]+)>/)
       const messageId = messageIdMatch?.[1] ?? `${Date.now()}@${host}`
 
-      await sendCommand('QUIT')
+      // QUIT is best-effort: the message is already accepted, so a failed/closed
+      // QUIT must not turn a successful send into a thrown error.
+      await sendCommand('QUIT').catch(() => { /* best-effort; message already accepted */ })
 
       return { messageId }
     }
     finally {
       reader.releaseLock()
       writer.releaseLock()
-      await socket.close()
+      await socket.close().catch(() => { /* best-effort close */ })
     }
+  }
+
+  /** Authenticate using a server-advertised SASL mechanism (PLAIN or LOGIN). */
+  private async authenticate(
+    expectCode: (command: string, expected: number) => Promise<string>,
+    capabilities: SmtpCapabilities,
+    username: string,
+    password: string,
+  ): Promise<void> {
+    if (capabilities.auth.has('PLAIN')) {
+      const credentials = Buffer.from(`\0${username}\0${password}`).toString('base64')
+      await expectCode(`AUTH PLAIN ${credentials}`, 235)
+      return
+    }
+    if (capabilities.auth.has('LOGIN')) {
+      await expectCode('AUTH LOGIN', 334)
+      await expectCode(Buffer.from(username).toString('base64'), 334)
+      await expectCode(Buffer.from(password).toString('base64'), 235)
+      return
+    }
+    throw new EmailError(
+      capabilities.auth.size === 0
+        ? 'SMTP credentials were provided but the server does not advertise AUTH.'
+        : `SMTP server does not support a known AUTH mechanism (offered: ${[...capabilities.auth].join(', ')}). Supported: PLAIN, LOGIN.`,
+    )
   }
 }

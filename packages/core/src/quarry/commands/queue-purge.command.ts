@@ -28,21 +28,25 @@ export class QueuePurgeCommand extends Command {
     }
 
     if (queueFilter) {
+      // Collect all matching keys first, then delete: removing keys mid-listing
+      // shifts the cursor and would skip jobs in a single pass.
+      const ids: string[] = []
       let cursor: string | undefined
-      let count = 0
 
       do {
         const result = await this.store.listFailedJobs({ cursor, limit: 100 })
         cursor = result.cursor
-
         for (const key of result.keys) {
           if (key.metadata.queue !== queueFilter) continue
-          await this.store.removeFailedJob(key.id)
-          count++
+          ids.push(key.id)
         }
       } while (cursor)
 
-      this.success(`Purged ${count} job(s) from queue "${queueFilter}"`)
+      for (const id of ids) {
+        await this.store.removeFailedJob(id)
+      }
+
+      this.success(`Purged ${ids.length} job(s) from queue "${queueFilter}"`)
     } else {
       await this.store.purgeFailedJobs()
       this.success('Purged all failed jobs')

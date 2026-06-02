@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EmailError } from '../email.error'
 
 const encoder = new TextEncoder()
@@ -24,11 +24,27 @@ function createMockSocket(responses: string[]) {
       readable,
       writable,
       startTls: () => { startTlsCalled = true },
-      close: vi.fn(),
+      close: vi.fn(() => Promise.resolve()),
       closed: Promise.resolve(),
     },
     get startTlsCalled() { return startTlsCalled },
   }
+}
+
+// EHLO replies. The first EHLO advertises STARTTLS; the post-TLS EHLO advertises
+// the AUTH mechanisms (servers commonly only offer AUTH once encrypted).
+const EHLO_STARTTLS = '250-smtp.example.com\r\n250-STARTTLS\r\n250 OK\r\n'
+const EHLO_AUTH_PLAIN = '250-smtp.example.com\r\n250-AUTH PLAIN LOGIN\r\n250 OK\r\n'
+
+/** Greeting → EHLO(STARTTLS) → STARTTLS → EHLO(AUTH) → AUTH-235. */
+function authHandshake(): string[] {
+  return [
+    '220 smtp.example.com ESMTP\r\n',
+    EHLO_STARTTLS,
+    '220 Ready to start TLS\r\n',
+    EHLO_AUTH_PLAIN,
+    '235 Authentication successful\r\n',
+  ]
 }
 
 vi.mock('cloudflare:sockets', () => ({
@@ -57,11 +73,7 @@ describe('SmtpClient', () => {
   describe('Connection & Handshake (RFC 5321)', () => {
     it('should connect and complete SMTP handshake', async () => {
       const { socket } = createMockSocket([
-        '220 smtp.example.com ESMTP\r\n',
-        '250-smtp.example.com\r\n250-STARTTLS\r\n250 OK\r\n',
-        '220 Ready to start TLS\r\n',
-        '250-smtp.example.com\r\n250 OK\r\n',
-        '235 Authentication successful\r\n',
+        ...authHandshake(),
         '250 OK\r\n',
         '250 OK\r\n',
         '354 Start mail input\r\n',
@@ -94,11 +106,7 @@ describe('SmtpClient', () => {
   describe('STARTTLS (RFC 3207)', () => {
     it('should use STARTTLS when server advertises it in EHLO', async () => {
       const mock = createMockSocket([
-        '220 smtp.example.com ESMTP\r\n',
-        '250-smtp.example.com\r\n250-STARTTLS\r\n250 OK\r\n',
-        '220 Ready to start TLS\r\n',
-        '250 OK\r\n',
-        '235 OK\r\n',
+        ...authHandshake(),
         '250 OK\r\n',
         '250 OK\r\n',
         '354 Go ahead\r\n',
@@ -113,29 +121,52 @@ describe('SmtpClient', () => {
       expect(mock.startTlsCalled).toBe(true)
     })
 
-    it('should skip STARTTLS when server does not advertise it', async () => {
+    it('should refuse to send credentials when the server does not offer STARTTLS', async () => {
+      // smtp:// + credentials + no STARTTLS would put the password on the wire in
+      // cleartext (a STARTTLS-stripping downgrade). The client must fail loudly.
       const mock = createMockSocket([
         '220 smtp.example.com ESMTP\r\n',
-        '250 OK\r\n',
-        '235 OK\r\n',
-        '250 OK\r\n',
-        '250 OK\r\n',
-        '354 Go ahead\r\n',
-        '250 OK id=<msg@host>\r\n',
-        '221 Bye\r\n',
+        '250 OK\r\n', // EHLO: no STARTTLS, no AUTH
       ])
       mockedConnect.mockReturnValue(mock.socket as any)
 
       const client = new SmtpClient({ url: 'smtp://user:pass@smtp.example.com:587' })
-      await client.send('test', sendOptions)
-
+      await expect(client.send('test', sendOptions)).rejects.toThrow(/unencrypted/i)
       expect(mock.startTlsCalled).toBe(false)
+    })
+
+    it('should send in plaintext without auth when no credentials are set (e.g. Mailpit)', async () => {
+      // Local dev servers (Mailpit on :1025) require no auth and offer no
+      // STARTTLS. With no credentials there is no secret to protect, so a plain
+      // connection is allowed and no AUTH is attempted.
+      const writtenData: string[] = []
+      const { socket } = createMockSocket([
+        '220 mailpit\r\n',
+        '250 OK\r\n', // EHLO: no STARTTLS, no AUTH
+        '250 OK\r\n', // MAIL FROM
+        '250 OK\r\n', // RCPT TO
+        '354 Go\r\n', // DATA
+        '250 OK id=<m@h>\r\n', // body
+        '221 Bye\r\n', // QUIT
+      ])
+      const writable = new WritableStream({
+        write(chunk) { writtenData.push(new TextDecoder().decode(chunk)) },
+      })
+      Object.defineProperty(socket, 'writable', { value: writable })
+      mockedConnect.mockReturnValue(socket as any)
+
+      const client = new SmtpClient({ url: 'smtp://localhost:1025' })
+      const result = await client.send('test', sendOptions)
+
+      expect(result.messageId).toBeDefined()
+      expect(writtenData.find(d => d.startsWith('AUTH'))).toBeUndefined()
+      expect(writtenData.find(d => d.startsWith('STARTTLS'))).toBeUndefined()
     })
 
     it('should use implicit TLS for port 465', async () => {
       const { socket } = createMockSocket([
         '220 smtp.example.com ESMTP\r\n',
-        '250 OK\r\n',
+        EHLO_AUTH_PLAIN, // implicit TLS: AUTH advertised on the first (encrypted) EHLO
         '235 OK\r\n',
         '250 OK\r\n',
         '250 OK\r\n',
@@ -159,9 +190,7 @@ describe('SmtpClient', () => {
     it('should send AUTH PLAIN with base64-encoded credentials', async () => {
       const writtenData: string[] = []
       const { socket } = createMockSocket([
-        '220 smtp.example.com ESMTP\r\n',
-        '250 OK\r\n',
-        '235 OK\r\n',
+        ...authHandshake(),
         '250 OK\r\n',
         '250 OK\r\n',
         '354 Go\r\n',
@@ -185,6 +214,49 @@ describe('SmtpClient', () => {
       const credentials = authCommand!.replace('AUTH PLAIN ', '').replace('\r\n', '')
       const decoded = Buffer.from(credentials, 'base64').toString()
       expect(decoded).toBe('\0user\0pass')
+    })
+
+    it('should use AUTH LOGIN when PLAIN is not advertised', async () => {
+      const writtenData: string[] = []
+      const { socket } = createMockSocket([
+        '220 smtp.example.com ESMTP\r\n',
+        EHLO_STARTTLS,
+        '220 Ready\r\n',
+        '250-smtp.example.com\r\n250-AUTH LOGIN\r\n250 OK\r\n', // only LOGIN
+        '334 VXNlcm5hbWU6\r\n', // username prompt
+        '334 UGFzc3dvcmQ6\r\n', // password prompt
+        '235 OK\r\n',
+        '250 OK\r\n',
+        '250 OK\r\n',
+        '354 Go\r\n',
+        '250 OK id=<m@h>\r\n',
+        '221 Bye\r\n',
+      ])
+      const writable = new WritableStream({
+        write(chunk) { writtenData.push(new TextDecoder().decode(chunk)) },
+      })
+      Object.defineProperty(socket, 'writable', { value: writable })
+      mockedConnect.mockReturnValue(socket as any)
+
+      const client = new SmtpClient(smtpConfig)
+      await client.send('test', sendOptions)
+
+      expect(writtenData.find(d => d.startsWith('AUTH LOGIN'))).toBeDefined()
+      expect(writtenData).toContainEqual(Buffer.from('user').toString('base64') + '\r\n')
+      expect(writtenData).toContainEqual(Buffer.from('pass').toString('base64') + '\r\n')
+    })
+
+    it('should throw when credentials are set but the server advertises no AUTH', async () => {
+      const { socket } = createMockSocket([
+        '220 smtp.example.com ESMTP\r\n',
+        EHLO_STARTTLS,
+        '220 Ready\r\n',
+        '250 OK\r\n', // post-TLS EHLO advertises no AUTH
+      ])
+      mockedConnect.mockReturnValue(socket as any)
+
+      const client = new SmtpClient(smtpConfig)
+      await expect(client.send('test', sendOptions)).rejects.toThrow(/does not advertise AUTH/i)
     })
 
     it('should skip auth when no username/password provided', async () => {
@@ -218,9 +290,7 @@ describe('SmtpClient', () => {
     it('should send MAIL FROM and RCPT TO for each recipient', async () => {
       const writtenData: string[] = []
       const { socket } = createMockSocket([
-        '220 smtp.example.com ESMTP\r\n',
-        '250 OK\r\n',
-        '235 OK\r\n',
+        ...authHandshake(),
         '250 OK\r\n',
         '250 OK\r\n',
         '250 OK\r\n',
@@ -253,9 +323,7 @@ describe('SmtpClient', () => {
     it('should dot-stuff lines starting with a period', async () => {
       const writtenData: string[] = []
       const { socket } = createMockSocket([
-        '220 smtp.example.com ESMTP\r\n',
-        '250 OK\r\n',
-        '235 OK\r\n',
+        ...authHandshake(),
         '250 OK\r\n',
         '250 OK\r\n',
         '354 Go\r\n',
@@ -281,9 +349,7 @@ describe('SmtpClient', () => {
     it('should dot-stuff a message body starting with a period (RFC 5321 §4.5.2)', async () => {
       const writtenData: string[] = []
       const { socket } = createMockSocket([
-        '220 smtp.example.com ESMTP\r\n',
-        '250 OK\r\n',
-        '235 OK\r\n',
+        ...authHandshake(),
         '250 OK\r\n',
         '250 OK\r\n',
         '354 Go\r\n',
@@ -308,9 +374,7 @@ describe('SmtpClient', () => {
 
     it('should extract messageId from server response', async () => {
       const { socket } = createMockSocket([
-        '220 smtp.example.com ESMTP\r\n',
-        '250 OK\r\n',
-        '235 OK\r\n',
+        ...authHandshake(),
         '250 OK\r\n',
         '250 OK\r\n',
         '354 Go\r\n',
@@ -359,11 +423,11 @@ describe('SmtpClient', () => {
       )
     })
 
-    it('should decode URL-encoded passwords', async () => {
+    it('should decode URL-encoded usernames and passwords', async () => {
       const writtenData: string[] = []
       const { socket } = createMockSocket([
-        '220 OK\r\n', '250 OK\r\n',
-        '235 OK\r\n', '250 OK\r\n', '250 OK\r\n', '354 Go\r\n', '250 OK id=<m@h>\r\n', '221 Bye\r\n',
+        ...authHandshake(),
+        '250 OK\r\n', '250 OK\r\n', '354 Go\r\n', '250 OK id=<m@h>\r\n', '221 Bye\r\n',
       ])
 
       const writable = new WritableStream({
@@ -372,18 +436,44 @@ describe('SmtpClient', () => {
       Object.defineProperty(socket, 'writable', { value: writable })
       mockedConnect.mockReturnValue(socket as any)
 
-      const client = new SmtpClient({ url: 'smtp://user:p%40ss%23word@smtp.test.com:587' })
+      // username "user@host" and password "p@ss#word" both percent-encoded.
+      const client = new SmtpClient({ url: 'smtp://user%40host:p%40ss%23word@smtp.test.com:587' })
       await client.send('test', sendOptions)
 
       const authCommand = writtenData.find(d => d.startsWith('AUTH PLAIN'))
       expect(authCommand).toBeDefined()
       const credentials = authCommand!.replace('AUTH PLAIN ', '').replace('\r\n', '')
       const decoded = Buffer.from(credentials, 'base64').toString()
-      expect(decoded).toBe('\0user\0p@ss#word')
+      expect(decoded).toBe('\0user@host\0p@ss#word')
     })
 
     it('should throw on invalid URL', () => {
       expect(() => new SmtpClient({ url: 'not-a-url' })).toThrow(EmailError)
+    })
+  })
+
+  describe('Timeout', () => {
+    beforeEach(() => { vi.useFakeTimers() })
+    afterEach(() => { vi.useRealTimers() })
+
+    it('should abort when the server never responds', async () => {
+      // A readable that never enqueues — read() hangs until the timeout fires.
+      const readable = new ReadableStream({ pull() { /* never enqueue */ } })
+      const writable = new WritableStream({ write() { /* no-op */ } })
+      const socket = {
+        readable,
+        writable,
+        startTls: () => { /* no-op for mock */ },
+        close: vi.fn(() => Promise.resolve()),
+        closed: Promise.resolve(),
+      }
+      mockedConnect.mockReturnValue(socket as any)
+
+      const client = new SmtpClient(smtpConfig)
+      const promise = client.send('test', sendOptions)
+      const assertion = expect(promise).rejects.toThrow(/timeout/i)
+      await vi.advanceTimersByTimeAsync(30_001)
+      await assertion
     })
   })
 
@@ -402,9 +492,7 @@ describe('SmtpClient', () => {
 
     it('should throw EmailError on rejected MAIL FROM', async () => {
       const { socket } = createMockSocket([
-        '220 smtp.example.com ESMTP\r\n',
-        '250 OK\r\n',
-        '235 OK\r\n',
+        ...authHandshake(),
         '550 Sender rejected\r\n',
       ])
       mockedConnect.mockReturnValue(socket as any)
@@ -415,9 +503,7 @@ describe('SmtpClient', () => {
 
     it('should throw EmailError on rejected RCPT TO', async () => {
       const { socket } = createMockSocket([
-        '220 smtp.example.com ESMTP\r\n',
-        '250 OK\r\n',
-        '235 OK\r\n',
+        ...authHandshake(),
         '250 OK\r\n',
         '550 Recipient rejected\r\n',
       ])
@@ -430,7 +516,9 @@ describe('SmtpClient', () => {
     it('should throw EmailError on AUTH failure (535)', async () => {
       const { socket } = createMockSocket([
         '220 smtp.example.com ESMTP\r\n',
-        '250 OK\r\n',
+        EHLO_STARTTLS,
+        '220 Ready\r\n',
+        EHLO_AUTH_PLAIN,
         '535 Authentication failed\r\n',
       ])
       mockedConnect.mockReturnValue(socket as any)
@@ -450,7 +538,7 @@ describe('SmtpClient', () => {
         readable,
         writable,
         startTls: () => { /* no-op for mock */ },
-        close: vi.fn(),
+        close: vi.fn(() => Promise.resolve()),
         closed: Promise.resolve(),
       }
       mockedConnect.mockReturnValue(socket as any)
@@ -461,9 +549,7 @@ describe('SmtpClient', () => {
 
     it('should throw EmailError on DATA body rejection', async () => {
       const { socket } = createMockSocket([
-        '220 smtp.example.com ESMTP\r\n',
-        '250 OK\r\n',
-        '235 OK\r\n',
+        ...authHandshake(),
         '250 OK\r\n',
         '250 OK\r\n',
         '354 Go\r\n',
@@ -477,9 +563,7 @@ describe('SmtpClient', () => {
 
     it('should generate fallback messageId when server response has none', async () => {
       const { socket } = createMockSocket([
-        '220 smtp.example.com ESMTP\r\n',
-        '250 OK\r\n',
-        '235 OK\r\n',
+        ...authHandshake(),
         '250 OK\r\n',
         '250 OK\r\n',
         '354 Go\r\n',

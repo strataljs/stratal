@@ -116,9 +116,11 @@ describe('QueueManager', () => {
       consumer.onError!.mockResolvedValue(undefined)
       consumerRegistry.register(consumer)
 
+      // maxRetries is 3, attempts is 1-based: delivery 4 is the first that
+      // exceeds the 3-retry budget, so this is where the job is given up on.
       const batch = createMockBatch([
         { id: '1', type: 'email.send', payload: {} },
-      ], 3)
+      ], 4)
 
       await queueManager.processBatch('notifications-queue', batch)
 
@@ -131,6 +133,24 @@ describe('QueueManager', () => {
       )
       expect(batch.messages[0].ack).toHaveBeenCalled()
       expect(batch.messages[0].retry).not.toHaveBeenCalled()
+    })
+
+    it('should still retry on the attempt equal to maxRetries (1-based attempts)', async () => {
+      const consumer = createConsumer(['email.send'])
+      consumer.handle.mockRejectedValue(new Error('Processing failed'))
+      consumer.onError!.mockResolvedValue(undefined)
+      consumerRegistry.register(consumer)
+
+      // attempts === maxRetries (3): the 3rd delivery still has a retry left.
+      const batch = createMockBatch([
+        { id: '1', type: 'email.send', payload: {} },
+      ], 3)
+
+      await queueManager.processBatch('notifications-queue', batch)
+
+      expect(batch.messages[0].retry).toHaveBeenCalled()
+      expect(batch.messages[0].ack).not.toHaveBeenCalled()
+      expect(mockStore.storeFailedJob).not.toHaveBeenCalled()
     })
 
     it('should handle multiple consumers for same message type', async () => {

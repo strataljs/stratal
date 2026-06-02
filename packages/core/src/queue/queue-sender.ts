@@ -59,8 +59,35 @@ export class QueueSender implements IQueueSender {
   }
 
   private async generateIdempotencyKey(type: string, payload: unknown): Promise<string> {
-    const data = new TextEncoder().encode(JSON.stringify({ type, payload }))
+    // Use a stable, key-sorted serialization: `JSON.stringify` preserves
+    // insertion order, so two semantically identical payloads with differently
+    // ordered keys would otherwise hash differently and defeat deduplication.
+    const data = new TextEncoder().encode(stableStringify({ type, payload }))
     const hash = await crypto.subtle.digest('SHA-256', data)
     return `queue:${Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('')}`
   }
+}
+
+/**
+ * Deterministic JSON serialization: object keys are emitted in sorted order at
+ * every level so the output depends only on the data, not on key insertion
+ * order. Arrays keep their order (order is significant). Used to derive a stable
+ * idempotency hash from a message's `type` + `payload`.
+ */
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value) ?? 'null'
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`
+  }
+  const entries = Object.keys(value as Record<string, unknown>)
+    .sort()
+    .map((key) => {
+      const v = (value as Record<string, unknown>)[key]
+      if (v === undefined) return undefined
+      return `${JSON.stringify(key)}:${stableStringify(v)}`
+    })
+    .filter((entry): entry is string => entry !== undefined)
+  return `{${entries.join(',')}}`
 }

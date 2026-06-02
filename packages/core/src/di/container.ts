@@ -235,16 +235,51 @@ export class Container {
   // ── Internal ──────────────────────────────────────────────────
 
   /**
-   * Direct constructor dependency tokens of a class, with lazy tokens unwrapped
-   * to the concrete token they resolve to. Recorded when a request-scoped
-   * instance is cached so {@link invalidateRequestCache} can find dependents.
+   * Transitive constructor dependency tokens of a class, with lazy tokens
+   * unwrapped to the concrete token they resolve to. Recorded when a
+   * request-scoped instance is cached so {@link invalidateRequestCache} can find
+   * dependents.
+   *
+   * The walk follows class/alias registrations through transient intermediaries:
+   * a cached service A that depends on a (non-cached) transient B which depends
+   * on token C must still be invalidated when C is re-registered, even though B
+   * itself is never cached. Value/factory/lazy providers are not traversed —
+   * their dependencies aren't introspectable (factory) or would re-enter a
+   * cycle (lazy). Over-collecting is safe: it only rebuilds extra request-scoped
+   * instances, which is correct.
    */
   private collectDependencyTokens(Class: Constructor): Set<InjectionToken> {
     const deps = new Set<InjectionToken>()
-    for (const { token } of getInjectionTokens(Class).values()) {
-      deps.add(isLazyToken(token) ? token.factory() : token)
+    const visited = new Set<Constructor>()
+
+    const walk = (cls: Constructor): void => {
+      if (visited.has(cls)) return
+      visited.add(cls)
+      for (const { token } of getInjectionTokens(cls).values()) {
+        const real = isLazyToken(token) ? token.factory() : token
+        deps.add(real)
+        const childClass = this.classForToken(real)
+        if (childClass) walk(childClass)
+      }
     }
+
+    walk(Class)
     return deps
+  }
+
+  /** The implementing class for a token, following class/alias registrations. */
+  private classForToken(token: InjectionToken): Constructor | undefined {
+    const reg = this.findRegistration(token)
+    if (reg) {
+      if (reg.kind === 'class') return reg.useClass
+      if (reg.kind === 'alias') return this.classForToken(reg.target)
+      return undefined
+    }
+    // A bare constructor token that is auto-resolvable (carries DI metadata).
+    if (typeof token === 'function' && getClassMetadata(token as Constructor)) {
+      return token as unknown as Constructor
+    }
+    return undefined
   }
 
   /**

@@ -132,9 +132,15 @@ export async function dropDatabase(adminConn: string, dbName: string): Promise<v
 
 /** Drop every per-file database matching the prefix (recovers leaks). */
 async function sweepStaleDatabases(adminConn: string, prefix: string): Promise<void> {
+  // Escape both the SQL-string quote and the LIKE metacharacters (`\`, `%`, `_`)
+  // so a prefix containing `_` (a single-char wildcard) can't over-match and drop
+  // an unrelated database. `\` is the explicit ESCAPE character below.
+  const likePrefix = prefix
+    .replace(/'/g, "''")
+    .replace(/[\\%_]/g, (c) => `\\${c}`)
   await withAdminClient(adminConn, async (query) => {
     const { rows } = (await query(
-      `SELECT datname FROM pg_database WHERE datname LIKE '${prefix.replace(/'/g, "''")}%'`,
+      `SELECT datname FROM pg_database WHERE datname LIKE '${likePrefix}%' ESCAPE '\\'`,
     )) as { rows: { datname: string }[] }
     for (const { datname } of rows) {
       await query(`DROP DATABASE IF EXISTS ${quoteIdent(datname)} WITH (FORCE)`)
