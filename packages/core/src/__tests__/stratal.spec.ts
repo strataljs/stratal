@@ -9,6 +9,8 @@ import { Listener, On } from '../events';
 import { z } from '../i18n/validation/zod';
 import { LogLevel } from '../logger';
 import { Module } from '../module/module.decorator';
+import { Command } from '../quarry';
+import { InjectQueue, QueueModule, type IQueueConsumer, type IQueueSender, type QueueMessage } from '../queue';
 import { Controller } from '../router/decorators/controller.decorator';
 import { Route } from '../router/decorators/route.decorator';
 import type { RouterContext } from '../router/router-context';
@@ -366,5 +368,94 @@ describe('registerCronJobs (static vs instance schedule)', () => {
     expect(instanceScheduleExecutions).toHaveLength(0)
 
     await app.shutdown()
+  })
+})
+
+// ──────────────────────────────────────────────────────────────────
+// Regression: a CLI command is a non-HTTP scope that may dispatch to
+// queues and emit events (e.g. tenant:bootstrap → email.send /
+// tenant.geo.seed). handleCommand must initialize the queue subsystem
+// so consumers are registered; otherwise the sync provider finds zero
+// consumers and silently drops every dispatched message.
+// ──────────────────────────────────────────────────────────────────
+
+const commandQueueHandled: string[] = []
+const commandEventFired: string[] = []
+
+@Transient()
+class CommandTriggeredConsumer implements IQueueConsumer<{ tag: string }> {
+  readonly messageTypes = ['command.test.message']
+   handle(message: QueueMessage<{ tag: string }>): Promise<void> {
+    commandQueueHandled.push(message.payload.tag)
+    return Promise.resolve()
+  }
+  async onError(): Promise<void> { /* no-op */ }
+}
+
+@Listener()
+class CommandTriggeredListener {
+  @On('command.test.event' as never)
+  handle(ctx: EventContext<never>): void {
+    commandEventFired.push((ctx as { data?: { tag?: string } }).data?.tag ?? 'no-tag')
+  }
+}
+
+@Transient()
+class DispatchingCommand extends Command {
+  static command = 'test:dispatch'
+  static description = 'Dispatches a queue message and emits an event'
+
+  constructor(
+    @InjectQueue('TEST_QUEUE') private readonly queue: IQueueSender,
+    @inject(DI_TOKENS.EventRegistry) private readonly events: IEventRegistry,
+  ) {
+    super()
+  }
+
+  async handle(): Promise<void> {
+    await this.events.emit('command.test.event' as never, { data: { tag: 'from-command' } } as never)
+    await this.queue.dispatch({ type: 'command.test.message', payload: { tag: 'from-command' } })
+  }
+}
+
+@Module({
+  imports: [
+    QueueModule.forRootAsync({ useFactory: () => ({ provider: 'sync' }) }),
+    QueueModule.registerQueue('TEST_QUEUE'),
+  ],
+  providers: [DispatchingCommand, CommandTriggeredListener],
+  consumers: [CommandTriggeredConsumer],
+})
+class CommandQueueModule { }
+
+describe('handleCommand (queue + event processing)', () => {
+  let app: Application
+
+  beforeEach(async () => {
+    commandQueueHandled.length = 0
+    commandEventFired.length = 0
+    app = new Application({
+      module: CommandQueueModule,
+      logging: { level: LogLevel.ERROR },
+      env: mockEnv,
+      ctx: { waitUntil: vi.fn() },
+    })
+    await app.initialize()
+  })
+
+  afterEach(async () => {
+    await app.shutdown()
+  })
+
+  it('processes queue messages dispatched from a CLI command (sync provider)', async () => {
+    await app.handleCommand('test:dispatch')
+
+    expect(commandQueueHandled).toEqual(['from-command'])
+  })
+
+  it('fires @Listener() handlers for events emitted from a CLI command', async () => {
+    await app.handleCommand('test:dispatch')
+
+    expect(commandEventFired).toEqual(['from-command'])
   })
 })

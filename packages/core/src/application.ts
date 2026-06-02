@@ -317,6 +317,13 @@ export class Application {
 
   async handleCommand(name: string, input?: CommandInput): Promise<CommandResult> {
     await this.initializeRouting()
+    // A CLI command is a non-HTTP scope that can dispatch to queues and emit
+    // events from arbitrary user code (e.g. tenant:bootstrap → email.send /
+    // tenant.geo.seed). Initialize the queue subsystem so consumers are
+    // registered — otherwise the (dev/CLI) sync provider finds zero consumers
+    // and silently drops every dispatched message. Events are already wired by
+    // initializeRouting; both inits are memoized, so this is idempotent.
+    await this.initializeQueue()
     // Resolve QuarryRegistry lazily (deferred from bootstrap)
     this.quarry ??= this._container.resolve<QuarryRegistry>(DI_TOKENS.Quarry)
     const mockContext = this.createMockRouterContext('en')
