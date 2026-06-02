@@ -89,6 +89,21 @@ async function main(): Promise<void> {
     if (existsSync(envPath)) process.loadEnvFile(envPath)
   }
 
+  // Bridge the documented `WRANGLER_REGISTRY_PATH` to `MINIFLARE_REGISTRY_PATH`,
+  // the variable Miniflare's `getDefaultDevRegistryPath()` actually reads.
+  // `wrangler dev` performs the same translation internally; mirroring it here
+  // lets a single documented env var redirect the dev service registry for BOTH
+  // this CLI's Miniflare (below) AND any vite dev server a command launches
+  // (`@cloudflare/vite-plugin` also resolves its registry via
+  // `getDefaultDevRegistryPath()`). That allows several isolated dev environments
+  // to run in parallel without sharing the global `~/.wrangler/registry`, where
+  // their identically-named workers would otherwise overwrite each other and
+  // break cross-worker service-binding resolution. Only set when unset so an
+  // explicit override still wins.
+  if (process.env.WRANGLER_REGISTRY_PATH && !process.env.MINIFLARE_REGISTRY_PATH) {
+    process.env.MINIFLARE_REGISTRY_PATH = process.env.WRANGLER_REGISTRY_PATH
+  }
+
   const config = readConfig({ config: configPath, env: environment })
   const { workerOptions } = getMiniflareWorkerOptions(config, environment)
 
