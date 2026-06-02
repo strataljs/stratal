@@ -42,6 +42,14 @@ function encodeHeaderValue(value: string): string {
 }
 
 /**
+ * Escape a value for an RFC 5322 quoted-string: backslash MUST be escaped first
+ * (so the escapes added for `"` aren't themselves re-escaped), then `"`.
+ */
+function escapeQuotedString(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+/**
  * Encode a MIME parameter (e.g. `name`/`filename`) safely. ASCII values are
  * emitted as a quoted-string with `"`/`\` escaped; non-ASCII values use the
  * RFC 2231 extended syntax (`param*=UTF-8''…`). CR/LF are always stripped so a
@@ -50,8 +58,7 @@ function encodeHeaderValue(value: string): string {
 function encodeMimeParam(param: string, value: string): string {
   const clean = stripCrlf(value)
   if (isAscii(clean)) {
-    const escaped = clean.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-    return `${param}="${escaped}"`
+    return `${param}="${escapeQuotedString(clean)}"`
   }
   const encoded = Array.from(Buffer.from(clean, 'utf-8'))
     .map((b) => (/[A-Za-z0-9!#$&+\-.^_`|~]/.test(String.fromCharCode(b))
@@ -69,7 +76,8 @@ function extractEmail(address: string): string {
 function formatAddress(email: string, name?: string): string {
   const cleanEmail = stripCrlf(email)
   if (!name) return cleanEmail
-  const encodedName = isAscii(stripCrlf(name)) ? `"${stripCrlf(name).replace(/"/g, '\\"')}"` : encodeHeaderValue(name)
+  const cleanName = stripCrlf(name)
+  const encodedName = isAscii(cleanName) ? `"${escapeQuotedString(cleanName)}"` : encodeHeaderValue(name)
   return `${encodedName} <${cleanEmail}>`
 }
 

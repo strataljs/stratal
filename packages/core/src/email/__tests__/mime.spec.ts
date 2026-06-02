@@ -337,6 +337,17 @@ describe('buildMimeMessage', () => {
       expect(headers['From']).toContain('\\"Bob\\"')
     })
 
+    it('should escape backslashes before quotes in display names', async () => {
+      const from = { name: 'Back\\slash "Q"', email: 'bs@example.com' }
+      const message: ResolvedEmailMessage = { to: 'user@example.com', subject: 'Test', html: '<p>Hi</p>' }
+      const result = await buildMimeMessage(message, from)
+      const headers = parseHeaders(result.raw)
+
+      // Each literal backslash → \\ and each quote → \" ; order matters so the
+      // escapes added for the quote aren't themselves re-escaped.
+      expect(headers['From']).toBe('"Back\\\\slash \\"Q\\"" <bs@example.com>')
+    })
+
     it('should use CRLF line endings throughout', async () => {
       const message: ResolvedEmailMessage = { to: 'user@example.com', subject: 'Test', html: '<p>Hi</p>' }
       const result = await buildMimeMessage(message, defaultFrom)
