@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import { createMock, type DeepMocked } from '@stratal/testing/mocks'
-import type { Container } from '../../di/container'
-import { runWithContainer } from '../../di/container-storage'
-import type { Constructor } from '../../types'
-import { ConsumerRegistry } from '../consumer-registry'
-import { SyncQueueProvider } from '../providers/sync-queue.provider'
-import type { IQueueConsumer, QueueMessage } from '../queue-consumer'
+import { createMock, type DeepMocked } from '@stratal/testing/mocks';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { Container } from '../../di/container';
+import { runWithContainer } from '../../di/container-storage';
+import type { Constructor } from '../../types';
+import { ConsumerRegistry } from '../consumer-registry';
+import { SyncQueueProvider } from '../providers/sync-queue.provider';
+import type { IQueueConsumer, QueueMessage } from '../queue-consumer';
 
 describe('SyncQueueProvider', () => {
   let provider: SyncQueueProvider
@@ -15,11 +15,13 @@ describe('SyncQueueProvider', () => {
 
   beforeEach(() => {
     registry = new ConsumerRegistry()
-    provider = new SyncQueueProvider(registry)
     instances = new Map()
     scope = {
       resolve: (token: Constructor<IQueueConsumer>) => instances.get(token),
     } as unknown as Container
+    // `root` is only used when there is no ambient scope; these tests wrap send()
+    // in runWithContainer(scope), so the ambient path is exercised.
+    provider = new SyncQueueProvider(registry, scope)
   })
 
   const createMessage = <T>(type: string, payload: T): QueueMessage<T> => ({
@@ -191,6 +193,30 @@ describe('SyncQueueProvider', () => {
 
       // Same consumer handles messages from both queues
       expect(consumer.handle).toHaveBeenCalledTimes(2)
+    })
+
+    it('establishes its own request scope when dispatched with no ambient scope', async () => {
+      // Regression: dispatching from a service called directly in a test (no
+      // surrounding runInScope) must still process — the provider creates its
+      // own request scope and resolves the consumer from it.
+      const handled: string[] = []
+      class RealConsumer implements IQueueConsumer {
+        readonly messageTypes = ['email.send']
+        async handle(message: QueueMessage): Promise<void> {
+          handled.push((message.payload as { to: string }).to)
+          return Promise.resolve()
+        }
+      }
+
+      const root = new Container()
+      root.register(RealConsumer)
+      registry.register(RealConsumer, ['email.send'])
+      const realProvider = new SyncQueueProvider(registry, root)
+
+      // No runWithContainer wrapper: getStore() is undefined here.
+      await realProvider.send('q', createMessage('email.send', { to: 'a@example.com' }))
+
+      expect(handled).toEqual(['a@example.com'])
     })
   })
 })
