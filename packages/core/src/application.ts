@@ -194,9 +194,17 @@ export class Application {
   }
 
   /**
-   * Wire event and queue handlers for a non-HTTP request scope (Durable
-   * Objects, Workflows, WorkerEntrypoints), which may emit events or dispatch
-   * to queues from arbitrary user code.
+   * Wire event and queue handlers for any non-HTTP request scope — queue
+   * batches, scheduled/cron runs, CLI commands, Durable Objects, Workflows,
+   * WorkerEntrypoints — all of which may emit events or dispatch to queues from
+   * arbitrary user code. This is the single source of truth for that wiring:
+   * every non-HTTP entry point routes through it rather than open-coding which
+   * subsystems to init, so a subsystem can't be silently dropped by a future
+   * refactor (the queue half was once lost from the command path that way).
+   *
+   * HTTP (`fetch`) deliberately does NOT use this: a fetch worker only enqueues
+   * to the async Cloudflare queue and never processes consumers inline, so it
+   * skips queue init via `initializeRouting`.
    */
   async ensureScopedHandlers(): Promise<void> {
     await this.initializeEventListeners()
@@ -258,8 +266,7 @@ export class Application {
   }
 
   async handleQueue(batch: MessageBatch, queueName: string): Promise<void> {
-    await this.initializeQueue()
-    await this.initializeEventListeners()
+    await this.ensureScopedHandlers()
 
     const firstMessage = batch.messages[0]?.body as QueueMessage | undefined
     const locale = firstMessage?.metadata?.locale ?? 'en'
@@ -279,7 +286,11 @@ export class Application {
 
   async handleScheduled(controller: ScheduledController): Promise<void> {
     const cronManager = await this.ensureCron()
-    await this.initializeEventListeners()
+    // A scheduled job is a non-HTTP scope that can emit events and dispatch to
+    // queues (timeout/reminder/digest emails) — wire both so dispatches aren't
+    // silently dropped by the sync provider. i18n is ensured independently for
+    // the job execution context. All inits are memoized, so this is idempotent.
+    await this.ensureScopedHandlers()
     await this.ensureI18n()
 
     const mockRouterContext = this.createMockRouterContext('en')
@@ -316,14 +327,15 @@ export class Application {
   }
 
   async handleCommand(name: string, input?: CommandInput): Promise<CommandResult> {
+    // Routing first: commands generate URLs via route() (e.g. tenant:bootstrap
+    // prints tenant URLs / builds email links).
     await this.initializeRouting()
     // A CLI command is a non-HTTP scope that can dispatch to queues and emit
     // events from arbitrary user code (e.g. tenant:bootstrap → email.send /
-    // tenant.geo.seed). Initialize the queue subsystem so consumers are
-    // registered — otherwise the (dev/CLI) sync provider finds zero consumers
-    // and silently drops every dispatched message. Events are already wired by
-    // initializeRouting; both inits are memoized, so this is idempotent.
-    await this.initializeQueue()
+    // tenant.geo.seed). Without this the dev/CLI sync provider finds zero
+    // consumers and silently drops every dispatched message. All inits are
+    // memoized, so the events half (already wired by routing) is a no-op here.
+    await this.ensureScopedHandlers()
     // Resolve QuarryRegistry lazily (deferred from bootstrap)
     this.quarry ??= this._container.resolve<QuarryRegistry>(DI_TOKENS.Quarry)
     const mockContext = this.createMockRouterContext('en')

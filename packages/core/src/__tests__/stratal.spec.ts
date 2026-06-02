@@ -459,3 +459,77 @@ describe('handleCommand (queue + event processing)', () => {
     expect(commandEventFired).toEqual(['from-command'])
   })
 })
+
+// ──────────────────────────────────────────────────────────────────
+// Regression: a scheduled (cron) job is a non-HTTP scope that may
+// dispatch to queues (timeout/reminder/digest emails). handleScheduled
+// must initialize the queue subsystem so consumers are registered;
+// otherwise the sync provider finds zero consumers and silently drops
+// every dispatched message — the same class of bug as the command path.
+// ──────────────────────────────────────────────────────────────────
+
+const scheduledQueueHandled: string[] = []
+
+@Transient()
+class ScheduledTriggeredConsumer implements IQueueConsumer<{ tag: string }> {
+  readonly messageTypes = ['scheduled.test.message']
+   handle(message: QueueMessage<{ tag: string }>): Promise<void> {
+    scheduledQueueHandled.push(message.payload.tag)
+    return Promise.resolve()
+  }
+  async onError(): Promise<void> { /* no-op */ }
+}
+
+@Transient()
+class DispatchingCronJob implements CronJob {
+  static schedule = '*/5 * * * *'
+
+  constructor(
+    @InjectQueue('TEST_QUEUE') private readonly queue: IQueueSender,
+  ) { }
+
+  async execute(): Promise<void> {
+    await this.queue.dispatch({ type: 'scheduled.test.message', payload: { tag: 'from-cron' } })
+  }
+}
+
+@Module({
+  imports: [
+    QueueModule.forRootAsync({ useFactory: () => ({ provider: 'sync' }) }),
+    QueueModule.registerQueue('TEST_QUEUE'),
+  ],
+  jobs: [DispatchingCronJob as Constructor],
+  consumers: [ScheduledTriggeredConsumer],
+})
+class ScheduledQueueModule { }
+
+describe('handleScheduled (queue processing from cron jobs)', () => {
+  let app: Application
+
+  beforeEach(async () => {
+    scheduledQueueHandled.length = 0
+    app = new Application({
+      module: ScheduledQueueModule,
+      logging: { level: LogLevel.ERROR },
+      env: mockEnv,
+      ctx: { waitUntil: vi.fn() },
+    })
+    await app.initialize()
+  })
+
+  afterEach(async () => {
+    await app.shutdown()
+  })
+
+  it('processes queue messages dispatched from a cron job (sync provider)', async () => {
+    const controller = {
+      scheduledTime: Date.now(),
+      cron: '*/5 * * * *',
+      noRetry: vi.fn(),
+    } as unknown as ScheduledController
+
+    await app.handleScheduled(controller)
+
+    expect(scheduledQueueHandled).toEqual(['from-cron'])
+  })
+})
