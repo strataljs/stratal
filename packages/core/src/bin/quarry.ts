@@ -1,12 +1,12 @@
-import { existsSync } from 'node:fs'
-import { createRequire, register } from 'node:module'
-import { dirname, join, resolve } from 'node:path'
-import { URL, pathToFileURL } from 'node:url'
-import type { MiniflareOptions } from 'miniflare'
-import type { QuarryRegistry } from 'stratal/quarry'
-import { type Application } from '../application'
-import { extractEnvFlag } from './argv'
-import { createDynamicCommands } from './commands/dynamic-command'
+import type { MiniflareOptions } from 'miniflare';
+import { existsSync } from 'node:fs';
+import { createRequire, register } from 'node:module';
+import { dirname, join, resolve } from 'node:path';
+import { URL, pathToFileURL } from 'node:url';
+import type { QuarryRegistry } from 'stratal/quarry';
+import { type Application } from '../application';
+import { extractEnvFlag } from './argv';
+import { createDynamicCommands } from './commands/dynamic-command';
 
 interface WranglerConfig {
   name?: string
@@ -79,6 +79,15 @@ async function main(): Promise<void> {
   const candidates = ['wrangler.jsonc', 'wrangler.json', 'wrangler.toml']
   const configName = candidates.find(c => existsSync(resolve(process.cwd(), c)))
   const configPath = configName ? resolve(process.cwd(), configName) : undefined
+
+  // Load .env into process.env before building Miniflare options, mirroring
+  // `wrangler dev`. Load base `.env`
+  // first, then the env-specific `.env.<environment>` (later load wins).
+  for (const envFile of ['.env', environment ? `.env.${environment}` : null]) {
+    if (!envFile) continue
+    const envPath = resolve(process.cwd(), envFile)
+    if (existsSync(envPath)) process.loadEnvFile(envPath)
+  }
 
   const config = readConfig({ config: configPath, env: environment })
   const { workerOptions } = getMiniflareWorkerOptions(config, environment)
