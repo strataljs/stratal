@@ -32,8 +32,11 @@ Maintainer rules for `@stratal/feature-flags`. Consumer API depth lives in
 
 ## Conventions
 
-- `FeatureFlagService` is `@Request`-scoped (the default-context resolver needs the
-  current `RouterContext`, resolved gracefully via `container.tryResolve`).
+- `FeatureFlagService` is `@Transient`. It works in and out of a request: the
+  default-context resolver runs only when a `RouterContext` is present (injected
+  with `isOptional`), and is skipped otherwise. It is **not** `@Request`-scoped —
+  request-scoped providers now throw when resolved outside a request, and this
+  service is designed to resolve from global/queue/cron scope too.
 - `use(binding)` returns a new **immutable** instance bound to another app — never
   mutate `this`.
 - Flags must be declared once in the `apps[].flags` manifest (the binding has no

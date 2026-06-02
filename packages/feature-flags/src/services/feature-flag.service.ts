@@ -1,5 +1,5 @@
 import type { StratalEnv } from 'stratal'
-import { DI_TOKENS, Request, inject } from 'stratal/di'
+import { DI_TOKENS, Transient, inject } from 'stratal/di'
 import { ROUTER_TOKENS, type RouterContext } from 'stratal/router'
 import { FeatureFlagError } from '../feature-flags.error'
 import { FEATURE_FLAG_TOKENS } from '../feature-flags.tokens'
@@ -37,7 +37,7 @@ import type {
  *
  * @see https://developers.cloudflare.com/flagship/binding/
  */
-@Request(FEATURE_FLAG_TOKENS.FeatureFlagService)
+@Transient(FEATURE_FLAG_TOKENS.FeatureFlagService)
 export class FeatureFlagService {
   private readonly apps = new Map<string, FeatureFlagApp>()
   private bindingName!: string
