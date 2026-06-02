@@ -133,6 +133,21 @@ export class Application {
     this.registerCommands()
     this.registerSeeders()
 
+    // Wire event listeners as part of initialization whenever the application
+    // declares any, so emitted events reach their handlers regardless of which
+    // entry point drives the app. Listener wiring otherwise happens lazily only
+    // on the HTTP router (`initializeRouting`) and queue/scheduled/command
+    // (`ensureScopedHandlers`) paths; any code that emits events without going
+    // through one of those — a direct service or repository call, an RPC
+    // entrypoint, or a Durable Object — would dispatch into a registry with no
+    // handlers attached, silently dropping the event. Guarded on there being
+    // listeners so applications with none still skip loading the events
+    // subsystem; `initializeEventListeners` dedups, so any later lazy trigger
+    // becomes a no-op.
+    if (this.moduleRegistry.getAllListeners().length > 0) {
+      await this.initializeEventListeners()
+    }
+
     // Cron only loads when the app actually declares scheduled jobs
     if (this.moduleRegistry.getAllJobs().length > 0) {
       await this.ensureCron()
