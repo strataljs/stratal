@@ -96,15 +96,23 @@ describe('InertiaService', () => {
   const options: InertiaModuleOptions = {
     rootView: '<html>@inertia</html>',
     version: '1.0',
+    ssr: {
+      bundle: vi.fn() as unknown as NonNullable<InertiaModuleOptions['ssr']>['bundle'],
+    },
+  }
+
+  function emptyStream(): ReadableStream<Uint8Array> {
+    return new ReadableStream<Uint8Array>({ start(controller) { controller.close() } })
   }
 
   beforeEach(() => {
     mockTemplate = {
-      render: vi.fn().mockReturnValue('<html><div id="app"></div></html>'),
+      renderStream: vi.fn().mockReturnValue(emptyStream()),
+      renderClientOnly: vi.fn().mockReturnValue('<html><div id="app"></div></html>'),
     } as unknown as TemplateService
 
     mockSsr = {
-      render: vi.fn().mockResolvedValue({ head: [], body: '' }),
+      render: vi.fn().mockResolvedValue({ head: [], stream: emptyStream() }),
     } as unknown as SsrRendererService
 
     mockSeo = {
@@ -140,7 +148,7 @@ describe('InertiaService', () => {
       expect(response.status).toBe(200)
       expect(response.headers.get('Content-Type')).toBe('text/html; charset=utf-8')
       expect(mockSsr.render).toHaveBeenCalled()
-      expect(mockTemplate.render).toHaveBeenCalled()
+      expect(mockTemplate.renderStream).toHaveBeenCalled()
     })
 
     it('should include render options in page object when true', async () => {
@@ -479,7 +487,7 @@ describe('InertiaService', () => {
       await service.render(ctx, 'Home', { message: 'Hello' })
 
       expect(mockSsr.render).not.toHaveBeenCalled()
-      expect(mockTemplate.render).toHaveBeenCalled()
+      expect(mockTemplate.renderClientOnly).toHaveBeenCalled()
     })
 
     it('should skip SSR when URL matches ssr.disabled pattern', async () => {
@@ -498,7 +506,7 @@ describe('InertiaService', () => {
       await ssrService.render(ctx, 'AdminDashboard', {})
 
       expect(mockSsr.render).not.toHaveBeenCalled()
-      expect(mockTemplate.render).toHaveBeenCalled()
+      expect(mockTemplate.renderClientOnly).toHaveBeenCalled()
     })
 
     it('should perform SSR for non-matching URL patterns', async () => {
@@ -518,19 +526,38 @@ describe('InertiaService', () => {
 
       expect(mockSsr.render).toHaveBeenCalled()
     })
+
+    it('matches ssr.disabled against the pathname even with a query string', async () => {
+      const ssrOptions: InertiaModuleOptions = {
+        rootView: '<html>@inertia</html>',
+        version: '1.0',
+        ssr: {
+          bundle: vi.fn() as unknown as InertiaModuleOptions['ssr'] extends { bundle: infer B } ? B : never,
+          disabled: ['admin/*'],
+        },
+      }
+
+      const ssrService = new InertiaService(ssrOptions, mockTemplate, mockSsr, mockSeo)
+      const ctx = createMockContext({ url: 'http://localhost/admin/dashboard?tab=users' })
+
+      await ssrService.render(ctx, 'AdminDashboard', {})
+
+      expect(mockSsr.render).not.toHaveBeenCalled()
+      expect(mockTemplate.renderClientOnly).toHaveBeenCalled()
+    })
   })
 
   describe('seo injection', () => {
     it('shares the resolved seo prop and injects its tags into the head', async () => {
       ;(mockSeo.resolve as ReturnType<typeof vi.fn>).mockResolvedValue({ title: 'Dashboard' })
       ;(mockSeo.tagsFor as ReturnType<typeof vi.fn>).mockReturnValue(['<title data-seo>Dashboard</title>'])
-      ;(mockSsr.render as ReturnType<typeof vi.fn>).mockResolvedValue({ head: ['<meta charset="utf-8" />'], body: '' })
+      ;(mockSsr.render as ReturnType<typeof vi.fn>).mockResolvedValue({ head: ['<meta charset="utf-8" />'], stream: emptyStream() })
 
       const ctx = createMockContext()
       await service.render(ctx, 'Home', { message: 'Hello' })
 
       expect(mockSeo.resolve).toHaveBeenCalledWith(ctx)
-      const [page, headArg] = (mockTemplate.render as ReturnType<typeof vi.fn>).mock.calls[0]
+      const [page, headArg] = (mockTemplate.renderStream as ReturnType<typeof vi.fn>).mock.calls[0]
       expect((page as Page).props).toMatchObject({ seo: { title: 'Dashboard' }, message: 'Hello' })
       expect((page as Page).sharedProps).toContain('seo')
       // SEO tags (hreflang now among them) are appended after the SSR head.

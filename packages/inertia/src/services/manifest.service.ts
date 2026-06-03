@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import { Transient, inject } from 'stratal/di'
+import { Singleton, inject } from 'stratal/di'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { INERTIA_TOKENS } from '../inertia.tokens'
 import type { ViteManifest } from '../types'
@@ -11,11 +11,15 @@ interface ManifestGlobal {
   __STRATAL_INERTIA_MANIFEST__?: ViteManifest
 }
 
-@Transient()
+@Singleton()
 export class ManifestService {
   private readonly manifest: ViteManifest | null
   private readonly entryClientPath: string
   private readonly isDev: boolean = Boolean(import.meta.env.DEV)
+  // The manifest is static for the lifetime of the worker, so the derived
+  // head/script tag strings are computed once and cached.
+  private headTags: string | null = null
+  private scriptTags: string | null = null
 
   constructor(
     @inject(INERTIA_TOKENS.Options) options: InertiaModuleOptions,
@@ -33,6 +37,14 @@ export class ManifestService {
   }
 
   getHeadTags(): string {
+    return this.headTags ??= this.buildHeadTags()
+  }
+
+  getScriptTags(): string {
+    return this.scriptTags ??= this.buildScriptTags()
+  }
+
+  private buildHeadTags(): string {
     if (this.isDev) {
       return '<link rel="stylesheet" href="/__inertia/ssr-css" data-ssr-css />'
     }
@@ -52,7 +64,7 @@ export class ManifestService {
     return tags.join('\n')
   }
 
-  getScriptTags(): string {
+  private buildScriptTags(): string {
     if (this.isDev) {
       return [
         '<script type="module" src="/@vite/client"></script>',
