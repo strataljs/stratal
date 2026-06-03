@@ -52,6 +52,10 @@
       "types": "./dist/seo-runtime.d.mts",
       "import": "./dist/seo-runtime.mjs"
     },
+    "./ssr": {
+      "types": "./dist/ssr.d.mts",
+      "import": "./dist/ssr.mjs"
+    },
     "./testing": {
       "types": "./dist/testing.d.mts",
       "import": "./dist/testing.mjs"

@@ -28,6 +28,17 @@ createInertiaApp({
   },
 })`
 
+const SSR_TSX = `import { createInertiaSsrApp } from '@stratal/inertia/ssr'
+
+export const { render } = createInertiaSsrApp({
+  resolve: async (name) => {
+    const pages = import.meta.glob('./pages/**/*.tsx')
+    const page = await pages[\`./pages/\${name}.tsx\`]?.()
+    if (!page) throw new Error(\`Page not found: \${name}\`)
+    return page
+  },
+})`
+
 const HOME_TSX = `export default function Home({ message }: { message: string }) {
   return (
     <div>
@@ -63,6 +74,7 @@ export class InertiaInstallCommand extends Command {
     const files = [
       { path: join(inertiaDir, 'root.html'), content: ROOT_HTML, name: 'root.html' },
       { path: join(inertiaDir, 'app.tsx'), content: APP_TSX, name: 'app.tsx' },
+      { path: join(inertiaDir, 'ssr.tsx'), content: SSR_TSX, name: 'ssr.tsx' },
       { path: join(pagesDir, 'Home.tsx'), content: HOME_TSX, name: 'pages/Home.tsx' },
     ]
 
@@ -161,13 +173,13 @@ export class InertiaInstallCommand extends Command {
         const initializer = importsProp.asKind(SyntaxKind.PropertyAssignment)?.getInitializer()
         const arrayLiteral = initializer?.asKind(SyntaxKind.ArrayLiteralExpression)
         if (arrayLiteral) {
-          arrayLiteral.addElement(`InertiaModule.forRoot({\n    rootView,\n  })`)
+          arrayLiteral.addElement(`InertiaModule.forRoot({\n    rootView,\n    ssr: { bundle: () => import('./inertia/ssr') },\n  })`)
         }
       } else {
         // Add imports property
         objLiteral.addPropertyAssignment({
           name: 'imports',
-          initializer: `[\n    InertiaModule.forRoot({\n      rootView,\n    }),\n  ]`,
+          initializer: `[\n    InertiaModule.forRoot({\n      rootView,\n      ssr: { bundle: () => import('./inertia/ssr') },\n    }),\n  ]`,
         })
       }
 

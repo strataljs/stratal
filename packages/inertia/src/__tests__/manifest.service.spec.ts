@@ -90,5 +90,19 @@ describe('ManifestService', () => {
     it('throws when no manifest is injected on globalThis', () => {
       expect(() => createService()).toThrow(/production build is missing the Vite client manifest/)
     })
+
+    it('memoizes the derived head/script tag strings', () => {
+      (globalThis as ManifestGlobal).__STRATAL_INERTIA_MANIFEST__ = {
+        'src/inertia/app.tsx': {
+          file: 'assets/app-abc123.js',
+          css: ['assets/app-abc123.css'],
+          isEntry: true,
+        },
+      }
+
+      const service = createService()
+      expect(service.getHeadTags()).toBe(service.getHeadTags())
+      expect(service.getScriptTags()).toBe(service.getScriptTags())
+    })
   })
 })

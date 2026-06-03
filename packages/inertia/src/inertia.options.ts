@@ -1,15 +1,11 @@
-import type { InertiaAppSSRResponse, Page } from '@inertiajs/core'
 import type { MessageKeyPrefix } from 'stratal/i18n'
 import type { RouterContext } from 'stratal/router'
 import type { FlashStore } from './flash/flash-store'
 import type { SeoData } from './seo/types'
-
-interface SsrBundleModule {
-  render(page: Page): Promise<InertiaAppSSRResponse>
-}
+import type { InertiaSsrBundle } from './types'
 
 export interface InertiaSsrOptions {
-  bundle: () => Promise<SsrBundleModule | { default: SsrBundleModule }>
+  bundle: () => Promise<InertiaSsrBundle | { default: InertiaSsrBundle }>
   /**
    * Route patterns where SSR is disabled (e.g., `"admin/*"`).
    * Uses simple glob matching against the request pathname.

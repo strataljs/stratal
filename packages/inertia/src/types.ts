@@ -1,4 +1,4 @@
-import type { InertiaAppSSRResponse, Page, SharedPageProps } from '@inertiajs/core'
+import type { Page, SharedPageProps } from '@inertiajs/core'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { MessageKeys } from 'stratal/i18n'
 import type { RouterContext } from 'stratal/router'
@@ -47,8 +47,15 @@ export interface InertiaRenderOptions {
   status?: ContentfulStatusCode
 }
 
-// Use InertiaAppSSRResponse from @inertiajs/core — { head: string[]; body: string }
-export type InertiaSsrResult = InertiaAppSSRResponse
+/**
+ * Streaming SSR render result. `head` carries the document `<head>` tags Inertia
+ * collected during the synchronous shell render (known once the shell is ready);
+ * `stream` is React's `renderToReadableStream` output, piped into the `#app` body.
+ */
+export interface InertiaSsrResult {
+  head: string[]
+  stream: ReadableStream<Uint8Array>
+}
 
 export interface InertiaSsrBundle {
   render(page: Page): Promise<InertiaSsrResult>

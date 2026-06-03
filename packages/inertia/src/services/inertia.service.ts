@@ -154,19 +154,26 @@ export class InertiaService {
       })
     }
 
-    // Full page render — skip SSR if disabled for this route
-    const ssrDisabled = ctx.c.get('withoutSsr') || this.isSsrDisabled(url)
-    const ssrResult = ssrDisabled
-      ? { head: [] as string[], body: '' }
-      : await this.ssr.render(page)
+    // Full page render — skip SSR if disabled for this route or not configured
     const seoTags = this.seoService.tagsFor(resolvedSeo)
-    const html = this.template.render(page, [...ssrResult.head, ...seoTags], ssrResult.body)
+    const ssrDisabled = ctx.c.get('withoutSsr') || this.isSsrDisabled(url) || !this.options.ssr
 
-    return new Response(html, {
+    if (ssrDisabled) {
+      const html = this.template.renderClientOnly(page, seoTags)
+      return new Response(html, {
+        status,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      })
+    }
+
+    // Streaming SSR: awaiting render resolves once the shell is ready (so the
+    // Inertia `<Head>` tags are known); the body then streams progressively.
+    const { head, stream } = await this.ssr.render(page)
+    const body = this.template.renderStream(page, [...head, ...seoTags], stream)
+
+    return new Response(body, {
       status,
-      headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-      },
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
     })
   }
 

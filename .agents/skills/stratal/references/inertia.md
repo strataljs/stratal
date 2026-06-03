@@ -25,7 +25,7 @@ import { InertiaModule, CookieFlashStore } from '@stratal/inertia'
       },
       i18n: { only: ['common', 'nav'] },         // Share translations with frontend
       ssr: {
-        bundle: () => import('./ssr-bundle'),     // SSR bundle (async import)
+        bundle: () => import('./inertia/ssr'),     // SSR bundle (async import)
         disabled: ['admin/*'],                    // Glob patterns to skip SSR
       },
     }),
@@ -41,7 +41,7 @@ InertiaModule.forRootAsync({
   inject: [CONFIG_TOKEN],
   useFactory: (config) => ({
     rootView: config.rootView,
-    ssr: { bundle: () => import('./ssr-bundle') },
+    ssr: { bundle: () => import('./inertia/ssr') },
   }),
 })
 ```
@@ -552,20 +552,50 @@ resolveUrl('users.show', { id }, routes, currentRoute, trailingSlash)
 
 ## SSR
 
+SSR is **streamed** (React 19 `renderToReadableStream`): the document shell (server
+SEO + Vite CSS) flushes immediately and the app body streams progressively, lowering
+TTFB. There is **no client-side fallback** — if the SSR bundle fails to load or render,
+the error surfaces (500) rather than silently degrading.
+
 ### Configuration
 
 ```typescript
 ssr: {
-  bundle: () => import('./ssr-bundle'),    // Dynamic import of SSR bundle
-  disabled: ['admin/*', 'settings/*'],     // Glob patterns to skip SSR
+  bundle: () => import('./inertia/ssr'),   // Dynamic import of the streaming SSR bundle
+  disabled: ['admin/*', 'settings/*'],     // Glob patterns to skip SSR (buffered client-only render)
 }
 ```
+
+### The SSR bundle (`src/inertia/ssr.tsx`)
+
+Use `createInertiaSsrApp` from `@stratal/inertia/ssr` — it wires Inertia's `App`,
+head collection, and `renderToReadableStream`, returning the `render(page)` the module
+expects. `quarry inertia:install` scaffolds this file.
+
+```tsx
+import { createInertiaSsrApp } from '@stratal/inertia/ssr'
+
+export const { render } = createInertiaSsrApp({
+  resolve: async (name) => {
+    const pages = import.meta.glob('./pages/**/*.tsx')
+    const page = await pages[`./pages/${name}.tsx`]?.()
+    if (!page) throw new Error(`Page not found: ${name}`)
+    return page
+  },
+  // Optional provider wrapper (theme, store, …):
+  // setup: ({ App, props }) => <ThemeProvider><App {...props} /></ThemeProvider>,
+})
+```
+
+> Inertia's `<Head>` tags are collected during the synchronous shell render. A `<Head>`
+> inside a *suspended* boundary won't reach `<head>` — use server-side `ctx.seo()` for
+> document metadata (the blessed path), which is resolved before render regardless.
 
 ### Per-Route SSR Opt-Out
 
 ```typescript
 async show(ctx: RouterContext): Promise<Response> {
-  ctx.withoutSsr()  // Skip SSR for this specific render
+  ctx.withoutSsr()  // Skip SSR for this render (buffered client-only response)
   return ctx.inertia('notes/Show', { note })
 }
 ```
