@@ -1,5 +1,5 @@
 ---
-"stratal": minor
+"stratal": patch
 ---
 
 Reorganize core subsystem registries into modules

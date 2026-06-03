@@ -1,5 +1,5 @@
 ---
-"stratal": minor
+"stratal": patch
 ---
 
 Add lazy module loading and reduce cold start by loading built-in subsystems on demand
