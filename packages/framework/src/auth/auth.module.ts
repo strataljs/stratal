@@ -57,8 +57,10 @@ import { AccessService } from '../access-control/services/access.service'
 import { AC_TOKENS } from '../access-control/tokens'
 import type { AccessControlOptions } from '../access-control/types'
 import { AuthContext } from '../context/auth-context'
+// Side-effect import: registers the `user()` macro on `RouterContext` and its
+// type augmentation, backed by the request-scoped `AuthContext`.
+import '../context/router-context.augment'
 import { AUTH_OPTIONS, AUTH_SERVICE } from './auth.tokens'
-import { AuthContextMiddleware } from './middleware/auth-context.middleware'
 import { SessionVerificationMiddleware } from './middleware/session-verification.middleware'
 // Side-effect import: registers `forPath`/`pathEntries` macros on
 // `RateLimiterRegistry` and the `declare module` augmentation that exposes
@@ -85,12 +87,11 @@ export class AuthModule implements RouteConfigurable {
   /**
    * Configure auth middleware globally.
    *
-   * Registers middlewares in order:
-   * 1. AuthContextMiddleware - Creates and registers AuthContext in request container
-   * 2. SessionVerificationMiddleware - Verifies session and populates AuthContext with userId + role
+   * SessionVerificationMiddleware verifies the session and populates the
+   * request-scoped AuthContext with the authenticated user.
    */
   configureRoutes(router: Router): void {
-    router.use(AuthContextMiddleware, SessionVerificationMiddleware)
+    router.use(SessionVerificationMiddleware)
   }
 
   /**

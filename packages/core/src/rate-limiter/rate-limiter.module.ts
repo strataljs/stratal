@@ -1,3 +1,4 @@
+import { CacheModule } from '../cache'
 import type { ExceptionHandler } from '../errors/exception-handler'
 import { Module } from '../module'
 import type { AsyncModuleOptions, DynamicModule, ModuleContext, OnException, OnInitialize } from '../module/types'
@@ -32,6 +33,7 @@ import type { IRateLimiterStore } from './stores/rate-limiter-store.interface'
  *    the body was rendered as JSON, HTML, or via Inertia.
  */
 @Module({
+  imports: [CacheModule],
   providers: [
     { provide: RATE_LIMITER_TOKENS.Registry, useClass: RateLimiterRegistry },
     { provide: RATE_LIMITER_TOKENS.StoreFactory, useClass: RateLimiterStoreFactory },

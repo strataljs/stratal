@@ -85,6 +85,18 @@ describe('TemplateService', () => {
     expect(html).toContain('<\\/script>')
   })
 
+  it('should preserve $-sequences in head/body content verbatim', () => {
+    const manifest = createManifest()
+    const service = new (TemplateService as any)(options, manifest)
+    // A string replacement would interpret `$$`, `$&`, `$\`` and `$'` — corrupting
+    // SEO/page content that legitimately contains `$` and even splicing the
+    // placeholder token back in.
+    const title = '<title>Buy now: $$$ &amp; save $&amp; — `$`` deals</title>'
+    const html = service.render(page, [title], '')
+    expect(html).toContain(title)
+    expect(html).not.toContain('@inertiaHead')
+  })
+
   it('should replace @viteHead and @viteScripts with manifest tags', () => {
     vi.stubEnv('DEV', false)
     ;(globalThis as ManifestGlobal).__STRATAL_INERTIA_MANIFEST__ = {

@@ -1,9 +1,15 @@
 import type { InertiaAppSSRResponse, Page, SharedPageProps } from '@inertiajs/core'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
+import type { MessageKeys } from 'stratal/i18n'
 import type { RouterContext } from 'stratal/router'
 
 
 export interface InertiaPageRegistry {}
+
+export interface InertiaI18nConfig {}
+
+export type InertiaTranslationKeys =
+  InertiaI18nConfig extends { translationKeys: infer T extends string } ? T : MessageKeys
 
 // Derive shared props from @inertiajs/core's InertiaConfig.sharedPageProps.
 // Users augment InertiaConfig in their global.d.ts — this type stays in sync automatically.

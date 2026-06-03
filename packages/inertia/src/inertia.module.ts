@@ -6,8 +6,10 @@ import { augmentRouterContext } from './augment/router-context'
 import type { InertiaModuleOptions } from './inertia.options'
 import { INERTIA_TOKENS } from './inertia.tokens'
 import { InertiaMiddleware } from './middleware/inertia.middleware'
+import { HreflangService } from './services/hreflang.service'
 import { InertiaService } from './services/inertia.service'
 import { ManifestService } from './services/manifest.service'
+import { SeoService } from './services/seo.service'
 import { SsrRendererService } from './services/ssr-renderer.service'
 import { TemplateService } from './services/template.service'
 
@@ -17,6 +19,8 @@ import { TemplateService } from './services/template.service'
     { provide: INERTIA_TOKENS.TemplateService, useClass: TemplateService },
     { provide: INERTIA_TOKENS.ManifestService, useClass: ManifestService },
     { provide: INERTIA_TOKENS.SsrRenderer, useClass: SsrRendererService },
+    { provide: INERTIA_TOKENS.HreflangService, useClass: HreflangService },
+    { provide: INERTIA_TOKENS.SeoService, useClass: SeoService },
   ],
 })
 export class InertiaModule implements RouteConfigurable, OnInitialize, OnException {
@@ -57,6 +61,11 @@ export class InertiaModule implements RouteConfigurable, OnInitialize, OnExcepti
 
       if (!this.isInertiaRequest(context)) return undefined
 
+      // GET/HEAD navigations (including deferred partial reloads) can't use the
+      // flash-errors + redirect-back convention — see `isReadRequest`. Fall
+      // through to the errorPage pipeline so the error renders in place.
+      if (this.isReadRequest(context)) return undefined
+
       const issues = error.issues ?? []
       const errors: Record<string, string> = {}
       for (const issue of issues) {
@@ -78,6 +87,11 @@ export class InertiaModule implements RouteConfigurable, OnInitialize, OnExcepti
       }
 
       if (!this.isInertiaRequest(context)) return undefined
+
+      // GET/HEAD navigations (including deferred partial reloads) can't use the
+      // flash-errors + redirect-back convention — see `isReadRequest`. Fall
+      // through to the errorPage pipeline so the error renders in place.
+      if (this.isReadRequest(context)) return undefined
 
       context.ctx.flash('errors', { _form: message } as const)
       return this.redirectBack(context)
@@ -109,6 +123,24 @@ export class InertiaModule implements RouteConfigurable, OnInitialize, OnExcepti
 
   private isInertiaRequest(context: HttpExceptionContext): boolean {
     return context.ctx.header('x-inertia') === 'true'
+  }
+
+  /**
+   * GET/HEAD requests are idempotent navigations — including Inertia deferred
+   * partial reloads, which fetch deferred props over a follow-up XHR that still
+   * carries `X-Inertia: true`.
+   *
+   * Such requests must NOT use the flash-errors + redirect-back convention: the
+   * redirect points back at the very URL that just threw, so an error raised
+   * while resolving a deferred prop would redirect → re-request → throw again
+   * in an infinite loop (`ERR_TOO_MANY_REDIRECTS`). For these we fall through to
+   * the errorPage pipeline, which renders `Errors/${status}` in place as an
+   * Inertia response. Redirect-back stays for mutations (POST/PUT/PATCH/DELETE),
+   * where it drives the post-submit form-error flow.
+   */
+  private isReadRequest(context: HttpExceptionContext): boolean {
+    const method = context.ctx.c.req.method.toUpperCase()
+    return method === 'GET' || method === 'HEAD'
   }
 
   private isPrecognitionRequest(context: HttpExceptionContext): boolean {

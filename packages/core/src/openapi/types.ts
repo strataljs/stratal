@@ -81,7 +81,19 @@ export interface OpenAPIEffectiveConfig {
 }
 
 /**
- * OpenAPI config service interface
+ * Singleton holder of the static base config. Resolvable outside a request for
+ * static config (mount paths, base info) with no per-request state.
+ */
+export interface IOpenAPIConfigStore {
+  /**
+   * Get the static base config (no per-request overrides applied).
+   */
+  getBaseConfig(): OpenAPIEffectiveConfig
+}
+
+/**
+ * Request-scoped config service: reads through to {@link IOpenAPIConfigStore}
+ * and layers per-request overrides on top.
  */
 export interface IOpenAPIConfigService {
   /**

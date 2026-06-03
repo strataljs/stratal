@@ -7,6 +7,7 @@ import {
     Module,
     type AsyncModuleOptions,
     type DynamicModule,
+    type LazyModuleLoader,
     type ModuleContext,
     type OnInitialize,
     type OnShutdown,
@@ -81,9 +82,12 @@ export class DatabaseModule implements OnInitialize, OnShutdown {
     }
   }
 
-  onInitialize(context: ModuleContext): void {
+  async onInitialize(context: ModuleContext): Promise<void> {
     const config = context.container.resolve<DatabaseModuleConfig>(DATABASE_TOKENS.Options)
-    const eventRegistry = context.container.resolve<IEventRegistry>(DI_TOKENS.EventRegistry)
+    // EventRegistry is loaded on demand — pull in EventsModule via the loader.
+    const loader = context.container.resolve<LazyModuleLoader>(DI_TOKENS.LazyModuleLoader)
+    const eventsRef = await loader.load(() => import('stratal/events').then((m) => m.EventsModule))
+    const eventRegistry = eventsRef.get<IEventRegistry>(DI_TOKENS.EventRegistry)
     for (const conn of config.connections) {
       const Service = createDatabaseService(conn, eventRegistry);
 

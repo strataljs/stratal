@@ -5,13 +5,19 @@ export { InertiaModule } from './inertia.module';
 export { INERTIA_TOKENS } from './inertia.tokens';
 
 // Options
-export type { InertiaFlashOptions, InertiaI18nOptions, InertiaModuleOptions, InertiaSsrOptions } from './inertia.options';
+export type { InertiaFlashOptions, InertiaI18nOptions, InertiaModuleOptions, InertiaSeoOptions, InertiaSsrOptions } from './inertia.options';
+
+// SEO
+export { buildSeoTags, DATA_SEO_ATTR, descriptorToHtml } from './seo/build-seo-tags';
+export type { SeoData, SeoLinkTag, SeoMetaTag, SeoOpenGraph, SeoTagDescriptor, SeoTwitter } from './seo/types';
 
 // Types
 export type {
     InertiaAlwaysProp,
     InertiaDeferredProp,
     InertiaFullPageProps,
+    InertiaI18nConfig,
+    InertiaTranslationKeys,
     InertiaMergeProp,
     InertiaMergeStrategy,
     InertiaOnceProp,
@@ -35,6 +41,7 @@ export type { FlashStore } from './flash/flash-store';
 
 // Services
 export { InertiaService } from './services/inertia.service';
+export { SeoService } from './services/seo.service';
 export { ManifestService } from './services/manifest.service';
 export { SsrRendererService } from './services/ssr-renderer.service';
 export { TemplateService } from './services/template.service';

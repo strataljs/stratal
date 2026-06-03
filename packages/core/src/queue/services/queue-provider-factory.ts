@@ -1,4 +1,5 @@
 import { inject } from '../../di'
+import type { Container } from '../../di/container'
 import { type StratalEnv } from '../../env'
 import { Transient } from '../../di/decorators'
 import { DI_TOKENS } from '../../di/tokens'
@@ -36,6 +37,7 @@ export class QueueProviderFactory {
   constructor(
     @inject(DI_TOKENS.CloudflareEnv) private readonly env: StratalEnv,
     @inject(DI_TOKENS.ConsumerRegistry) private readonly registry: ConsumerRegistry,
+    @inject(DI_TOKENS.Container) private readonly container: Container,
     @inject(QUEUE_TOKENS.QueueModuleOptions, { isOptional: true }) private readonly options?: QueueModuleOptions,
   ) { }
 
@@ -53,7 +55,7 @@ export class QueueProviderFactory {
         return new CloudflareQueueProvider(this.env)
 
       case 'sync':
-        return new SyncQueueProvider(this.registry)
+        return new SyncQueueProvider(this.registry, this.container)
 
       default:
         throw new QueueError(`Queue provider "${String(providerType)}" is not supported`)

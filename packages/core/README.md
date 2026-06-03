@@ -27,7 +27,7 @@ Full guides and examples are available at **[stratal.dev](https://stratal.dev)**
 - **Queue Consumers** — Typed Cloudflare Queue consumers with message-type filtering
 - **Cron Jobs** — Scheduled tasks via Cloudflare Workers cron triggers
 - **Storage** — S3-compatible file storage with presigned URLs and TUS upload support
-- **Email** — Resend and SMTP providers with React Email template support
+- **Email** — SMTP provider with React Email template support
 - **i18n** — Type-safe internationalization with locale detection from request headers
 - **Guards and Middleware** — Route protection and per-module middleware configuration
 

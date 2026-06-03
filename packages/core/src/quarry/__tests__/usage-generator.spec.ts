@@ -238,7 +238,7 @@ describe('generateListing', () => {
 
     expect(listing).toContain('Global Options')
     expect(listing).toContain('-e, --env')
-    expect(listing).toContain('wrangler.jsonc')
+    expect(listing).toContain('wrangler config')
   })
 
   it('should show Global Options before Commands', () => {

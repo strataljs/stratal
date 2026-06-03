@@ -1,15 +1,17 @@
-import { inject } from '../di';
 import type { Application } from '../application';
+import { inject } from '../di';
 import { Request } from '../di/decorators';
 import { DI_TOKENS } from '../di/tokens';
-import { RouterError } from './router.error';
+import { applyLocalePrefix } from './locale-url';
 import type { RouteName, RouteParams } from './route-map';
 import type { RegisteredRoute, RouteRegistry } from './route-registry';
 import type { RouterContext } from './router-context';
+import { RouterError } from './router.error';
 import { ROUTER_TOKENS } from './router.tokens';
+import type { LocalePathService } from './services/locale-path.service';
 import { signUrl, verifySignedUrl, type SignedUrlOptions } from './signed-url';
 import { applyTrailingSlash } from './trailing-slash';
-import type { TrailingSlashMode } from './types';
+import type { LocaleUrlConfig, TrailingSlashMode } from './types';
 
 /**
  * Options for URL generation methods.
@@ -52,14 +54,14 @@ export function buildRouteUrl(
   route: RegisteredRoute,
   name: string,
   params?: Record<string, string>,
+  localeConfig?: LocaleUrlConfig,
 ): string {
   const allParams = { ...params }
   const consumedKeys = new Set<string>()
   let url = route.path
 
-  // When locale is provided and route has locale variants, prepend locale segment
   if (allParams.locale && route.localePaths?.length) {
-    url = `/${allParams.locale}${url === '/' ? '' : url}`
+    url = applyLocalePrefix(url, allParams.locale, localeConfig)
     consumedKeys.add('locale')
   }
 
@@ -127,17 +129,23 @@ export function buildRouteUrl(
  * uri.route('posts.index') // auto-fills :locale param
  * ```
  */
-@Request()
+@Request(ROUTER_TOKENS.Uri)
 export class Uri {
   private _defaults: Record<string, string> = {}
   private readonly trailingSlash: TrailingSlashMode
+  private readonly localeConfig: LocaleUrlConfig
 
   constructor(
     @inject(ROUTER_TOKENS.RouteRegistry) private readonly registry: RouteRegistry,
     @inject(ROUTER_TOKENS.RouterContext) private readonly routerContext: RouterContext,
     @inject(DI_TOKENS.Application) application: Application,
+    @inject(ROUTER_TOKENS.LocalePathService) localePathService: LocalePathService,
   ) {
     this.trailingSlash = application.config.trailingSlash ?? 'ignore'
+    this.localeConfig = {
+      defaultLocale: localePathService.localePathConfig?.defaultLocale ?? null,
+      prefixDefaultLocale: localePathService.prefixDefaultLocale,
+    }
   }
 
   /**
@@ -183,7 +191,7 @@ export class Uri {
     }
 
     const mergedParams = { ...this._defaults, ...params } as Record<string, string>
-    let url = applyTrailingSlash(buildRouteUrl(registeredRoute, name, mergedParams), this.trailingSlash)
+    let url = applyTrailingSlash(buildRouteUrl(registeredRoute, name, mergedParams, this.localeConfig), this.trailingSlash)
 
     if (options?.absolute && !url.startsWith('http')) {
       const origin = new URL(this.routerContext.c.req.url).origin

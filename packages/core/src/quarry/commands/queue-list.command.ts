@@ -12,16 +12,16 @@ export class QueueListCommand extends Command {
   }
 
   handle(): number | undefined {
-    const consumers = this.consumers.getAllConsumers()
+    const registrations = this.consumers.getRegistrations()
 
-    if (consumers.length === 0) {
+    if (registrations.length === 0) {
       this.info('No queue consumers found')
       return 0
     }
 
     this.table(
       ['Consumer', 'Message Types'],
-      consumers.map(c => [c.constructor.name, c.messageTypes.join(', ')]),
+      registrations.map(r => [r.consumerClass.name, r.messageTypes.join(', ')]),
     )
 
     return undefined

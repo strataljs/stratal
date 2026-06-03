@@ -45,8 +45,12 @@ interface CacheService {
   delete(key: string): Promise<void>
   list<Metadata>(options?: KVNamespaceListOptions): Promise<KVNamespaceListResult<Metadata>>
   withBinding(kv: KVNamespace): CacheService   // Use a different KV binding
+  binding(name: string): CacheService          // Same, resolved by binding name from env
 }
 ```
+
+KV reads are eventually consistent — a `get` can return an edge-cached value for
+up to ~60s after a `put`.
 
 ### Multiple KV Namespaces
 
@@ -71,6 +75,41 @@ export class MultiCacheService {
 ```
 
 Default binding reads from `env.CACHE`.
+
+### Tiered cache (opt-in isolate-local L1)
+
+Inject `CACHE_TOKENS.TieredCacheService` instead of `CacheService` when you need
+isolate-local **read-after-write coherence**: it layers an in-memory L1 over KV,
+so a value written on an isolate is immediately and consistently readable by
+later reads on that same isolate — closing KV's eventual-consistency gap. Same
+API as `CacheService`, plus `binding(name)`.
+
+```typescript
+import { CACHE_TOKENS } from 'stratal/cache'
+import type { TieredCacheService } from 'stratal/cache'
+
+@Transient()
+export class OnceGuard {
+  constructor(
+    @inject(CACHE_TOKENS.TieredCacheService) private cache: TieredCacheService,
+  ) {}
+
+  async claim(id: string): Promise<boolean> {
+    if (await this.cache.get(`claim:${id}`)) return false
+    await this.cache.put(`claim:${id}`, '1', { expirationTtl: 86400 })
+    return true
+  }
+}
+```
+
+**Use it for** set-once / read-mostly keys (idempotency claims, immutable
+lookups). The framework's queue idempotency store is built on it.
+
+**Do NOT use it for** read-modify-write counters that need cross-edge freshness
+(e.g. rate limiting): the L1 only sees writes made on its own isolate, so an
+isolate reads its own value until the entry expires — concurrent increments from
+other isolates are missed and overwritten. Use plain `CacheService` (KV) or a
+Durable-Object store there.
 
 ## Logger
 
@@ -112,6 +151,8 @@ export default new Stratal({
 
 ## Email
 
+Sends email via a built-in SMTP client using `cloudflare:sockets`. Zero npm dependencies — no nodemailer, no Resend SDK. Works with any SMTP endpoint (Resend, Postmark, SendGrid, Mailgun, self-hosted).
+
 ### EmailModule Setup
 
 ```typescript
@@ -122,16 +163,28 @@ import { EmailModule } from 'stratal/email'
     EmailModule.forRootAsync({
       inject: [DI_TOKENS.CloudflareEnv],
       useFactory: (env) => ({
-        provider: 'resend',              // 'resend' | 'smtp'
         from: { name: 'My App', email: 'noreply@example.com' },
-        apiKey: env.RESEND_API_KEY,      // required for resend provider
-        queue: 'NOTIFICATIONS_QUEUE',    // queue binding registered via QueueModule
+        smtp: { url: env.SMTP_URL },
+        queue: 'NOTIFICATIONS_QUEUE',
       }),
     }),
     QueueModule.registerQueue('NOTIFICATIONS_QUEUE'),
   ],
 })
 export class AppModule {}
+```
+
+SMTP URL format: `smtp://user:pass@host:port` (STARTTLS, default port 587) or `smtps://user:pass@host:port` (implicit TLS, default port 465).
+
+### EmailModuleOptions
+
+```typescript
+interface EmailModuleOptions {
+  from: { name: string; email: string }
+  smtp: { url: string }
+  replyTo?: string
+  queue: QueueBinding
+}
 ```
 
 ### Sending Email
@@ -154,18 +207,10 @@ export class NotificationService {
       html: '<h1>Welcome to our app</h1>',
     })
   }
-
-  async sendWithReactTemplate(to: string, name: string) {
-    await this.email.send({
-      to,
-      subject: 'Welcome!',
-      template: <WelcomeEmail name={name} />,  // React email template
-    })
-  }
 }
 ```
 
-Email supports `html`, `text`, and `template` (React) props. Emails are dispatched via queue for async sending. Providers: Resend, SMTP (nodemailer). Both are optional peerDependencies.
+Email supports `html` and `text` props. Emails are dispatched via queue for async sending. Attachments supported (inline `Buffer`/`ReadableStream` or storage-backed via `StorageService`). Each attachment is hard-capped at 20 MB (it is fully buffered before base64 encoding); exceeding it throws. Inline attachment `content` must be valid base64 (invalid base64 throws rather than shipping a corrupt file), and envelope addresses containing raw CR/LF are rejected to prevent SMTP command injection.
 
 ## Storage
 

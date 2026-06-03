@@ -1,5 +1,7 @@
 import type { Application } from '../application'
 import type { Container } from '../di/container'
+import { inject, Singleton } from '../di/decorators'
+import { DI_TOKENS } from '../di/tokens'
 import type { Constructor } from '../types'
 import { SeederError } from './seeder.error'
 import { type Seeder, SEEDER_INTERNALS } from './seeder'
@@ -8,11 +10,12 @@ export const SEEDER_TOKENS = {
   SeederRegistry: Symbol.for('stratal:seeders:registry'),
 } as const
 
+@Singleton(SEEDER_TOKENS.SeederRegistry)
 export class SeederRegistry {
   private seeders = new Set<Constructor<Seeder>>()
   private nameIndex = new Map<string, Constructor<Seeder>>()
 
-  constructor(private app: Application) { }
+  constructor(@inject(DI_TOKENS.Application) private app: Application) { }
 
   register(SeederClass: Constructor<Seeder>): void {
     const existing = this.nameIndex.get(SeederClass.name)

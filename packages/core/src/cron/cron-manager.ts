@@ -1,5 +1,6 @@
 import type { Container } from '../di/container'
-import { Transient } from '../di/decorators'
+import { Singleton } from '../di/decorators'
+import { DI_TOKENS } from '../di/tokens'
 import { LOGGER_TOKENS } from '../logger/logger.tokens'
 import type { LoggerService } from '../logger/services/logger.service'
 import type { CronJob, RegisteredJob } from './cron-job'
@@ -16,7 +17,7 @@ import { CronExecutionError } from './errors/cron-execution.error'
  * Jobs are grouped by their cron expression, allowing multiple jobs
  * to run on the same schedule.
  */
-@Transient()
+@Singleton(DI_TOKENS.Cron)
 export class CronManager {
 	/**
 	 * Map of cron expressions to registered job entries

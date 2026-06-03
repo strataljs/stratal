@@ -2,10 +2,11 @@ import type { Page } from '@inertiajs/core'
 import type { Application } from 'stratal'
 import { DI_TOKENS, Request, inject } from 'stratal/di'
 import { I18N_TOKENS, type MessageLoaderService } from 'stratal/i18n'
-import { ROUTER_TOKENS, type CurrentRoute, type RegisteredRoute, type RouteRegistry, type RouterContext, type SerializedRoutes, type Uri } from 'stratal/router'
+import { ROUTER_TOKENS, type CurrentRoute, type LocalePathService, type LocaleUrlConfig, type RegisteredRoute, type RouteRegistry, type RouterContext, type SerializedRoutes, type Uri } from 'stratal/router'
 import type { InertiaMergeOptions, InertiaOnceOptions } from '../augment/router-context'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { INERTIA_TOKENS } from '../inertia.tokens'
+import type { SeoData } from '../seo/types'
 import type {
   InertiaAlwaysProp,
   InertiaDeferredProp,
@@ -22,6 +23,7 @@ import {
   INERTIA_PROP_ONCE,
   INERTIA_PROP_OPTIONAL,
 } from '../types'
+import type { SeoService } from './seo.service'
 import type { SsrRendererService } from './ssr-renderer.service'
 import type { TemplateService } from './template.service'
 
@@ -33,10 +35,15 @@ export class InertiaService {
     @inject(INERTIA_TOKENS.Options) private readonly options: InertiaModuleOptions,
     @inject(INERTIA_TOKENS.TemplateService) private readonly template: TemplateService,
     @inject(INERTIA_TOKENS.SsrRenderer) private readonly ssr: SsrRendererService,
+    @inject(INERTIA_TOKENS.SeoService) private readonly seoService: SeoService,
   ) { }
 
   share(key: string, value: unknown): void {
     this.sharedData[key] = value
+  }
+
+  seo(data: SeoData): void {
+    this.seoService.set(data)
   }
 
   location(url: string): Response {
@@ -89,11 +96,19 @@ export class InertiaService {
     // Resolve shared data from module options
     const { shared: resolvedShared, sharedKeys } = await this.resolveSharedData(ctx)
 
-    // Merge shared data with route props
-    const allProps = { ...resolvedShared, ...this.sharedData, ...props }
+    // Resolve SEO once: shared as the `seo` prop (drives the client head-sync runtime)
+    // and rendered into <head> below for the initial paint. Wrapped as an ALWAYS
+    // prop so it is present on every response — including partial reloads that
+    // don't request it — otherwise the client runtime would see a missing `seo`
+    // key and wipe the managed head tags even though nothing changed.
+    const resolvedSeo = await this.seoService.resolve(ctx)
 
-    // Track all shared prop keys (module config + per-request .share())
-    const allSharedKeys = [...sharedKeys, ...Object.keys(this.sharedData)]
+    // Merge shared data with route props. `seo` is always-evaluated so it can
+    // never be filtered out by partial-reload prop selection.
+    const allProps = { ...resolvedShared, ...this.sharedData, seo: this.always(() => resolvedSeo), ...props }
+
+    // Track all shared prop keys (module config + per-request .share() + seo)
+    const allSharedKeys = [...sharedKeys, ...Object.keys(this.sharedData), 'seo']
 
     // Process props: handle optional, deferred, merge, once, always
     const result = await this.processProps(allProps, ctx, component, isInertia)
@@ -144,7 +159,8 @@ export class InertiaService {
     const ssrResult = ssrDisabled
       ? { head: [] as string[], body: '' }
       : await this.ssr.render(page)
-    const html = this.template.render(page, ssrResult.head, ssrResult.body)
+    const seoTags = this.seoService.tagsFor(resolvedSeo)
+    const html = this.template.render(page, [...ssrResult.head, ...seoTags], ssrResult.body)
 
     return new Response(html, {
       status,
@@ -191,9 +207,15 @@ export class InertiaService {
       const name = registry.findNameByRoute(ctx.c.req.method, ctx.c.req.routePath) ?? null
       const params = { ...ctx.param() }
 
+      const localePathService = container.resolve<LocalePathService>(ROUTER_TOKENS.LocalePathService)
+
       shared.routes = this.serializeRoutes(registry.named())
       shared.trailingSlash = application.config.trailingSlash ?? 'ignore'
       shared.route = { name, params, defaults: uri.getDefaults() } satisfies CurrentRoute
+      shared.localeConfig = {
+        defaultLocale: localePathService.localePathConfig?.defaultLocale ?? null,
+        prefixDefaultLocale: localePathService.prefixDefaultLocale,
+      } satisfies LocaleUrlConfig
     }
 
     return { shared, sharedKeys: Object.keys(shared) }

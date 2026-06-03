@@ -193,5 +193,41 @@ describe('CacheService', () => {
       expect(newKv.get).toHaveBeenCalledWith('key')
       expect(mockKv.get).not.toHaveBeenCalled()
     })
+
+  })
+
+  describe('binding()', () => {
+    it('should resolve a namespace by name from the environment', async () => {
+      const uploadsKv = createMock<KVNamespace>()
+      const uploadsGet = uploadsKv.get as unknown as { mockResolvedValue(v: string | null): void }
+      uploadsGet.mockResolvedValue('from-uploads')
+      ;(mockEnv as unknown as Record<string, unknown>).UPLOADS_CACHE = uploadsKv
+
+      const instance = service.binding('UPLOADS_CACHE')
+      const result = await instance.get('key')
+
+      expect(instance).toBeInstanceOf(CacheService)
+      expect(result).toBe('from-uploads')
+      expect(uploadsKv.get).toHaveBeenCalledWith('key')
+    })
+
+    it('should throw CacheError when the binding is missing', () => {
+      expect(() => service.binding('NOPE')).toThrow(CacheError)
+    })
+  })
+
+  describe('does not cache (thin KV wrapper)', () => {
+    it('reads KV on every get — no L1 read-after-write coherence', async () => {
+      mockKv.put.mockResolvedValue(undefined)
+      mockGet().mockResolvedValue('from-kv')
+
+      await service.put('k', 'v')
+      const first = await service.get('k')
+      const second = await service.get('k')
+
+      expect(first).toBe('from-kv')
+      expect(second).toBe('from-kv')
+      expect(mockKv.get).toHaveBeenCalledTimes(2)
+    })
   })
 })

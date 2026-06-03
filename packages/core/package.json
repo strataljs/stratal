@@ -179,17 +179,12 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@react-email/components": ">=1",
-    "nodemailer": ">=7",
+    "@react-email/render": ">=2",
     "react": ">=19",
-    "react-dom": ">=19",
-    "resend": ">=6"
+    "react-dom": ">=19"
   },
   "peerDependenciesMeta": {
-    "@react-email/components": {
-      "optional": true
-    },
-    "nodemailer": {
+    "@react-email/render": {
       "optional": true
     },
     "react": {
@@ -197,28 +192,22 @@
     },
     "react-dom": {
       "optional": true
-    },
-    "resend": {
-      "optional": true
     }
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.16.3",
-    "@cloudflare/workers-types": "4.20260510.1",
-    "@react-email/components": "^1.0.12",
+    "@cloudflare/vitest-pool-workers": "^0.16.10",
+    "@cloudflare/workers-types": "4.20260529.1",
+    "@react-email/render": "^2.0.8",
     "@stratal/testing": "workspace:*",
     "@types/node": "^25.6.2",
-    "@types/nodemailer": "^8.0.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitest/coverage-v8": "^4.1.5",
     "@vitest/runner": "~4.1.5",
     "@vitest/snapshot": "~4.1.5",
     "jsonc-parser": "^3.3.1",
-    "nodemailer": "^8.0.7",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "resend": "^6.12.3",
     "tsdown": "^0.22.0",
     "typescript": "^6.0.3",
     "vitest": "~4.1.5"

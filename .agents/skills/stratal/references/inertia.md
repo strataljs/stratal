@@ -55,6 +55,7 @@ InertiaModule.forRootAsync({
 - `flash?` — `{ store: FlashStore }` — flash message storage (use `CookieFlashStore`)
 - `i18n?` — `{ only?: string[] }` — share backend translations with frontend
 - `routes?` — `boolean` — When `true`, serializes all named routes and injects them as a `routes` shared prop for client-side URL generation with `useRoute()`. The configured `trailingSlash` mode (from the `Stratal` constructor) is also forwarded as a `trailingSlash` shared prop so `useRoute()` produces canonical URLs that match the server. Also injects a `route: { name, params, defaults }` shared prop so `useRoute()` knows the current match. Sticky params set on the server via `Uri.defaults()` come through as `defaults` and are auto-applied by `route(name, params?)` on the client.
+- `seo?` — `{ defaults?, titleTemplate? }` — app-wide SEO defaults and title template for backend-driven page metadata (`ctx.seo()`). See [SEO](#seo).
 - `entryClientPath?` — Client entry point (default: `src/inertia/app.tsx`)
 
 ## Rendering Pages
@@ -284,6 +285,14 @@ InertiaModule.forRoot({
 
 Resolvers are called per-request. Static values are shared across all requests.
 
+### Per-request sharing with `ctx.share`
+
+From middleware or a controller, add a shared prop for the current request with `ctx.share(key, value)`. It is merged into every Inertia page rendered during that request — useful for contributing data without passing it through each controller.
+
+```typescript
+ctx.share('featureFlags', { 'new-checkout': true })
+```
+
 ## Flash Messages
 
 Flash data is stored between requests and automatically shared as Inertia props via the `flash` object.
@@ -381,6 +390,109 @@ Use `only` to limit which message namespaces are sent to the frontend (reduces p
 i18n: { only: ['common', 'nav'] }           // Top-level namespaces
 i18n: { only: ['common.actions'] }           // Nested prefix
 i18n: {}                                      // All messages (omit only)
+```
+
+### Hreflang Link Tags (Automatic)
+
+When i18n detection uses `path` or `querystring` and at least two locales are configured, Inertia auto-emits `<link rel="alternate" hreflang="…" href="…" />` tags for every locale plus an `x-default`. URLs honor the app-wide `trailingSlash` mode. No configuration knob — if your i18n setup produces URL-distinct locale variants, the tags appear.
+
+These ride the [SEO](#seo) pipeline: they're injected into `<head>` on the initial render and re-synced on every Inertia client navigation, so the alternates always point at the current URL (no stale links after an SPA visit).
+
+Path strategy (`locales: ['en', 'fr']`, `defaultLocale: 'en'`, `prefixDefaultLocale: false`) on `/users`:
+
+```html
+<link rel="alternate" hreflang="en" href="https://example.com/users" />
+<link rel="alternate" hreflang="fr" href="https://example.com/fr/users" />
+<link rel="alternate" hreflang="x-default" href="https://example.com/users" />
+```
+
+Querystring strategy (same locales) on `/users`:
+
+```html
+<link rel="alternate" hreflang="en" href="https://example.com/users" />
+<link rel="alternate" hreflang="fr" href="https://example.com/users?locale=fr" />
+<link rel="alternate" hreflang="x-default" href="https://example.com/users" />
+```
+
+Cookie/header strategies emit nothing — those don't have URL-distinct locale variants.
+
+## SEO
+
+Set page metadata (title, description, Open Graph, Twitter, etc.) from the backend. The module injects the tags into `<head>` for the initial response (works with and without SSR), shares the resolved metadata as a `seo` prop, and keeps `document.head` in sync across client-side navigations automatically (the `stratalInertia()` Vite plugin injects a head-sync runtime into the client bundle — no app wiring).
+
+### Set metadata with `ctx.seo()`
+
+Call `ctx.seo(data)` in a controller (or middleware) before returning the page. Multiple calls merge:
+
+```typescript
+@InertiaGet('/:slug')
+async show(ctx: RouterContext): Promise<Response> {
+  const post = await this.service.bySlug(ctx.param('slug'))
+  ctx.seo({
+    title: post.title,
+    description: post.excerpt,
+    canonical: `https://acme.app/blog/${post.slug}`,
+    robots: 'index, follow',
+    keywords: ['blog', post.category],
+    author: post.author.name,
+    openGraph: {
+      title: post.title,
+      description: post.excerpt,
+      image: post.coverUrl,
+      type: 'article',
+      url: `https://acme.app/blog/${post.slug}`,
+      siteName: 'Acme',
+    },
+    twitter: { card: 'summary_large_image', site: '@acme', image: post.coverUrl },
+    meta: [{ name: 'theme-color', content: '#0b0b0b' }],   // arbitrary custom <meta>
+    link: [{ rel: 'amphtml', href: `https://acme.app/amp/${post.slug}` }],  // arbitrary custom <link>
+  })
+  return ctx.inertia('Blog/Show', { post })
+}
+```
+
+All `SeoData` fields are optional: `title`, `description`, `canonical`, `robots`, `keywords` (string | string[]), `author`, `openGraph`, `twitter`, `meta` (custom), `link` (custom).
+
+### App-wide defaults + title template
+
+Configure `seo` in `InertiaModule.forRoot()`. Per-page `ctx.seo()` values merge over `defaults` (`openGraph`/`twitter` deep-merge, `meta`/`link` concatenate):
+
+```typescript
+InertiaModule.forRoot({
+  rootView: 'app',
+  seo: {
+    defaults: { openGraph: { siteName: 'Acme' }, twitter: { card: 'summary_large_image' } },
+    titleTemplate: '%s — Acme',   // page title 'Dashboard' → '<title>Dashboard — Acme</title>'
+  },
+})
+```
+
+`titleTemplate` (string) wraps a page-provided title via `%s`; a bare default title is used as-is. Both `defaults` and `titleTemplate` also accept a `ctx`-aware (optionally async) resolver for personalization from the database or elsewhere:
+
+```typescript
+seo: {
+  defaults: async (ctx) => ({ openGraph: { siteName: (await ctx.user()).orgName } }),
+  titleTemplate: async (title, ctx) => `${title} — ${(await ctx.user()).name}'s Workspace`,
+}
+```
+
+The resolved `title` is always a string — it falls back to `''` when no page or default title applies (and even if a `titleTemplate` function returns `undefined`). This keeps client navigation deterministic: moving to a page with no SEO resets `document.title` (to your default or empty) instead of leaving the previous page's title behind. Set a `defaults.title` to control the fallback shown on such pages.
+
+### Frontend: head sync is automatic
+
+Server injection covers the first paint and crawlers. Client-side navigation updates are wired automatically — no app code: the `stratalInertia()` Vite plugin injects a runtime into the client entry that listens for Inertia `navigate` events and reconciles `document.head` from the shared `seo` prop. There is nothing to mount in `app.tsx`.
+
+The `seo` prop is shared on **every** response — including partial reloads that don't request it — so a partial reload (e.g. polling one prop) never drops `seo` and never wipes the managed head tags. The client runtime only reconciles `document.head` when the `seo` key is actually present on the page.
+
+Optionally, read the resolved metadata inside a component with `useSeo()` from `@stratal/inertia/react`:
+
+```tsx
+import { useSeo } from '@stratal/inertia/react'
+
+function DebugSeo() {
+  const seo = useSeo()
+  return <pre>{seo.title}</pre>
+}
 ```
 
 ## Client-Side URL Generation (useRoute)
@@ -535,7 +647,8 @@ The `stratalInertia()` Vite plugin (included in `createViteConfig`) accepts:
 - `@stratal/inertia` — Main module, service, decorators, flash stores, types
 - `@stratal/inertia/quarry` — CLI-only: `InertiaQuarryModule`, build/dev/types/install commands, `runTypeGeneration`
 - `@stratal/inertia/vite` — Vite configuration and plugins
-- `@stratal/inertia/react` — React hooks (`useI18n`, `useRoute`)
+- `@stratal/inertia/react` — React hooks (`useI18n`, `useRoute`, `useSeo`)
+- `@stratal/inertia/seo-runtime` — client SEO head-sync runtime; auto-injected into the client entry by `stratalInertia()`, not imported manually
 - `@stratal/inertia/testing` — Test response assertions for Inertia pages
 
 ## Precognition

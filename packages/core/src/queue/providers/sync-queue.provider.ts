@@ -1,8 +1,11 @@
+import type { Container } from '../../di/container'
+import { containerStorage } from '../../di/container-storage'
 import { inject } from '../../di'
 import { Transient } from '../../di/decorators'
 import { DI_TOKENS } from '../../di/tokens'
+import type { RouterContext } from '../../router/router-context'
 import { type ConsumerRegistry } from '../consumer-registry'
-import type { QueueMessage } from '../queue-consumer'
+import type { IQueueConsumer, QueueMessage } from '../queue-consumer'
 import type { IQueueProvider } from './queue-provider.interface'
 
 /**
@@ -21,47 +24,58 @@ import type { IQueueProvider } from './queue-provider.interface'
  * **Consumer Matching:**
  * - Consumers are matched by message type, not queue name
  * - Wildcard ('*') matches all message types
- *
- * @example Testing with sync provider
- * ```typescript
- * const provider = new SyncQueueProvider(registry)
- * await provider.send('NOTIFICATIONS_QUEUE', {
- *   id: '123',
- *   timestamp: Date.now(),
- *   type: 'email.send',
- *   payload: { to: 'test@example.com' }
- * })
- * // Consumer's handle() is called immediately!
- * ```
  */
 @Transient()
 export class SyncQueueProvider implements IQueueProvider {
   constructor(
-    @inject(DI_TOKENS.ConsumerRegistry) private readonly registry: ConsumerRegistry
+    @inject(DI_TOKENS.ConsumerRegistry) private readonly registry: ConsumerRegistry,
+    @inject(DI_TOKENS.Container) private readonly root: Container,
   ) {}
 
   /**
-   * Process a message synchronously
+   * Process a message synchronously.
    *
-   * Finds all matching consumers by message type and calls their handle() method.
-   * If any consumer throws, onError() is called and the error is re-thrown.
+   * Runs inside the active request scope when dispatch happens within one (an
+   * HTTP request, or `runInScope` for queues/cron/commands). When dispatched
+   * with no ambient scope — e.g. a service invoked directly in a test — it
+   * establishes its own request scope (mirroring the production queue handler)
+   * so consumers and their request-scoped dependencies resolve correctly.
    *
    * @param _binding - Queue binding (not used for routing, consumers match by message type)
-   * @param message - Complete message with id, timestamp, and payload
+   * @param message - Complete message with id and payload
    * @throws Re-throws any error from consumer.handle() after calling onError()
    */
   async send<T>(_binding: string, message: QueueMessage<T>): Promise<void> {
-    // Consumers are matched by message type, not queue name
-    const consumers = this.registry.getConsumers(message.type)
+    const ambient = containerStorage.getStore()
+    if (ambient) {
+      await this.process(ambient, message)
+      return
+    }
 
-    // Process synchronously - call each matching consumer
+    const locale = message.metadata?.locale ?? 'en'
+    const context = {
+      getLocale: () => locale,
+      setLocale: () => { /* no-op */ },
+      getContainer: () => containerStorage.getStore() ?? this.root,
+    } as unknown as RouterContext
+
+    await this.root.runInRequestScope(context, (container) => this.process(container, message))
+  }
+
+  /**
+   * Resolve a fresh consumer per message from `container` (matched by type) and
+   * invoke each sequentially, fail-fast on the first error after `onError`.
+   */
+  private async process<T>(container: Container, message: QueueMessage<T>): Promise<void> {
+    const consumers = this.registry
+      .getConsumerClasses(message.type)
+      .map((ConsumerClass) => container.resolve<IQueueConsumer>(ConsumerClass))
+
     for (const consumer of consumers) {
       try {
         await consumer.handle(message)
       } catch (error) {
-        const errorInstance = error instanceof Error
-          ? error
-          : new Error(String(error))
+        const errorInstance = error instanceof Error ? error : new Error(String(error))
 
         // Call onError hook if defined
         if (consumer.onError) {

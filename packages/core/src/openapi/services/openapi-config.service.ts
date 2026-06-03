@@ -3,9 +3,9 @@ import { Request } from '../../di/decorators'
 import { OPENAPI_TOKENS } from '../openapi.tokens'
 import type {
   IOpenAPIConfigService,
+  IOpenAPIConfigStore,
   OpenAPIConfigOverride,
-  OpenAPIEffectiveConfig,
-  OpenAPIModuleOptions
+  OpenAPIEffectiveConfig
 } from '../types'
 
 /**
@@ -35,7 +35,7 @@ export class OpenAPIConfigService implements IOpenAPIConfigService {
   private overrides: OpenAPIConfigOverride[] = []
 
   constructor(
-    @inject(OPENAPI_TOKENS.Options, { isOptional: true }) private baseOptions?: OpenAPIModuleOptions
+    @inject(OPENAPI_TOKENS.ConfigStore) private store: IOpenAPIConfigStore
   ) { }
 
   /**
@@ -48,16 +48,7 @@ export class OpenAPIConfigService implements IOpenAPIConfigService {
 
   /** Get effective configuration (base merged with all overrides) */
   getEffectiveConfig(): OpenAPIEffectiveConfig {
-    let effective: OpenAPIEffectiveConfig = {
-      jsonPath: this.baseOptions?.jsonPath ?? '/api/openapi.json',
-      ui: this.baseOptions?.ui,
-      info: {
-        title: this.baseOptions?.info?.title ?? 'API',
-        version: this.baseOptions?.info?.version ?? '1.0.0',
-        description: this.baseOptions?.info?.description
-      },
-      securitySchemes: this.baseOptions?.securitySchemes
-    }
+    let effective = this.store.getBaseConfig()
 
     for (const override of this.overrides) {
       effective = this.mergeConfig(effective, override)

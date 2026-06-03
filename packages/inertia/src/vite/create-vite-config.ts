@@ -49,12 +49,12 @@ try {
 } catch {}
 
 const baseConfig = {
+  publicDir: 'src/inertia/public',
   plugins: [
     cloudflare(${cloudflareArgs}),
     ...(inertiaPlugin ? [inertiaPlugin] : []),
     ...stratalInertia(${stratalArgs}),
   ],
-  publicDir: '${join(options.cwd, 'src', 'inertia', 'public').replace(/\\/g, '/')}',
   build: {
     ${outDirConfig}
   },

@@ -21,11 +21,14 @@ export class TemplateService {
     const viteHead = this.manifest.getHeadTags()
     const viteScripts = this.manifest.getScriptTags()
 
+    // Use function replacements: a string replacement interprets `$$`, `$&`,
+    // `` $` `` and `$'` patterns, which would corrupt SEO/page content that
+    // legitimately contains a `$` (and could splice a placeholder token back in).
     let html = this.options.rootView
-    html = html.replace('@inertiaHead', headTags)
-    html = html.replace('@inertia', appHtml)
-    html = html.replace('@viteHead', viteHead)
-    html = html.replace('@viteScripts', viteScripts)
+    html = html.replace('@inertiaHead', () => headTags)
+    html = html.replace('@inertia', () => appHtml)
+    html = html.replace('@viteHead', () => viteHead)
+    html = html.replace('@viteScripts', () => viteScripts)
 
     return html
   }

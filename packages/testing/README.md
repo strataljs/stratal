@@ -315,27 +315,11 @@ beforeEach(() => {
 })
 ```
 
-### Nodemailer mock
-
-A drop-in mock for nodemailer, useful in Vitest's module mocking:
-
-```typescript
-// vitest.config.ts (or inline vi.mock)
-export default defineConfig({
-  test: {
-    alias: {
-      nodemailer: '@stratal/testing/mocks/nodemailer',
-    },
-  },
-})
-```
-
 ## Sub-path Exports
 
 ```typescript
 import { Test, TestingModule, createFetchMock } from '@stratal/testing'
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
-import nodemailer from '@stratal/testing/mocks/nodemailer'
 ```
 
 ## License

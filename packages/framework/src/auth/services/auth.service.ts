@@ -11,11 +11,12 @@ import { getErrorHandlerConfig } from '../utils';
  * Configured via AuthModule.forRootAsync() from the application layer.
  *
  * **Extensibility:**
- * Extend this class in application layer to add custom methods.
+ * Extend this class to add custom methods. Subclasses inherit
+ * `@Request(AUTH_SERVICE)` scope automatically — no decorator needed.
  *
  * @example
  * ```typescript
- * @Transient(AUTH_SERVICE)
+ * @Request(AUTH_SERVICE)
  * export class AppAuthService extends AuthService<AuthOptions> {
  *   async signInMagicLink(email: string) {
  *     return wrapBetterAuth(async () => {
@@ -41,7 +42,7 @@ export class AuthService<TOptions extends BetterAuthOptions = BetterAuthOptions>
         ...this.options,
         onAPIError: getErrorHandlerConfig()
     }) as Auth<TOptions>;
-      
+
     return this._authInstance
   }
 }

@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Container } from '../../di/container'
+import { runWithContainer } from '../../di/container-storage'
 import { DI_TOKENS } from '../../di/tokens'
 import { Command } from '../command'
 import { CommandNotFoundError } from '../errors/command-not-found.error'
 import { CommandError } from '../errors/command.error'
 import { QuarryRegistry } from '../quarry-registry'
+import type { CommandInput, CommandResult } from '../types'
 
 class GreetCommand extends Command {
   static command = 'greet {name : The name} {--loud}'
@@ -93,6 +95,11 @@ describe('QuarryRegistry', () => {
     mockErrorHandler.handle.mockClear()
   })
 
+  // call() resolves the command from the ambient container scope (in production
+  // set by Application.handleCommand via runInRequestScope); establish it here.
+  const call = (name: string, input?: CommandInput): Promise<CommandResult> =>
+    runWithContainer(container, () => quarry.call(name, input))
+
   function registerAll(): void {
     quarry.register(GreetCommand)
     quarry.register(FailCommand)
@@ -172,7 +179,7 @@ describe('QuarryRegistry', () => {
 
   it('should call a command and return result', async () => {
     registerAll()
-    const result = await quarry.call('greet', { name: 'World' })
+    const result = await call('greet', { name: 'World' })
     expect(result.exitCode).toBe(0)
     expect(result.output).toEqual(['Hello, World!'])
     expect(result.errors).toEqual([])
@@ -180,57 +187,57 @@ describe('QuarryRegistry', () => {
 
   it('should call a command via alias', async () => {
     registerAll()
-    const result = await quarry.call('g', { name: 'Alias' })
+    const result = await call('g', { name: 'Alias' })
     expect(result.output).toEqual(['Hello, Alias!'])
   })
 
   it('should pass options to command', async () => {
     registerAll()
-    const result = await quarry.call('greet', { name: 'World', loud: true })
+    const result = await call('greet', { name: 'World', loud: true })
     expect(result.output).toEqual(['HELLO, WORLD!'])
   })
 
   it('should return exit code from handle()', async () => {
     registerAll()
-    const result = await quarry.call('fail')
+    const result = await call('fail')
     expect(result.exitCode).toBe(1)
     expect(result.errors).toEqual(['Something went wrong'])
   })
 
   it('should apply argument defaults', async () => {
     registerAll()
-    const result = await quarry.call('defaults')
+    const result = await call('defaults')
     expect(result.output).toEqual(['Hello, World!'])
   })
 
   it('should apply option defaults', async () => {
     registerAll()
-    const result = await quarry.call('defaults', { name: 'Alice' })
+    const result = await call('defaults', { name: 'Alice' })
     expect(result.output).toEqual(['Hello, Alice!'])
   })
 
   it('should override defaults with provided input', async () => {
     registerAll()
-    const result = await quarry.call('defaults', { name: 'Bob', greeting: 'Hi' })
+    const result = await call('defaults', { name: 'Bob', greeting: 'Hi' })
     expect(result.output).toEqual(['Hi, Bob!'])
   })
 
   // ── Error Handling ──────────────────────────────────────────────
 
   it('should throw CommandNotFoundError for unknown command', async () => {
-    await expect(quarry.call('unknown')).rejects.toThrow(CommandNotFoundError)
+    await expect(call('unknown')).rejects.toThrow(CommandNotFoundError)
   })
 
   it('should catch CommandError and put message in errors', async () => {
     registerAll()
-    const result = await quarry.call('error')
+    const result = await call('error')
     expect(result.exitCode).toBe(1)
     expect(result.errors).toContain('User-facing error')
   })
 
   it('should handle unexpected errors through ExceptionHandler', async () => {
     registerAll()
-    const result = await quarry.call('crash')
+    const result = await call('crash')
     expect(result.exitCode).toBe(1)
     expect(result.errors).toContain('Unexpected crash')
     expect(mockErrorHandler.handle).toHaveBeenCalledOnce()
@@ -238,7 +245,7 @@ describe('QuarryRegistry', () => {
 
   it('should route ApplicationError through ExceptionHandler', async () => {
     registerAll()
-    const result = await quarry.call('app-error')
+    const result = await call('app-error')
     expect(result.exitCode).toBe(1)
     expect(result.errors).toContain('errors.someAppError')
     expect(mockErrorHandler.handle).toHaveBeenCalledOnce()
@@ -246,22 +253,22 @@ describe('QuarryRegistry', () => {
 
   it('should not re-throw for unexpected errors', async () => {
     registerAll()
-    const result = await quarry.call('crash')
+    const result = await call('crash')
     expect(result.exitCode).toBe(1)
     expect(result.errors.length).toBeGreaterThan(0)
   })
 
   it('should throw CommandError for missing required argument', async () => {
     registerAll()
-    await expect(quarry.call('greet')).rejects.toThrow(CommandError)
-    await expect(quarry.call('greet')).rejects.toThrow('Missing required argument: name')
+    await expect(call('greet')).rejects.toThrow(CommandError)
+    await expect(call('greet')).rejects.toThrow('Missing required argument: name')
   })
 
   // ── this.call() delegation ──────────────────────────────────────
 
   it('should allow commands to call other commands via this.call()', async () => {
     registerAll()
-    const result = await quarry.call('caller')
+    const result = await call('caller')
     expect(result.output).toEqual(['Hello, Inner!', 'Inner result: Hello, Inner!'])
   })
 
@@ -327,8 +334,8 @@ describe('QuarryRegistry', () => {
 
   it('should reset command state between calls', async () => {
     registerAll()
-    const result1 = await quarry.call('greet', { name: 'First' })
-    const result2 = await quarry.call('greet', { name: 'Second' })
+    const result1 = await call('greet', { name: 'First' })
+    const result2 = await call('greet', { name: 'Second' })
 
     expect(result1.output).toEqual(['Hello, First!'])
     expect(result2.output).toEqual(['Hello, Second!'])

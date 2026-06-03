@@ -78,7 +78,7 @@ describe('Event Listener Auto-Wiring (Application-level)', () => {
     expect(registry.getAllListeners()).toHaveLength(1)
   })
 
-  it('should resolve the same singleton listener instance for all handlers', () => {
+  it('should register listeners as transient (fresh instance per event resolution)', () => {
     const mockEventRegistry = { on: vi.fn() }
     container.registerValue(DI_TOKENS.EventRegistry, mockEventRegistry)
 
@@ -96,10 +96,12 @@ describe('Event Listener Auto-Wiring (Application-level)', () => {
 
     registry.register(TestModule)
 
-    // Resolve listener twice — should be the same instance (singleton)
+    // Listeners are transient, not singletons — they are resolved fresh per event
+    // from the emitting request scope, so request-scoped dependencies bind to the
+    // emitting request instead of being frozen at boot.
     const instance1 = container.resolve(AuditListener)
     const instance2 = container.resolve(AuditListener)
-    expect(instance1).toBe(instance2)
+    expect(instance1).not.toBe(instance2)
   })
 
   it('should correctly bind handler methods to the listener instance', async () => {

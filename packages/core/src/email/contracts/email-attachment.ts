@@ -76,7 +76,6 @@ export type EmailAttachment = z.infer<typeof emailAttachmentSchema>
  *
  * Attachment after resolution, ready for email provider.
  * Content can be Buffer (for inline) or ReadableStream (for storage-based).
- * Both nodemailer and Resend support these formats directly.
  */
 export interface ResolvedEmailAttachment {
   filename: string

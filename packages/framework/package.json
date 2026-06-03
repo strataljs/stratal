@@ -57,10 +57,10 @@
     "generate": "zenstack generate --schema=test/schema.zmodel -o test/zenstack",
     "generate:types": "wrangler types -c test/wrangler.jsonc",
     "pretest": "npx dotenv -- yarn generate && yarn generate:types",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:e2e": "vitest run --project e2e",
-    "test:coverage": "vitest run --coverage",
+    "test": "npx dotenv -- vitest run",
+    "test:watch": "npx dotenv -- vitest",
+    "test:e2e": "npx dotenv -- vitest run --project e2e",
+    "test:coverage": "npx dotenv -- vitest run --coverage",
     "test:db": "docker compose -f test/docker-compose.yml up -d",
     "typecheck": "yarn tsc --noEmit",
     "lint": "npx oxlint .",
@@ -81,8 +81,8 @@
   },
   "devDependencies": {
     "@better-auth/core": "^1.6.11",
-    "@cloudflare/vitest-pool-workers": "^0.16.3",
-    "@cloudflare/workers-types": "4.20260510.1",
+    "@cloudflare/vitest-pool-workers": "^0.16.10",
+    "@cloudflare/workers-types": "4.20260529.1",
     "@stratal/testing": "workspace:^",
     "@types/node": "^25.6.2",
     "@types/pg": "^8.20.0",
@@ -100,6 +100,6 @@
     "tsdown": "^0.22.0",
     "typescript": "^6.0.3",
     "vitest": "~4.1.5",
-    "wrangler": "^4.90.0"
+    "wrangler": "^4.95.0"
   }
 }

@@ -1,11 +1,11 @@
 ---
 name: stratal
-description: "Build Cloudflare Workers applications with the Stratal framework. Use when code imports from 'stratal', '@stratal/framework', '@stratal/testing', '@stratal/inertia', or '@stratal/inertia-modal', when creating modules, controllers, services, routes, queue consumers, cron jobs, seeders, gateways, Durable Objects, Workflows, or CLI commands, or when user mentions Stratal, asks to 'create a module', 'add an endpoint', 'set up auth', 'configure database', 'set up Inertia', 'add a modal route', 'add a WebSocket gateway', 'use Durable Objects', 'use Cloudflare Workflows', 'configure storage', 'write tests', or 'run quarry'. Covers DI, routing with OpenAPI, error handling, i18n, testing, auth, RBAC, Inertia.js SSR, backend-driven modals, WebSocket gateways, Durable Object / Workflow / RPC base classes, R2 storage, and MCP server. Do NOT use for generic Hono apps, plain Cloudflare Workers, or NestJS."
+description: "Build Cloudflare Workers applications with the Stratal framework. Use when code imports from 'stratal', '@stratal/framework', '@stratal/testing', '@stratal/inertia', '@stratal/inertia-modal', or '@stratal/feature-flags', when creating modules, controllers, services, routes, queue consumers, cron jobs, seeders, gateways, Durable Objects, Workflows, or CLI commands, or when user mentions Stratal, asks to 'create a module', 'add an endpoint', 'set up auth', 'configure database', 'set up Inertia', 'add SEO', 'add a modal route', 'add a WebSocket gateway', 'use Durable Objects', 'use Cloudflare Workflows', 'configure storage', 'add feature flags', 'set up Flagship', 'write tests', or 'run quarry'. Covers DI, routing with OpenAPI, error handling, i18n, testing, auth, RBAC, Inertia.js SSR, backend-driven modals, WebSocket gateways, Durable Object / Workflow / RPC base classes, R2 storage, Cloudflare Flagship feature flags, and MCP server. Do NOT use for generic Hono apps, plain Cloudflare Workers, or NestJS."
 license: MIT
 compatibility: Designed for AI Agents. Requires Node.js 22+, npm.
 metadata:
   author: Temitayo Fadojutimi
-  version: "1.9"
+  version: "2.7"
 ---
 
 # Stratal Framework
@@ -16,6 +16,7 @@ Stratal is a modular Cloudflare Workers framework. ESM-only. Packages:
 - `@stratal/testing` — test utilities, mocks, HTTP client
 - `@stratal/inertia` — Inertia.js server adapter for React SSR
 - `@stratal/inertia-modal` — backend-driven modal pages for Inertia
+- `@stratal/feature-flags` — Cloudflare Flagship feature flags + Inertia sharing + React hooks
 
 ## Critical Rules
 
@@ -56,6 +57,9 @@ Run `npx quarry help` to see all commands. Always use these to inspect your app 
 | `npx quarry event:list` | List all event listeners |
 | `npx quarry schedule:list` | List all cron schedules |
 | `npx quarry queue:list` | List all queue consumers |
+| `npx quarry queue:failed` | List failed queue jobs |
+| `npx quarry queue:retry` | Retry failed queue jobs (single or all) |
+| `npx quarry queue:purge` | Delete failed queue jobs without retrying |
 | `npx quarry db:seed:list` | List all seeders |
 | `npx quarry mcp:tools` | Preview MCP tools from your API |
 | `npx quarry mcp:serve` | Start MCP stdio server exposing routes as tools |
@@ -211,7 +215,7 @@ Core: `stratal`, `stratal/cache`, `stratal/config`, `stratal/cron`, `stratal/di`
 
 Framework: `@stratal/framework/access-control`, `@stratal/framework/auth`, `@stratal/framework/context`, `@stratal/framework/database`, `@stratal/framework/factory`, `@stratal/framework/guards`
 
-Testing: `@stratal/testing`, `@stratal/testing/mocks`, `@stratal/testing/mocks/nodemailer`, `@stratal/testing/mocks/zenstack-language`, `@stratal/testing/storage`, `@stratal/testing/vitest-plugin`
+Testing: `@stratal/testing`, `@stratal/testing/mocks`, `@stratal/testing/mocks/zenstack-language`, `@stratal/testing/storage`, `@stratal/testing/vitest-plugin`
 
 Inertia: `@stratal/inertia`, `@stratal/inertia/quarry` (CLI-only: `InertiaQuarryModule`, build/dev/types/install commands), `@stratal/inertia/react`, `@stratal/inertia/testing`, `@stratal/inertia/vite`, `@stratal/inertia-modal`, `@stratal/inertia-modal/react`
 
@@ -243,8 +247,6 @@ Inertia: `@stratal/inertia`, `@stratal/inertia/quarry` (CLI-only: `InertiaQuarry
 3. Pass to entry point: `new Stratal({ module: AppModule, exceptionHandler: AppExceptionHandler })`
 4. Create custom error classes: extend `ApplicationError` for 500 errors, extend `HttpException` for non-500 errors with baked-in status
 
-See `references/errors-and-i18n.md` for the full ExceptionHandler API.
-
 ### Set Up Inertia.js SSR
 
 1. Install: `npm install @stratal/inertia`
@@ -253,9 +255,10 @@ See `references/errors-and-i18n.md` for the full ExceptionHandler API.
 4. Use `@InertiaGet('/')` / `@InertiaPost('/')` and `ctx.inertia('page/Name', props)` in controllers (or `@InertiaRoute()` for convention routing)
 5. For flash messages: add `flash: { store: new CookieFlashStore({ secret: env.FLASH_SECRET }) }` and use `ctx.flash(key, value)`
 6. For frontend i18n: add `i18n: { only: ['common', 'nav'] }` and use `useI18n()` from `@stratal/inertia/react`
-7. Run `npx quarry inertia:dev` for development
+7. For SEO: call `ctx.seo({ title, description, openGraph, ... })` in controllers — tags inject into `<head>` and the `stratalInertia()` Vite plugin auto-syncs the head on client navigation (no app wiring)
+8. Run `npx quarry inertia:dev` for development
 
-See `references/inertia.md` for props, shared data, flash messages, i18n integration, type safety, and Vite setup.
+See `references/inertia.md` for props, shared data, flash messages, i18n integration (incl. auto-emitted hreflang link tags for SEO), backend-driven SEO (`ctx.seo()`, auto head-sync), type safety, and Vite setup.
 
 ### Set Up Backend Modals
 
@@ -264,8 +267,6 @@ See `references/inertia.md` for props, shared data, flash messages, i18n integra
 3. In a controller, return `ctx.inertiaModal('Page/Component', props, { baseURL: '/parent' })`
 4. In `src/inertia/app.tsx`, call `resolver.set(name => pages['./pages/' + name + '.tsx']?.())` before `createInertiaApp`, and pass `resolve: resolver.resolve`
 5. Place `<Modal />` once in your layout
-
-See `references/inertia-modal.md` for the full backend + frontend setup, `useModal()`, and partial reloads.
 
 ### Expose API as MCP Server
 
@@ -282,6 +283,8 @@ See `references/quarry-cli.md` for all MCP flags and options.
 **User says "Add authentication"** -> Read `references/auth-and-rbac.md`. Configure `AuthModule.forRootAsync()`. Add `@UseGuards(AuthGuard())` to controllers.
 
 **User says "Write tests for my service"** -> Read `references/testing.md`. Use `Test.createTestingModule()` with provider overrides. Use `module.http` for HTTP tests, `module.get()` for unit tests.
+
+**User says "Run my tests in parallel with isolated databases"** -> Read `references/testing.md`. Pass `database: { isolation: 'database' }` to `stratalTest()` and wire `globalSetup` with `createTestDatabaseGlobalSetup` from `@stratal/testing/database`. Pass `schema` (the root `.zmodel` or schema dir) — required in database mode; the migrated template is reused across runs until the schema changes. Each file clones the template and drops it on teardown.
 
 **User says "Set up the database"** -> Read `references/database.md`. Configure `DatabaseModule.forRootAsync()` with ZenStack.
 
@@ -301,9 +304,17 @@ See `references/quarry-cli.md` for all MCP flags and options.
 
 **User says "Expose my API as MCP tools"** -> Run `npx quarry mcp:serve`. Use `--tag` or `--path` flags to filter. Preview with `npx quarry mcp:tools`.
 
+**User says "Retry failed queue jobs" / "See failed messages" / "Purge dead letters"** -> Read `references/queues-and-cron.md`. Run `npx quarry queue:failed` to list, `npx quarry queue:retry --all` to retry all, `npx quarry queue:purge --all` to delete all.
+
+**User says "Automatically clean up old failed jobs" / "Expire dead-letter jobs" / "Bound failed-job KV growth"** -> Read `references/queues-and-cron.md` (Failed Job Management). Failed jobs persist until retried/purged. Add the opt-in `FailedJobCleanupJob` (import from `stratal/queue`) to a module's `jobs` array, set `QueueModule.forRoot({ failedJobs: { retention } })`, and add a matching cron trigger to `wrangler.jsonc`. Use `failedJobCleanupJob(schedule)` for a custom schedule.
+
 **User says "List all routes" / "Debug my app"** -> Run `npx quarry route:list`. Also try `event:list`, `schedule:list`, `queue:list` to inspect other registrations.
 
 **User says "Set up i18n with Accept-Language header"** -> Read `references/errors-and-i18n.md`. Configure `I18nModule.forRoot({ detection: { strategy: 'header' } })`. Register messages with `I18nModule.registerMessages()`.
+
+**User says "Add hreflang tags" / "Localized SEO" / "Alternate language URLs"** -> Read `references/inertia.md` (Hreflang section). No setup needed beyond Inertia + `I18nModule.forRoot({ locales, defaultLocale, detection: { strategy: 'path' | 'querystring' } })`. Tags auto-emit into the SSR head when ≥2 locales are configured.
+
+**User says "Set the page title/description" / "Add SEO / Open Graph / meta tags" / "Set page metadata"** -> Read `references/inertia.md` (SEO section). Call `ctx.seo({ title, description, openGraph, twitter, ... })` in the controller; add app-wide defaults + `titleTemplate` via `InertiaModule.forRoot({ seo: { ... } })`. Head sync on client navigation is automatic — the `stratalInertia()` Vite plugin injects the runtime; no `<Seo/>` mount needed. Read metadata in a component with `useSeo()` from `@stratal/inertia/react`.
 
 **User says "Check if all translations are complete" / "Audit i18n" / "Missing translations"** -> Run `npx quarry i18n:check`. Use `--locale=fr` to check a single locale, `--prefix=common` to filter by namespace. See `references/quarry-cli.md` for all i18n commands.
 
@@ -321,9 +332,13 @@ See `references/quarry-cli.md` for all MCP flags and options.
 
 **User says "Always trailing slash on URLs" / "Force no trailing slash"** -> Read `references/routing.md`. Set `trailingSlash: 'always'` or `'never'` in the `Stratal` constructor. Default `'ignore'` matches both forms with no redirect.
 
+**User says "Lazily load a module" / "Load a module on demand" / "Reduce cold start"** -> Read `references/modules-and-di.md` (Lazy Module Loading). Inject `DI_TOKENS.LazyModuleLoader`, call `loader.load(() => import('./x.module').then(m => m.XModule))`, resolve providers via `ref.get(Token)`. Lazy modules register providers only — controllers/consumers/jobs are skipped.
+
 **User says "I have an existing Hono app"** -> Read `references/incremental-adoption.md`. Mount Stratal as sub-app via `stratal.hono`.
 
 **User says "Add rate limiting" / "Throttle this endpoint" / "429 too many requests"** -> Read `references/rate-limiter.md`. Import `RateLimiterModule.forRoot({ store: 'kv', binding: 'RATE_LIMITS' })`. Define limiters in `OnInitialize` via `registry.for('name', ctx => Limit.perMinute(60).by(...))`. Attach with `router.throttle('name')` or `@RateLimit('name')`. For better-auth path rules → `references/auth-and-rbac.md` "Rate-limit interop".
+
+**User says "Add feature flags" / "Use Flagship" / "toggle a feature"** -> Read `references/feature-flags.md`. Install `@stratal/feature-flags`, add the `flagship` binding to wrangler, import `FeatureFlagModule.forRoot({ apps: [{ binding: 'FLAGS', flags: {...} }] })`, inject `FeatureFlagService`. To expose flags to Inertia, register `FeatureFlagShareMiddleware` (scoped via `router.middleware(...)` or global via `router.use(...)`) and read them via `useFlag` from `@stratal/feature-flags/react`.
 
 ## Reference Loading Guide
 
@@ -332,22 +347,23 @@ Load these when the task needs deeper knowledge:
 | Reference | When to Load |
 |-----------|-------------|
 | `references/quarry-cli.md` | CLI commands, MCP server setup, custom command creation, debugging |
-| `references/modules-and-di.md` | Provider types, scopes, container API, dynamic modules |
+| `references/modules-and-di.md` | Provider types, scopes, container API, dynamic modules, lazy module loading (`LazyModuleLoader`) |
 | `references/routing.md` | RouteConfig, RouterContext API, named routes, URL generation, signed URLs, domain routing, Router fluent API, OpenAPI, versioning |
 | `references/errors-and-i18n.md` | ExceptionHandler, ApplicationError, HttpException, domain error classes, i18n, withZodI18n(), withI18n() |
-| `references/inertia.md` | Inertia.js setup, rendering, props, SSR, type safety, Vite |
+| `references/inertia.md` | Inertia.js setup, rendering, props, SSR, SEO (`ctx.seo()`, auto head-sync), type safety, Vite |
 | `references/inertia-modal.md` | Backend-driven modal pages: `ModalModule`, `ctx.inertiaModal()`, `<Modal>`, `useModal()` |
+| `references/feature-flags.md` | Cloudflare Flagship: `FeatureFlagModule`, `FeatureFlagService`, flag manifest, `use()`, `all()`, `FeatureFlagShareMiddleware` (Inertia sharing), `useFlag`/`useFeatureFlags` |
 | `references/websocket.md` | WebSocket gateways: `@Gateway`, `@OnMessage`, `GatewayContext` |
 | `references/workers.md` | Durable Objects, Workflows, Service Bindings — DI-aware base classes |
 | `references/database.md` | DatabaseModule, ZenStack, connections, plugins, transactions |
 | `references/auth-and-rbac.md` | Better Auth, AuthContext, access control, AuthGuard, rate-limit interop (`registry.forPath()` + auto-wired `customStorage` / `customRules`) |
 | `references/events.md` | Event listeners, @On/@Listener, database events, wildcards |
-| `references/queues-and-cron.md` | Queue consumers, senders, cron jobs, wrangler config |
+| `references/queues-and-cron.md` | Queue consumers, senders, auto-idempotent dispatch, failed job management + `FailedJobCleanupJob` cron, cron jobs, wrangler config |
 | `references/seeders.md` | Database seeders, calling other seeders |
 | `references/middleware-and-guards.md` | RouteConfigurable, middleware registration with Router, guards, @UseGuards |
 | `references/rate-limiter.md` | Named rate limiters, `RateLimiterModule.forRoot()`, `Limit` value class (incl. `perSeconds`), `router.throttle()`, `@RateLimit` decorator, typed-KV custom stores, 429 headers |
-| `references/testing.md` | TestingModule, TestHttpClient, mocks, factories |
-| `references/infrastructure.md` | Cache (KV), Logger, Email (Resend/SMTP), Storage (R2 — multi-disk, presigned URLs), OpenAPI |
+| `references/testing.md` | TestingModule, TestHttpClient, mocks, factories, parallel per-file database isolation (required `schema`, reused template) |
+| `references/infrastructure.md` | Cache (KV), Logger, Email (SMTP), Storage (R2 — multi-disk, presigned URLs), OpenAPI |
 | `references/config.md` | ConfigService, registerAs(), namespaces |
 | `references/incremental-adoption.md` | Mounting Stratal into existing Hono app |
 | `assets/project-scaffold.md` | New project template (only when scaffolding from scratch) |
@@ -358,13 +374,17 @@ Load these when the task needs deeper knowledge:
 
 **"Token not registered"** -> Provider not in any module's `providers`, or module not imported.
 
+**"missing @inject on constructor parameter N" / "has N constructor parameter(s) but none are decorated with @inject"** -> Every constructor dependency needs an explicit `@inject(Token)` from `stratal/di` — there is no type-based auto-resolution. Decorate each parameter.
+
+**"Cannot resolve request-scoped provider ... outside a request scope"** -> A `@Request()`-scoped service was resolved at boot or outside an HTTP request. Resolve it inside a request handler; for non-HTTP entrypoints (Durable Objects, Workflows, WorkerEntrypoints) use `this.runInScope(container => …)` (see `references/workers.md`).
+
 **"Cannot mix convention and HTTP decorators"** -> Pick one routing pattern per controller.
 
 **Zod validation errors not translated** -> Imported `z` from `zod` instead of `stratal/validation`.
 
 **`z.cuid2()` accepts `'sw'`, `'a'`, or any short lowercase string** -> Zod 4.3.6's regex is `/^[0-9a-z]+$/`. Use `cuid2()` from `stratal/validation` instead.
 
-**Cron job not firing** -> `schedule` must be a `static` class property (not instance property). Also verify the string matches `wrangler.jsonc` trigger exactly.
+**Cron job not firing** -> `schedule` must be a `static` class property (not instance property). Also verify the string matches `wrangler.jsonc` trigger exactly. Jobs without a static `schedule` property log a warning and are skipped at boot.
 
 **Queue messages not consumed** -> Check: consumer in `consumers` array (not `providers`), `messageTypes` matches dispatched `type`, `QueueModule.registerQueue('BINDING_NAME')` called, and `'BINDING_NAME'` matches the `binding` field under `queues.producers[]` in `wrangler.jsonc` exactly (UPPER_SNAKE_CASE, no transformation).
 

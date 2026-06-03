@@ -37,13 +37,17 @@
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
     },
+    "./database": {
+      "types": "./dist/database/index.d.mts",
+      "import": "./dist/database/index.mjs"
+    },
+    "./feature-flags": {
+      "types": "./dist/feature-flags/index.d.mts",
+      "import": "./dist/feature-flags/index.mjs"
+    },
     "./mocks": {
       "types": "./dist/mocks/index.d.mts",
       "import": "./dist/mocks/index.mjs"
-    },
-    "./mocks/nodemailer": {
-      "types": "./dist/mocks/nodemailer.d.mts",
-      "import": "./dist/mocks/nodemailer.mjs"
     },
     "./mocks/zenstack-language": {
       "types": "./dist/mocks/zenstack-language.d.mts",
@@ -66,14 +70,15 @@
     "lint:fix": "npx oxlint --fix ."
   },
   "dependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.16.3",
+    "@cloudflare/vitest-pool-workers": "^0.16.10",
     "@golevelup/ts-vitest": "^4.0.0",
     "msw": "^2.14.5"
   },
   "peerDependencies": {
     "@stratal/framework": ">=0.0.22",
     "better-auth": ">=1.4",
-    "stratal": ">=0.0.22",
+    "pg": "^8.0.0",
+    "stratal": ">=0.0.21",
     "vitest": "^4.1.0"
   },
   "peerDependenciesMeta": {
@@ -82,15 +87,20 @@
     },
     "better-auth": {
       "optional": true
+    },
+    "pg": {
+      "optional": true
     }
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "4.20260510.1",
+    "@cloudflare/workers-types": "4.20260529.1",
     "@stratal/framework": "workspace:*",
     "@types/node": "^25.6.2",
+    "@types/pg": "^8.20.0",
     "@vitest/runner": "~4.1.5",
     "@vitest/snapshot": "~4.1.5",
     "better-auth": "^1.6.11",
+    "pg": "^8.20.0",
     "stratal": "workspace:*",
     "tsdown": "^0.22.0",
     "typescript": "^6.0.3",

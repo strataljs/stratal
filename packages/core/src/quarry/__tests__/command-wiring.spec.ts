@@ -2,6 +2,7 @@ import { createMock, type DeepMocked } from '@stratal/testing/mocks'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { inject, Transient } from '../../di'
 import { Container } from '../../di/container'
+import { runWithContainer } from '../../di/container-storage'
 import type { LoggerService } from '../../logger/services/logger.service'
 import { ModuleRegistry } from '../../module/module-registry'
 import { Module } from '../../module/module.decorator'
@@ -144,7 +145,7 @@ describe('Command Auto-Wiring (Application-level)', () => {
       quarry.register(CommandClass as Constructor<Command>)
     }
 
-    const result = await quarry.call('dependent')
+    const result = await runWithContainer(container, () => quarry.call('dependent'))
     expect(result.output).toEqual(['injected-value'])
   })
 })

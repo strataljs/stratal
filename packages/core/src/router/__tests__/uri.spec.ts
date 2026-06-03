@@ -3,7 +3,8 @@ import type { Application } from '../../application'
 import { RouterError } from '../router.error'
 import type { RegisteredRoute, RouteRegistry } from '../route-registry'
 import type { RouterContext } from '../router-context'
-import type { TrailingSlashMode } from '../types'
+import type { LocalePathService } from '../services/locale-path.service'
+import type { LocalePathConfig, TrailingSlashMode } from '../types'
 import { Uri, buildRouteUrl } from '../uri'
 
 const createMockApplication = (trailingSlash?: TrailingSlashMode) => ({
@@ -39,6 +40,14 @@ const createMockRouterContext = (overrides: {
     env: overrides.env ?? { APP_SECRET: 'test-secret' },
   },
 }) as unknown as RouterContext
+
+const createMockLocalePathService = (overrides: {
+  localePathConfig?: LocalePathConfig | null
+  prefixDefaultLocale?: false | true | 'redirect'
+} = {}) => ({
+  localePathConfig: overrides.localePathConfig ?? null,
+  prefixDefaultLocale: overrides.prefixDefaultLocale ?? false,
+}) as unknown as LocalePathService
 
 describe('buildRouteUrl', () => {
   it('should build URL for simple route', () => {
@@ -155,6 +164,45 @@ describe('buildRouteUrl', () => {
     expect(buildRouteUrl(route, 'tenant.dashboard', { tenant: 'acme', locale: 'fr' }))
       .toBe('https://acme.myapp.com/fr/dashboard')
   })
+
+  it('should skip locale prefix for default locale when prefixDefaultLocale is false', () => {
+    const route = createRoute({
+      path: '/posts',
+      localePaths: ['/:locale{en|fr}/posts'],
+    })
+    const config = { defaultLocale: 'en', prefixDefaultLocale: false as const }
+    expect(buildRouteUrl(route, 'posts.index', { locale: 'en' }, config)).toBe('/posts')
+    expect(buildRouteUrl(route, 'posts.index', { locale: 'fr' }, config)).toBe('/fr/posts')
+  })
+
+  it('should skip locale prefix for default locale when prefixDefaultLocale is redirect', () => {
+    const route = createRoute({
+      path: '/posts',
+      localePaths: ['/:locale{en|fr}/posts'],
+    })
+    const config = { defaultLocale: 'en', prefixDefaultLocale: 'redirect' as const }
+    expect(buildRouteUrl(route, 'posts.index', { locale: 'en' }, config)).toBe('/posts')
+    expect(buildRouteUrl(route, 'posts.index', { locale: 'fr' }, config)).toBe('/fr/posts')
+  })
+
+  it('should prefix all locales when prefixDefaultLocale is true', () => {
+    const route = createRoute({
+      path: '/posts',
+      localePaths: ['/:locale{en|fr}/posts'],
+    })
+    const config = { defaultLocale: null, prefixDefaultLocale: true as const }
+    expect(buildRouteUrl(route, 'posts.index', { locale: 'en' }, config)).toBe('/en/posts')
+    expect(buildRouteUrl(route, 'posts.index', { locale: 'fr' }, config)).toBe('/fr/posts')
+  })
+
+  it('should consume default locale from params even when not prefixed', () => {
+    const route = createRoute({
+      path: '/posts',
+      localePaths: ['/:locale{en|fr}/posts'],
+    })
+    const config = { defaultLocale: 'en', prefixDefaultLocale: false as const }
+    expect(buildRouteUrl(route, 'posts.index', { locale: 'en', page: '2' }, config)).toBe('/posts?page=2')
+  })
 })
 
 describe('Uri', () => {
@@ -166,10 +214,11 @@ describe('Uri', () => {
     routes: Record<string, RegisteredRoute> = {},
     contextOverrides: Parameters<typeof createMockRouterContext>[0] = {},
     trailingSlash?: TrailingSlashMode,
+    localePathOverrides: Parameters<typeof createMockLocalePathService>[0] = {},
   ) => {
     mockRegistry = createMockRegistry(routes)
     mockRouterContext = createMockRouterContext(contextOverrides)
-    uri = new Uri(mockRegistry, mockRouterContext, createMockApplication(trailingSlash))
+    uri = new Uri(mockRegistry, mockRouterContext, createMockApplication(trailingSlash), createMockLocalePathService(localePathOverrides))
   }
 
   beforeEach(() => {
@@ -432,9 +481,40 @@ describe('Uri', () => {
           path: '/posts',
           localePaths: ['/:locale{en|fr}/posts'],
         })
+      }, {}, undefined, {
+        localePathConfig: { allLocales: ['en', 'fr'], prefixedLocales: ['en', 'fr'], defaultLocale: null },
+        prefixDefaultLocale: true,
       })
       uri.defaults({ locale: 'en' })
       expect(uri.route('posts.index')).toBe('/en/posts')
+    })
+
+    it('should skip locale prefix for default locale when prefixDefaultLocale is false', () => {
+      setupUri({
+        'posts.index': createRoute({
+          path: '/posts',
+          localePaths: ['/:locale{en|fr}/posts'],
+        })
+      }, {}, undefined, {
+        localePathConfig: { allLocales: ['en', 'fr'], prefixedLocales: ['fr'], defaultLocale: 'en' },
+        prefixDefaultLocale: false,
+      })
+      uri.defaults({ locale: 'en' })
+      expect(uri.route('posts.index')).toBe('/posts')
+    })
+
+    it('should prefix non-default locale when prefixDefaultLocale is false', () => {
+      setupUri({
+        'posts.index': createRoute({
+          path: '/posts',
+          localePaths: ['/:locale{en|fr}/posts'],
+        })
+      }, {}, undefined, {
+        localePathConfig: { allLocales: ['en', 'fr'], prefixedLocales: ['fr'], defaultLocale: 'en' },
+        prefixDefaultLocale: false,
+      })
+      uri.defaults({ locale: 'fr' })
+      expect(uri.route('posts.index')).toBe('/fr/posts')
     })
   })
 

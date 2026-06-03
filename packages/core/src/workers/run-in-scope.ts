@@ -11,7 +11,7 @@ export async function runInScope<T>(
   callback: (container: Container) => T | Promise<T>
 ): Promise<T> {
   const app = await Stratal.resolveApplication()
-  await app.initializeHandlers()
+  await app.ensureScopedHandlers()
   const mockCtx = app.createMockRouterContext('en')
   return app.container.runInRequestScope(mockCtx, callback)
 }

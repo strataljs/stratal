@@ -59,12 +59,10 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
       // For the redirect modes, the trailing-slash middleware runs first and
       // canonicalises via 308 before matching reaches the registered route.
       strict: false,
-      defaultHook: (result, c) => {
+      defaultHook: (result) => {
         if (!result.success) {
           throw new SchemaValidationError(result.error)
         }
-        const override = c.get('validationSuccessResponse')
-        if (override) return override
       },
     })
 
@@ -147,6 +145,11 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
     const requestContainer = c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER) ?? this._container
     const handler = requestContainer.resolve<ExceptionHandler>(DI_TOKENS.ExceptionHandler)
     const ctx = createHttpExceptionContext(c)
-    return handler.handle(err, ctx)
+    // Run the handler within the request container's async context so standalone
+    // helpers like `route()` (which read the ambient container via getContainer)
+    // resolve correctly. Errors thrown before the request-scope middleware's
+    // `runWithContainer` body — e.g. route-param validation failures — otherwise
+    // reach here outside any container scope, breaking redirect-back rendering.
+    return runWithContainer(requestContainer, () => handler.handle(err, ctx))
   }
 }

@@ -6,6 +6,9 @@ export * from './queue-binding'
 export * from './queue-sender.interface'
 export * from './queue-sender'
 export * from './queue-registry'
+export * from './queue-store'
+export * from './failed-job'
+export * from './jobs/failed-job-cleanup.job'
 
 // Decorators
 export * from './decorators'
