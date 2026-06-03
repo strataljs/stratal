@@ -129,9 +129,9 @@ export class ModalService {
     // page.url = modalURL in both the server-rendered HTML and the client
     // hydration pass. The Modal component renders null during SSR (effects
     // don't run server-side), so there is no hydration mismatch.
-    const ssrResult = await this.ssr.render(combinedPage)
-    const html = this.template.render(combinedPage, ssrResult.head, ssrResult.body)
-    return new Response(html, {
+    const { head, stream } = await this.ssr.render(combinedPage)
+    const body = this.template.renderStream(combinedPage, head, stream)
+    return new Response(body, {
       status: 200,
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     })

@@ -12,15 +12,41 @@
  */
 
 import type { HeadManagerTitleCallback, Page } from '@inertiajs/core'
+// Import `App` as a runtime value only — never reference its *type*
+// (`typeof App`, `Parameters<typeof App>`, `ComponentProps<typeof App>`, …) in
+// this module's exported surface. Any such reference makes the emitted `.d.mts`
+// re-export `import { App } from '@inertiajs/react'`, which pulls Inertia's whole
+// type graph into resolution the moment a consumer imports this SSR entry. That
+// eagerly evaluates `@inertiajs/core`'s config-driven types (`FlashData`,
+// `SharedPageProps`, derived from its `InertiaConfig` interface) before a
+// consumer's own `declare module '@inertiajs/core'` augmentation has been
+// applied, caching the un-augmented defaults — so `usePage().flash` /
+// `usePage().props` degrade to `unknown` at call sites. Typing this entry's
+// surface structurally (below) keeps `@inertiajs/react` out of the generated
+// declarations and avoids the hazard.
 import { App } from '@inertiajs/react'
 import { type ComponentType, type ReactNode, createElement } from 'react'
 import { renderToReadableStream } from 'react-dom/server'
 import { ApplicationError } from 'stratal/errors'
 import type { InertiaSsrResult } from './types'
 
-// `@inertiajs/react` does not re-export its `InertiaAppProps` type, so derive it
-// from the `App` component's own parameters.
-type AppProps = Parameters<typeof App>[0]
+/**
+ * The props Inertia's `App` component receives, reconstructed locally from
+ * `@inertiajs/core` + React types. Mirrors `@inertiajs/react`'s `InertiaAppProps`
+ * without importing it — see the `App` import note above for why that matters.
+ */
+interface AppProps {
+  initialPage: Page
+  // `ComponentType<any>` mirrors Inertia's own `ReactComponent` (page components
+  // are resolved opaquely), keeping the resolver's `ComponentType<TProps>` output
+  // assignable here without coupling to `@inertiajs/react`'s exported types.
+  // oxlint-disable-next-line typescript/no-explicit-any
+  initialComponent?: ComponentType<any>
+  // oxlint-disable-next-line typescript/no-explicit-any
+  resolveComponent?: (name: string, page?: Page) => ComponentType<any> | Promise<ComponentType<any>>
+  titleCallback?: HeadManagerTitleCallback
+  onHeadUpdate?: (elements: string[]) => void
+}
 
 /** A page component for `TProps`, or a module namespace whose `default` is one. */
 type ResolvedPage<TProps> = ComponentType<TProps> | { default: ComponentType<TProps> }
@@ -66,7 +92,7 @@ export interface CreateInertiaSsrAppOptions<TProps = unknown> {
    * Receives the Inertia `App` component and its props; return the React tree to
    * render. When omitted, `App` is rendered directly.
    */
-  setup?: (args: { App: typeof App; props: AppProps }) => ReactNode
+  setup?: (args: { App: ComponentType<AppProps>; props: AppProps }) => ReactNode
   /**
    * Optional document-title callback (Inertia `title`), applied to page titles.
    */
