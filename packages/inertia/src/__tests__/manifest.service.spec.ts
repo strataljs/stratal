@@ -91,7 +91,7 @@ describe('ManifestService', () => {
       expect(() => createService()).toThrow(/production build is missing the Vite client manifest/)
     })
 
-    it('memoizes the derived head/script tag strings', () => {
+    it('memoizes the derived head/script tag strings (builds each once)', () => {
       (globalThis as ManifestGlobal).__STRATAL_INERTIA_MANIFEST__ = {
         'src/inertia/app.tsx': {
           file: 'assets/app-abc123.js',
@@ -101,8 +101,15 @@ describe('ManifestService', () => {
       }
 
       const service = createService()
+      // Spy on the builders to prove the result is cached, not rebuilt — string
+      // value-equality alone can't tell a memoized result from a fresh identical one.
+      const buildHead = vi.spyOn(service as unknown as { buildHeadTags(): string }, 'buildHeadTags')
+      const buildScripts = vi.spyOn(service as unknown as { buildScriptTags(): string }, 'buildScriptTags')
+
       expect(service.getHeadTags()).toBe(service.getHeadTags())
       expect(service.getScriptTags()).toBe(service.getScriptTags())
+      expect(buildHead).toHaveBeenCalledTimes(1)
+      expect(buildScripts).toHaveBeenCalledTimes(1)
     })
   })
 })

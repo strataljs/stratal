@@ -526,6 +526,25 @@ describe('InertiaService', () => {
 
       expect(mockSsr.render).toHaveBeenCalled()
     })
+
+    it('matches ssr.disabled against the pathname even with a query string', async () => {
+      const ssrOptions: InertiaModuleOptions = {
+        rootView: '<html>@inertia</html>',
+        version: '1.0',
+        ssr: {
+          bundle: vi.fn() as unknown as InertiaModuleOptions['ssr'] extends { bundle: infer B } ? B : never,
+          disabled: ['admin/*'],
+        },
+      }
+
+      const ssrService = new InertiaService(ssrOptions, mockTemplate, mockSsr, mockSeo)
+      const ctx = createMockContext({ url: 'http://localhost/admin/dashboard?tab=users' })
+
+      await ssrService.render(ctx, 'AdminDashboard', {})
+
+      expect(mockSsr.render).not.toHaveBeenCalled()
+      expect(mockTemplate.renderClientOnly).toHaveBeenCalled()
+    })
   })
 
   describe('seo injection', () => {

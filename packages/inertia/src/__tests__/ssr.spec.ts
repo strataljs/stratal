@@ -66,4 +66,14 @@ describe('createInertiaSsrApp', () => {
 
     await expect(render(createPage())).rejects.toThrow(/did not return a React component/)
   })
+
+  it('accepts a props type argument to type the resolver', async () => {
+    // With a type argument the resolver is typed (no casts); the bare `Home`
+    // component satisfies `ComponentType<{ message: string }>`.
+    const { render } = createInertiaSsrApp<{ message: string }>({ resolve: () => Home })
+
+    const html = await readAll((await render(createPage())).stream)
+
+    expect(html).toContain('Hello')
+  })
 })

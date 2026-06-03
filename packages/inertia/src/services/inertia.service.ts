@@ -91,6 +91,8 @@ export class InertiaService {
   ): Promise<Response> {
     const reqUrl = new URL(ctx.c.req.url)
     const url = reqUrl.search ? `${reqUrl.pathname}${reqUrl.search}` : reqUrl.pathname
+    // `ssr.disabled` globs match the path only — keep the query string out of it.
+    const pathname = reqUrl.pathname
     const isInertia = ctx.c.get('inertia')
 
     // Resolve shared data from module options
@@ -156,7 +158,7 @@ export class InertiaService {
 
     // Full page render — skip SSR if disabled for this route or not configured
     const seoTags = this.seoService.tagsFor(resolvedSeo)
-    const ssrDisabled = ctx.c.get('withoutSsr') || this.isSsrDisabled(url) || !this.options.ssr
+    const ssrDisabled = ctx.c.get('withoutSsr') || this.isSsrDisabled(pathname) || !this.options.ssr
 
     if (ssrDisabled) {
       const html = this.template.renderClientOnly(page, seoTags)

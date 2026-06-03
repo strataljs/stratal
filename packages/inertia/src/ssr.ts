@@ -21,12 +21,18 @@ import type { InertiaSsrResult } from './types'
 // `@inertiajs/react` does not re-export its `InertiaAppProps` type, so derive it
 // from the `App` component's own parameters.
 type AppProps = Parameters<typeof App>[0]
+
+/** A page component for `TProps`, or a module namespace whose `default` is one. */
+type ResolvedPage<TProps> = ComponentType<TProps> | { default: ComponentType<TProps> }
+
 /**
- * A resolved Inertia page component. Concretely typed (rather than reusing
- * `@inertiajs/react`'s `ResolvedComponent`, which is `ComponentType<any>`) so no
- * `any` leaks out of the resolver into the rest of the bundle.
+ * The resolver's return type, keyed on whether a props type argument was supplied:
+ * with none (`TProps` defaults to `unknown`) it stays opaque — matching what
+ * `import.meta.glob` yields — and with one it is the typed component/module.
  */
-type PageComponent = ComponentType<Record<string, unknown>>
+type ResolverReturn<TProps> = [unknown] extends [TProps]
+  ? unknown
+  : ResolvedPage<TProps> | Promise<ResolvedPage<TProps>>
 
 /** Unwrap a module namespace's `default` export, leaving a bare component as-is. */
 function unwrapDefault(module: unknown): unknown {
@@ -40,19 +46,21 @@ function unwrapDefault(module: unknown): unknown {
  * (a `memo`/`forwardRef`/`lazy` exotic component). This narrows the opaque value a
  * dynamic import yields without admitting `any`.
  */
-function isPageComponent(value: unknown): value is PageComponent {
+function isPageComponent<TProps>(value: unknown): value is ComponentType<TProps> {
   return typeof value === 'function' || (typeof value === 'object' && value !== null)
 }
 
-export interface CreateInertiaSsrAppOptions {
+export interface CreateInertiaSsrAppOptions<TProps = unknown> {
   /**
    * Resolve a page by name. Typically backed by `import.meta.glob`, whose modules
    * are opaque (`unknown`) — the returned value is unwrapped (a `default` export is
    * taken when present) and narrowed to a component at runtime, so an invalid
-   * resolver result fails loudly rather than rendering nothing. May return a
-   * component, a module namespace, or a promise of either.
+   * resolver result fails loudly rather than rendering nothing. Pass a props type
+   * argument to {@link createInertiaSsrApp} to type the resolver's return.
    */
-  resolve: (name: string) => unknown
+  // `NoInfer` keeps `TProps` pinned to its explicit type argument (or the
+  // `unknown` default) instead of being widened back out of the resolver return.
+  resolve: (name: string) => ResolverReturn<NoInfer<TProps>>
   /**
    * Optional wrapper for application-level providers (theme, store, i18n, …).
    * Receives the Inertia `App` component and its props; return the React tree to
@@ -77,11 +85,13 @@ export interface InertiaSsrApp {
  * progressively. Head tags rendered inside a *suspended* boundary are not
  * captured; use Stratal's server-side SEO (`ctx.seo()`) for `<head>` metadata.
  */
-export function createInertiaSsrApp(options: CreateInertiaSsrAppOptions): InertiaSsrApp {
-  const resolveComponent = (name: string): Promise<PageComponent> =>
+export function createInertiaSsrApp<TProps = unknown>(
+  options: CreateInertiaSsrAppOptions<TProps>,
+): InertiaSsrApp {
+  const resolveComponent = (name: string): Promise<ComponentType<TProps>> =>
     Promise.resolve(options.resolve(name)).then((module) => {
       const component = unwrapDefault(module)
-      if (!isPageComponent(component)) {
+      if (!isPageComponent<TProps>(component)) {
         throw new ApplicationError(`[stratal:inertia] resolve("${name}") did not return a React component.`)
       }
       return component
