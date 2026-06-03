@@ -45,8 +45,12 @@ interface CacheService {
   delete(key: string): Promise<void>
   list<Metadata>(options?: KVNamespaceListOptions): Promise<KVNamespaceListResult<Metadata>>
   withBinding(kv: KVNamespace): CacheService   // Use a different KV binding
+  binding(name: string): CacheService          // Same, resolved by binding name from env
 }
 ```
+
+KV reads are eventually consistent — a `get` can return an edge-cached value for
+up to ~60s after a `put`.
 
 ### Multiple KV Namespaces
 
@@ -71,6 +75,41 @@ export class MultiCacheService {
 ```
 
 Default binding reads from `env.CACHE`.
+
+### Tiered cache (opt-in isolate-local L1)
+
+Inject `CACHE_TOKENS.TieredCacheService` instead of `CacheService` when you need
+isolate-local **read-after-write coherence**: it layers an in-memory L1 over KV,
+so a value written on an isolate is immediately and consistently readable by
+later reads on that same isolate — closing KV's eventual-consistency gap. Same
+API as `CacheService`, plus `binding(name)`.
+
+```typescript
+import { CACHE_TOKENS } from 'stratal/cache'
+import type { TieredCacheService } from 'stratal/cache'
+
+@Transient()
+export class OnceGuard {
+  constructor(
+    @inject(CACHE_TOKENS.TieredCacheService) private cache: TieredCacheService,
+  ) {}
+
+  async claim(id: string): Promise<boolean> {
+    if (await this.cache.get(`claim:${id}`)) return false
+    await this.cache.put(`claim:${id}`, '1', { expirationTtl: 86400 })
+    return true
+  }
+}
+```
+
+**Use it for** set-once / read-mostly keys (idempotency claims, immutable
+lookups). The framework's queue idempotency store is built on it.
+
+**Do NOT use it for** read-modify-write counters that need cross-edge freshness
+(e.g. rate limiting): the L1 only sees writes made on its own isolate, so an
+isolate reads its own value until the entry expires — concurrent increments from
+other isolates are missed and overwritten. Use plain `CacheService` (KV) or a
+Durable-Object store there.
 
 ## Logger
 

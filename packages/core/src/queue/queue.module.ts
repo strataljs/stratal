@@ -25,6 +25,7 @@
  * - `sync`: Testing provider that processes messages immediately
  */
 
+import { CacheModule } from '../cache';
 import { DI_TOKENS } from '../di/tokens';
 import { type StratalEnv } from '../env';
 import { Module } from '../module';
@@ -106,6 +107,9 @@ export interface QueueModuleOptions {
 }
 
 @Module({
+  // QueueStore persists idempotency claims and failed jobs through CacheService
+  // (isolate-local L1 + KV), so the cache must be available wherever queues are.
+  imports: [CacheModule],
   providers: [
     { provide: DI_TOKENS.ConsumerRegistry, useClass: ConsumerRegistry },
     QueueManager,

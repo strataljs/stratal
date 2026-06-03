@@ -1,7 +1,7 @@
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LoggerService } from '../../logger'
-import { type StratalEnv } from '../../env'
+import type { TieredCacheService } from '../../cache/services/tiered-cache.service'
 import { FailedJobCleanupJob, failedJobCleanupJob } from '../jobs/failed-job-cleanup.job'
 import type { QueueModuleOptions } from '../queue.module'
 import { QueueStore } from '../queue-store'
@@ -53,7 +53,9 @@ describe('QueueStore.purgeFailedJobsOlderThan', () => {
     ])
 
     const deleted: string[] = []
-    const kv = {
+    const cache = {
+      // QueueStore binds to its configured namespace via `binding()`.
+      binding: vi.fn().mockReturnThis(),
       list: vi.fn().mockResolvedValue({
         keys: [...entries].map(([name, { metadata }]) => ({ name, metadata })),
         list_complete: true,
@@ -65,7 +67,7 @@ describe('QueueStore.purgeFailedJobsOlderThan', () => {
     }
 
     const store = new QueueStore(
-      { CACHE: kv } as unknown as StratalEnv,
+      cache as unknown as TieredCacheService,
       { provider: 'cloudflare' } as QueueModuleOptions,
     )
 
