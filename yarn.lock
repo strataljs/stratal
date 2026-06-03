@@ -2781,7 +2781,7 @@ __metadata:
     "@types/node": "npm:^25.6.2"
     "@types/react": "npm:^19.2.14"
     "@types/react-dom": "npm:^19.2.3"
-    hono: "npm:^4.12.18"
+    hono: "npm:^4.12.19"
     react: "npm:^19.2.6"
     react-dom: "npm:^19.2.6"
     stratal: "workspace:*"
@@ -2858,7 +2858,7 @@ __metadata:
     "@stratal/inertia": "workspace:*"
     "@types/node": "npm:^25.6.2"
     "@types/react": "npm:^19.2.14"
-    hono: "npm:^4.12.18"
+    hono: "npm:^4.12.19"
     react: "npm:^19.2.6"
     stratal: "workspace:*"
     tsdown: "npm:^0.22.0"
@@ -2895,7 +2895,7 @@ __metadata:
     "@types/react-dom": "npm:^19.2.3"
     "@vitest/runner": "npm:~4.1.5"
     "@vitest/snapshot": "npm:~4.1.5"
-    hono: "npm:^4.12.18"
+    hono: "npm:^4.12.19"
     intl-messageformat: "npm:^11.2.7"
     jsdom: "npm:^29.1.1"
     react: "npm:^19.2.6"
@@ -5506,10 +5506,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"hono@npm:^4.12.18":
-  version: 4.12.18
-  resolution: "hono@npm:4.12.18"
-  checksum: 10c0/b0b9688fd9e41a1847b077d579dc0e92a28b67c247c6ee7d1e751c0bae269824c30c7773feff1a2874e40ea36a3d2f9d1fc5ba618a28ecdf2ca1b33ed2473864
+"hono@npm:^4.12.19":
+  version: 4.12.19
+  resolution: "hono@npm:4.12.19"
+  checksum: 10c0/e124f7216c5633031be979cf9c09f6312ea86e0dd3fe618398922e6d91f9afe889b4e2006ea75565dfdf2de29702e6805cfa2276b2dd4b4f46c682c8672209b7
   languageName: node
   linkType: hard
 
@@ -8428,7 +8428,7 @@ __metadata:
     "@vitest/runner": "npm:~4.1.5"
     "@vitest/snapshot": "npm:~4.1.5"
     clipanion: "npm:^4.0.0-rc.4"
-    hono: "npm:^4.12.18"
+    hono: "npm:^4.12.19"
     intl-messageformat: "npm:^11.2.7"
     jsonc-parser: "npm:^3.3.1"
     react: "npm:^19.2.6"

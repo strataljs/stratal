@@ -87,7 +87,7 @@
     "@types/node": "^25.6.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "hono": "^4.12.18",
+    "hono": "^4.12.19",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "stratal": "workspace:*",
