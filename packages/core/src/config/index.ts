@@ -1,3 +1,4 @@
+export * from './config.error'
 export { CONFIG_TOKENS } from './config.tokens'
 
 // Export ConfigModule

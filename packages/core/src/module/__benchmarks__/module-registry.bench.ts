@@ -1,7 +1,6 @@
-import { injectable, container as tsyringeRootContainer } from 'tsyringe'
 import { bench, describe } from 'vitest'
 import { Container } from '../../di/container'
-import { Scope } from '../../di/types'
+import { Transient } from '../../di/decorators'
 import type { LoggerService } from '../../logger'
 import { ModuleRegistry } from '../module-registry'
 import { Module } from '../module.decorator'
@@ -11,18 +10,18 @@ import type { ModuleContext, OnInitialize } from '../types'
 
 const TOKEN_SVC = Symbol('BenchModuleSvc')
 
-@injectable()
+@Transient()
 class BenchService { }
 
-@injectable()
+@Transient()
 class BenchServiceB { }
 
-@injectable()
+@Transient()
 class BenchServiceC { }
 
 @Module({
   providers: [
-    { provide: TOKEN_SVC, useClass: BenchService, scope: Scope.Singleton },
+    { provide: TOKEN_SVC, useClass: BenchService },
   ],
 })
 class SingleModule { }
@@ -72,9 +71,7 @@ const noopLogger = {
 } as unknown as LoggerService
 
 function createFreshContainer(): Container {
-  return new Container({
-    container: tsyringeRootContainer.createChildContainer(),
-  })
+  return new Container()
 }
 
 function createRegistry(): ModuleRegistry {

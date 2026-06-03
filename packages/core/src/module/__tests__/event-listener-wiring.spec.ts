@@ -1,27 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
-import { container as tsyringeRootContainer, injectable, inject } from 'tsyringe'
-import type { DependencyContainer } from 'tsyringe'
 import { Container } from '../../di/container'
+import { inject, Transient } from '../../di/decorators'
 import { DI_TOKENS } from '../../di/tokens'
-import { Scope } from '../../di/types'
 import { Listener, On, getListenerHandlers } from '../../events'
 import type { LoggerService } from '../../logger/services/logger.service'
 import { Module } from '../module.decorator'
 import { ModuleRegistry } from '../module-registry'
 
 describe('Event Listener Auto-Wiring (Application-level)', () => {
-  let childContainer: DependencyContainer
   let container: Container
   let mockLogger: DeepMocked<LoggerService>
   let registry: ModuleRegistry
 
   beforeEach(() => {
     vi.clearAllMocks()
-    childContainer = tsyringeRootContainer.createChildContainer()
-    container = new Container({
-      container: childContainer,
-    })
+    container = new Container()
     mockLogger = createMock<LoggerService>()
     registry = new ModuleRegistry(container, mockLogger as unknown as LoggerService)
   })
@@ -84,7 +78,7 @@ describe('Event Listener Auto-Wiring (Application-level)', () => {
     expect(registry.getAllListeners()).toHaveLength(1)
   })
 
-  it('should resolve the same singleton listener instance for all handlers', () => {
+  it('should register listeners as transient (fresh instance per event resolution)', () => {
     const mockEventRegistry = { on: vi.fn() }
     container.registerValue(DI_TOKENS.EventRegistry, mockEventRegistry)
 
@@ -102,10 +96,12 @@ describe('Event Listener Auto-Wiring (Application-level)', () => {
 
     registry.register(TestModule)
 
-    // Resolve listener twice — should be the same instance (singleton)
+    // Listeners are transient, not singletons — they are resolved fresh per event
+    // from the emitting request scope, so request-scoped dependencies bind to the
+    // emitting request instead of being frozen at boot.
     const instance1 = container.resolve(AuditListener)
     const instance2 = container.resolve(AuditListener)
-    expect(instance1).toBe(instance2)
+    expect(instance1).not.toBe(instance2)
   })
 
   it('should correctly bind handler methods to the listener instance', async () => {
@@ -139,12 +135,12 @@ describe('Event Listener Auto-Wiring (Application-level)', () => {
   it('should handle listener with injected dependencies', () => {
     const SERVICE_TOKEN = Symbol('TestService')
 
-    @injectable()
+    @Transient()
     class TestService {
       getValue() { return 'injected' }
     }
 
-    container.register(SERVICE_TOKEN, TestService, Scope.Singleton)
+    container.register(SERVICE_TOKEN, TestService)
 
     @Listener()
     class DependentListener {

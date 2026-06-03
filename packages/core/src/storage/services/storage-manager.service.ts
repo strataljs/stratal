@@ -1,8 +1,8 @@
-import { inject } from 'tsyringe'
-import { Transient } from '../../di/decorators'
+import { inject } from '../../di'
+import { Singleton } from '../../di/decorators'
 import { DI_TOKENS } from '../../di/tokens'
 import { type StratalEnv } from '../../env'
-import { DiskNotConfiguredError, R2BindingNotFoundError } from '../errors'
+import { StorageError } from '../storage.error'
 import type { IStorageProvider } from '../providers/storage-provider.interface'
 import { STORAGE_TOKENS } from '../storage.tokens'
 import type { StorageConfig, StorageEntry } from '../types'
@@ -12,7 +12,7 @@ import type { StorageConfig, StorageEntry } from '../types'
  * Manages multiple storage providers (one per disk)
  * Handles lazy initialization and caching of R2 providers
  */
-@Transient(STORAGE_TOKENS.StorageManager)
+@Singleton(STORAGE_TOKENS.StorageManager)
 export class StorageManagerService {
   private readonly providers = new Map<string, IStorageProvider>()
   private readonly creationPromises = new Map<string, Promise<IStorageProvider>>()
@@ -58,7 +58,7 @@ export class StorageManagerService {
     // Get disk configuration
     const diskConfig = this.diskConfigs.get(diskName)
     if (!diskConfig) {
-      throw new DiskNotConfiguredError(diskName)
+      throw new StorageError(`Disk "${diskName}" is not configured`)
     }
 
     // Create provider and deduplicate concurrent calls
@@ -86,7 +86,7 @@ export class StorageManagerService {
     const { R2StorageProvider } = await import('../providers/r2-storage.provider')
     const bucket = this.env[config.binding as keyof StratalEnv] as unknown as R2Bucket | undefined
     if (!bucket) {
-      throw new R2BindingNotFoundError(config.binding)
+      throw new StorageError(`R2 binding "${config.binding}" was not found in the environment`)
     }
     return new R2StorageProvider(config, bucket, this.env, this.options.route)
   }
@@ -99,7 +99,7 @@ export class StorageManagerService {
   getDiskConfig(diskName: string): StorageEntry {
     const config = this.diskConfigs.get(diskName)
     if (!config) {
-      throw new DiskNotConfiguredError(diskName)
+      throw new StorageError(`Disk "${diskName}" is not configured`)
     }
     return config
   }

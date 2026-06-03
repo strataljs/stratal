@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe'
+import { inject } from '../../src/di'
 import { Transient } from '../../src/di/decorators'
 import { LOGGER_TOKENS, type LoggerService } from '../../src/logger'
 import { Module } from '../../src/module/module.decorator'

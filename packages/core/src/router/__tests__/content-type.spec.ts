@@ -1,7 +1,7 @@
 import { createMock } from '@stratal/testing/mocks'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { describe, expect, it } from 'vitest'
-import { z, type RouteConfig as OpenAPIRouteConfig } from '../../i18n/validation'
+import { z, type RouteConfig as OpenAPIRouteConfig } from '../../i18n/validation/zod'
 import type { LoggerService } from '../../logger/services/logger.service'
 import type { ModuleRegistry } from '../../module/module-registry'
 import { DEFAULT_CONTENT_TYPE } from '../constants'

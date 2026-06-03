@@ -116,6 +116,9 @@ class RouterContext {
   param(key: string): string             // URL param (e.g., :id)
   query(key?: string): Record | string   // Query params
   header(name: string): string | undefined
+  getCookie(name: string): string | undefined       // Read cookie
+  setCookie(name: string, value: string, options?: CookieOptions): void  // Set cookie
+  deleteCookie(name: string, options?: CookieOptions): string | undefined // Delete cookie
   text(text: string, status?: number): Response
   html(html: string, status?: number): Response
   redirect(url: string, status?: number): Response
@@ -408,6 +411,7 @@ export class ApiModule implements RouteConfigurable {
 | `.middleware(...classes)` | Middleware for controllers in scope |
 | `.version(v)` | API version (string or array) |
 | `.hideFromDocs(hide?)` | Hide routes from OpenAPI docs |
+| `.throttle(name)` | Apply a named rate limiter to controllers in scope (see `references/rate-limiter.md`) |
 | `.use(...classes)` | **Global middleware** — all routes in entire app (root Router only) |
 | `.group(controllers, callback)` | Sub-group with its own config |
 
@@ -478,15 +482,15 @@ export const noteSchema = z.object({
 
 ### i18n Validation Messages
 
-Use `withI18n()` for translatable validation messages:
+Use `withZodI18n()` for translatable validation messages:
 
 ```typescript
-import { z, withI18n } from 'stratal/validation'
+import { z, withZodI18n } from 'stratal/validation'
 
 export const createNoteSchema = z.object({
   title: z.string()
-    .min(1, withI18n('validation.notes.title.required'))
-    .max(255, withI18n('validation.notes.title.max', { max: 255 })),
+    .min(1, withZodI18n('validation.notes.title.required'))
+    .max(255, withZodI18n('validation.notes.title.max', { max: 255 })),
   content: z.string().optional(),
 }).openapi('CreateNote')
 ```
@@ -518,6 +522,45 @@ Or via the Router:
 configureRoutes(router: Router): void {
   router.version('2')  // All controllers in this module get v2
 }
+```
+
+## Trailing Slash
+
+Stratal can canonicalise trailing slashes globally. Configure via the `Stratal` constructor:
+
+```typescript
+import { Stratal } from 'stratal'
+import { AppModule } from './app.module'
+
+export default new Stratal({
+  module: AppModule,
+  trailingSlash: 'always', // 'ignore' (default) | 'always' | 'never'
+})
+```
+
+| Mode | Incoming `/foo` | Incoming `/foo/` | Generated URLs |
+|------|-----------------|-------------------|----------------|
+| `'ignore'` (default) | matches `/foo` route | matches `/foo` route | as authored |
+| `'always'` | 308 → `/foo/` | matches `/foo` route | trailing slash appended |
+| `'never'` | matches `/foo` route | 308 → `/foo` | trailing slash stripped |
+
+Redirects use **308 Permanent Redirect** so POST/PUT/PATCH bodies survive. The `Location` header is path-relative (no scheme/host), which avoids mixed-content blocks when the worker sits behind an HTTPS-terminating proxy that speaks HTTP internally.
+
+**Skipped paths** (passed through unchanged in every mode):
+- The root path `/`.
+- For `'always'`: paths whose last segment contains `.` (file-like, e.g. `/api/openapi.json`, `/file.tar.gz`).
+
+The configured mode is also applied to URL-generation helpers so generated links match incoming-request canonical form:
+
+- `route(name, params?, options?)` (standalone, from `stratal/router`)
+- `ctx.route(name, params?, options?)` (RouterContext)
+- `Uri.route()`, `Uri.to()`, `Uri.query()`, `Uri.current()`, `Uri.full()`
+
+Type export:
+
+```typescript
+import type { TrailingSlashMode } from 'stratal/router'
+// 'ignore' | 'always' | 'never'
 ```
 
 ## Response Validation

@@ -4,7 +4,7 @@
 // Core router types
 export type { IController } from './controller'
 export type { Middleware, Next } from './middleware.interface'
-export type { ControllerOptions, ConventionRouteMetadata, ExplicitRouteMetadata, LocalePathConfig, RouteBody, RouteBodyObject, RouteConfig, RouteMetadata, RouterEnv, RouteResponse, RouteResponseObject, RouterVariables, SecurityScheme, VersioningOptions } from './types'
+export type { ControllerOptions, ConventionRouteMetadata, ExplicitRouteMetadata, LocalePathConfig, LocaleUrlConfig, RouteBody, RouteBodyObject, RouteConfig, RouteMetadata, RouterEnv, RouteResponse, RouteResponseObject, RouterVariables, SecurityScheme, TrailingSlashMode, VersioningOptions } from './types'
 
 // Router constants
 export { HTTP_METHODS, ROUTE_METADATA_KEYS, ROUTER_CONTEXT_KEYS, SECURITY_SCHEMES, VERSION_NEUTRAL } from './constants'
@@ -21,7 +21,7 @@ export { HonoApp } from './hono-app'
 
 // Router services
 export {
-  LocalePathService, RouteRegistrationService,
+  LocalePathService, LocaleUrlService, RouteRegistrationService,
   VersioningService, type ResolvedPath
 } from './services'
 
@@ -32,11 +32,13 @@ export { ROUTER_TOKENS } from './router.tokens'
 export { RouteRegistry, type RegisteredRoute, type RouteRegistrationInput } from './route-registry'
 
 // Route Map (augmentable interface for type-safe URL generation)
-export type { RouteName, RouteParams, SerializedRoute, SerializedRoutes, StratalRouteMap } from './route-map'
+export type { CurrentRoute, RouteMatcher, RouteName, RouteParams, RoutePrefixes, SerializedRoute, SerializedRoutes, StratalRouteMap } from './route-map'
 
 // Route URL generation
 export { route } from './route-url'
 export { buildRouteUrl, Uri, type SignedUriOptions, type UriOptions } from './uri'
+export { applyLocalePrefix, shouldPrefixLocale, stripLocalePrefix } from './locale-url'
+export { applyTrailingSlash } from './trailing-slash'
 
 // Router (replaces MiddlewareConfigurable — route + middleware configuration)
 export { Router, type RouteConfigurable, type RouterGroupConfig } from './router'
@@ -65,10 +67,12 @@ export { createDomainMiddleware, parseDomainPattern } from './middleware/domain.
 export { VerifySignatureMiddleware } from './middleware/verify-signature.middleware'
 export { signUrl, verifySignedUrl, type SignedUrlOptions } from './signed-url'
 
+// Domain error
+export * from './router.error'
+
 // Errors
 export {
-  ControllerRegistrationError, DomainMismatchError, DuplicateRouteNameError, HonoAppAlreadyConfiguredError, InvalidSignatureError, MiddlewareNextCalledMultipleTimesError, MissingEnvironmentVariableError, MissingRouteParamError, OpenAPIRouteRegistrationError,
-  OpenAPIValidationError, ResponseValidationError, RouteNameNotFoundError, RouteNotFoundError,
-  RouterUseScopeError, SchemaValidationError
+  InvalidSignatureError, ResponseValidationError, RouteNotFoundError,
+  SchemaValidationError
 } from './errors'
 

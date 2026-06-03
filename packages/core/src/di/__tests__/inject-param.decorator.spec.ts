@@ -3,7 +3,9 @@ import {
   InjectParam,
   getMethodInjections,
   INJECT_PARAM_METADATA_KEY,
+  type ParamInjection,
 } from '../decorators/inject-param.decorator'
+import { getMetadata } from '../metadata'
 
 // Test tokens
 const TOKEN_A = Symbol('TokenA')
@@ -24,7 +26,7 @@ describe('InjectParam decorator', () => {
         }
       }
 
-      const metadata = Reflect.getMetadata(
+      const metadata = getMetadata<ParamInjection[]>(
         INJECT_PARAM_METADATA_KEY,
         TestController.prototype,
         'testMethod'
@@ -32,7 +34,7 @@ describe('InjectParam decorator', () => {
 
       expect(metadata).toBeDefined()
       expect(metadata).toHaveLength(1)
-      expect(metadata[0]).toEqual({ index: 1, token: TOKEN_A })
+      expect(metadata![0]).toEqual({ index: 1, token: TOKEN_A })
     })
 
     it('should store multiple injections on same method', () => {
@@ -46,7 +48,7 @@ describe('InjectParam decorator', () => {
         }
       }
 
-      const metadata = Reflect.getMetadata(
+      const metadata = getMetadata<ParamInjection[]>(
         INJECT_PARAM_METADATA_KEY,
         TestController.prototype,
         'testMethod'
@@ -68,14 +70,14 @@ describe('InjectParam decorator', () => {
         }
       }
 
-      const metadata = Reflect.getMetadata(
+      const metadata = getMetadata<ParamInjection[]>(
         INJECT_PARAM_METADATA_KEY,
         TestController.prototype,
         'testMethod'
       )
 
       expect(metadata).toHaveLength(1)
-      expect(metadata[0].token).toBe(ServiceA)
+      expect(metadata![0].token).toBe(ServiceA)
     })
 
     it('should not interfere between different methods', () => {
@@ -95,23 +97,23 @@ describe('InjectParam decorator', () => {
         }
       }
 
-      const metadataA = Reflect.getMetadata(
+      const metadataA = getMetadata<ParamInjection[]>(
         INJECT_PARAM_METADATA_KEY,
         TestController.prototype,
         'methodA'
       )
 
-      const metadataB = Reflect.getMetadata(
+      const metadataB = getMetadata<ParamInjection[]>(
         INJECT_PARAM_METADATA_KEY,
         TestController.prototype,
         'methodB'
       )
 
       expect(metadataA).toHaveLength(1)
-      expect(metadataA[0].token).toBe(TOKEN_A)
+      expect(metadataA![0].token).toBe(TOKEN_A)
 
       expect(metadataB).toHaveLength(1)
-      expect(metadataB[0].token).toBe(TOKEN_B)
+      expect(metadataB![0].token).toBe(TOKEN_B)
     })
   })
 

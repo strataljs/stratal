@@ -1,6 +1,8 @@
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Container } from '../../di/container'
+import { LOGGER_TOKENS } from '../../logger/logger.tokens'
+import type { LoggerService } from '../../logger/services/logger.service'
 import type { CronJob } from '../cron-job'
 import { CronManager } from '../cron-manager'
 import { CronExecutionError } from '../errors/cron-execution.error'
@@ -20,11 +22,11 @@ describe('CronManager', () => {
    * Returns both the class and a mock instance that the container will resolve to.
    */
   const createJobClass = (schedule: string, name?: string) => {
-    const mockInstance = createMock<CronJob>({ schedule })
+    const mockInstance = createMock<CronJob>()
     mockInstance.execute.mockResolvedValue(undefined)
 
     class MockJob implements CronJob {
-      readonly schedule = schedule
+      static schedule = schedule
       execute = mockInstance.execute
       onError = mockInstance.onError
     }
@@ -123,6 +125,27 @@ describe('CronManager', () => {
       const controller = createController('0 3 * * *')
 
       await expect(manager.executeScheduled(controller, mockContainer)).resolves.toBeUndefined()
+    })
+
+    it('should warn via the logger when no jobs match the trigger', async () => {
+      const { JobClass } = createJobClass('*/2 * * * *')
+      manager.registerJob('*/2 * * * *', JobClass)
+
+      const mockLogger = createMock<LoggerService>()
+      mockContainer.resolve.mockImplementation((token: any) => {
+        if (token === LOGGER_TOKENS.LoggerService) return mockLogger
+        throw new Error(`Unexpected token: ${String(token)}`)
+      })
+
+      await manager.executeScheduled(createController('*/9 * * * *'), mockContainer)
+
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        'No cron jobs matched scheduled trigger',
+        expect.objectContaining({
+          incomingCron: '*/9 * * * *',
+          registeredSchedules: ['*/2 * * * *'],
+        }),
+      )
     })
 
     it('should call onError() when job throws and continue to next job', async () => {

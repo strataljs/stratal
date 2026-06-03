@@ -1,5 +1,183 @@
 # @stratal/framework
 
+## 0.0.23
+
+### Patch Changes
+
+- 13b0e8d: Add `@stratal/feature-flags` — Cloudflare Flagship feature flags via the native Worker binding API.
+
+  - `FeatureFlagModule.forRoot({ apps: [{ binding, flags }], default, context })` with a declare-once flag manifest, manifest defaults, a per-request evaluation-context resolver, and multi-app support via `FeatureFlagService.use(binding)`.
+  - `FeatureFlagShareMiddleware` shares evaluated flags to Inertia pages as the `featureFlags` prop; register it yourself (scoped to page controllers via `router.middleware(...)` or app-wide via `router.use(...)`) so a stalled Flagship binding can't block unrelated routes. Typed `useFlag` / `useFeatureFlags` hooks on `@stratal/feature-flags/react`. No runtime dependency on `@stratal/inertia`.
+  - `@stratal/inertia`: expose a generic `ctx.share(key, value)` macro on `RouterContext` so middleware and packages can contribute per-request shared props.
+  - `@stratal/framework`: add a `ctx.user()` macro on `RouterContext` (shorthand for `AuthContext.requireUser()`).
+
+- 13b0e8d: Fix correctness and security issues found in review.
+
+  Queue:
+
+  - Retry the correct binding: dispatch stamps the producer binding into message metadata and failed jobs record it, so `queue:retry` re-enqueues through the Cloudflare binding instead of the queue name (which is not a valid binding key and broke retry whenever the two differed). A message with no binding metadata is logged and acked rather than stored as an unretryable job.
+  - Honor the documented retry budget: `maxRetries` now counts retries correctly against Cloudflare's 1-based `message.attempts` (previously gave one fewer retry than configured).
+  - Derive idempotency keys from an order-stable serialization of `type` + `payload`, so payloads that differ only in key order dedupe correctly.
+  - `queue:retry --all` / `queue:purge --all --queue` collect matching keys before deleting, so cursor pagination no longer skips jobs; `queue:failed --queue --limit` now counts matching jobs rather than scanned keys.
+  - Documented that delivery is at-least-once with best-effort de-duplication (not exactly-once), since the processed marker is written only after a handler succeeds and KV is eventually consistent — handlers must be idempotent.
+
+  Email (SMTP):
+
+  - Upgrade STARTTLS onto the socket `startTls()` returns: the original socket is closed by the runtime, so the post-upgrade reader/writer are re-derived from the new secure socket and any pre-handshake bytes are discarded (fixes a broken `smtp://` STARTTLS path on real Workers and closes the STARTTLS plaintext-injection vector).
+  - Refuse to send credentials over an unencrypted connection: an `smtp://` server that doesn't offer STARTTLS now fails loudly instead of leaking the password (blocks STARTTLS-stripping downgrades). Credential-free connections (e.g. local Mailpit) are unaffected.
+  - AUTH is gated on the server's advertised mechanisms and supports both `PLAIN` and `LOGIN`; usernames are percent-decoded like passwords.
+  - Add a response timeout so a hung SMTP server can't wedge the worker; QUIT/socket close are now best-effort and never mask a successful send.
+  - MIME builder strips CR/LF from headers, escapes/RFC 2231-encodes attachment filenames (prevents header injection), base64-encodes message bodies (fixes long-line corruption), and rejects envelope addresses containing whitespace or angle brackets (prevents `MAIL FROM`/`RCPT TO` desync).
+
+  Inertia SEO:
+
+  - `titleTemplate` substitutes every `%s` and treats `$`-sequences in the title literally.
+  - Inject head/body content via function replacements, so SEO/page content containing `$`-sequences (`$$`, `$&`, `` $` ``, `$'`) is no longer corrupted or able to splice a template placeholder back into the output.
+  - Drop unsafe attribute names — including inline event handlers (`on*`) — from custom `meta`/`link` entries (prevents tag breakout server-side, `setAttribute` errors during client head-sync, and developer-supplied event-handler attributes).
+
+  Feature flags:
+
+  - `FeatureFlagService.use()` binds the target app exactly once.
+
+  Database (framework):
+
+  - The reentrant `$transaction` proxy forwards the receiver for non-transaction property access.
+
+  Testing:
+
+  - `TestingModule.close()` drops the isolated per-file database even if shutdown throws; the stale-database sweep escapes LIKE metacharacters so a prefix containing `_` can't over-match.
+
+  DI:
+
+  - Construct singletons against the root container so they can never capture a request-scoped dependency (which would leak one request's state across every later request); an illegal singleton→request dependency now throws loudly.
+  - Detect circular dependencies and throw a clear error naming the cycle instead of overflowing the stack.
+  - `tryResolve` only swallows "no provider"; a registered provider that throws while constructing now surfaces the real error instead of injecting `undefined`.
+  - Request-cache invalidation tracks transitive constructor dependencies, so re-registering a value rebuilds cached services that depend on it through a transient intermediary.
+
+  Quarry dev runtime:
+
+  - Persist every durable plugin (KV, D1, R2, Durable Objects, cache) under `.wrangler/state/v3`, matching `wrangler dev` (previously only R2 was persisted); load `.env.local` / `.env.<env>.local` into `process.env` for full parity.
+  - The `cloudflare:sockets` STARTTLS shim re-attaches the stream error handler to the upgraded socket, so post-upgrade connection errors still surface.
+
+- 13b0e8d: Make database transactions reentrant and remove `AuthContextMiddleware`
+
+  - Nested `$transaction` calls now reuse the active transaction instead of acquiring a second connection, fixing deadlocks on single-connection pools (e.g. Hyperdrive with `max: 1`) when libraries such as Better Auth run nested transactions.
+
+  ### Breaking Changes
+
+  - **`AuthContextMiddleware` is removed.** Auth context is now registered automatically per request. If you registered this middleware explicitly, remove the registration — `SessionVerificationMiddleware` is sufficient.
+
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [be813bc]
+  - stratal@0.0.23
+
+## 0.0.22
+
+### Patch Changes
+
+- 1658945: Migrate all error classes to `HttpException`, move heavy dependencies to peer dependencies
+
+  ### Breaking Changes
+
+  - **Error classes migrated** — All framework error classes (`InsufficientPermissionsError`, auth errors, database errors, context errors) now extend `HttpException` instead of `ApplicationError`. Constructor signatures are simplified — remove `i18nKey` and `code` arguments.
+  - **`@better-auth/core`, `@zenstackhq/orm`, `@zenstackhq/schema`, and `better-auth` moved to peer dependencies** — Install them directly in your application if not already present.
+  - **Database error mapping simplified** — `fromZenStackError()` no longer maps to typed error code objects. It returns plain `HttpException` instances with descriptive messages.
+
+- 4b273ea: Adapt to the new built-in DI container from `stratal`, removing all `tsyringe` and `reflect-metadata` usage
+
+  - All request-scoped services now use the `@Request` decorator instead of `@Transient`.
+  - `DatabaseModule` uses `lazy()` for dynamic connection registration instead of tsyringe's `delay()`.
+  - `reflect-metadata` is no longer required as a peer dependency.
+
+- Updated dependencies [1658945]
+- Updated dependencies [4b273ea]
+  - stratal@0.0.22
+
+## 0.0.21
+
+### Patch Changes
+
+- 3489cfd: Require `name` on `AuthUser`
+
+  `AuthUser` now extends Better Auth's `BaseUser` directly, so `name` is required again (it was temporarily made optional in `0.0.20`). Apps whose schema stores `firstName`/`lastName` instead of a `name` column should expose `name` through a [ZenStack result extension](https://zenstack.dev/docs/orm/plugins/extending-orm-client#adding-fields-to-query-results) so reads return a populated `name` for free, rather than relying on `name` being absent.
+
+- Updated dependencies [3489cfd]
+- Updated dependencies [3489cfd]
+  - stratal@0.0.21
+
+## 0.0.20
+
+### Patch Changes
+
+- f8c61e1: Auto-wire Better Auth's rate limiting through Stratal's `RateLimiterModule`
+
+  When `RateLimiterModule` is imported alongside `AuthModule`, Better Auth's `rateLimit` block is configured automatically:
+
+  - `customStorage` is backed by Stratal's shared `IRateLimiterStore`, so HTTP throttling and Better Auth share one store.
+  - `customRules` is populated from a new `RateLimiterRegistry.forPath(path, resolver)` API, letting apps declare path-keyed limits (e.g. `/sign-in/email`, `/two-factor/*`) using the same `Limit` builder used elsewhere.
+  - User-supplied `rateLimit.customStorage` and `rateLimit.customRules` keys take precedence on a per-key basis.
+
+  ```ts
+  limiter.forPath("/sign-in/email", () => Limit.perSeconds(10, 3));
+  limiter.forPath("/forget-password", () => Limit.none()); // disabled
+  ```
+
+  Path-keyed entries are scoped per-IP+path by Better Auth (`Limit.by(...)` is ignored), and multiple `Limit`s reduce to the most restrictive (smallest `max / windowSeconds`).
+
+- f8c61e1: Store the full authenticated user on `AuthContext`
+
+  `AuthContext` now holds the full user record returned by Better Auth's `getSession()` instead of just `userId`/`role`, so controllers and services can read profile fields without re-querying the database.
+
+  ### Breaking Changes
+
+  - `AuthInfo` shape changed from `{ userId?, role? }` to `{ user: AuthUser }`. `setAuthContext({ userId, role })` callers must pass `setAuthContext({ user })` instead.
+  - `getAuthContext()` was renamed to `getAuthInfo()` and now returns `{ user }`.
+  - `AuthContext.getRole()` reads from `user.role`. Apps that use roles should augment the new `AuthUser` interface with `role: string` (or your app's role field) so it stays typed.
+
+  ### New API
+
+  - `AuthUser` interface (extends Better Auth's `BaseUser` with optional `name`) is augmentable via `declare module '@stratal/framework/context'` for app-specific fields.
+  - `AuthContext.getUser()` returns the user or `undefined`.
+  - `AuthContext.requireUser()` returns the user or throws `UserNotAuthenticatedError`.
+
+  ### Migration
+
+  ```ts
+  // Before
+  const userId = authContext.getAuthContext().userId;
+  authContext.setAuthContext({
+    userId: session.user.id,
+    role: session.user.role,
+  });
+
+  // After
+  const user = authContext.requireUser();
+  authContext.setAuthContext({ user: session.user });
+  ```
+
+- f8c61e1: Add `better-call@1.3.5` as a direct dependency
+
+  `@better-auth/core@1.6.9` declares `better-call` as a peer dependency but does not install it itself, so the framework — its direct consumer — is responsible for providing it. Without it, stricter resolvers (e.g. Cloudflare's workerd vitest pool) fail to resolve `better-call/error` from `@better-auth/core`.
+
+- f8c61e1: Support `@computed` fields in `DatabaseModule` connection config
+
+  `DatabaseConnectionConfig` accepts a new optional `computedFields` map that is forwarded to the underlying ZenStack client. ZenStack 3+ requires this whenever the schema declares any `@computed` fields; previously the connection failed to construct.
+
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+  - stratal@0.0.20
+
 ## 0.0.19
 
 ### Patch Changes

@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import { z } from 'zod'
 import type { Application } from '../../application'
 import { DI_TOKENS } from '../../di/tokens'
@@ -6,7 +6,7 @@ import { OPENAPI_TOKENS } from '../../openapi/openapi.tokens'
 import type { Dispatcher } from '../../openapi/services/openapi-tools.service'
 import { OpenApiToolsService } from '../../openapi/services/openapi-tools.service'
 import type { OpenAPIService } from '../../openapi/services/openapi.service'
-import type { IOpenAPIConfigService } from '../../openapi/types'
+import type { IOpenAPIConfigStore } from '../../openapi/types'
 import { Command } from '../command'
 
 export class McpServeCommand extends Command {
@@ -81,8 +81,11 @@ export class McpServeCommand extends Command {
     }
     const tools = service.getTools(filter)
 
-    const configService = this.app.container.resolve<IOpenAPIConfigService>(OPENAPI_TOKENS.ConfigService)
-    const config = configService.getEffectiveConfig()
+    // CLI runs outside a request scope; the store carries the static base config
+    // (there are no per-request overrides here).
+    const config = this.app.container
+      .resolve<IOpenAPIConfigStore>(OPENAPI_TOKENS.ConfigStore)
+      .getBaseConfig()
 
     const server = new McpServer({
       name: config.info.title,

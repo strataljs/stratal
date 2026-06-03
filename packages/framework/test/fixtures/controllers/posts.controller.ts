@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe'
+import { inject } from 'stratal/di'
 import { z } from 'stratal/validation'
 import { DI_TOKENS } from 'stratal/di'
 import { Controller, Route } from 'stratal/router'

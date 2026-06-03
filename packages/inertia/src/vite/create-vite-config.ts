@@ -5,6 +5,12 @@ export interface TempViteConfigOptions {
   server?: { port?: number; host?: boolean }
   outDir?: string
   persistTo?: string
+  /**
+   * Path (relative to `cwd`) to the Vite client manifest the worker bundle
+   * should inline. Defaults to `dist/client/.vite/manifest.json`, matching
+   * what `quarry inertia:build` emits in phase 1.
+   */
+  clientManifestPath?: string
 }
 
 export function writeTempViteConfig(options: TempViteConfigOptions): string {
@@ -26,6 +32,10 @@ export function writeTempViteConfig(options: TempViteConfigOptions): string {
     ? `{ persistState: { path: ${JSON.stringify(options.persistTo)} } }`
     : ''
 
+  const stratalArgs = options.clientManifestPath
+    ? `{ clientManifestPath: ${JSON.stringify(options.clientManifestPath)} }`
+    : ''
+
   const content = `
 import { mergeConfig } from 'vite'
 import { cloudflare } from '@cloudflare/vite-plugin'
@@ -39,12 +49,12 @@ try {
 } catch {}
 
 const baseConfig = {
+  publicDir: 'src/inertia/public',
   plugins: [
     cloudflare(${cloudflareArgs}),
     ...(inertiaPlugin ? [inertiaPlugin] : []),
-    ...stratalInertia(),
+    ...stratalInertia(${stratalArgs}),
   ],
-  publicDir: '${join(options.cwd, 'src', 'inertia', 'public').replace(/\\/g, '/')}',
   build: {
     ${outDirConfig}
   },

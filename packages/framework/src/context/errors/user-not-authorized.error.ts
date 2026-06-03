@@ -1,10 +1,5 @@
-import { ApplicationError, ERROR_CODES } from 'stratal/errors'
+import { HttpException } from 'stratal/errors'
 
-export class UserNotAuthorizedError extends ApplicationError {
-  constructor() {
-    super(
-      'errors.unauthorized',
-      ERROR_CODES.AUTHZ.FORBIDDEN
-    )
-  }
+export class UserNotAuthorizedError extends HttpException {
+  constructor() { super(403, 'Unauthorized') }
 }

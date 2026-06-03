@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Application } from '../../application'
 import type { Container } from '../../di/container'
 import { DI_TOKENS } from '../../di/tokens'
-import { Scope } from '../../di/types'
 import type { StratalEnv } from '../../env'
 import { LogLevel } from '../../logger'
 import { Module } from '../../module/module.decorator'
 import { Stratal } from '../../stratal'
+import { forceGc } from './__helpers__/force-gc'
 
 const TOKEN = Symbol('TestSvc')
 
@@ -15,7 +15,7 @@ class TestService {
 }
 
 @Module({
-  providers: [{ provide: TOKEN, useClass: TestService, scope: Scope.Singleton }],
+  providers: [{ provide: TOKEN, useClass: TestService }],
 })
 class TestAppModule {}
 
@@ -84,7 +84,7 @@ describe('StratalDurableObject', () => {
     expect(result.value).toBe('from-durable-object')
   })
 
-  it('should dispose the request container after callback completes', async () => {
+  it('should release the request container for garbage collection after callback completes', async () => {
     const mockState = {
       id: { toString: () => 'test-do-id' },
       storage: {},
@@ -106,17 +106,19 @@ describe('StratalDurableObject', () => {
 
     class TestDO extends StratalDurableObject {
       async testRunInScope() {
-        let capturedContainer: Container | undefined
+        let weakRef: WeakRef<Container> | undefined
         await this.runInScope((container) => {
-          capturedContainer = container
+          weakRef = new WeakRef(container)
         })
-        return capturedContainer
+        return weakRef
       }
     }
 
     const doInstance = new TestDO(mockState as never, mockEnv)
-    const container = await doInstance.testRunInScope()
+    const weakRef = await doInstance.testRunInScope()
 
-    expect(() => container!.resolve(TOKEN)).toThrow()
+    await forceGc()
+
+    expect(weakRef!.deref()).toBeUndefined()
   })
 })

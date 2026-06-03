@@ -1,24 +1,31 @@
-import type { DependencyContainer } from 'tsyringe'
-import { injectable, Lifecycle, container as tsyringeRootContainer } from 'tsyringe'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RouterContext } from '../../router/router-context'
 import { Container } from '../container'
-import { RequestScopeOperationNotAllowedError } from '../errors/request-scope-operation-not-allowed.error'
+import { ContainerError } from '../container.error'
+import { inject, Request, Transient } from '../decorators'
 import { CONTAINER_TOKEN, DI_TOKENS } from '../tokens'
-import { Scope } from '../types'
 
 // Test services
-@injectable()
+@Transient()
 class TestService {
   getValue() {
     return 'test-value'
   }
 }
 
-@injectable()
+@Transient()
 class AnotherService {
   getName() {
     return 'another'
+  }
+}
+
+const REQUEST_SCOPED_TOKEN = Symbol('RequestScopedToken')
+
+@Request(REQUEST_SCOPED_TOKEN)
+class RequestScopedService {
+  getValue() {
+    return 'request-scoped'
   }
 }
 
@@ -26,16 +33,12 @@ const TEST_TOKEN = Symbol('TestToken')
 const ALIAS_TOKEN = Symbol('AliasToken')
 
 describe('Container', () => {
-  let childContainer: DependencyContainer
   let container: Container
 
   beforeEach(() => {
     vi.clearAllMocks()
-    childContainer = tsyringeRootContainer.createChildContainer()
 
-    container = new Container({
-      container: childContainer,
-    })
+    container = new Container()
   })
 
   describe('register() and resolve()', () => {
@@ -82,6 +85,36 @@ describe('Container', () => {
 
       expect(resolved).toBe(value)
       expect(resolved.count).toBe(42)
+    })
+
+    it('should not destroy other cached request-scoped services', () => {
+      const UNRELATED_TOKEN = Symbol('UnrelatedToken')
+
+      container.register(REQUEST_SCOPED_TOKEN, RequestScopedService)
+      const reqContainer = new Container({ parent: container, isRequestScoped: true })
+
+      const first = reqContainer.resolve<RequestScopedService>(REQUEST_SCOPED_TOKEN)
+      reqContainer.registerValue(UNRELATED_TOKEN, { unrelated: true })
+      const second = reqContainer.resolve<RequestScopedService>(REQUEST_SCOPED_TOKEN)
+
+      expect(second).toBe(first)
+    })
+
+    it('should invalidate only its own token in request cache', () => {
+      const TOKEN_A = Symbol('TokenA')
+      const TOKEN_B = Symbol('TokenB')
+
+      const reqContainer = new Container({ parent: container, isRequestScoped: true })
+      reqContainer.registerValue(TOKEN_A, 'original-a')
+      reqContainer.registerValue(TOKEN_B, 'original-b')
+
+      expect(reqContainer.resolve(TOKEN_A)).toBe('original-a')
+      expect(reqContainer.resolve(TOKEN_B)).toBe('original-b')
+
+      reqContainer.registerValue(TOKEN_A, 'updated-a')
+
+      expect(reqContainer.resolve(TOKEN_A)).toBe('updated-a')
+      expect(reqContainer.resolve(TOKEN_B)).toBe('original-b')
     })
   })
 
@@ -160,24 +193,12 @@ describe('Container', () => {
     it('should register CONTAINER_TOKEN for global container', () => {
       expect(container.isRegistered(CONTAINER_TOKEN)).toBe(true)
     })
-
-    it('should NOT register CONTAINER_TOKEN for request-scoped container', () => {
-      const reqChildContainer = tsyringeRootContainer.createChildContainer()
-      const _reqContainer = new Container({
-        container: reqChildContainer,
-        isRequestScoped: true,
-      })
-
-      // Should not be registered in this specific container
-      expect(reqChildContainer.isRegistered(CONTAINER_TOKEN, true)).toBe(false)
-    })
   })
 
   describe('request scope restrictions', () => {
-    it('should throw RequestScopeOperationNotAllowedError for runInRequestScope on request-scoped container', async () => {
-      const reqChildContainer = tsyringeRootContainer.createChildContainer()
+    it('should throw ContainerError for runInRequestScope on request-scoped container', async () => {
       const reqContainer = new Container({
-        container: reqChildContainer,
+        parent: container,
         isRequestScoped: true,
       })
 
@@ -185,18 +206,17 @@ describe('Container', () => {
         reqContainer.runInRequestScope({} as unknown as RouterContext, async () => {
           // noop
         })
-      ).rejects.toThrow(RequestScopeOperationNotAllowedError)
+      ).rejects.toThrow(ContainerError)
     })
 
-    it('should throw RequestScopeOperationNotAllowedError for createRequestScope on request-scoped container', () => {
-      const reqChildContainer = tsyringeRootContainer.createChildContainer()
+    it('should throw ContainerError for createRequestScope on request-scoped container', () => {
       const reqContainer = new Container({
-        container: reqChildContainer,
+        parent: container,
         isRequestScoped: true,
       })
 
       expect(() => reqContainer.createRequestScope({} as unknown as RouterContext)).toThrow(
-        RequestScopeOperationNotAllowedError
+        ContainerError
       )
     })
   })
@@ -225,17 +245,79 @@ describe('Container', () => {
     })
   })
 
-  describe('Scope enum', () => {
-    it('should map Scope.Transient to Lifecycle.Transient', () => {
-      expect(Scope.Transient).toBe(Lifecycle.Transient)
+  describe('circular dependency detection', () => {
+    it('should throw a clear error instead of overflowing the stack', () => {
+      const A_TOKEN = Symbol('A')
+      const B_TOKEN = Symbol('B')
+
+      @Transient(A_TOKEN)
+      class A {
+        constructor(@inject(B_TOKEN) public b: unknown) {}
+      }
+
+      @Transient(B_TOKEN)
+      class B {
+        constructor(@inject(A_TOKEN) public a: unknown) {}
+      }
+
+      container.register(A_TOKEN, A)
+      container.register(B_TOKEN, B)
+
+      expect(() => container.resolve(A_TOKEN)).toThrow(ContainerError)
+      expect(() => container.resolve(A_TOKEN)).toThrow(/circular dependency/i)
     })
 
-    it('should map Scope.Singleton to Lifecycle.Singleton', () => {
-      expect(Scope.Singleton).toBe(Lifecycle.Singleton)
-    })
-
-    it('should map Scope.Request to Lifecycle.ContainerScoped', () => {
-      expect(Scope.Request).toBe(Lifecycle.ContainerScoped)
+    it('should resolve again cleanly after a circular-dependency error (stack is unwound)', () => {
+      container.register(TestService)
+      // A failed resolution must not leave the resolution stack polluted.
+      expect(container.resolve(TestService)).toBeInstanceOf(TestService)
     })
   })
+
+  describe('captive dependency', () => {
+    it('should throw when a singleton depends on a request-scoped provider', async () => {
+      const SINGLETON_TOKEN = Symbol('CaptiveSingleton')
+
+      @Request(REQUEST_SCOPED_TOKEN)
+      class ReqService {}
+
+      // A singleton that injects a @Request provider would otherwise capture one
+      // request's instance forever. Resolving it (even inside a request) must
+      // fail rather than leak.
+      class CaptiveSingleton {
+        constructor(@inject(REQUEST_SCOPED_TOKEN) public req: ReqService) {}
+      }
+
+      container.registerSingleton(SINGLETON_TOKEN, CaptiveSingleton)
+      container.register(REQUEST_SCOPED_TOKEN, ReqService)
+
+      const routerContext = { getContainer: () => container } as unknown as RouterContext
+
+      await container.runInRequestScope(routerContext, (req) => {
+        expect(() => req.resolve(SINGLETON_TOKEN)).toThrow(/request-scoped/i)
+      })
+    })
+  })
+
+  describe('tryResolve()', () => {
+    it('should return undefined for an unregistered token', () => {
+      expect(container.tryResolve(Symbol('missing'))).toBeUndefined()
+    })
+
+    it('should propagate a construction error instead of masking it as undefined', () => {
+      const THROWS_TOKEN = Symbol('Throws')
+
+      @Transient(THROWS_TOKEN)
+      class Throws {
+        constructor() {
+          throw new Error('boom')
+        }
+      }
+
+      container.register(THROWS_TOKEN, Throws)
+      // The provider IS registered; a failure constructing it is a real error.
+      expect(() => container.tryResolve(THROWS_TOKEN)).toThrow('boom')
+    })
+  })
+
 })

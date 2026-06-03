@@ -1,12 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Application } from '../../application'
-import type { Container } from '../../di/container'
-import { Scope } from '../../di/types'
-import type { StratalEnv } from '../../env'
-import { LogLevel } from '../../logger'
-import { Module } from '../../module/module.decorator'
-import { Stratal } from '../../stratal'
-import { runInScope } from '../run-in-scope'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Application } from '../../application';
+import type { Container } from '../../di/container';
+import { DI_TOKENS } from '../../di/tokens';
+import type { StratalEnv } from '../../env';
+import type { EventContext, IEventRegistry } from '../../events';
+import { Listener, On } from '../../events';
+import { LogLevel } from '../../logger';
+import { Module } from '../../module/module.decorator';
+import { Stratal } from '../../stratal';
+import { runInScope } from '../run-in-scope';
+import { forceGc } from './__helpers__/force-gc';
 
 const TOKEN = Symbol('TestSvc')
 
@@ -14,8 +17,21 @@ class TestService {
   getValue() { return 'from-run-in-scope' }
 }
 
+const listenerInvocations: string[] = []
+
+@Listener()
+class TestEventListener {
+  @On('test.run-in-scope.event' as never)
+   handle(ctx: EventContext<never>) {
+    listenerInvocations.push((ctx as { data?: { tag?: string } }).data?.tag ?? 'no-tag')
+  }
+}
+
 @Module({
-  providers: [{ provide: TOKEN, useClass: TestService, scope: Scope.Singleton }],
+  providers: [
+    { provide: TOKEN, useClass: TestService },
+    TestEventListener,
+  ],
 })
 class TestAppModule {}
 
@@ -34,6 +50,7 @@ describe('runInScope', () => {
   let app: Application
 
   beforeEach(async () => {
+    listenerInvocations.length = 0
     app = createTestApp()
     await app.initialize()
     vi.spyOn(Stratal, 'resolveApplication').mockResolvedValue(app)
@@ -56,14 +73,15 @@ describe('runInScope', () => {
     expect(Stratal.resolveApplication).toHaveBeenCalledOnce()
   })
 
-  it('should dispose the request container after callback completes', async () => {
-    let capturedContainer: Container | undefined
+  it('should release the request container for garbage collection after callback completes', async () => {
+    let weakRef: WeakRef<Container> | undefined
     await runInScope((container) => {
-      capturedContainer = container
+      weakRef = new WeakRef(container)
     })
 
-    // After callback, trying to resolve should throw because the container is disposed
-    expect(() => capturedContainer!.resolve(TOKEN)).toThrow()
+    await forceGc()
+
+    expect(weakRef!.deref()).toBeUndefined()
   })
 
   it('should propagate errors from the callback', async () => {
@@ -72,5 +90,16 @@ describe('runInScope', () => {
         throw new Error('callback-error')
       })
     ).rejects.toThrow('callback-error')
+  })
+
+  it('should register @Listener() handlers so events emitted inside runInScope fire', async () => {
+    await runInScope(async (container) => {
+      const events = container.resolve<IEventRegistry>(DI_TOKENS.EventRegistry)
+      await events.emit('test.run-in-scope.event' as never, {
+        data: { tag: 'fired' },
+      } as never)
+    })
+
+    expect(listenerInvocations).toEqual(['fired'])
   })
 })

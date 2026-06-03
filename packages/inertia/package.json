@@ -1,6 +1,6 @@
 {
   "name": "@stratal/inertia",
-  "version": "0.0.19",
+  "version": "0.0.23",
   "description": "Inertia.js v3 server adapter for Stratal framework — server-driven React SPAs",
   "type": "module",
   "license": "MIT",
@@ -40,9 +40,21 @@
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
     },
+    "./quarry": {
+      "types": "./dist/quarry.d.mts",
+      "import": "./dist/quarry.mjs"
+    },
     "./react": {
       "types": "./dist/react.d.mts",
       "import": "./dist/react.mjs"
+    },
+    "./seo-runtime": {
+      "types": "./dist/seo-runtime.d.mts",
+      "import": "./dist/seo-runtime.mjs"
+    },
+    "./ssr": {
+      "types": "./dist/ssr.d.mts",
+      "import": "./dist/ssr.mjs"
     },
     "./testing": {
       "types": "./dist/testing.d.mts",
@@ -63,22 +75,21 @@
     "lint:fix": "npx oxlint --fix ."
   },
   "dependencies": {
+    "intl-messageformat": "^11.2.7",
     "ts-morph": "^28.0.0"
   },
   "peerDependencies": {
     "@cloudflare/vite-plugin": ">=1.0.0",
-    "@inertiajs/core": "^3.0.0-beta.5",
-    "@inertiajs/react": "^3.0.0-beta.5",
-    "@inertiajs/vite": "^3.0.0-beta.5",
-    "@intlify/core-base": ">=11.0.0",
-    "@stratal/testing": ">=0.0.19",
-    "hono": "^4.12.8",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "reflect-metadata": "^0.2.2",
-    "stratal": "^0.0.19",
-    "vite": "^8.0.0",
-    "vitest": "^4.1.0"
+    "@inertiajs/core": ">=3",
+    "@inertiajs/react": ">=3",
+    "@inertiajs/vite": ">=3",
+    "@stratal/testing": ">=0.0.23",
+    "hono": ">=4",
+    "react": ">=19",
+    "react-dom": ">=19",
+    "stratal": ">=0.0.23",
+    "vite": ">=8",
+    "vitest": ">=4"
   },
   "peerDependenciesMeta": {
     "@cloudflare/vite-plugin": {
@@ -91,9 +102,6 @@
       "optional": true
     },
     "@inertiajs/vite": {
-      "optional": true
-    },
-    "@intlify/core-base": {
       "optional": true
     },
     "@stratal/testing": {
@@ -110,26 +118,25 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.33.2",
-    "@cloudflare/workers-types": "4.20260426.1",
-    "@inertiajs/core": "^3.0.3",
-    "@inertiajs/react": "^3.0.3",
-    "@inertiajs/vite": "^3.0.3",
-    "@intlify/core-base": "^11.4.0",
+    "@cloudflare/vite-plugin": "^1.39.2",
+    "@cloudflare/workers-types": "4.20260603.1",
+    "@inertiajs/core": "^3.3.0",
+    "@inertiajs/react": "^3.3.0",
+    "@inertiajs/vite": "^3.3.0",
     "@stratal/testing": "workspace:*",
-    "@types/node": "^25.6.0",
-    "@types/react": "^19.2.14",
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.2.16",
     "@types/react-dom": "^19.2.3",
-    "@vitest/runner": "~4.1.5",
-    "@vitest/snapshot": "~4.1.5",
-    "hono": "^4.12.15",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5",
-    "reflect-metadata": "^0.2.2",
+    "@vitest/runner": "~4.1.8",
+    "@vitest/snapshot": "~4.1.8",
+    "hono": "^4.12.23",
+    "jsdom": "^29.1.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "stratal": "workspace:*",
-    "tsdown": "^0.21.10",
+    "tsdown": "^0.22.1",
     "typescript": "^6.0.3",
-    "vite": "^8.0.10",
-    "vitest": "~4.1.5"
+    "vite": "^8.0.16",
+    "vitest": "~4.1.8"
   }
 }

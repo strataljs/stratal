@@ -1,4 +1,4 @@
-import { type OpenAPIObject } from "../../i18n/validation"
+import type { OpenAPIObject } from '../../i18n/validation/zod'
 import type { HttpMethod } from '../../router/types'
 
 type JsonSchema = Record<string, unknown>

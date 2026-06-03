@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import type { RouteRegistry, RegisteredRoute } from '../../router/route-registry'
 import { ROUTER_TOKENS } from '../../router/router.tokens'
 import { Command } from '../command'

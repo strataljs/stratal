@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import { DI_TOKENS } from '../../di/tokens'
 import { getListenerHandlers } from '../../events'
 import type { ModuleRegistry } from '../../module/module-registry'
