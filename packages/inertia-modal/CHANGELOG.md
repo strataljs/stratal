@@ -1,5 +1,24 @@
 # @stratal/inertia-modal
 
+## 0.0.23
+
+### Patch Changes
+
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [be813bc]
+  - stratal@0.0.23
+  - @stratal/inertia@0.0.23
+
 ## 0.0.22
 
 ### Patch Changes

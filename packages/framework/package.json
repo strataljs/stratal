@@ -1,6 +1,6 @@
 {
   "name": "@stratal/framework",
-  "version": "0.0.22",
+  "version": "0.0.23",
   "type": "module",
   "license": "MIT",
   "author": "Temitayo Fadojutimi",
@@ -77,7 +77,7 @@
     "@zenstackhq/schema": ">=3.6",
     "better-auth": ">=1.6",
     "pg": "^8.0.0",
-    "stratal": "^0.0.22"
+    "stratal": "^0.0.23"
   },
   "devDependencies": {
     "@better-auth/core": "^1.6.14",
