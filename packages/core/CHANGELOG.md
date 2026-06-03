@@ -1,5 +1,153 @@
 # stratal
 
+## 0.0.23
+
+### Patch Changes
+
+- 13b0e8d: Reorganize core subsystem registries into modules
+
+  The event, cron, quarry, and seeder registries — previously registered imperatively in `Application` — are now declared as ordinary `@Module`s (`EventsModule`, `CronModule`, `QuarryModule`, `SeederModule`), consistent with every other subsystem. The `Application` constructor now only sets up the bootstrap kernel (`ExceptionHandler`, `LazyModuleLoader`, logging); all module registration happens during initialization. `application.ts` has no static subsystem imports — every built-in module is loaded via dynamic `import()`.
+
+  ### Breaking Changes
+
+  - **`EventRegistry`, `QuarryRegistry`, `CronManager`, `SeederRegistry` are now `@Singleton`** (they were `@Transient` but always force-registered as singletons). This aligns the class decorator with their actual lifecycle; their canonical DI tokens are declared on the decorator.
+  - **`SeederRegistry` now injects the `Application`** (`@inject(DI_TOKENS.Application)`) instead of being constructed manually.
+  - **`@stratal/framework` `DatabaseModule.onInitialize` is now `async`** and loads `EventsModule` on demand via `LazyModuleLoader` (the event registry is no longer eagerly registered). No change is required for apps that use `DatabaseModule` normally.
+  - New public modules are exported from their sub-paths: `EventsModule` (`stratal/events`), `CronModule` (`stratal/cron`), `QuarryModule` (`stratal/quarry`), `SeederModule` (`stratal/seeder`).
+  - The `schedule:list` command now lazy-loads `CronModule` via `LazyModuleLoader` rather than injecting `DI_TOKENS.Cron`; with no jobs registered it prints "No cron jobs found" instead of failing to resolve.
+
+- 13b0e8d: Replace the email provider layer with a built-in Cloudflare Workers-compatible SMTP client and defer React Email rendering
+
+  - Email is now sent through a built-in SMTP client and MIME builder, removing the runtime dependency on `nodemailer`.
+  - `@react-email/render` is loaded on demand only when sending a React template, reducing cold-start overhead for requests that don't send email.
+
+  ### Breaking Changes
+
+  - **Resend provider removed.** Switch to SMTP. Remove the `provider` and `apiKey` options from your email configuration and remove `resend` from your dependencies.
+  - **SMTP configuration uses a connection URL.** Replace individual `host`/`port`/`secure`/`username`/`password` fields with a single `url`:
+
+    ```ts
+    // Before
+    smtp: { host: 'smtp.example.com', port: 587, username: 'user', password: 'pass' }
+    // After
+    smtp: { url: 'smtp://user:pass@smtp.example.com:587' } // or smtps:// for TLS
+    ```
+
+  - **Dependencies changed.** `nodemailer`, `resend`, and `@react-email/components` are no longer peer dependencies. If you render React email templates, install `@react-email/render` directly.
+
+- 13b0e8d: Add lazy module loading and reduce cold start by loading built-in subsystems on demand
+
+  ### New: `LazyModuleLoader`
+
+  Inject `LazyModuleLoader` (or resolve `DI_TOKENS.LazyModuleLoader`) to load a module at runtime, NestJS-style:
+
+  ```ts
+  const ref = await loader.load(() =>
+    import("./reports.module").then((m) => m.ReportsModule)
+  );
+  ref.get(ReportService);
+  ```
+
+  The loaded module's nested `imports` and `providers` are registered into the global container and its `onInitialize` hook runs once. Repeat loads return the cached `ModuleRef`. Controllers, queue consumers, and cron jobs declared by a lazily loaded module are skipped (with a warning) — that wiring is finalized at bootstrap.
+
+  If a lazy module provides a token that another module has already bound on the global container, the existing binding is kept and the colliding lazy provider is ignored (with a warning) — a lazy module cannot silently clobber an already-registered token.
+
+  ### Breaking Changes
+
+  - **Built-in subsystems are no longer registered eagerly at boot.** `I18nModule`, `QueueModule`, `CacheModule`, `OpenAPIModule`, the cron manager, and router services are now loaded via dynamic `import()` at their trigger points (i18n/routing on the first HTTP request, queue on the first batch, cron on the first scheduled invocation or when the app declares jobs). HTTP-only apps no longer evaluate queue/cron code at cold start.
+  - **`CacheService` is no longer globally available unless `CacheModule` is loaded.** `RateLimiterModule` now imports `CacheModule` itself; apps that relied on the implicit global `CacheService` must import `CacheModule` (or use `LazyModuleLoader`).
+  - **`Application.initializeHandlers()` is removed.** Non-HTTP entrypoints (Durable Objects, Workflows, WorkerEntrypoints) now use `Application.ensureScopedHandlers()` via the internal `runInScope` helper — no action required for typical apps.
+
+- 13b0e8d: Add locale-aware URL generation for path-prefixed and querystring localized routing
+
+  - Route URL generation now applies the active locale automatically — e.g. `uri.route('posts.show', { locale: 'es' })` produces `/es/posts/...` when locale prefixing is enabled.
+  - New `LocaleUrlConfig` and a locale-aware URL service for producing locale variants of any URL (used for hreflang alternates, canonical URLs, sitemaps, and redirects).
+  - Configurable trailing-slash handling for consistent URL formatting.
+
+- 13b0e8d: Fix correctness and security issues found in review.
+
+  Queue:
+
+  - Retry the correct binding: dispatch stamps the producer binding into message metadata and failed jobs record it, so `queue:retry` re-enqueues through the Cloudflare binding instead of the queue name (which is not a valid binding key and broke retry whenever the two differed). A message with no binding metadata is logged and acked rather than stored as an unretryable job.
+  - Honor the documented retry budget: `maxRetries` now counts retries correctly against Cloudflare's 1-based `message.attempts` (previously gave one fewer retry than configured).
+  - Derive idempotency keys from an order-stable serialization of `type` + `payload`, so payloads that differ only in key order dedupe correctly.
+  - `queue:retry --all` / `queue:purge --all --queue` collect matching keys before deleting, so cursor pagination no longer skips jobs; `queue:failed --queue --limit` now counts matching jobs rather than scanned keys.
+  - Documented that delivery is at-least-once with best-effort de-duplication (not exactly-once), since the processed marker is written only after a handler succeeds and KV is eventually consistent — handlers must be idempotent.
+
+  Email (SMTP):
+
+  - Upgrade STARTTLS onto the socket `startTls()` returns: the original socket is closed by the runtime, so the post-upgrade reader/writer are re-derived from the new secure socket and any pre-handshake bytes are discarded (fixes a broken `smtp://` STARTTLS path on real Workers and closes the STARTTLS plaintext-injection vector).
+  - Refuse to send credentials over an unencrypted connection: an `smtp://` server that doesn't offer STARTTLS now fails loudly instead of leaking the password (blocks STARTTLS-stripping downgrades). Credential-free connections (e.g. local Mailpit) are unaffected.
+  - AUTH is gated on the server's advertised mechanisms and supports both `PLAIN` and `LOGIN`; usernames are percent-decoded like passwords.
+  - Add a response timeout so a hung SMTP server can't wedge the worker; QUIT/socket close are now best-effort and never mask a successful send.
+  - MIME builder strips CR/LF from headers, escapes/RFC 2231-encodes attachment filenames (prevents header injection), base64-encodes message bodies (fixes long-line corruption), and rejects envelope addresses containing whitespace or angle brackets (prevents `MAIL FROM`/`RCPT TO` desync).
+
+  Inertia SEO:
+
+  - `titleTemplate` substitutes every `%s` and treats `$`-sequences in the title literally.
+  - Inject head/body content via function replacements, so SEO/page content containing `$`-sequences (`$$`, `$&`, `` $` ``, `$'`) is no longer corrupted or able to splice a template placeholder back into the output.
+  - Drop unsafe attribute names — including inline event handlers (`on*`) — from custom `meta`/`link` entries (prevents tag breakout server-side, `setAttribute` errors during client head-sync, and developer-supplied event-handler attributes).
+
+  Feature flags:
+
+  - `FeatureFlagService.use()` binds the target app exactly once.
+
+  Database (framework):
+
+  - The reentrant `$transaction` proxy forwards the receiver for non-transaction property access.
+
+  Testing:
+
+  - `TestingModule.close()` drops the isolated per-file database even if shutdown throws; the stale-database sweep escapes LIKE metacharacters so a prefix containing `_` can't over-match.
+
+  DI:
+
+  - Construct singletons against the root container so they can never capture a request-scoped dependency (which would leak one request's state across every later request); an illegal singleton→request dependency now throws loudly.
+  - Detect circular dependencies and throw a clear error naming the cycle instead of overflowing the stack.
+  - `tryResolve` only swallows "no provider"; a registered provider that throws while constructing now surfaces the real error instead of injecting `undefined`.
+  - Request-cache invalidation tracks transitive constructor dependencies, so re-registering a value rebuilds cached services that depend on it through a transient intermediary.
+
+  Quarry dev runtime:
+
+  - Persist every durable plugin (KV, D1, R2, Durable Objects, cache) under `.wrangler/state/v3`, matching `wrangler dev` (previously only R2 was persisted); load `.env.local` / `.env.<env>.local` into `process.env` for full parity.
+  - The `cloudflare:sockets` STARTTLS shim re-attaches the stream error handler to the upgraded socket, so post-upgrade connection errors still surface.
+
+- 13b0e8d: Align the Quarry CLI dev runtime with `wrangler dev`
+
+  The Quarry CLI now builds its local environment directly from your Wrangler config via Miniflare, so bindings, `vars`, and `.dev.vars` / `.env` files resolve exactly as they do under `wrangler dev` (including environment-specific `.env.<environment>` files loaded by `--env`).
+
+  - **Shared R2 state** — R2 buckets now persist to `.wrangler/state/v3/r2`, so data written by Quarry commands and `wrangler dev` is shared.
+  - **Parallel dev environments** — set `WRANGLER_REGISTRY_PATH` to isolate the dev service registry, allowing multiple dev environments to run side by side without service-binding collisions. Quarry also discovers a running `wrangler dev` session so service bindings resolve against it.
+  - **SMTP/socket support** — outbound TCP/TLS (e.g. sending email over SMTP) now works when running under Quarry.
+  - **Queues and events in commands** — CLI commands can now dispatch to queues and emit events, with listeners wired automatically.
+
+- 13b0e8d: Add failed-job storage, idempotent dispatch, and queue management CLI commands
+
+  - Messages that exhaust their retry attempts are persisted to a KV-backed store so they can be inspected and replayed.
+  - New Quarry commands to manage failed jobs:
+    - `queue:failed` — list failed jobs (filter with `--queue`, cap with `--limit`).
+    - `queue:retry` — re-dispatch a job by id, a whole queue (`--queue`), or everything (`--all`).
+    - `queue:purge` — delete a failed job by id, a whole queue (`--queue`), or everything (`--all`).
+  - Messages stay auto-idempotent: every dispatch carries an idempotency key (an explicit `metadata.idempotencyKey`, otherwise a deterministic SHA-256 hash of `type` + `payload`), and an already-processed message is skipped. `idempotency.ttl` bounds how long processed keys are remembered (default 24h).
+  - Failed jobs persist indefinitely until retried or purged. Register the opt-in `FailedJobCleanupJob` cron (in a module's `jobs` array) to delete failed jobs older than `failedJobs.retention` (default 7 days); use `failedJobCleanupJob(schedule)` for a custom schedule.
+  - The KV store binding is validated at app boot: a missing binding throws a clear, actionable `QueueError` during module initialization instead of failing on every queue invocation.
+  - Queue state (idempotency claims and failed jobs) is stored in a KV namespace that defaults to the `CACHE` binding; override it with `store: { binding: 'YOUR_KV' }` in the queue module options.
+
+- 13b0e8d: Add precognition request validation, a safe WebSocket send, and cron misconfiguration warnings
+
+  - **Precognition** — send a `Precognition: true` header to run a route's validators (across all parameters, including localized/prefixed routes) and get a `204` without executing the handler, enabling live form validation.
+  - **`trySend()`** — gateways can now send a WebSocket message only when the socket is open, returning `false` instead of throwing for closed connections.
+  - A warning is now logged when a cron job is registered without a `schedule`, instead of silently skipping it.
+
+- 13b0e8d: Add an opt-in isolate-local L1 cache tier and back queue idempotency with it.
+
+  - New `TieredCacheService` (`CACHE_TOKENS.TieredCacheService`) layers an isolate-local in-memory L1 over `CacheService` (KV). It gives read-after-write coherence within an isolate, closing KV's eventual-consistency gap (a `get` can otherwise return an edge-cached value for up to ~60s after a `put`). Same API as `CacheService` plus `binding(name)`, which memoizes a tiered instance per binding so each KV namespace keeps a stable, isolate-lifetime L1.
+  - L1 semantics: caches string-backed values only (`text`/`json`); `put`/`delete` are write-through; `text` reads back-populate; `arrayBuffer`/`stream` reads and non-string writes bypass and invalidate L1; `getWithMetadata`/`list` always read KV. FIFO-bounded.
+  - Queue idempotency claims and failed-job storage (`QueueStore`) now run through `TieredCacheService`, so a message redelivered to the same warm isolate is de-duplicated even inside KV's consistency window. Delivery remains at-least-once with best-effort de-duplication, not exactly-once. `QueueModule` now imports `CacheModule`.
+  - `CacheService` stays a thin KV wrapper (eventually consistent) and gains a `binding(name)` helper plus a `namespace` getter. Use it — not the tiered cache — for read-modify-write counters that need cross-edge freshness (e.g. rate limiting), where an isolate-local L1 would read its own stale value and miss other isolates' writes.
+
+- be813bc: Update bundled runtime dependencies to their latest patch releases (Hono, `@swc/core`, `@swc/helpers`)
+
 ## 0.0.22
 
 ### Patch Changes

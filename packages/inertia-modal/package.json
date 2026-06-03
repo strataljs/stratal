@@ -1,6 +1,6 @@
 {
   "name": "@stratal/inertia-modal",
-  "version": "0.0.22",
+  "version": "0.0.23",
   "description": "Modal page primitive for Stratal Inertia — backend-driven modal dialogs",
   "type": "module",
   "license": "MIT",
@@ -42,10 +42,10 @@
   "peerDependencies": {
     "@inertiajs/core": ">=3",
     "@inertiajs/react": ">=3",
-    "@stratal/inertia": ">=0.0.22",
+    "@stratal/inertia": ">=0.0.23",
     "hono": ">=4",
     "react": ">=19",
-    "stratal": ">=0.0.22"
+    "stratal": ">=0.0.23"
   },
   "peerDependenciesMeta": {
     "@inertiajs/core": {
