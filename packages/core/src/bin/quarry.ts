@@ -81,9 +81,16 @@ async function main(): Promise<void> {
   const configPath = configName ? resolve(process.cwd(), configName) : undefined
 
   // Load .env into process.env before building Miniflare options, mirroring
-  // `wrangler dev`. Load base `.env`
-  // first, then the env-specific `.env.<environment>` (later load wins).
-  for (const envFile of ['.env', environment ? `.env.${environment}` : null]) {
+  // `wrangler dev`'s precedence: base `.env`, then `.env.local`, then the
+  // env-specific `.env.<environment>` and `.env.<environment>.local` (later
+  // load wins).
+  const envFiles = [
+    '.env',
+    '.env.local',
+    environment ? `.env.${environment}` : null,
+    environment ? `.env.${environment}.local` : null,
+  ]
+  for (const envFile of envFiles) {
     if (!envFile) continue
     const envPath = resolve(process.cwd(), envFile)
     if (existsSync(envPath)) process.loadEnvFile(envPath)
@@ -135,7 +142,10 @@ async function main(): Promise<void> {
     script: '',
     modules: true,
     unsafeDevRegistryPath: registryPath,
-    r2Persist: join(process.cwd(), '.wrangler/state/v3/r2'),
+    // Persist every durable plugin (KV, D1, R2, Durable Objects, cache) under
+    // the same root `wrangler dev` uses, so state survives across `quarry`
+    // invocations and is shared with a running `wrangler dev` session.
+    defaultPersistRoot: join(process.cwd(), '.wrangler/state/v3'),
   })
 
   await mf.ready

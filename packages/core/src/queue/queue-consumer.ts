@@ -1,3 +1,5 @@
+import type { QueueBinding } from './queue-binding';
+
 /**
  * Queue message structure
  *
@@ -15,6 +17,13 @@ export interface QueueMessage<T = unknown> {
   metadata?: {
     locale?: string
     idempotencyKey?: string
+    /**
+     * Producer binding the message was dispatched through (stamped by
+     * {@link QueueSender}). Recorded on failed jobs so `queue:retry` can
+     * re-enqueue to the correct Cloudflare binding — the queue *name* a
+     * consumer sees is not a valid producer binding key.
+     */
+    binding?: QueueBinding
     [key: string]: unknown
   }
 }

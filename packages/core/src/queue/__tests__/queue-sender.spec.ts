@@ -109,5 +109,12 @@ describe('QueueSender', () => {
 
       expect(mockProvider.send).toHaveBeenCalledWith('TEST_QUEUE', expect.any(Object))
     })
+
+    it('should stamp the producer binding into metadata for retry', async () => {
+      await sender.dispatch({ type: 'test', payload: {} })
+
+      const sent = mockProvider.send.mock.calls[0][1]
+      expect(sent.metadata?.binding).toBe('TEST_QUEUE')
+    })
   })
 })

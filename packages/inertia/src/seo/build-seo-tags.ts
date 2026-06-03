@@ -64,10 +64,11 @@ export function buildSeoTags(data: SeoData): SeoTagDescriptor[] {
     for (const entry of data.link) {
       const attrs: Record<string, string> = {}
       // Custom link entries carry arbitrary keys; drop any whose name isn't a
-      // valid attribute so a crafted key can't break out of the tag (server) or
-      // throw from `setAttribute` (client head-sync).
+      // safe attribute so a crafted key can't break out of the tag (server),
+      // throw from `setAttribute` (client head-sync), or smuggle in an inline
+      // event handler (`<link rel=… onload=…>` fires for some rel values).
       for (const [key, value] of Object.entries(entry)) {
-        if (VALID_ATTR_NAME.test(key)) attrs[key] = value
+        if (isSafeAttrName(key)) attrs[key] = value
       }
       tags.push({ tag: 'link', attrs })
     }
@@ -89,10 +90,19 @@ export function buildSeoTags(data: SeoData): SeoTagDescriptor[] {
  */
 const VALID_ATTR_NAME = /^[A-Za-z_:][\w.:-]*$/
 
+/**
+ * A valid attribute name that is also not an inline event handler. Even with a
+ * well-formed name and an escaped value, `on*` attributes execute JS, so a
+ * user-supplied `onload`/`onerror`/… key must never be emitted.
+ */
+function isSafeAttrName(name: string): boolean {
+  return VALID_ATTR_NAME.test(name) && !/^on/i.test(name)
+}
+
 /** Renders a descriptor to an HTML string with attribute/text escaping (server-side). */
 export function descriptorToHtml(d: SeoTagDescriptor): string {
   const attrs = Object.entries(d.attrs)
-    .filter(([key]) => VALID_ATTR_NAME.test(key))
+    .filter(([key]) => isSafeAttrName(key))
     .map(([key, value]) => (value === '' ? key : `${key}="${escapeAttr(value)}"`))
     .join(' ')
   const open = attrs ? `${d.tag} ${attrs}` : d.tag

@@ -55,6 +55,12 @@ export class Container {
   private readonly singletons = new Map<InjectionToken, unknown>()
   private readonly requestCache = new Map<InjectionToken, unknown>()
   private readonly requestCacheDeps = new Map<InjectionToken, Set<InjectionToken>>()
+  /**
+   * Classes currently being constructed, held on the root so it spans the
+   * global ↔ request-scope boundary. Used to turn an otherwise-opaque stack
+   * overflow on a circular dependency into a clear error naming the cycle.
+   */
+  private readonly resolutionStack: Constructor[] = []
   private readonly parent: Container | null
   private readonly isRequestScoped: boolean
 
@@ -173,16 +179,29 @@ export class Container {
   }
 
   tryResolve<T>(token: InjectionToken<T>): T | undefined {
-    try {
-      return this.resolve(token)
-    } catch {
-      return undefined
-    }
+    const realToken = isLazyToken(token) ? (token.factory() as InjectionToken<T>) : token
+
+    // Only "nothing is registered" yields undefined for an optional dependency.
+    // A provider that exists but throws while constructing is a real error and
+    // must surface — swallowing it would silently inject `undefined` and turn a
+    // bug into a baffling downstream failure.
+    if (!this.isResolvable(realToken)) return undefined
+    return this.resolve(realToken)
   }
 
   isRegistered<T>(token: InjectionToken<T>): boolean {
     if (this.registrations.has(token)) return true
     return this.parent?.isRegistered(token) ?? false
+  }
+
+  /**
+   * Whether a token has anything to resolve to: an explicit registration, or a
+   * bare class constructor (auto-resolvable). Distinct from {@link isRegistered}
+   * so {@link tryResolve} can tell "no provider" (→ undefined) apart from
+   * "provider exists but failed" (→ rethrow).
+   */
+  private isResolvable(token: InjectionToken): boolean {
+    return typeof token === 'function' || this.isRegistered(token)
   }
 
   // ── Conditional ───────────────────────────────────────────────
@@ -342,7 +361,13 @@ export class Container {
     if (scope === Scope.Singleton) {
       const root = this.getRoot()
       if (root.singletons.has(token)) return root.singletons.get(token)
-      const instance = this.instantiate(useClass)
+      // Always construct against the root container. Constructing against a
+      // request-scoped child would let the singleton permanently capture that
+      // one request's request-scoped dependencies (a captive dependency leaking
+      // state across every later request on the isolate). Resolving a @Request
+      // dependency from root instead throws the request-scope error below,
+      // surfacing the illegal singleton→request dependency loudly.
+      const instance = root.instantiate(useClass)
       root.singletons.set(token, instance)
       return instance
     }
@@ -367,36 +392,56 @@ export class Container {
   }
 
   private instantiate(Class: Constructor): unknown {
-    const injections = getInjectionTokens(Class)
+    const root = this.getRoot()
 
-    // Without reflect-metadata there is no `design:paramtypes` fallback, so every
-    // constructor dependency must carry an explicit @inject. A required parameter
-    // with no entry would otherwise be silently injected as `undefined`; fail loud.
-    if (injections.size === 0) {
-      if (Class.length > 0) {
-        throw new ContainerError(
-          `${Class.name} has ${Class.length} required constructor parameter(s) but none are decorated with @inject. ` +
-            `Every constructor dependency must be explicitly injected.`,
-        )
-      }
-      return new Class()
+    // A class re-entering its own construction is a circular dependency. Detect
+    // it and throw a clear error naming the cycle instead of recursing into a
+    // stack overflow. `lazy()` only defers a forward *reference*, not
+    // resolution, so it cannot break a true runtime cycle — the graph must be
+    // refactored.
+    if (root.resolutionStack.includes(Class)) {
+      const cycle = [...root.resolutionStack, Class].map((c) => c.name).join(' → ')
+      throw new ContainerError(
+        `Circular dependency detected while constructing: ${cycle}. ` +
+          `Break the cycle by extracting the shared dependency, or inject a provider/factory instead of the instance.`,
+      )
     }
 
-    const maxIndex = Math.max(...injections.keys())
-    const args: unknown[] = new Array(maxIndex + 1)
+    root.resolutionStack.push(Class)
+    try {
+      const injections = getInjectionTokens(Class)
 
-    for (let index = 0; index <= maxIndex; index++) {
-      const entry = injections.get(index)
-      if (!entry) {
-        throw new ContainerError(
-          `${Class.name} is missing @inject on constructor parameter ${index}. ` +
-            `Every constructor dependency must be explicitly injected.`,
-        )
+      // Without reflect-metadata there is no `design:paramtypes` fallback, so every
+      // constructor dependency must carry an explicit @inject. A required parameter
+      // with no entry would otherwise be silently injected as `undefined`; fail loud.
+      if (injections.size === 0) {
+        if (Class.length > 0) {
+          throw new ContainerError(
+            `${Class.name} has ${Class.length} required constructor parameter(s) but none are decorated with @inject. ` +
+              `Every constructor dependency must be explicitly injected.`,
+          )
+        }
+        return new Class()
       }
-      args[index] = entry.optional ? this.tryResolve(entry.token) : this.resolve(entry.token)
-    }
 
-    return new Class(...args)
+      const maxIndex = Math.max(...injections.keys())
+      const args: unknown[] = new Array(maxIndex + 1)
+
+      for (let index = 0; index <= maxIndex; index++) {
+        const entry = injections.get(index)
+        if (!entry) {
+          throw new ContainerError(
+            `${Class.name} is missing @inject on constructor parameter ${index}. ` +
+              `Every constructor dependency must be explicitly injected.`,
+          )
+        }
+        args[index] = entry.optional ? this.tryResolve(entry.token) : this.resolve(entry.token)
+      }
+
+      return new Class(...args)
+    } finally {
+      root.resolutionStack.pop()
+    }
   }
 
   findRegistration(token: InjectionToken): Registration | undefined {

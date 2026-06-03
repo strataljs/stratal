@@ -113,7 +113,15 @@ function encodeMimeParam(param: string, value: string): string {
 function extractEmail(address: string): string {
   assertNoCrlf(address)
   const match = address.match(/<([^>]+)>/)
-  return match ? match[1] : address.trim()
+  const email = (match ? match[1] : address).trim()
+  // The bare address is written verbatim into `MAIL FROM:<…>` / `RCPT TO:<…>`.
+  // Beyond CR/LF (checked above), reject whitespace and stray angle brackets
+  // that could break out of the brackets or desync the command (e.g.
+  // `a>b@x.com` → `MAIL FROM:<a>b@x.com>`).
+  if (/[<>\s]/.test(email)) {
+    throw new EmailError(`Invalid email address for SMTP envelope: ${JSON.stringify(address)}`)
+  }
+  return email
 }
 
 function formatAddress(email: string, name?: string): string {

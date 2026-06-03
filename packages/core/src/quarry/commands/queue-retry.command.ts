@@ -44,7 +44,7 @@ export class QueueRetryCommand extends Command {
       return 1
     }
 
-    await this.provider.send(job.queue, {
+    await this.provider.send(job.binding, {
       ...job.message,
       id: crypto.randomUUID(),
     })
@@ -75,7 +75,7 @@ export class QueueRetryCommand extends Command {
       const job = await this.store.getFailedJob(id)
       if (!job) continue
 
-      await this.provider.send(job.queue, {
+      await this.provider.send(job.binding, {
         ...job.message,
         id: crypto.randomUUID(),
       })

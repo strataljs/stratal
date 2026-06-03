@@ -50,6 +50,7 @@ export class QueueStore {
   async storeFailedJob(job: FailedJob): Promise<void> {
     const metadata: FailedJobMetadata = {
       queue: job.queue,
+      binding: job.binding,
       type: job.type,
       consumer: job.consumer,
       attempts: job.attempts,

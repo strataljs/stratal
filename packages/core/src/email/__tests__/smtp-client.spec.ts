@@ -3,30 +3,57 @@ import { EmailError } from '../email.error'
 
 const encoder = new TextEncoder()
 
+interface MockSocket {
+  readable: ReadableStream<Uint8Array>
+  writable: WritableStream<Uint8Array>
+  startTls: () => MockSocket
+  close: () => Promise<void>
+  closed: Promise<void>
+}
+
 function createMockSocket(responses: string[]) {
+  // `responseIndex` is shared across every socket this helper hands out so the
+  // scripted reply sequence continues seamlessly across a STARTTLS upgrade.
   let responseIndex = 0
   let startTlsCalled = false
+  // Commands written across ALL sockets (pre- and post-STARTTLS). AUTH/MAIL/DATA
+  // are written on the post-upgrade socket, so per-socket capture would miss
+  // them — collect into one shared buffer.
+  const written: string[] = []
 
-  const writable = new WritableStream({
-    write() { /* no-op for mock */ },
-  })
-
-  const readable = new ReadableStream({
-    pull(controller) {
-      if (responseIndex < responses.length) {
-        controller.enqueue(encoder.encode(responses[responseIndex++]))
-      }
-    },
-  })
-
-  return {
-    socket: {
+  // Models the real Cloudflare contract: `startTls()` returns a NEW socket with
+  // fresh readable/writable streams and the original is dead. A client that
+  // keeps reading the pre-TLS reader after the upgrade would hang here (the new
+  // socket's stream is never read), so this mock catches that regression.
+  const makeSocket = (): MockSocket => {
+    const writable = new WritableStream<Uint8Array>({
+      write(chunk) { written.push(new TextDecoder().decode(chunk)) },
+    })
+    // highWaterMark 0 → pull strictly on demand (one reply per read()), so the
+    // stream never prefetches a reply that would be lost when we swap sockets on
+    // STARTTLS and the shared response sequence stays aligned across the upgrade.
+    const readable = new ReadableStream({
+      pull(controller) {
+        if (responseIndex < responses.length) {
+          controller.enqueue(encoder.encode(responses[responseIndex++]))
+        }
+      },
+    }, { highWaterMark: 0 })
+    return {
       readable,
       writable,
-      startTls: () => { startTlsCalled = true },
+      startTls: () => {
+        startTlsCalled = true
+        return makeSocket()
+      },
       close: vi.fn(() => Promise.resolve()),
       closed: Promise.resolve(),
-    },
+    }
+  }
+
+  return {
+    socket: makeSocket(),
+    written,
     get startTlsCalled() { return startTlsCalled },
   }
 }
@@ -188,8 +215,7 @@ describe('SmtpClient', () => {
 
   describe('Authentication (RFC 4954)', () => {
     it('should send AUTH PLAIN with base64-encoded credentials', async () => {
-      const writtenData: string[] = []
-      const { socket } = createMockSocket([
+      const { socket, written } = createMockSocket([
         ...authHandshake(),
         '250 OK\r\n',
         '250 OK\r\n',
@@ -197,19 +223,12 @@ describe('SmtpClient', () => {
         '250 OK id=<m@h>\r\n',
         '221 Bye\r\n',
       ])
-
-      const writable = new WritableStream({
-        write(chunk) {
-          writtenData.push(new TextDecoder().decode(chunk))
-        },
-      })
-      Object.defineProperty(socket, 'writable', { value: writable })
       mockedConnect.mockReturnValue(socket as any)
 
       const client = new SmtpClient(smtpConfig)
       await client.send('test', sendOptions)
 
-      const authCommand = writtenData.find(d => d.startsWith('AUTH PLAIN'))
+      const authCommand = written.find(d => d.startsWith('AUTH PLAIN'))
       expect(authCommand).toBeDefined()
       const credentials = authCommand!.replace('AUTH PLAIN ', '').replace('\r\n', '')
       const decoded = Buffer.from(credentials, 'base64').toString()
@@ -217,8 +236,7 @@ describe('SmtpClient', () => {
     })
 
     it('should use AUTH LOGIN when PLAIN is not advertised', async () => {
-      const writtenData: string[] = []
-      const { socket } = createMockSocket([
+      const { socket, written } = createMockSocket([
         '220 smtp.example.com ESMTP\r\n',
         EHLO_STARTTLS,
         '220 Ready\r\n',
@@ -232,18 +250,14 @@ describe('SmtpClient', () => {
         '250 OK id=<m@h>\r\n',
         '221 Bye\r\n',
       ])
-      const writable = new WritableStream({
-        write(chunk) { writtenData.push(new TextDecoder().decode(chunk)) },
-      })
-      Object.defineProperty(socket, 'writable', { value: writable })
       mockedConnect.mockReturnValue(socket as any)
 
       const client = new SmtpClient(smtpConfig)
       await client.send('test', sendOptions)
 
-      expect(writtenData.find(d => d.startsWith('AUTH LOGIN'))).toBeDefined()
-      expect(writtenData).toContainEqual(Buffer.from('user').toString('base64') + '\r\n')
-      expect(writtenData).toContainEqual(Buffer.from('pass').toString('base64') + '\r\n')
+      expect(written.find(d => d.startsWith('AUTH LOGIN'))).toBeDefined()
+      expect(written).toContainEqual(Buffer.from('user').toString('base64') + '\r\n')
+      expect(written).toContainEqual(Buffer.from('pass').toString('base64') + '\r\n')
     })
 
     it('should throw when credentials are set but the server advertises no AUTH', async () => {
@@ -288,8 +302,7 @@ describe('SmtpClient', () => {
 
   describe('Envelope (RFC 5321)', () => {
     it('should send MAIL FROM and RCPT TO for each recipient', async () => {
-      const writtenData: string[] = []
-      const { socket } = createMockSocket([
+      const { socket, written } = createMockSocket([
         ...authHandshake(),
         '250 OK\r\n',
         '250 OK\r\n',
@@ -298,13 +311,6 @@ describe('SmtpClient', () => {
         '250 OK id=<m@h>\r\n',
         '221 Bye\r\n',
       ])
-
-      const writable = new WritableStream({
-        write(chunk) {
-          writtenData.push(new TextDecoder().decode(chunk))
-        },
-      })
-      Object.defineProperty(socket, 'writable', { value: writable })
       mockedConnect.mockReturnValue(socket as any)
 
       const client = new SmtpClient(smtpConfig)
@@ -313,16 +319,15 @@ describe('SmtpClient', () => {
         to: ['a@test.com', 'b@test.com'],
       })
 
-      expect(writtenData).toContainEqual('MAIL FROM:<sender@test.com>\r\n')
-      expect(writtenData).toContainEqual('RCPT TO:<a@test.com>\r\n')
-      expect(writtenData).toContainEqual('RCPT TO:<b@test.com>\r\n')
+      expect(written).toContainEqual('MAIL FROM:<sender@test.com>\r\n')
+      expect(written).toContainEqual('RCPT TO:<a@test.com>\r\n')
+      expect(written).toContainEqual('RCPT TO:<b@test.com>\r\n')
     })
   })
 
   describe('DATA (RFC 5321)', () => {
     it('should dot-stuff lines starting with a period', async () => {
-      const writtenData: string[] = []
-      const { socket } = createMockSocket([
+      const { socket, written } = createMockSocket([
         ...authHandshake(),
         '250 OK\r\n',
         '250 OK\r\n',
@@ -330,25 +335,17 @@ describe('SmtpClient', () => {
         '250 OK id=<m@h>\r\n',
         '221 Bye\r\n',
       ])
-
-      const writable = new WritableStream({
-        write(chunk) {
-          writtenData.push(new TextDecoder().decode(chunk))
-        },
-      })
-      Object.defineProperty(socket, 'writable', { value: writable })
       mockedConnect.mockReturnValue(socket as any)
 
       const client = new SmtpClient(smtpConfig)
       await client.send('Subject: Test\r\n\r\nLine 1\r\n.Hidden dot\r\nLine 3', sendOptions)
 
-      const dataContent = writtenData.find(d => d.includes('..Hidden dot'))
+      const dataContent = written.find(d => d.includes('..Hidden dot'))
       expect(dataContent).toBeDefined()
     })
 
     it('should dot-stuff a message body starting with a period (RFC 5321 §4.5.2)', async () => {
-      const writtenData: string[] = []
-      const { socket } = createMockSocket([
+      const { socket, written } = createMockSocket([
         ...authHandshake(),
         '250 OK\r\n',
         '250 OK\r\n',
@@ -356,19 +353,12 @@ describe('SmtpClient', () => {
         '250 OK id=<m@h>\r\n',
         '221 Bye\r\n',
       ])
-
-      const writable = new WritableStream({
-        write(chunk) {
-          writtenData.push(new TextDecoder().decode(chunk))
-        },
-      })
-      Object.defineProperty(socket, 'writable', { value: writable })
       mockedConnect.mockReturnValue(socket as any)
 
       const client = new SmtpClient(smtpConfig)
       await client.send('.starts with dot', sendOptions)
 
-      const dataContent = writtenData.find(d => d.startsWith('..starts with dot'))
+      const dataContent = written.find(d => d.startsWith('..starts with dot'))
       expect(dataContent).toBeDefined()
     })
 
@@ -461,23 +451,17 @@ describe('SmtpClient', () => {
     })
 
     it('should decode URL-encoded usernames and passwords', async () => {
-      const writtenData: string[] = []
-      const { socket } = createMockSocket([
+      const { socket, written } = createMockSocket([
         ...authHandshake(),
         '250 OK\r\n', '250 OK\r\n', '354 Go\r\n', '250 OK id=<m@h>\r\n', '221 Bye\r\n',
       ])
-
-      const writable = new WritableStream({
-        write(chunk) { writtenData.push(new TextDecoder().decode(chunk)) },
-      })
-      Object.defineProperty(socket, 'writable', { value: writable })
       mockedConnect.mockReturnValue(socket as any)
 
       // username "user@host" and password "p@ss#word" both percent-encoded.
       const client = new SmtpClient({ url: 'smtp://user%40host:p%40ss%23word@smtp.test.com:587' })
       await client.send('test', sendOptions)
 
-      const authCommand = writtenData.find(d => d.startsWith('AUTH PLAIN'))
+      const authCommand = written.find(d => d.startsWith('AUTH PLAIN'))
       expect(authCommand).toBeDefined()
       const credentials = authCommand!.replace('AUTH PLAIN ', '').replace('\r\n', '')
       const decoded = Buffer.from(credentials, 'base64').toString()

@@ -139,19 +139,43 @@ describe('QueueManager', () => {
 
       // maxRetries is 3, attempts is 1-based: delivery 4 is the first that
       // exceeds the 3-retry budget, so this is where the job is given up on.
+      // The queue *name* ('background-queue-dev') deliberately differs from the
+      // producer binding ('BACKGROUND_QUEUE') the message was dispatched
+      // through — retry must re-enqueue via the binding, not the name.
       const batch = createMockBatch([
-        { id: '1', type: 'email.send', payload: {} },
+        { id: '1', type: 'email.send', payload: {}, metadata: { binding: 'BACKGROUND_QUEUE' } },
       ], 4)
 
-      await process('notifications-queue', batch)
+      await process('background-queue-dev', batch)
 
       expect(mockStore.storeFailedJob).toHaveBeenCalledWith(
         expect.objectContaining({
           id: '1',
-          queue: 'notifications-queue',
+          queue: 'background-queue-dev',
+          binding: 'BACKGROUND_QUEUE',
           error: expect.objectContaining({ message: 'Processing failed' }),
         }),
       )
+      expect(batch.messages[0].ack).toHaveBeenCalled()
+      expect(batch.messages[0].retry).not.toHaveBeenCalled()
+    })
+
+    it('should not store a failed job when the message carries no binding metadata', async () => {
+      const consumer = createConsumer(['email.send'])
+      consumer.handle.mockRejectedValue(new Error('Processing failed'))
+      consumer.onError!.mockResolvedValue(undefined)
+      register(consumer)
+
+      // A message dispatched outside Stratal has no binding to retry through.
+      // The job can't be recorded for retry — log and ack, never crash the batch.
+      const batch = createMockBatch([
+        { id: '1', type: 'email.send', payload: {} },
+      ], 4)
+
+      await process('background-queue-dev', batch)
+
+      expect(mockStore.storeFailedJob).not.toHaveBeenCalled()
+      expect(mockLogger.error).toHaveBeenCalled()
       expect(batch.messages[0].ack).toHaveBeenCalled()
       expect(batch.messages[0].retry).not.toHaveBeenCalled()
     })
@@ -301,8 +325,8 @@ describe('QueueManager', () => {
 
       // attempts = maxRetries + 1 (4): the failed-job path runs.
       const batch = createMockBatch([
-        { id: '1', type: 'email.send', payload: {} },
-        { id: '2', type: 'email.send', payload: {} },
+        { id: '1', type: 'email.send', payload: {}, metadata: { binding: 'NOTIFICATIONS_QUEUE' } },
+        { id: '2', type: 'email.send', payload: {}, metadata: { binding: 'NOTIFICATIONS_QUEUE' } },
       ], 4)
 
       await process('notifications-queue', batch)

@@ -6,6 +6,7 @@ import { LOGGER_TOKENS, type LoggerService } from '../logger'
 import { type ConsumerRegistry } from './consumer-registry'
 import type { FailedJob } from './failed-job'
 import type { IQueueConsumer, QueueMessage } from './queue-consumer'
+import { QueueError } from './queue.error'
 import type { QueueModuleOptions } from './queue.module'
 import type { QueueStore } from './queue-store'
 import { QUEUE_TOKENS } from './queue.tokens'
@@ -84,25 +85,35 @@ export class QueueManager {
         // `max_retries` in wrangler.jsonc, otherwise Cloudflare dead-letters the
         // message before this branch ever runs and it never reaches the store.
         if (message.attempts > this.maxRetries) {
-          const failedJob: FailedJob = {
-            id: queueMessage.id,
-            queue: queueName,
-            type: queueMessage.type,
-            message: queueMessage,
-            error: {
-              name: lastError!.name,
-              message: lastError!.message,
-              stack: lastError!.stack,
-            },
-            consumer: failedConsumer!,
-            attempts: message.attempts,
-            failedAt: new Date().toISOString(),
-          }
-
-          // A KV failure while persisting the failed job must not abort the
-          // rest of the batch — log and ack so the message isn't redelivered
-          // forever.
+          // A KV failure (or a message dispatched outside Stratal, with no
+          // binding to retry through) while persisting the failed job must not
+          // abort the rest of the batch — log and ack so the message isn't
+          // redelivered forever.
           try {
+            const binding = queueMessage.metadata?.binding
+            if (!binding) {
+              throw new QueueError(
+                `Queue message ${queueMessage.id} has no binding metadata and cannot be recorded for retry. ` +
+                  `Messages must be dispatched through a Stratal queue sender (@InjectQueue).`,
+              )
+            }
+
+            const failedJob: FailedJob = {
+              id: queueMessage.id,
+              queue: queueName,
+              binding,
+              type: queueMessage.type,
+              message: queueMessage,
+              error: {
+                name: lastError!.name,
+                message: lastError!.message,
+                stack: lastError!.stack,
+              },
+              consumer: failedConsumer!,
+              attempts: message.attempts,
+              failedAt: new Date().toISOString(),
+            }
+
             await this.store.storeFailedJob(failedJob)
           } catch (error) {
             this.logger.error(

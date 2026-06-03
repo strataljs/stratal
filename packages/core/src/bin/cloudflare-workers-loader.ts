@@ -122,7 +122,7 @@ export function connect(address, options) {
     currentSocket = netConnect({ host: hostname, port });
   }
 
-  let dataHandler, endHandler;
+  let dataHandler, endHandler, errorHandler;
 
   const readable = new ReadableStream({
     start(controller) {
@@ -132,11 +132,12 @@ export function connect(address, options) {
       endHandler = () => {
         try { controller.close(); } catch {}
       };
+      errorHandler = (err) => {
+        try { controller.error(err); } catch {}
+      };
       currentSocket.on('data', dataHandler);
       currentSocket.on('end', endHandler);
-      currentSocket.on('error', (err) => {
-        try { controller.error(err); } catch {}
-      });
+      currentSocket.on('error', errorHandler);
     }
   });
 
@@ -156,10 +157,12 @@ export function connect(address, options) {
     startTls() {
       currentSocket.removeListener('data', dataHandler);
       currentSocket.removeListener('end', endHandler);
+      currentSocket.removeListener('error', errorHandler);
       const tlsSocket = tlsConnect({ socket: currentSocket, servername: hostname });
       currentSocket = tlsSocket;
       tlsSocket.on('data', dataHandler);
       tlsSocket.on('end', endHandler);
+      tlsSocket.on('error', errorHandler);
     },
     close() { currentSocket.destroy(); },
     closed: closedPromise,

@@ -75,8 +75,12 @@ export class SmtpClient {
       { secureTransport: implicitTls ? 'on' : 'starttls', allowHalfOpen: false },
     )
 
-    const reader = socket.readable.getReader()
-    const writer = socket.writable.getWriter()
+    // `startTls()` returns a brand-new socket and closes the original, so these
+    // must be reassignable: after the upgrade we re-derive the reader/writer
+    // from the secure socket (the originals stop working).
+    let activeSocket = socket
+    let reader = socket.readable.getReader()
+    let writer = socket.writable.getWriter()
     const decoder = new TextDecoder()
     const encoder = new TextEncoder()
 
@@ -160,7 +164,16 @@ export class SmtpClient {
       let encrypted = implicitTls
       if (!implicitTls && capabilities.startTls) {
         await expectCode('STARTTLS', 220)
-        socket.startTls()
+        // Swap onto the secure socket the runtime hands back. Release the old
+        // locks first, then re-derive reader/writer from the new socket. Reset
+        // `leftover` so no byte received before the handshake is trusted as part
+        // of the encrypted session (STARTTLS plaintext-injection, CVE-2011-0411).
+        reader.releaseLock()
+        writer.releaseLock()
+        activeSocket = socket.startTls()
+        reader = activeSocket.readable.getReader()
+        writer = activeSocket.writable.getWriter()
+        leftover = ''
         capabilities = parseCapabilities(await expectCode(`EHLO ${host}`, 250))
         encrypted = true
       }
@@ -205,7 +218,7 @@ export class SmtpClient {
     finally {
       reader.releaseLock()
       writer.releaseLock()
-      await socket.close().catch(() => { /* best-effort close */ })
+      await activeSocket.close().catch(() => { /* best-effort close */ })
     }
   }
 

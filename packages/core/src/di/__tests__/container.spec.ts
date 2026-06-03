@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RouterContext } from '../../router/router-context'
 import { Container } from '../container'
 import { ContainerError } from '../container.error'
-import { Request, Transient } from '../decorators'
+import { inject, Request, Transient } from '../decorators'
 import { CONTAINER_TOKEN, DI_TOKENS } from '../tokens'
 
 // Test services
@@ -242,6 +242,81 @@ describe('Container', () => {
 
       expect(receivedContainer).toBeDefined()
       expect(receivedContainer).not.toBe(container)
+    })
+  })
+
+  describe('circular dependency detection', () => {
+    it('should throw a clear error instead of overflowing the stack', () => {
+      const A_TOKEN = Symbol('A')
+      const B_TOKEN = Symbol('B')
+
+      @Transient(A_TOKEN)
+      class A {
+        constructor(@inject(B_TOKEN) public b: unknown) {}
+      }
+
+      @Transient(B_TOKEN)
+      class B {
+        constructor(@inject(A_TOKEN) public a: unknown) {}
+      }
+
+      container.register(A_TOKEN, A)
+      container.register(B_TOKEN, B)
+
+      expect(() => container.resolve(A_TOKEN)).toThrow(ContainerError)
+      expect(() => container.resolve(A_TOKEN)).toThrow(/circular dependency/i)
+    })
+
+    it('should resolve again cleanly after a circular-dependency error (stack is unwound)', () => {
+      container.register(TestService)
+      // A failed resolution must not leave the resolution stack polluted.
+      expect(container.resolve(TestService)).toBeInstanceOf(TestService)
+    })
+  })
+
+  describe('captive dependency', () => {
+    it('should throw when a singleton depends on a request-scoped provider', async () => {
+      const SINGLETON_TOKEN = Symbol('CaptiveSingleton')
+
+      @Request(REQUEST_SCOPED_TOKEN)
+      class ReqService {}
+
+      // A singleton that injects a @Request provider would otherwise capture one
+      // request's instance forever. Resolving it (even inside a request) must
+      // fail rather than leak.
+      class CaptiveSingleton {
+        constructor(@inject(REQUEST_SCOPED_TOKEN) public req: ReqService) {}
+      }
+
+      container.registerSingleton(SINGLETON_TOKEN, CaptiveSingleton)
+      container.register(REQUEST_SCOPED_TOKEN, ReqService)
+
+      const routerContext = { getContainer: () => container } as unknown as RouterContext
+
+      await container.runInRequestScope(routerContext, (req) => {
+        expect(() => req.resolve(SINGLETON_TOKEN)).toThrow(/request-scoped/i)
+      })
+    })
+  })
+
+  describe('tryResolve()', () => {
+    it('should return undefined for an unregistered token', () => {
+      expect(container.tryResolve(Symbol('missing'))).toBeUndefined()
+    })
+
+    it('should propagate a construction error instead of masking it as undefined', () => {
+      const THROWS_TOKEN = Symbol('Throws')
+
+      @Transient(THROWS_TOKEN)
+      class Throws {
+        constructor() {
+          throw new Error('boom')
+        }
+      }
+
+      container.register(THROWS_TOKEN, Throws)
+      // The provider IS registered; a failure constructing it is a real error.
+      expect(() => container.tryResolve(THROWS_TOKEN)).toThrow('boom')
     })
   })
 

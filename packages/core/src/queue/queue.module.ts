@@ -61,7 +61,8 @@ export interface QueueModuleOptions {
    * Defaults to the `CACHE` binding if omitted.
    */
   store?: {
-    /** KV namespace binding name.`
+    /**
+     * KV namespace binding name.
      * @default CACHE
      */
     binding?: string
@@ -70,10 +71,15 @@ export interface QueueModuleOptions {
   /**
    * Idempotency configuration.
    *
-   * Messages are auto-idempotent: every dispatch carries an idempotency key
-   * (an explicit `metadata.idempotencyKey`, otherwise a deterministic SHA-256
-   * hash of `type` + `payload`), and a message that has already been processed
-   * is skipped. `ttl` bounds how long processed keys are remembered.
+   * Delivery is **at-least-once with best-effort de-duplication**, not
+   * exactly-once. Every dispatch carries an idempotency key (an explicit
+   * `metadata.idempotencyKey`, otherwise a deterministic SHA-256 hash of `type`
+   * + `payload`), and a message already recorded as processed is skipped. The
+   * processed marker is written only after a handler succeeds, and KV `get`/`put`
+   * are eventually consistent — so a message redelivered concurrently (or after
+   * a crash before the marker was durable) can still run more than once. Make
+   * handlers idempotent; don't rely on this as a hard exactly-once guarantee.
+   * `ttl` bounds how long processed keys are remembered.
    */
   idempotency?: {
     /** TTL in seconds for processed idempotency keys. Default: 86400 (24h) */

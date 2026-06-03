@@ -49,6 +49,11 @@ export class QueueSender implements IQueueSender {
 
     metadata.idempotencyKey ??= await this.generateIdempotencyKey(message.type, message.payload);
 
+    // Stamp the producer binding so a failed job can be retried to the right
+    // Cloudflare binding. Consumers only see the queue *name*, which is not a
+    // valid producer binding key.
+    metadata.binding = this.binding
+
     const fullMessage: QueueMessage<T> = {
       id: crypto.randomUUID(),
       ...message,
