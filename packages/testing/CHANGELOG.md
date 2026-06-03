@@ -1,5 +1,12 @@
 # @stratal/testing
 
+## 0.0.24
+
+### Patch Changes
+
+- stratal@0.0.24
+- @stratal/framework@0.0.24
+
 ## 0.0.23
 
 ### Patch Changes
