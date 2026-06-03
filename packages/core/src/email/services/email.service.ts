@@ -1,6 +1,6 @@
 import { render } from '@react-email/render'
 import type { ReactElement } from 'react'
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import { Transient } from '../../di/decorators'
 import type { IQueueSender } from '../../queue'
 import type { SendBatchEmailInput, SendEmailInput } from '../contracts'
@@ -19,7 +19,7 @@ export type SendBatchEmailInputWithTemplate = Omit<SendBatchEmailInput, 'message
  *
  * Main facade for sending emails. Routes emails to queues for async processing.
  * The queue is injected via EMAIL_TOKENS.EmailQueue, configured by the application
- * via EmailModule.forRoot({ queue: 'queue-name' }).
+ * via EmailModule.forRoot({ queue: 'QUEUE_BINDING_NAME' }).
  *
  * @example Basic usage
  * ```typescript

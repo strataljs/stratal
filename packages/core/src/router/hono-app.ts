@@ -1,22 +1,24 @@
 import type { Context, MiddlewareHandler } from 'hono'
-import { inject } from 'tsyringe'
+import { inject } from '../di'
+import type { Application } from '../application'
 import type { Container } from '../di/container'
 import { runWithContainer } from '../di/container-storage'
-import { Transient } from '../di/decorators'
+import { Singleton } from '../di/decorators'
 import { CONTAINER_TOKEN, DI_TOKENS } from '../di/tokens'
 import { createHttpExceptionContext } from '../errors/exception-context'
 import type { ExceptionHandler } from '../errors/exception-handler'
-import { OpenAPIHono } from '../i18n/validation'
+import { OpenAPIHono } from '../i18n/validation/zod'
 import { LOGGER_TOKENS, type LoggerService } from '../logger'
 import { OPENAPI_TOKENS, type OpenAPIService } from '../openapi'
 import type { Constructor } from '../types'
 import { ROUTER_CONTEXT_KEYS } from './constants'
-import { HonoAppAlreadyConfiguredError, RouteNotFoundError, SchemaValidationError } from './errors'
-import { createLoggerMiddleware, createMiddlewareChain } from './middleware'
+import { RouteNotFoundError, SchemaValidationError } from './errors'
+import { RouterError } from './router.error'
+import { createLoggerMiddleware, createMiddlewareChain, createTrailingSlashRedirect } from './middleware'
 import type { Middleware } from './middleware.interface'
 import { RouterContext } from './router-context'
 import { RouteRegistrationService } from './services/route-registration.service'
-import type { RouterEnv } from './types'
+import type { RouterEnv, TrailingSlashMode } from './types'
 
 const isMiddlewareClass = (arg: unknown): arg is Constructor<Middleware> =>
   // eslint-disable-next-line @typescript-eslint/no-unsafe-return
@@ -32,7 +34,7 @@ const isMiddlewareClass = (arg: unknown): arg is Constructor<Middleware> =>
  * - `use()` overload for Stratal middleware classes
  * - `configure()` for OpenAPI, routes, and 404
  */
-@Transient()
+@Singleton()
 export class HonoApp extends OpenAPIHono<RouterEnv> {
   private configured = false
   private readonly _container: Container
@@ -48,8 +50,15 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
   constructor(
     @inject(CONTAINER_TOKEN) container: Container,
     @inject(LOGGER_TOKENS.LoggerService) logger: LoggerService,
+    @inject(DI_TOKENS.Application) application: Application,
   ) {
+    const trailingSlash: TrailingSlashMode = application.config.trailingSlash ?? 'ignore'
+
     super({
+      // Always non-strict: a registered `/foo` route matches both `/foo` and `/foo/`.
+      // For the redirect modes, the trailing-slash middleware runs first and
+      // canonicalises via 308 before matching reaches the registered route.
+      strict: false,
       defaultHook: (result, c) => {
         if (!result.success) {
           throw new SchemaValidationError(result.error)
@@ -80,6 +89,13 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
       return (this.nativeUse as (...a: unknown[]) => unknown)(...args)
     }) as typeof this.use
 
+    // Trailing-slash redirect runs first so redirected requests skip request-scope
+    // and logger overhead.
+    const trailingSlashRedirect = createTrailingSlashRedirect(trailingSlash)
+    if (trailingSlashRedirect) {
+      this.nativeUse('*', trailingSlashRedirect)
+    }
+
     // Internal setup — uses nativeUse to bypass the override
     this.setupRequestScope()
     this.applyGlobalMiddleware()
@@ -99,7 +115,7 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
    * Called once by Application.initialize().
    */
   async configure(): Promise<void> {
-    if (this.configured) throw new HonoAppAlreadyConfiguredError()
+    if (this.configured) throw new RouterError('HonoApp has already been configured')
 
     // OpenAPI endpoints
     const openAPIService = this._container.resolve<OpenAPIService>(OPENAPI_TOKENS.OpenAPIService)

@@ -3,7 +3,7 @@ import type { WSContext, WSReadyState } from 'hono/ws'
 import type { ContextQueryResult } from '../router/router-context'
 import { RouterContext } from '../router/router-context'
 import type { RouterEnv } from '../router/types'
-import { WebSocketBodyNotAvailableError } from './errors/websocket-body-not-available.error'
+import { WebSocketError } from './websocket.error'
 
 /**
  * WebSocket gateway context
@@ -43,11 +43,18 @@ export class GatewayContext extends RouterContext {
   }
 
   /**
-   * Get route parameter value from the raw request (no OpenAPI validation)
+   * Get route parameter value(s) from the raw request — WebSocket gateways are
+   * not OpenAPI-registered, so reads come straight from Hono's matcher.
+   *
+   * - With a key → single string value.
+   * - With no args → full `Record<string, string>` (or `{}` when none).
    *
    * @param key - Parameter name (e.g., 'id' for /ws/chat/:id)
    */
-  override param(key: string): string {
+  override param(): Record<string, string>
+  override param(key: string): string
+  override param(key?: string): string | Record<string, string> {
+    if (key === undefined) return this.c.req.param() ?? {}
     return this.c.req.param(key)!
   }
 
@@ -66,9 +73,9 @@ export class GatewayContext extends RouterContext {
   /**
    * Request body is not available in WebSocket gateways
    *
-   * @throws WebSocketBodyNotAvailableError always — WebSocket upgrade requests do not have a body
+   * @throws WebSocketError always — WebSocket upgrade requests do not have a body
    */
   override body<T>(): Promise<T> {
-    throw new WebSocketBodyNotAvailableError()
+    throw new WebSocketError('Request body is not available in WebSocket gateways')
   }
 }

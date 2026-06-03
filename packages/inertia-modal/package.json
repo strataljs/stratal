@@ -1,6 +1,6 @@
 {
   "name": "@stratal/inertia-modal",
-  "version": "0.0.19",
+  "version": "0.0.21",
   "description": "Modal page primitive for Stratal Inertia — backend-driven modal dialogs",
   "type": "module",
   "license": "MIT",
@@ -40,13 +40,12 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@inertiajs/core": "^3.0.0-beta.5",
-    "@inertiajs/react": "^3.0.0-beta.5",
-    "@stratal/inertia": ">=0.0.19",
-    "hono": "^4.12.8",
-    "react": "^19.0.0",
-    "reflect-metadata": "^0.2.2",
-    "stratal": "^0.0.19"
+    "@inertiajs/core": ">=3",
+    "@inertiajs/react": ">=3",
+    "@stratal/inertia": ">=0.0.21",
+    "hono": ">=4",
+    "react": ">=19",
+    "stratal": ">=0.0.21"
   },
   "peerDependenciesMeta": {
     "@inertiajs/core": {
@@ -60,17 +59,16 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "4.20260426.1",
-    "@inertiajs/core": "^3.0.3",
-    "@inertiajs/react": "^3.0.3",
+    "@cloudflare/workers-types": "4.20260510.1",
+    "@inertiajs/core": "^3.1.1",
+    "@inertiajs/react": "^3.1.1",
     "@stratal/inertia": "workspace:*",
-    "@types/node": "^25.6.0",
+    "@types/node": "^25.6.2",
     "@types/react": "^19.2.14",
-    "hono": "^4.12.15",
-    "react": "^19.2.5",
-    "reflect-metadata": "^0.2.2",
+    "hono": "^4.12.18",
+    "react": "^19.2.6",
     "stratal": "workspace:*",
-    "tsdown": "^0.21.10",
+    "tsdown": "^0.22.0",
     "typescript": "^6.0.3"
   }
 }

@@ -1,4 +1,4 @@
-import { Transient } from '../di/decorators'
+import { Singleton } from '../di/decorators'
 import { DI_TOKENS } from '../di/tokens'
 import type { IQueueConsumer } from './queue-consumer'
 
@@ -33,7 +33,7 @@ import type { IQueueConsumer } from './queue-consumer'
  * this.consumerRegistry.register(consumer)
  * ```
  */
-@Transient(DI_TOKENS.ConsumerRegistry)
+@Singleton(DI_TOKENS.ConsumerRegistry)
 export class ConsumerRegistry {
   /** Map from message type to consumers handling that type */
   private consumersByType = new Map<string, IQueueConsumer[]>()

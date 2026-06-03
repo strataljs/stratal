@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import { z } from 'zod'
 import type { Application } from '../../application'
 import { DI_TOKENS } from '../../di/tokens'

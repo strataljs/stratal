@@ -1,6 +1,6 @@
 import type { Container } from '../di'
 import { type StratalEnv } from '../env'
-import type { RouteConfig as OpenAPIRouteConfig, ZodObject, ZodPipe, ZodType } from '../i18n/validation'
+import type { RouteConfig as OpenAPIRouteConfig, ZodObject, ZodPipe, ZodType } from '../i18n/validation/zod'
 import { type HTTP_METHODS, type ROUTER_CONTEXT_KEYS, type SECURITY_SCHEMES, type VERSION_NEUTRAL } from './constants'
 
 /**
@@ -240,6 +240,16 @@ export interface ControllerOptions {
    */
   domain?: string
 }
+
+/**
+ * Trailing-slash handling for incoming requests.
+ *
+ * - `'ignore'` (default) — match both `/foo` and `/foo/` for the same route, no redirect.
+ * - `'always'`  — non-trailing requests redirect (308) to the trailing-slash form.
+ *                 Paths whose last segment contains `.` (e.g. `/api/openapi.json`) are skipped.
+ * - `'never'`   — trailing requests redirect (308) to the non-trailing form.
+ */
+export type TrailingSlashMode = 'ignore' | 'always' | 'never'
 
 /**
  * Versioning configuration for the application.

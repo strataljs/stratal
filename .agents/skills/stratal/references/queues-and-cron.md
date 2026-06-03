@@ -2,7 +2,7 @@
 
 ## QueueModule Setup
 
-QueueModule must be configured before using queues. Each queue must be registered individually.
+Register each queue you want to inject. The string passed to `registerQueue()` is the **binding name** — it must match the `binding` field declared under `queues.producers[]` in `wrangler.jsonc` exactly (conventionally UPPER_SNAKE_CASE).
 
 ```typescript
 import { QueueModule } from 'stratal/queue'
@@ -16,36 +16,14 @@ import { DI_TOKENS } from 'stratal/di'
         provider: 'cloudflare',  // 'cloudflare' | 'sync'
       }),
     }),
-    QueueModule.registerQueue('notifications-queue'),
-    QueueModule.registerQueue('email-queue'),
+    QueueModule.registerQueue('NOTIFICATIONS_QUEUE'),
+    QueueModule.registerQueue('BACKGROUND_QUEUE'),
   ],
 })
 export class AppModule {}
 ```
 
-### Queue Name Type Safety
-
-Auto-derive queue names from `Cloudflare.Env` bindings:
-
-```typescript
-// src/types/queues.ts
-type QueueBindingKeys = {
-  [K in keyof Cloudflare.Env]: Cloudflare.Env[K] extends Queue ? K : never
-}[keyof Cloudflare.Env]
-
-type BindingToQueueName<T extends string> =
-  T extends `${infer Part}_${infer Rest}`
-  ? `${Lowercase<Part>}-${BindingToQueueName<Rest>}`
-  : Lowercase<T>
-
-type DerivedQueueNames = BindingToQueueName<QueueBindingKeys>
-
-declare module 'stratal' {
-  interface QueueNames extends Record<DerivedQueueNames, true> {}
-}
-```
-
-This converts bindings like `NOTIFICATIONS_QUEUE` to `'notifications-queue'` for typed queue name autocomplete.
+The binding string does three jobs at once: DI injection token, env lookup key (`env.NOTIFICATIONS_QUEUE`), and autocomplete source. The `QueueBinding` type derives the valid set from `StratalEnv` automatically — no extra type augmentation is needed beyond `interface StratalEnv extends Cloudflare.Env {}`.
 
 ## Queue Consumer
 
@@ -82,6 +60,8 @@ Register in module's `consumers` array:
 })
 export class EmailModule {}
 ```
+
+Consumers are matched against `message.type`, not against which queue the message arrived on. A single consumer can handle messages from any queue, and a single queue can fan messages out to many consumers — `messageTypes` is the routing key.
 
 ### Wildcard Consumer
 
@@ -123,7 +103,7 @@ import { Transient } from 'stratal/di'
 @Transient()
 export class NotificationService {
   constructor(
-    @InjectQueue('notifications-queue') private queue: IQueueSender,
+    @InjectQueue('NOTIFICATIONS_QUEUE') private queue: IQueueSender,
   ) {}
 
   async notify(userId: string, message: string) {
@@ -163,7 +143,11 @@ await this.queue.dispatch({
 }
 ```
 
+Stratal code only references the `binding` value (`NOTIFICATIONS_QUEUE`). The `queue` value is wrangler's routing identifier and can vary per environment (e.g. `notifications-queue-dev`) without touching application code.
+
 ## Cron Jobs
+
+Declare `schedule` as a **static** property on the class.
 
 ```typescript
 import { Transient, inject } from 'stratal/di'
@@ -172,7 +156,7 @@ import { LOGGER_TOKENS } from 'stratal/logger'
 
 @Transient()
 export class DataCleanupJob implements CronJob {
-  readonly schedule = '0 2 * * *'  // Daily at 2 AM UTC
+  static schedule = '0 2 * * *'  // Daily at 2 AM UTC
 
   constructor(
     @inject(LOGGER_TOKENS.LoggerService) private logger: LoggerService,
@@ -215,8 +199,9 @@ The `schedule` value MUST exactly match a trigger in `wrangler.jsonc`:
 
 ```typescript
 interface CronJob {
-  readonly schedule: string                     // Cron expression
   execute(controller: ScheduledController): Promise<void>
   onError?(error: Error, controller: ScheduledController): Promise<void>
 }
 ```
+
+Declare `static schedule` on the class — it is not part of the interface.

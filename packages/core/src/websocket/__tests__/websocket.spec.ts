@@ -1,7 +1,6 @@
 import { createMock } from '@stratal/testing/mocks'
 import type { Context } from 'hono'
 import type { WSContext } from 'hono/ws'
-import 'reflect-metadata'
 import { describe, expect, it, vi } from 'vitest'
 import { VERSION_NEUTRAL } from '../../router/constants'
 import { Controller, getControllerOptions, getControllerRoute } from '../../router/decorators/controller.decorator'
@@ -15,8 +14,7 @@ import {
   getWsOnErrorMethod,
   getWsOnMessageMethod,
 } from '../decorators/ws-event.decorator'
-import { WebSocketBodyNotAvailableError } from '../errors/websocket-body-not-available.error'
-import { WebSocketDuplicateEventHandlerError } from '../errors/websocket-duplicate-event-handler.error'
+import { WebSocketError } from '../websocket.error'
 import { GatewayContext } from '../gateway-context'
 
 describe('WebSocket Support', () => {
@@ -156,7 +154,7 @@ describe('WebSocket Support', () => {
           @OnMessage()
           secondHandler() { /* noop */ }
         }
-      }).toThrow(WebSocketDuplicateEventHandlerError)
+      }).toThrow(WebSocketError)
     })
   })
 
@@ -240,10 +238,10 @@ describe('WebSocket Support', () => {
       expect(mockHonoContext.req.query).toHaveBeenCalledWith()
     })
 
-    it('body() should throw WebSocketBodyNotAvailableError', () => {
+    it('body() should throw WebSocketError', () => {
       const ctx = new GatewayContext(mockHonoContext, mockWsContext)
 
-      expect(() => ctx.body()).toThrow(WebSocketBodyNotAvailableError)
+      expect(() => ctx.body()).toThrow(WebSocketError)
     })
   })
 })

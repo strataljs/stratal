@@ -89,7 +89,11 @@ export class MyService {
     this.logger.debug('Debug message', { key: 'value' })
     this.logger.info('Info message')
     this.logger.warn('Warning message')
-    this.logger.error('Error message', { error })
+
+    // error() overloads:
+    this.logger.error('Something failed', new Error('boom'))                    // (message, Error)
+    this.logger.error('Something failed', new Error('boom'), { userId: '123' }) // (message, Error, context)
+    this.logger.error('Something failed', { code: 500 })                        // (message, context)
   }
 }
 ```
@@ -101,7 +105,7 @@ export default new Stratal({
   module: AppModule,
   logging: {
     level: LogLevel.INFO,    // DEBUG, INFO, WARN, ERROR
-    formatter: 'json',       // 'json' or 'text'
+    formatter: 'json',       // 'json' or 'pretty'
   },
 })
 ```
@@ -121,10 +125,10 @@ import { EmailModule } from 'stratal/email'
         provider: 'resend',              // 'resend' | 'smtp'
         from: { name: 'My App', email: 'noreply@example.com' },
         apiKey: env.RESEND_API_KEY,      // required for resend provider
-        queue: 'email-queue',            // queue name for async sending
+        queue: 'NOTIFICATIONS_QUEUE',    // queue binding registered via QueueModule
       }),
     }),
-    QueueModule.registerQueue('email-queue'),
+    QueueModule.registerQueue('NOTIFICATIONS_QUEUE'),
   ],
 })
 export class AppModule {}
@@ -165,7 +169,34 @@ Email supports `html`, `text`, and `template` (React) props. Emails are dispatch
 
 ## Storage
 
-S3-compatible storage using Cloudflare R2. Optional peerDependency: `@aws-sdk/client-s3`.
+Native Cloudflare R2 storage with multi-disk support. No third-party SDK dependency.
+
+### Setup
+
+Configure `StorageModule` with one or more disks. Each `disk` is a logical name; `binding` matches an `r2_buckets` binding in `wrangler.jsonc`; `root` is the path prefix written into the bucket.
+
+```typescript
+import { Module } from 'stratal/module'
+import { StorageModule } from 'stratal/storage'
+
+@Module({
+  imports: [
+    StorageModule.forRoot({
+      storage: [
+        { disk: 'uploads', binding: 'UPLOADS_BUCKET', root: 'uploads' },
+        { disk: 'avatars', binding: 'AVATAR_BUCKET',  root: 'avatars' },
+      ],
+      defaultStorageDisk: 'uploads',
+      presignedUrl: { defaultExpiry: 3600, maxExpiry: 86400 },
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+`APP_SECRET` env var is required for presigned URLs (added to `wrangler.jsonc` `[vars]`). Use `StorageModule.forRootAsync({ inject, useFactory })` when config depends on other services.
+
+### Using StorageService
 
 ```typescript
 import { STORAGE_TOKENS } from 'stratal/storage'
@@ -178,24 +209,21 @@ export class FileService {
     @inject(STORAGE_TOKENS.StorageService) private storage: StorageService,
   ) {}
 
-  async uploadFile(path: string, data: ReadableStream, contentType: string) {
-    return this.storage.upload(data, path, { contentType })
+  async uploadFile(path: string, data: ReadableStream, mimeType: string, size: number) {
+    return this.storage.upload(data, path, { mimeType, size })
+  }
+
+  async uploadStream(path: string, data: ReadableStream, mimeType: string) {
+    // Use chunkedUpload when the stream size is unknown — splits into R2 multipart parts.
+    return this.storage.chunkedUpload(data, path, { mimeType })
   }
 
   async downloadFile(path: string) {
     return this.storage.download(path)
   }
 
-  async deleteFile(path: string) {
-    await this.storage.delete(path)
-  }
-
-  async fileExists(path: string) {
-    return this.storage.exists(path)
-  }
-
   async getDownloadUrl(path: string) {
-    return this.storage.getPresignedDownloadUrl(path, 3600) // 1 hour expiry
+    return this.storage.getPresignedDownloadUrl(path, 3600)
   }
 
   async getUploadUrl(path: string) {
@@ -204,23 +232,44 @@ export class FileService {
 }
 ```
 
+Pass `disk` as the last argument to target a non-default disk: `this.storage.upload(data, path, options, 'avatars')`.
+
 ### Storage API
 
 ```typescript
 interface StorageService {
-  upload(body, relativePath, options: UploadOptions, disk?): Promise<UploadResult>
-  download(relativePath, disk?): Promise<DownloadResult>
-  delete(relativePath, disk?): Promise<void>
-  exists(relativePath, disk?): Promise<boolean>
-  getPresignedDownloadUrl(relativePath, expiresIn?, disk?): Promise<PresignedUrlResult>
-  getPresignedUploadUrl(relativePath, expiresIn?, disk?): Promise<PresignedUrlResult>
-  getPresignedDeleteUrl(relativePath, expiresIn?, disk?): Promise<PresignedUrlResult>
-  chunkedUpload(body, relativePath, options, disk?): Promise<UploadResult>
+  upload(body, path, options, disk?): Promise<UploadResult>
+  chunkedUpload(body, path, options, disk?): Promise<UploadResult>  // streams without known size
+  download(path, disk?): Promise<DownloadResult>
+  delete(path, disk?): Promise<void>
+  exists(path, disk?): Promise<boolean>
+  getPresignedDownloadUrl(path, expiresIn?, disk?): Promise<PresignedUrlResult>
+  getPresignedUploadUrl(path, expiresIn?, disk?): Promise<PresignedUrlResult>
+  getPresignedDeleteUrl(path, expiresIn?, disk?): Promise<PresignedUrlResult>
   getAvailableDisks(): string[]
 }
 ```
 
 Path supports template variables: `{date}`, `{year}`, `{month}`.
+
+### Auto-Registered Storage Routes
+
+`StorageModule` mounts a hidden `StorageController` that proxies R2 operations behind signed URLs. The presigned-URL helpers above return URLs that point at these routes:
+
+- `GET    /storage/:disk/*` — download (used by `getPresignedDownloadUrl`)
+- `PUT    /storage/:disk/*` — upload (used by `getPresignedUploadUrl`)
+- `DELETE /storage/:disk/*` — delete (used by `getPresignedDeleteUrl`)
+
+Override the base path or opt out:
+
+```typescript
+StorageModule.forRoot({
+  // ...
+  route: { basePath: '/files', disabled: false },  // default basePath: '/storage'
+})
+```
+
+Set `route: { disabled: true }` to skip auto-registration entirely (e.g. when fronting R2 with your own controller).
 
 ## OpenAPI
 
@@ -256,4 +305,4 @@ Custom schemes can be passed via `securitySchemes` option.
 
 ## I18n
 
-See `references/errors-and-i18n.md` for I18nModule configuration, I18nService usage, and `withI18n()` for Zod validation messages.
+See `references/errors-and-i18n.md` for I18nModule configuration, I18nService usage, `withZodI18n()` for Zod validation messages, and `withI18n()` from `stratal/i18n` for general translations.

@@ -26,6 +26,7 @@ export default defineConfig({
           exclude: ['**/node_modules/**', '**/dist/**'],
           setupFiles: ['./vitest.setup.ts'],
           globals: true,
+          sequence: { groupOrder: 0 },
         },
       },
       {
@@ -46,6 +47,7 @@ export default defineConfig({
           globalSetup: ['./test/global-setup.ts'],
           fileParallelism: false,
           isolate: false,
+          sequence: { groupOrder: 1 },
         },
       },
     ],

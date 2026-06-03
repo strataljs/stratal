@@ -1,7 +1,8 @@
 import type { Page } from '@inertiajs/core'
-import { Transient, inject } from 'stratal/di'
+import type { Application } from 'stratal'
+import { DI_TOKENS, Request, inject } from 'stratal/di'
 import { I18N_TOKENS, type MessageLoaderService } from 'stratal/i18n'
-import { ROUTER_TOKENS, type RegisteredRoute, type RouteRegistry, type RouterContext, type SerializedRoutes } from 'stratal/router'
+import { ROUTER_TOKENS, type CurrentRoute, type RegisteredRoute, type RouteRegistry, type RouterContext, type SerializedRoutes, type Uri } from 'stratal/router'
 import type { InertiaMergeOptions, InertiaOnceOptions } from '../augment/router-context'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { INERTIA_TOKENS } from '../inertia.tokens'
@@ -24,7 +25,7 @@ import {
 import type { SsrRendererService } from './ssr-renderer.service'
 import type { TemplateService } from './template.service'
 
-@Transient(INERTIA_TOKENS.InertiaService)
+@Request(INERTIA_TOKENS.InertiaService)
 export class InertiaService {
   private sharedData: Record<string, unknown> = {}
 
@@ -111,6 +112,7 @@ export class InertiaService {
       version: this.options.version ?? null,
       flash,
       rememberedState: {},
+      rescuedProps: [],
       ...(result.mergeProps.length > 0 ? { mergeProps: result.mergeProps } : {}),
       ...(result.prependProps.length > 0 ? { prependProps: result.prependProps } : {}),
       ...(result.deepMergeProps.length > 0 ? { deepMergeProps: result.deepMergeProps } : {}),
@@ -124,9 +126,11 @@ export class InertiaService {
       ...(renderOptions.preserveFragment ? { preserveFragment: true } : {}),
     }
 
+    const status = renderOptions.status ?? 200
+
     if (isInertia) {
       return new Response(JSON.stringify(page), {
-        status: 200,
+        status,
         headers: {
           'Content-Type': 'application/json',
           'X-Inertia': 'true',
@@ -143,7 +147,7 @@ export class InertiaService {
     const html = this.template.render(page, ssrResult.head, ssrResult.body)
 
     return new Response(html, {
-      status: 200,
+      status,
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
       },
@@ -179,8 +183,17 @@ export class InertiaService {
     }
 
     if (this.options.routes) {
-      const registry = ctx.getContainer().resolve<RouteRegistry>(ROUTER_TOKENS.RouteRegistry)
+      const container = ctx.getContainer()
+      const registry = container.resolve<RouteRegistry>(ROUTER_TOKENS.RouteRegistry)
+      const application = container.resolve<Application>(DI_TOKENS.Application)
+      const uri = container.resolve<Uri>(ROUTER_TOKENS.Uri)
+
+      const name = registry.findNameByRoute(ctx.c.req.method, ctx.c.req.routePath) ?? null
+      const params = { ...ctx.param() }
+
       shared.routes = this.serializeRoutes(registry.named())
+      shared.trailingSlash = application.config.trailingSlash ?? 'ignore'
+      shared.route = { name, params, defaults: uri.getDefaults() } satisfies CurrentRoute
     }
 
     return { shared, sharedKeys: Object.keys(shared) }
@@ -219,6 +232,7 @@ export class InertiaService {
     const partialDataHeader = ctx.header('x-inertia-partial-data')
     const partialExceptHeader = ctx.header('x-inertia-partial-except')
     const resetHeader = ctx.header('x-inertia-reset')
+    const shouldResolveDeferred = ctx.header('x-inertia-resolve-deferred') === 'true'
     const isPartialReload = isInertia && partialComponent === component && partialDataHeader
 
     const requestedProps = partialDataHeader?.split(',').map((s) => s.trim()) ?? []
@@ -251,8 +265,12 @@ export class InertiaService {
         if (isPartialReload && this.isRequested(key, requestedProps)) {
           resolvedProps[key] = await value.callback()
         } else if (!isPartialReload) {
-          deferredProps[value.group] ??= []
-          deferredProps[value.group].push(key)
+          if (shouldResolveDeferred) {
+            resolvedProps[key] = await value.callback()
+          } else {
+            deferredProps[value.group] ??= []
+            deferredProps[value.group].push(key)
+          }
         }
         continue
       }

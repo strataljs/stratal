@@ -1,5 +1,35 @@
 # @stratal/testing
 
+## 0.0.21
+
+### Patch Changes
+
+- 3489cfd: Allow tests to install a custom `ExceptionHandler` via `TestingModuleConfig`
+
+  `TestingModuleBuilder` now accepts `exceptionHandler` on its config, mirroring `ApplicationConfig.exceptionHandler`. This is the only way to swap the handler in tests because the framework resolves it during `app.initialize()`, which runs before `overrideProvider(DI_TOKENS.ExceptionHandler)` can take effect.
+
+- Updated dependencies [3489cfd]
+- Updated dependencies [3489cfd]
+- Updated dependencies [3489cfd]
+  - @stratal/framework@0.0.21
+  - stratal@0.0.21
+
+## 0.0.20
+
+### Patch Changes
+
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+  - @stratal/framework@0.0.20
+  - stratal@0.0.20
+
 ## 0.0.19
 
 ### Patch Changes

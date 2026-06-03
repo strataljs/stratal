@@ -1,9 +1,8 @@
-import type { Auth, BetterAuthOptions } from 'better-auth'
-import { betterAuth } from 'better-auth'
-import { inject } from 'tsyringe'
-import { Transient } from 'stratal/di'
-import { AUTH_OPTIONS, AUTH_SERVICE } from '../auth.tokens'
-import { getErrorHandlerConfig } from '../utils'
+import type { Auth, BetterAuthOptions } from 'better-auth';
+import { betterAuth } from 'better-auth/minimal';
+import { inject, Request } from 'stratal/di';
+import { AUTH_OPTIONS, AUTH_SERVICE } from '../auth.tokens';
+import { getErrorHandlerConfig } from '../utils';
 
 /**
  * AuthService
@@ -26,23 +25,23 @@ import { getErrorHandlerConfig } from '../utils'
  * }
  * ```
  */
-@Transient(AUTH_SERVICE)
+@Request(AUTH_SERVICE)
 export class AuthService<TOptions extends BetterAuthOptions = BetterAuthOptions> {
-  private authInstance: Auth<TOptions>
+  private _authInstance?: Auth<TOptions>
 
   constructor(
     @inject(AUTH_OPTIONS) protected readonly options: TOptions
-  ) {
-    this.authInstance = betterAuth({
-      ...this.options,
-      onAPIError: getErrorHandlerConfig()
-    }) as Auth<TOptions>
-  }
+  ) {}
 
   /**
-   * Get the Better Auth instance
+   * Get the Better Auth instance.
    */
   get auth(): Auth<TOptions> {
-    return this.authInstance
+    this._authInstance ??= betterAuth({
+        ...this.options,
+        onAPIError: getErrorHandlerConfig()
+    }) as Auth<TOptions>;
+      
+    return this._authInstance
   }
 }

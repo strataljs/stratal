@@ -1,3 +1,6 @@
+// Module error
+export * from './module.error'
+
 // Module decorator and utilities
 export * from './module.decorator'
 

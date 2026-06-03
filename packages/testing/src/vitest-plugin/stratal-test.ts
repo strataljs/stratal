@@ -58,13 +58,70 @@ export const fixPgCjs = (): Plugin => ({
   },
 })
 
+/**
+ * Returns a Vite plugin that forces CJS resolution for `@noble/hashes` subpaths
+ * used by `@paralleldrive/cuid2@2.x` (the version `@zenstackhq/orm` depends on).
+ *
+ * cuid2@2.x is CJS and does `require("@noble/hashes/sha3")` without the `.js`
+ * extension. In a workspace that also installs `@noble/hashes@2.x` (ESM-only),
+ * the hoisted v2 package has no extensionless `./sha3` entry in its exports
+ * map, so Vite/workerd resolution fails. This plugin routes the extensionless
+ * subpaths through the consumer's nested `@noble/hashes@1.x` (a sibling of
+ * cuid2 under `@zenstackhq/orm/node_modules`), which ships proper CJS exports.
+ *
+ * If the consumer doesn't depend on `@zenstackhq/orm`, the plugin is a no-op.
+ * Otherwise it throws loudly at config-resolution time if the resolution chain
+ * is unexpectedly broken — surfacing dependency drift instead of letting the
+ * symptom resurface as an opaque test failure.
+ *
+ * Must be used at the **root** `defineConfig` level (same constraint as
+ * `fixPgCjs`).
+ *
+ * @example
+ * ```ts
+ * import { fixNobleHashesCjs, fixPgCjs, stratalTest } from '@stratal/testing/vitest-plugin'
+ *
+ * export default defineConfig({
+ *   plugins: [fixPgCjs(), fixNobleHashesCjs()],
+ *   // ...
+ * })
+ * ```
+ */
+export const fixNobleHashesCjs = (): Plugin => {
+  const ids = ['@noble/hashes/sha3', '@noble/hashes/crypto']
+  let resolved: Map<string, string> | null = null
+
+  return {
+    name: 'stratal-noble-hashes-cjs',
+    enforce: 'pre',
+    configResolved(config) {
+      const consumerRequire = createRequire(path.join(config.root, 'noop.js'))
+      let zenstackPath: string
+      try {
+        zenstackPath = consumerRequire.resolve('@zenstackhq/orm')
+      } catch {
+        // Consumer doesn't use ZenStack — nothing to fix.
+        return
+      }
+      const cuid2Path = createRequire(zenstackPath).resolve('@paralleldrive/cuid2')
+      const cuid2Require = createRequire(cuid2Path)
+      resolved = new Map<string, string>(
+        ids.map((id) => [id, cuid2Require.resolve(id)]),
+      )
+    },
+    resolveId(id) {
+      return resolved?.get(id)
+    },
+  }
+}
+
 const stratalPlugin: Plugin = {
   name: 'stratal-test',
   config() {
     return {
       resolve: {
         alias: {
-          tslib: 'tsyringe/node_modules/tslib/tslib.es6.js',
+          tslib: 'tslib/tslib.es6.mjs',
           '@zenstackhq/language/ast': '@stratal/testing/mocks/zenstack-language',
           '@zenstackhq/language/utils': '@stratal/testing/mocks/zenstack-language',
           '@zenstackhq/language': '@stratal/testing/mocks/zenstack-language',

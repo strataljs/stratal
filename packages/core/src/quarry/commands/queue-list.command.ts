@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import { DI_TOKENS } from '../../di/tokens'
 import type { ConsumerRegistry } from '../../queue/consumer-registry'
 import { Command } from '../command'

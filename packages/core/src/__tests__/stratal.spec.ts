@@ -1,24 +1,25 @@
-import { inject, injectable } from 'tsyringe'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Application, type ApplicationOptions } from '../application'
-import type { CronJob } from '../cron/cron-job'
-import { Transient } from '../di/decorators'
-import { Scope } from '../di/types'
-import type { StratalEnv } from '../env'
-import { z } from '../i18n/validation'
-import { LogLevel } from '../logger'
-import { Module } from '../module/module.decorator'
-import { Controller } from '../router/decorators/controller.decorator'
-import { Route } from '../router/decorators/route.decorator'
-import { ControllerRegistrationError } from '../router/errors'
-import type { RouterContext } from '../router/router-context'
-import type { Constructor } from '../types'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Application, type ApplicationOptions } from '../application';
+import type { CronJob } from '../cron/cron-job';
+import { inject, Transient } from '../di/decorators';
+import { DI_TOKENS } from '../di/tokens';
+import type { StratalEnv } from '../env';
+import type { EventContext, IEventRegistry } from '../events';
+import { Listener, On } from '../events';
+import { z } from '../i18n/validation/zod';
+import { LogLevel } from '../logger';
+import { Module } from '../module/module.decorator';
+import { Controller } from '../router/decorators/controller.decorator';
+import { Route } from '../router/decorators/route.decorator';
+import { RouterError } from '../router/router.error';
+import type { RouterContext } from '../router/router-context';
+import type { Constructor } from '../types';
 
 // Fixtures
 
 const TOKEN = Symbol('TestSvc')
 
-@injectable()
+@Transient()
 class TestService {
   getValue() {
     return 'stratal-test'
@@ -37,7 +38,7 @@ class TestController {
 }
 
 @Module({
-  providers: [{ provide: TOKEN, useClass: TestService, scope: Scope.Singleton }],
+  providers: [{ provide: TOKEN, useClass: TestService }],
   controllers: [TestController],
 })
 class TestAppModule { }
@@ -159,10 +160,10 @@ describe('Application (eager bootstrap)', () => {
     // No error thrown
   })
 
-  it('should throw ControllerRegistrationError for controller without route decorators', async () => {
+  it('should throw RouterError for controller without route decorators', async () => {
     const noDecoratorApp = createTestApp({ module: NoDecoratorModule })
     await noDecoratorApp.initialize()
-    await expect(noDecoratorApp.ensureHono()).rejects.toThrow(ControllerRegistrationError)
+    await expect(noDecoratorApp.ensureHono()).rejects.toThrow(RouterError)
   })
 })
 
@@ -184,7 +185,7 @@ const cronJobExecutions: string[] = []
 
 @Transient()
 class TestCronJob implements CronJob {
-  readonly schedule = '*/5 * * * *'
+  static schedule = '*/5 * * * *'
 
   constructor(
     @inject(REQUEST_SCOPED_TOKEN) private readonly service: RequestScopedService,
@@ -199,7 +200,7 @@ class TestCronJob implements CronJob {
 
 @Module({
   providers: [
-    { provide: REQUEST_SCOPED_TOKEN, useClass: RequestScopedService, scope: Scope.Request },
+    { provide: REQUEST_SCOPED_TOKEN, useClass: RequestScopedService },
   ],
   jobs: [TestCronJob as Constructor],
 })
@@ -248,5 +249,73 @@ describe('handleScheduled (cron jobs with request-scoped deps)', () => {
     expect(cronJobExecutions).toHaveLength(2)
     // Each invocation must get a different service instance
     expect(cronJobExecutions[0]).not.toBe(cronJobExecutions[1])
+  })
+})
+
+// ──────────────────────────────────────────────────────────────────
+// Cron jobs that emit events must trigger @Listener() handlers.
+// Regression: handleScheduled used to skip initializeHandlers, leaving
+// EventRegistry empty so emit() silently dropped events.
+// ──────────────────────────────────────────────────────────────────
+
+const scheduledListenerInvocations: string[] = []
+
+@Listener()
+class ScheduledEventListener {
+  @On('test.scheduled.event' as never)
+   handle(ctx: EventContext<never>) {
+    scheduledListenerInvocations.push((ctx as { data?: { tag?: string } }).data?.tag ?? 'no-tag')
+  }
+}
+
+@Transient()
+class EmittingCronJob implements CronJob {
+  static schedule = '*/5 * * * *'
+
+  constructor(
+    @inject(DI_TOKENS.EventRegistry) private readonly events: IEventRegistry,
+  ) { }
+
+  async execute(): Promise<void> {
+    await this.events.emit('test.scheduled.event' as never, {
+      data: { tag: 'from-cron' },
+    } as never)
+  }
+}
+
+@Module({
+  providers: [ScheduledEventListener],
+  jobs: [EmittingCronJob as Constructor],
+})
+class CronEventsModule { }
+
+describe('handleScheduled (event emission from cron jobs)', () => {
+  let app: Application
+
+  beforeEach(async () => {
+    scheduledListenerInvocations.length = 0
+    app = new Application({
+      module: CronEventsModule,
+      logging: { level: LogLevel.ERROR },
+      env: mockEnv,
+      ctx: { waitUntil: vi.fn() },
+    })
+    await app.initialize()
+  })
+
+  afterEach(async () => {
+    await app.shutdown()
+  })
+
+  it('should fire @Listener() handlers for events emitted from cron jobs', async () => {
+    const controller = {
+      scheduledTime: Date.now(),
+      cron: '*/5 * * * *',
+      noRetry: vi.fn(),
+    } as unknown as ScheduledController
+
+    await app.handleScheduled(controller)
+
+    expect(scheduledListenerInvocations).toEqual(['from-cron'])
   })
 })

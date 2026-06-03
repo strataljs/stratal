@@ -6,20 +6,21 @@
 
 ```typescript
 // vitest.config.ts
-import { stratalTest } from '@stratal/testing/vitest-plugin'
+import { fixNobleHashesCjs, fixPgCjs, stratalTest } from '@stratal/testing/vitest-plugin'
 
 export default defineConfig({
-  plugins: [stratalTest()],
+  plugins: [fixPgCjs(), fixNobleHashesCjs(), stratalTest()],
 })
 ```
 
 `stratalTest()` wraps `@cloudflare/vitest-pool-workers` with Stratal defaults (tslib alias, ZenStack mocks, SSR externals).
 
+Add `fixPgCjs()` and `fixNobleHashesCjs()` when the project uses `@stratal/framework` (ZenStack). Both are no-ops if the relevant packages aren't installed.
+
 ### Setup File
 
 ```typescript
 // vitest.setup.ts
-import 'reflect-metadata'  // Required for tsyringe
 ```
 
 ### Test File Convention
@@ -377,7 +378,6 @@ Add the side-effect import to your test setup file:
 
 ```typescript
 // vitest.setup.ts
-import 'reflect-metadata'
 import '@stratal/inertia/testing'  // Augments TestResponse with Inertia assertions
 ```
 

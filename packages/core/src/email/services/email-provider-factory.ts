@@ -1,8 +1,8 @@
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import { Transient } from '../../di/decorators'
 import type { EmailModuleOptions } from '../email.module'
 import { EMAIL_TOKENS } from '../email.tokens'
-import { EmailProviderNotSupportedError } from '../errors'
+import { EmailError } from '../email.error'
 import type { IEmailProvider } from '../providers/email-provider.interface'
 
 /**
@@ -26,7 +26,7 @@ export class EmailProviderFactory {
    * Create email provider instance based on configuration
    *
    * @returns Email provider implementation
-   * @throws EmailProviderNotSupportedError if provider is not supported
+   * @throws EmailError if provider is not supported
    */
   async create(): Promise<IEmailProvider> {
     switch (this.options.provider) {
@@ -41,7 +41,7 @@ export class EmailProviderFactory {
       }
 
       default:
-        throw new EmailProviderNotSupportedError(this.options.provider)
+        throw new EmailError(`Email provider "${String(this.options.provider)}" is not supported`)
     }
   }
 }

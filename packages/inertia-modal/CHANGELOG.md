@@ -1,5 +1,41 @@
 # @stratal/inertia-modal
 
+## 0.0.21
+
+### Patch Changes
+
+- 3489cfd: Preserve query string and forwarded headers on modal background requests
+
+  - The background page request now keeps the referer URL's query string, so opening a modal no longer resets the parent list view's filter/pagination state to defaults.
+  - `x-forwarded-proto`, `x-forwarded-host`, `x-forwarded-for`, `x-forwarded-port`, `x-real-ip`, `accept-language`, and `user-agent` are forwarded from the original request when present. Middleware that reconstructs the canonical request URL (e.g. apps whose `appUrl` is derived from forwarded headers) now sees the same protocol/host as the original request, fixing background fetches that previously appeared unauthenticated because Better Auth's secure-cookie prefix was resolved against the wrong base URL.
+
+- Updated dependencies [3489cfd]
+- Updated dependencies [3489cfd]
+- Updated dependencies [3489cfd]
+- Updated dependencies [3489cfd]
+  - stratal@0.0.21
+  - @stratal/inertia@0.0.21
+
+## 0.0.20
+
+### Patch Changes
+
+- f8c61e1: Loosen peer dependency ranges for broader compatibility
+
+  Peer dependencies (`@inertiajs/core`, `@inertiajs/react`, `hono`, `react`, `reflect-metadata`, `stratal`) now use `>=` ranges instead of pinned `^` ranges, so apps can adopt newer majors of these packages without waiting for a coordinated bump.
+
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+  - stratal@0.0.20
+  - @stratal/inertia@0.0.20
+
 ## 0.0.19
 
 ### Patch Changes

@@ -20,7 +20,7 @@ Full guides and examples are available at **[stratal.dev](https://stratal.dev)**
 
 ## Features
 
-- **Dependency Injection** — Two-tier DI container (global + request-scoped) powered by tsyringe
+- **Dependency Injection** — Two-tier DI container (global + request-scoped) with built-in decorator support
 - **OpenAPI Documentation** — Define Zod schemas once and get a full OpenAPI 3.0 spec with interactive docs
 - **Modular Architecture** — NestJS-style modules with lifecycle hooks, dynamic configuration, and middleware
 - **Hono Routing** — Convention-based RESTful controllers with automatic HTTP method mapping

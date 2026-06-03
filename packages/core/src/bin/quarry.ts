@@ -1,5 +1,3 @@
-import 'reflect-metadata'
-
 import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { createRequire, register } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -7,7 +5,7 @@ import { dirname, join, resolve } from 'node:path'
 import { URL, pathToFileURL } from 'node:url'
 import type { QuarryRegistry } from 'stratal/quarry'
 import { type Application } from '../application'
-import { errors as errorMessages } from '../i18n/messages/en/errors'
+import { extractEnvFlag } from './argv'
 import { createDynamicCommands } from './commands/dynamic-command'
 
 const require = createRequire(import.meta.url)
@@ -19,7 +17,17 @@ register(pathToFileURL(swcRegisterPath), pathToFileURL('./'))
 // Register cloudflare:workers virtual module loader
 register(new URL('./cloudflare-workers-loader.mjs', import.meta.url), pathToFileURL('./'))
 
-const DEFAULT_ENTRY = './src/index.ts'
+const DEFAULT_ENTRY = './src/quarry.ts'
+
+let environment: string | undefined
+try {
+  const parsed = extractEnvFlag(process.argv.slice(2))
+  environment = parsed.env
+  process.argv.splice(2, process.argv.length - 2, ...parsed.rest)
+} catch (e) {
+  console.error(`Error: ${(e as Error).message}`)
+  process.exit(1)
+}
 
 // Determine entry file: if first arg looks like a file path, use it; otherwise use default
 const firstArg = process.argv[2]
@@ -37,7 +45,7 @@ const entryPath = resolve(process.cwd(), entryFile)
 if (!existsSync(entryPath)) {
   console.error(`Error: Entry file not found: ${entryFile}`)
   console.error('')
-  console.error('Create src/index.ts with a default Stratal export, or specify a custom path:')
+  console.error('Create src/quarry.ts that exports `QuarryRunner.run({ module, seeders })`, or specify a custom path:')
   console.error('  npx quarry ./path/to/entry.ts <command> [options]')
   process.exit(1)
 }
@@ -122,7 +130,7 @@ async function main(): Promise<void> {
 
   const envFiles = discoverEnvFiles()
   const { env, ctx, dispose } = await getPlatformProxy({
-    envFiles, configPath: strippedConfigPath,
+    environment, envFiles, configPath: strippedConfigPath,
   })
 
   // Track waitUntil promises so we can drain them before shutdown.
@@ -192,11 +200,8 @@ async function main(): Promise<void> {
 
 main().catch(async (error: unknown) => {
   const { ConfigValidationError } = await import('stratal/config')
-  const { StratalNotInitializedError } = await import('stratal/errors')
 
-  const message = error instanceof StratalNotInitializedError
-    ? errorMessages.stratalNotInitialized
-    : error instanceof Error ? error.message : String(error)
+  const message = error instanceof Error ? error.message : String(error)
   console.error('Fatal error:', message)
   if (error instanceof ConfigValidationError) {
     console.error(error.errors.message)

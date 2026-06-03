@@ -1,7 +1,7 @@
 import type { Application } from '../application'
 import type { Container } from '../di/container'
 import type { Constructor } from '../types'
-import { SeederNameCollisionError, SeederNotRegisteredError } from './errors'
+import { SeederError } from './seeder.error'
 import { type Seeder, SEEDER_INTERNALS } from './seeder'
 
 export const SEEDER_TOKENS = {
@@ -17,7 +17,7 @@ export class SeederRegistry {
   register(SeederClass: Constructor<Seeder>): void {
     const existing = this.nameIndex.get(SeederClass.name)
     if (existing && existing !== SeederClass) {
-      throw new SeederNameCollisionError(SeederClass.name)
+      throw new SeederError(`Seeder name collision: "${SeederClass.name}" is already registered`)
     }
     this.seeders.add(SeederClass)
     this.nameIndex.set(SeederClass.name, SeederClass)
@@ -25,7 +25,7 @@ export class SeederRegistry {
 
   async run(SeederClass: Constructor<Seeder>, options?: { container?: Container }): Promise<void> {
     if (!this.seeders.has(SeederClass)) {
-      throw new SeederNotRegisteredError(SeederClass.name)
+      throw new SeederError(`Seeder "${SeederClass.name}" is not registered`)
     }
 
     const execute = async (container: Container) => {

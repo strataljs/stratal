@@ -1,9 +1,8 @@
-import { swaggerUI } from '@hono/swagger-ui'
 import type { Container } from '../../di/container'
-import { Transient } from '../../di/decorators'
-import type { II18nService } from '../../i18n'
-import { I18N_TOKENS } from '../../i18n'
-import type { OpenAPIHono, OpenAPIObject, PathItemObject } from '../../i18n/validation'
+import { Singleton } from '../../di/decorators'
+import { I18N_TOKENS } from '../../i18n/i18n.tokens'
+import type { II18nService } from '../../i18n/i18n.types'
+import type { OpenAPIHono, OpenAPIObject, PathItemObject } from '../../i18n/validation/zod'
 import { ROUTER_CONTEXT_KEYS, SECURITY_SCHEMES } from '../../router/constants'
 import type { RouterEnv } from '../../router/types'
 import { OPENAPI_TOKENS } from '../openapi.tokens'
@@ -24,7 +23,7 @@ import type { IOpenAPIConfigService, OpenAPIEffectiveConfig } from '../types'
  * Configuration is resolved per-request from OpenAPIConfigService,
  * allowing middleware to override config based on domain context.
  */
-@Transient(OPENAPI_TOKENS.OpenAPIService)
+@Singleton(OPENAPI_TOKENS.OpenAPIService)
 export class OpenAPIService {
 
   /**
@@ -94,7 +93,7 @@ export class OpenAPIService {
       const uiPath = config.ui?.path ?? '/api/docs'
       const uiRenderer = config.ui?.renderer
 
-      app.get(uiPath, (c, next) => {
+      app.get(uiPath, async (c, next) => {
         const requestContainer = c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER)
         const requestConfigService = requestContainer.resolve<IOpenAPIConfigService>(
           OPENAPI_TOKENS.ConfigService
@@ -106,6 +105,7 @@ export class OpenAPIService {
           return uiRenderer(uiContext)(c, next)
         }
 
+        const { swaggerUI } = await import('@hono/swagger-ui')
         return swaggerUI<RouterEnv>({ url: uiContext.specUrl })(c, next)
       })
       this.nameLastHandler(app, 'OpenAPI', 'docs')

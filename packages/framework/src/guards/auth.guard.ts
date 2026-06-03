@@ -1,8 +1,7 @@
-import { DI_TOKENS, Transient } from 'stratal/di'
+import { DI_TOKENS, inject, Transient } from 'stratal/di'
 import type { AuthGuardOptions, CanActivate, GuardClass } from 'stratal/guards'
 import { LOGGER_TOKENS, type LoggerService } from 'stratal/logger'
 import type { RouterContext } from 'stratal/router'
-import { inject } from 'tsyringe'
 import { InsufficientPermissionsError } from '../access-control/errors/insufficient-permissions.error'
 import type { AccessService } from '../access-control/services/access.service'
 import { AC_TOKENS } from '../access-control/tokens'
@@ -78,7 +77,7 @@ export function AuthGuard(options?: AuthGuardOptions): GuardClass {
       const userId = this.authContext.getUserId()
       if (!userId) {
         this.logger.debug('Auth guard: No user ID in context')
-        throw new InsufficientPermissionsError(rawPermissions!, undefined)
+        throw new InsufficientPermissionsError(rawPermissions!)
       }
 
       if (this.accessService) {

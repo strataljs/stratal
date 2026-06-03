@@ -18,17 +18,19 @@ export class MyModule {}
 
 ## Provider Types
 
-### Class Provider (with optional scope)
+### Class Provider
 
 ```typescript
-// Bare class — transient by default, uses class-as-token
+// Bare class — uses class-as-token
 providers: [MyService]
 
-// Explicit class provider with Symbol token and scope
+// Explicit class provider with Symbol token
 providers: [
-  { provide: MY_TOKENS.MyService, useClass: MyService, scope: Scope.Singleton },
+  { provide: MY_TOKENS.MyService, useClass: MyService },
 ]
 ```
+
+Set scope via the decorator on the class (`@Singleton()`, `@Request()`, `@Transient()`), not in the provider definition.
 
 ### Value Provider
 
@@ -43,9 +45,9 @@ providers: [
 ```typescript
 providers: [
   {
-    provide: LOGGER_TOKENS.Transports,
-    useFactory: (console) => [console],
-    inject: [LOGGER_TOKENS.ConsoleTransport],
+    provide: MY_TOKENS.Service,
+    useFactory: (logger) => new MyService(logger),
+    inject: [LOGGER_TOKENS.LoggerService],
   },
 ]
 ```
@@ -73,14 +75,14 @@ Scope.Request    // New instance per HTTP request (child container)
 - Use `Scope.Request` for request-specific state (auth context, current user)
 - Default `Scope.Transient` for most services
 
-## @Transient() Decorator
+## DI Decorators
 
-Every class resolved by DI must have `@Transient()`. It wraps tsyringe's `@injectable()`.
+Every injectable class must have a scope decorator (`@Singleton()`, `@Request()`, or `@Transient()`).
 
 ```typescript
-import { Transient, inject } from 'stratal/di'
+import { Request, inject } from 'stratal/di'
 
-@Transient()
+@Request()
 export class UserService {
   constructor(
     @inject(UserRepository) private repo: UserRepository,
@@ -207,7 +209,7 @@ export class MyModule implements OnInitialize, OnShutdown {
 
 ## Container API
 
-The `Container` class wraps tsyringe with a two-tier model:
+The `Container` class provides a two-tier model:
 
 ```typescript
 import { Container, DI_TOKENS } from 'stratal/di'
@@ -216,7 +218,7 @@ import { Container, DI_TOKENS } from 'stratal/di'
 const service = container.resolve<MyService>(MY_TOKENS.MyService)
 
 // Register a service
-container.register(MY_TOKENS.MyService, MyService, Scope.Singleton)
+container.register(MY_TOKENS.MyService, MyService)
 
 // Conditional registration
 container
@@ -230,6 +232,19 @@ container.extend(MY_TOKEN, (original, container) => new DecoratedService(origina
 ```
 
 Global container holds singletons. Request container (child) is created per HTTP request for `Scope.Request` services.
+
+## Lazy Resolution
+
+Use `lazy()` to break circular dependencies:
+
+```typescript
+import { lazy } from 'stratal/di'
+
+@Transient()
+export class ServiceA {
+  constructor(@inject(lazy(() => ServiceB)) private b: ServiceB) {}
+}
+```
 
 ## InjectParam Decorator
 

@@ -1,5 +1,3 @@
-import 'reflect-metadata'
-
 import { Application, type ApplicationConfig } from './application'
 import type { StratalEnv } from './env'
 import { StratalNotInitializedError } from './errors'

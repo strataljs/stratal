@@ -108,14 +108,29 @@ describe('Path Utilities', () => {
       expect(sorted[1].path).toBe('/api/:path{.+}')
     })
 
-    it('should sort primary paths before locale variants', () => {
+    it('should sort locale variants before their primary', () => {
       const routes = [
-        { path: '/:locale{en|fr}/users/:id' },
-        { path: '/users/:id' },
+        { path: '/users/:id', isLocaleVariant: false },
+        { path: '/:locale{en|fr}/users/:id', isLocaleVariant: true },
       ]
       const sorted = sortRoutesBySpecificity(routes)
-      expect(sorted[0].path).toBe('/users/:id')
-      expect(sorted[1].path).toBe('/:locale{en|fr}/users/:id')
+      expect(sorted[0].path).toBe('/:locale{en|fr}/users/:id')
+      expect(sorted[1].path).toBe('/users/:id')
+    })
+
+    it('should sort the locale variant of a catch-all before the primary catch-all', () => {
+      // Regression: with `/:slug{.+}` registered first, Hono let the catch-all
+      // gobble locale-prefixed URLs (e.g. `/sw/applications/123` was matched
+      // as `slug='sw/applications/123'` instead of locale='sw' + slug='applications/123').
+      const routes = [
+        { path: '/:slug{.+}', isLocaleVariant: false },
+        { path: '/:locale{sw}/:slug{.+}', isLocaleVariant: true },
+      ]
+      const sorted = sortRoutesBySpecificity(routes)
+      expect(sorted.map(r => r.path)).toEqual([
+        '/:locale{sw}/:slug{.+}',
+        '/:slug{.+}',
+      ])
     })
 
     it('should use segment count as tie-breaker (more segments first)', () => {
@@ -130,17 +145,20 @@ describe('Path Utilities', () => {
 
     it('should handle complex mixed routes', () => {
       const routes = [
-        { path: '/:locale{en|fr}/:companyId/settings' },
-        { path: '/:companyId/settings' },
-        { path: '/health' },
-        { path: '/:locale{en|fr}/health' },
+        { path: '/:locale{en|fr}/:companyId/settings', isLocaleVariant: true },
+        { path: '/:companyId/settings', isLocaleVariant: false },
+        { path: '/health', isLocaleVariant: false },
+        { path: '/:locale{en|fr}/health', isLocaleVariant: true },
       ]
       const sorted = sortRoutesBySpecificity(routes)
+      // Each variant sorts immediately ahead of its primary (its extra :locale
+      // segment is the tie-breaker once their scores are equalised), and the
+      // pairs themselves remain in static-before-parameterised order.
       expect(sorted.map(r => r.path)).toEqual([
-        '/health',
         '/:locale{en|fr}/health',
-        '/:companyId/settings',
+        '/health',
         '/:locale{en|fr}/:companyId/settings',
+        '/:companyId/settings',
       ])
     })
 

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { type StratalEnv } from '../../env'
 import { ConsumerRegistry } from '../consumer-registry'
-import { QueueProviderNotSupportedError } from '../errors'
+import { QueueError } from '../queue.error'
 import { CloudflareQueueProvider, SyncQueueProvider } from '../providers'
 import type { QueueModuleOptions } from '../queue.module'
 import { QueueProviderFactory } from '../services/queue-provider-factory'
@@ -37,11 +37,11 @@ describe('QueueProviderFactory', () => {
       expect(provider).toBeInstanceOf(SyncQueueProvider)
     })
 
-    it('should throw QueueProviderNotSupportedError for unknown provider', () => {
+    it('should throw QueueError for unknown provider', () => {
       const options = { provider: 'unknown' } as unknown as QueueModuleOptions
       factory = new QueueProviderFactory(mockEnv, registry, options)
 
-      expect(() => factory.create()).toThrow(QueueProviderNotSupportedError)
+      expect(() => factory.create()).toThrow(QueueError)
     })
 
     it('should create new provider instance each time', () => {
