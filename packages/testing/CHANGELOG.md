@@ -1,5 +1,18 @@
 # @stratal/testing
 
+## 0.0.22
+
+### Patch Changes
+
+- 1658945: Add `fixNobleHashesCjs` Vitest plugin to resolve `@noble/hashes` CJS compatibility issues with `@zenstackhq/orm`
+- 4b273ea: Update Vitest plugin tslib alias to use the direct tslib package instead of the tsyringe-bundled copy
+- Updated dependencies [1658945]
+- Updated dependencies [1658945]
+- Updated dependencies [4b273ea]
+- Updated dependencies [4b273ea]
+  - stratal@0.0.22
+  - @stratal/framework@0.0.22
+
 ## 0.0.21
 
 ### Patch Changes

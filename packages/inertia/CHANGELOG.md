@@ -1,5 +1,30 @@
 # @stratal/inertia
 
+## 0.0.22
+
+### Patch Changes
+
+- 1658945: Add `createClientViteConfig` helper, client manifest injection, sourcemap option, and `InertiaQuarryModule` for CLI integration
+
+  - New `createClientViteConfig()` produces a ready-made Vite config for the client bundle with automatic reflect-metadata invocation for tsyringe compatibility.
+  - Inertia build command now injects the client manifest into the SSR bundle for asset resolution.
+  - Type generator enhanced to extract controller page prop types with promise unwrapping.
+  - New `@stratal/inertia/quarry` export provides `InertiaQuarryModule` for registering Inertia CLI commands.
+
+- 4b273ea: Replace @intlify/core-base with intl-messageformat in `useI18n` hook, add eager deferred prop resolution, and remove tsyringe/reflect-metadata dependencies
+
+  - `useI18n()` now uses `intl-messageformat` for ICU message formatting. The hook API is unchanged.
+  - New `x-inertia-resolve-deferred` request header causes all deferred props to be resolved eagerly in the response, skipping client-side lazy loading.
+  - The `invokeReflectMetadataBeforeTsyringeCheck` Vite plugin is removed (no longer needed).
+  - `reflect-metadata` and `@intlify/core-base` are no longer peer dependencies.
+
+- Updated dependencies [1658945]
+- Updated dependencies [1658945]
+- Updated dependencies [4b273ea]
+- Updated dependencies [4b273ea]
+  - @stratal/testing@0.0.22
+  - stratal@0.0.22
+
 ## 0.0.21
 
 ### Patch Changes

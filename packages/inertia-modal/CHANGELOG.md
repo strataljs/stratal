@@ -1,5 +1,22 @@
 # @stratal/inertia-modal
 
+## 0.0.22
+
+### Patch Changes
+
+- 4b273ea: Add `nativeBack` support to modal navigation and eagerly resolve deferred props in background page fetches
+
+  - `useModal().redirect()` now uses `history.back()` instead of a server round-trip when the modal was loaded via a partial reload, providing instant close behavior.
+  - Background page fetches send `x-inertia-resolve-deferred: true` to ensure deferred props are included in the response.
+
+- 1658945: Fix modal component re-rendering by tracking component path instead of nonce
+- Updated dependencies [1658945]
+- Updated dependencies [1658945]
+- Updated dependencies [4b273ea]
+- Updated dependencies [4b273ea]
+  - @stratal/inertia@0.0.22
+  - stratal@0.0.22
+
 ## 0.0.21
 
 ### Patch Changes
