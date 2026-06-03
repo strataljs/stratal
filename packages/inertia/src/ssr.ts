@@ -15,6 +15,7 @@ import type { HeadManagerTitleCallback, Page } from '@inertiajs/core'
 import { App } from '@inertiajs/react'
 import { type ComponentType, type ReactNode, createElement } from 'react'
 import { renderToReadableStream } from 'react-dom/server'
+import { ApplicationError } from 'stratal/errors'
 import type { InertiaSsrResult } from './types'
 
 // `@inertiajs/react` does not re-export its `InertiaAppProps` type, so derive it
@@ -23,17 +24,35 @@ type AppProps = Parameters<typeof App>[0]
 /**
  * A resolved Inertia page component. Concretely typed (rather than reusing
  * `@inertiajs/react`'s `ResolvedComponent`, which is `ComponentType<any>`) so no
- * `any` leaks through the resolver into the rest of the bundle.
+ * `any` leaks out of the resolver into the rest of the bundle.
  */
 type PageComponent = ComponentType<Record<string, unknown>>
-type ResolvedModule = PageComponent | { default: PageComponent }
+
+/** Unwrap a module namespace's `default` export, leaving a bare component as-is. */
+function unwrapDefault(module: unknown): unknown {
+  return typeof module === 'object' && module !== null && 'default' in module
+    ? (module as { default: unknown }).default
+    : module
+}
+
+/**
+ * A React component is either a function (function/class component) or an object
+ * (a `memo`/`forwardRef`/`lazy` exotic component). This narrows the opaque value a
+ * dynamic import yields without admitting `any`.
+ */
+function isPageComponent(value: unknown): value is PageComponent {
+  return typeof value === 'function' || (typeof value === 'object' && value !== null)
+}
 
 export interface CreateInertiaSsrAppOptions {
   /**
-   * Resolve a page component by name. Typically backed by `import.meta.glob`.
-   * May return the component directly or a module whose `default` is the component.
+   * Resolve a page by name. Typically backed by `import.meta.glob`, whose modules
+   * are opaque (`unknown`) — the returned value is unwrapped (a `default` export is
+   * taken when present) and narrowed to a component at runtime, so an invalid
+   * resolver result fails loudly rather than rendering nothing. May return a
+   * component, a module namespace, or a promise of either.
    */
-  resolve: (name: string) => ResolvedModule | Promise<ResolvedModule>
+  resolve: (name: string) => unknown
   /**
    * Optional wrapper for application-level providers (theme, store, i18n, …).
    * Receives the Inertia `App` component and its props; return the React tree to
@@ -60,9 +79,13 @@ export interface InertiaSsrApp {
  */
 export function createInertiaSsrApp(options: CreateInertiaSsrAppOptions): InertiaSsrApp {
   const resolveComponent = (name: string): Promise<PageComponent> =>
-    Promise.resolve(options.resolve(name)).then((mod) =>
-      'default' in mod ? mod.default : mod,
-    )
+    Promise.resolve(options.resolve(name)).then((module) => {
+      const component = unwrapDefault(module)
+      if (!isPageComponent(component)) {
+        throw new ApplicationError(`[stratal:inertia] resolve("${name}") did not return a React component.`)
+      }
+      return component
+    })
 
   return {
     async render(page: Page): Promise<InertiaSsrResult> {

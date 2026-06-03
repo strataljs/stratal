@@ -38,29 +38,35 @@ export class TemplateService {
    */
   renderStream(page: Page, head: string[], reactStream: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
     const encoder = new TextEncoder()
-    const shellPre = this.buildShell(head)
+    const shellPre = this.fillPlaceholders(this.pre, head)
       + `<script data-page="${APP_ID}" type="application/json">${this.serialize(page)}</script>`
       + `<div data-server-rendered="true" id="${APP_ID}">`
-    const shellPost = `</div>${this.buildScripts()}`
+    const shellPost = `</div>${this.fillPlaceholders(this.post, head)}`
 
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined
     return new ReadableStream<Uint8Array>({
       async start(controller) {
         controller.enqueue(encoder.encode(shellPre))
-        const reader = reactStream.getReader()
+        reader = reactStream.getReader()
         try {
           for (; ;) {
             const { done, value } = await reader.read()
             if (done) break
             controller.enqueue(value)
           }
+          controller.enqueue(encoder.encode(shellPost))
+          controller.close()
         } catch (error) {
           controller.error(error)
-          return
         } finally {
           reader.releaseLock()
+          reader = undefined
         }
-        controller.enqueue(encoder.encode(shellPost))
-        controller.close()
+      },
+      // Forward a downstream cancellation (e.g. the client disconnects) up to the
+      // React render so it stops working on a response no one is reading.
+      cancel(reason) {
+        return reader?.cancel(reason) ?? reactStream.cancel(reason)
       },
     })
   }
@@ -70,23 +76,21 @@ export class TemplateService {
    * Emits an empty `#app` div for the client bundle to hydrate.
    */
   renderClientOnly(page: Page, head: string[]): string {
-    return this.buildShell(head)
+    return this.fillPlaceholders(this.pre, head)
       + `<script data-page="${APP_ID}" type="application/json">${this.serialize(page)}</script><div id="${APP_ID}"></div>`
-      + this.buildScripts()
+      + this.fillPlaceholders(this.post, head)
   }
 
-  // Function replacements are required: a string replacement interprets `$$`,
-  // `$&`, `` $` `` and `$'` patterns, which would corrupt head/script content
-  // that legitimately contains a `$`.
-  private buildShell(head: string[]): string {
-    const headTags = head.join('\n')
-    return this.pre
+  // Fill the document placeholders in a template segment. Function replacements
+  // are required: a string replacement interprets `$$`, `$&`, `` $` `` and `$'`
+  // patterns, which would corrupt head/script content that legitimately contains
+  // a `$`. Each token is filled wherever it appears (a token absent from the
+  // segment is a no-op), so placement of @viteHead/@viteScripts doesn't matter.
+  private fillPlaceholders(segment: string, head: string[]): string {
+    return segment
+      .replace('@inertiaHead', () => head.join('\n'))
       .replace('@viteHead', () => this.manifest.getHeadTags())
-      .replace('@inertiaHead', () => headTags)
-  }
-
-  private buildScripts(): string {
-    return this.post.replace('@viteScripts', () => this.manifest.getScriptTags())
+      .replace('@viteScripts', () => this.manifest.getScriptTags())
   }
 
   private serialize(page: Page): string {

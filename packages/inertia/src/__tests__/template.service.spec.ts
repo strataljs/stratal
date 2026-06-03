@@ -170,6 +170,22 @@ describe('TemplateService', () => {
       })
       await expect(readAll(service.renderStream(page, [], failing))).rejects.toThrow('boom')
     })
+
+    it('cancels the upstream React stream when the consumer cancels', async () => {
+      const { service } = createService()
+      let cancelled: unknown
+      const reactStream = new ReadableStream<Uint8Array>({
+        start(controller) { controller.enqueue(new TextEncoder().encode('<main/>')) },
+        cancel(reason) { cancelled = reason },
+      })
+
+      const out = service.renderStream(page, [], reactStream)
+      const reader = out.getReader()
+      await reader.read() // pull the shell + first chunk, leaving the React stream open
+      await reader.cancel('client gone')
+
+      expect(cancelled).toBe('client gone')
+    })
   })
 
   describe('renderClientOnly', () => {
@@ -196,5 +212,20 @@ describe('TemplateService', () => {
     const html = await readAll(service.renderStream(page, [], streamOf('<main/>')))
     expect(html).toContain('<link rel="stylesheet" href="/assets/app-abc.css" />')
     expect(html).toContain('<script type="module" src="/assets/app-abc.js"></script>')
+  })
+
+  it('fills placeholders regardless of which side of @inertia they sit on', async () => {
+    // @viteScripts placed in the <head> (before @inertia) must still resolve.
+    const { service } = createService({
+      rootView: '<head>@viteHead @viteScripts @inertiaHead</head><body>@inertia</body>',
+    })
+    const html = await readAll(service.renderStream(page, ['<title>T</title>'], streamOf('<main/>')))
+
+    expect(html).not.toContain('@viteScripts')
+    expect(html).not.toContain('@viteHead')
+    expect(html).not.toContain('@inertiaHead')
+    expect(html).toContain('<title>T</title>')
+    // dev manifest tags emitted in both the head-located script slot and head slot
+    expect(html).toContain('/@vite/client')
   })
 })

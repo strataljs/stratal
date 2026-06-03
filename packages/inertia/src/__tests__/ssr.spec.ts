@@ -52,4 +52,18 @@ describe('createInertiaSsrApp', () => {
     expect(setup).toHaveBeenCalledOnce()
     expect(html).toContain('Hello')
   })
+
+  it('renders a bare (non-default-exported) component', async () => {
+    const { render } = createInertiaSsrApp({ resolve: () => Home })
+
+    const html = await readAll((await render(createPage())).stream)
+
+    expect(html).toContain('Hello')
+  })
+
+  it('throws when the resolver yields no component instead of rendering nothing', async () => {
+    const { render } = createInertiaSsrApp({ resolve: () => ({ default: undefined }) })
+
+    await expect(render(createPage())).rejects.toThrow(/did not return a React component/)
+  })
 })

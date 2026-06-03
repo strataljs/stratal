@@ -1,9 +1,9 @@
-import type { Page } from '@inertiajs/core';
-import { Singleton, inject } from 'stratal/di';
-import { ApplicationError } from 'stratal/errors';
-import type { InertiaModuleOptions } from '../inertia.options';
-import { INERTIA_TOKENS } from '../inertia.tokens';
-import type { InertiaSsrBundle, InertiaSsrResult } from '../types';
+import type { Page } from '@inertiajs/core'
+import { Singleton, inject } from 'stratal/di'
+import { ApplicationError } from 'stratal/errors'
+import type { InertiaModuleOptions } from '../inertia.options'
+import { INERTIA_TOKENS } from '../inertia.tokens'
+import type { InertiaSsrBundle, InertiaSsrResult } from '../types'
 
 @Singleton()
 export class SsrRendererService {
