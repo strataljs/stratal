@@ -1,5 +1,27 @@
 # @stratal/framework
 
+## 0.0.22
+
+### Patch Changes
+
+- 1658945: Migrate all error classes to `HttpException`, move heavy dependencies to peer dependencies
+
+  ### Breaking Changes
+
+  - **Error classes migrated** — All framework error classes (`InsufficientPermissionsError`, auth errors, database errors, context errors) now extend `HttpException` instead of `ApplicationError`. Constructor signatures are simplified — remove `i18nKey` and `code` arguments.
+  - **`@better-auth/core`, `@zenstackhq/orm`, `@zenstackhq/schema`, and `better-auth` moved to peer dependencies** — Install them directly in your application if not already present.
+  - **Database error mapping simplified** — `fromZenStackError()` no longer maps to typed error code objects. It returns plain `HttpException` instances with descriptive messages.
+
+- 4b273ea: Adapt to the new built-in DI container from `stratal`, removing all `tsyringe` and `reflect-metadata` usage
+
+  - All request-scoped services now use the `@Request` decorator instead of `@Transient`.
+  - `DatabaseModule` uses `lazy()` for dynamic connection registration instead of tsyringe's `delay()`.
+  - `reflect-metadata` is no longer required as a peer dependency.
+
+- Updated dependencies [1658945]
+- Updated dependencies [4b273ea]
+  - stratal@0.0.22
+
 ## 0.0.21
 
 ### Patch Changes

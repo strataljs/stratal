@@ -1,5 +1,34 @@
 # stratal
 
+## 0.0.22
+
+### Patch Changes
+
+- 1658945: Overhaul error handling, rename queue "name" to "binding", add i18n CLI commands, and introduce QuarryRunner
+
+  ### Breaking Changes
+
+  - **`ApplicationError`** — Constructor changed from `(i18nKey, code, metadata?)` to `(message?, cause?)`. Remove error code and i18n key arguments from any subclass `super()` calls. The `code`, `metadata`, `toErrorResponse()`, `toJSON()`, `report()`, and `render()` members are removed.
+  - **Error codes removed** — `ERROR_CODES` registry and `ErrorCode` type are deleted. Use plain error messages or custom properties on `HttpException` subclasses instead.
+  - **Per-module error consolidation** — Individual error classes (e.g. `QueueBindingNotFoundError`, `CacheGetError`, `ConfigModuleNotInitializedError`) are replaced by single per-module error classes (`QueueError`, `CacheError`, `ConfigError`, etc.). Update any `catch` blocks or `instanceof` checks.
+  - **Queue "name" → "binding"** — `@InjectQueue('queue-name')` now takes the exact Cloudflare binding key (e.g. `BACKGROUND_QUEUE`) instead of a kebab-case name. The automatic `kebab-case → UPPER_SNAKE_CASE` conversion is removed. Rename all queue references to match your `wrangler.jsonc` binding names.
+  - **`withI18n` renamed to `withZodI18n`** — Update imports from `stratal/i18n` accordingly.
+  - **Logger transport system removed** — `ConsoleTransport`, `BaseTransport`, and the transport plugin interface are deleted. The logger now writes directly to console.
+  - **`ExceptionHandler` simplified** — The handler no longer translates i18n message keys or builds `ErrorResponse` objects. It renders errors using `HttpException.status` and plain messages.
+
+- 4b273ea: Replace tsyringe and reflect-metadata with a built-in dependency injection container and switch i18n engine from @intlify/core-base to intl-messageformat
+
+  ### Breaking Changes
+
+  - **`tsyringe` and `reflect-metadata` removed** — All imports from `tsyringe` (`inject`, `injectable`, `container`, `delay`, `Lifecycle`) must be replaced with equivalents from `stratal/di`. Remove `reflect-metadata` from your dependencies and imports.
+  - **`@Transient` decorator renamed to `@Request`** — Update all `@Transient(TOKEN)` usages to `@Request(TOKEN)` for request-scoped services.
+  - **`delay()` replaced by `lazy()`** — Replace `delay(() => MyClass)` with `lazy(() => MyClass)` from `stratal/di`.
+  - **`scope` removed from module providers** — The `scope` option on `ClassProvider` is removed. Scope is now determined by the class decorator (`@Singleton`, `@Request`). Remove `scope: Scope.Singleton` or `scope: Scope.Request` from provider definitions.
+  - **`Scope` enum simplified** — `Scope.Singleton`, `Scope.Request`, and `Scope.Transient` are still available as types, but are no longer passed to module providers. Use `@Singleton()` or `@Request()` decorators on the class instead.
+  - **`@intlify/core-base` replaced by `intl-messageformat`** — If you extended `MessageLoaderService` or used `getCoreContext()`, switch to the new `translate(locale, key, params?)` method. The public `I18nService.t()` API is unchanged.
+  - **`setupI18nCompiler()` removed** — No manual compiler setup is needed. Remove any calls to this function.
+  - **OpenAPI Swagger UI is now dynamically imported** — No action required; reduces initial bundle size.
+
 ## 0.0.21
 
 ### Patch Changes
