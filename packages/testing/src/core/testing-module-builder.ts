@@ -9,6 +9,7 @@ import type { ExceptionHandler } from 'stratal/errors'
 import { type Container } from 'stratal/di'
 import { LogLevel } from 'stratal/logger'
 import { type InjectionToken, Module, type ModuleClass, type ModuleOptions } from 'stratal/module'
+import { EMAIL_TOKENS } from 'stratal/email'
 import { STORAGE_TOKENS } from 'stratal/storage'
 import {
   BINDING_ENV_VAR,
@@ -23,6 +24,7 @@ import {
   normalizeIsolation,
 } from '../database'
 import { FakeStorageService } from '../storage'
+import { TestEmailProvider } from '../mocks/test-email-provider'
 import { FEATURE_FLAG_SERVICE_TOKEN, FakeFeatureFlagService } from '../feature-flags'
 import { ProviderOverrideBuilder, type ProviderOverrideConfig } from './override'
 import { Test } from './test'
@@ -157,6 +159,15 @@ export class TestingModuleBuilder {
       // real Cloudflare Flagship binding. Inert for apps that don't use feature flags.
       app.container.registerSingleton(FEATURE_FLAG_SERVICE_TOKEN, FakeFeatureFlagService)
 
+      // Auto-register TestEmailProvider: the sync queue provider runs
+      // EmailConsumer inline on dispatch, which would otherwise open a real
+      // SMTP connection from the test worker. Recorded messages are exposed
+      // via `module.sentEmails`; the user overrides below still replace this.
+      const testEmailProvider = new TestEmailProvider()
+      app.container.registerValue(EMAIL_TOKENS.EmailProviderFactory, {
+        create: () => testEmailProvider,
+      })
+
       // Apply user overrides AFTER initialize so they replace module-registered providers
       for (const override of this.overrides) {
         switch (override.type) {
@@ -184,7 +195,7 @@ export class TestingModuleBuilder {
         }
       }
 
-      return new TestingModule(app, env, ctx, isolatedDb)
+      return new TestingModule(app, env, ctx, isolatedDb, testEmailProvider)
     } catch (error) {
       if (isolatedDb) {
         await dropDatabase(isolatedDb.adminConnectionString, isolatedDb.name).catch(() => {

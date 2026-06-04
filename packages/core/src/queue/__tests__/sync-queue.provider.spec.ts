@@ -1,5 +1,6 @@
 import { createMock, type DeepMocked } from '@stratal/testing/mocks';
 import { beforeEach, describe, expect, it } from 'vitest';
+import type { Application } from '../../application';
 import { Container } from '../../di/container';
 import { runWithContainer } from '../../di/container-storage';
 import type { Constructor } from '../../types';
@@ -12,6 +13,8 @@ describe('SyncQueueProvider', () => {
   let registry: ConsumerRegistry
   let instances: Map<Constructor<IQueueConsumer>, IQueueConsumer>
   let scope: Container
+  let app: Application
+  let ensureScopedHandlersCalls: number
 
   beforeEach(() => {
     registry = new ConsumerRegistry()
@@ -19,9 +22,16 @@ describe('SyncQueueProvider', () => {
     scope = {
       resolve: (token: Constructor<IQueueConsumer>) => instances.get(token),
     } as unknown as Container
+    ensureScopedHandlersCalls = 0
+    app = {
+      ensureScopedHandlers: () => {
+        ensureScopedHandlersCalls += 1
+        return Promise.resolve()
+      },
+    } as unknown as Application
     // `root` is only used when there is no ambient scope; these tests wrap send()
     // in runWithContainer(scope), so the ambient path is exercised.
-    provider = new SyncQueueProvider(registry, scope)
+    provider = new SyncQueueProvider(registry, scope, app)
   })
 
   const createMessage = <T>(type: string, payload: T): QueueMessage<T> => ({
@@ -211,12 +221,23 @@ describe('SyncQueueProvider', () => {
       const root = new Container()
       root.register(RealConsumer)
       registry.register(RealConsumer, ['email.send'])
-      const realProvider = new SyncQueueProvider(registry, root)
+      const realProvider = new SyncQueueProvider(registry, root, app)
 
       // No runWithContainer wrapper: getStore() is undefined here.
       await realProvider.send('q', createMessage('email.send', { to: 'a@example.com' }))
 
       expect(handled).toEqual(['a@example.com'])
+    })
+
+    it('initializes the queue subsystem before matching consumers', async () => {
+      // The fetch path skips queue init (a Cloudflare-queue worker never runs
+      // consumers inline) — the sync provider IS the inline path, so it must
+      // populate the consumer registry itself or every dispatch silently drops.
+      await runWithContainer(scope, () =>
+        provider.send('q', createMessage('any.type', {})),
+      )
+
+      expect(ensureScopedHandlersCalls).toBe(1)
     })
   })
 })

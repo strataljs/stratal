@@ -1,3 +1,4 @@
+import type { Application } from '../../application'
 import type { Container } from '../../di/container'
 import { containerStorage } from '../../di/container-storage'
 import { inject } from '../../di'
@@ -30,6 +31,7 @@ export class SyncQueueProvider implements IQueueProvider {
   constructor(
     @inject(DI_TOKENS.ConsumerRegistry) private readonly registry: ConsumerRegistry,
     @inject(DI_TOKENS.Container) private readonly root: Container,
+    @inject(DI_TOKENS.Application) private readonly app: Application,
   ) {}
 
   /**
@@ -46,6 +48,12 @@ export class SyncQueueProvider implements IQueueProvider {
    * @throws Re-throws any error from consumer.handle() after calling onError()
    */
   async send<T>(_binding: string, message: QueueMessage<T>): Promise<void> {
+    // The fetch path deliberately skips queue init (a Cloudflare-queue worker
+    // never processes consumers inline) — but the sync provider IS the inline
+    // consumer path, so populate the consumer registry before matching message
+    // types. Memoized inside the application; a no-op after the first dispatch.
+    await this.app.ensureScopedHandlers()
+
     const ambient = containerStorage.getStore()
     if (ambient) {
       await this.process(ambient, message)
