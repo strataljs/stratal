@@ -329,7 +329,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@better-auth/core@npm:1.6.14, @better-auth/core@npm:^1.6.14":
+"@better-auth/core@npm:1.6.14, @better-auth/core@npm:^1.6.11, @better-auth/core@npm:^1.6.14":
   version: 1.6.14
   resolution: "@better-auth/core@npm:1.6.14"
   dependencies:
@@ -2830,6 +2830,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@stratal/testing@workspace:packages/testing"
   dependencies:
+    "@better-auth/core": "npm:^1.6.11"
     "@cloudflare/vitest-pool-workers": "npm:^0.16.12"
     "@cloudflare/workers-types": "npm:4.20260603.1"
     "@golevelup/ts-vitest": "npm:^4.0.0"
@@ -2846,12 +2847,15 @@ __metadata:
     typescript: "npm:^6.0.3"
     vitest: "npm:~4.1.8"
   peerDependencies:
+    "@better-auth/core": ">=1.6"
     "@stratal/framework": ">=0.0.24"
     better-auth: ">=1.4"
     pg: ^8.0.0
     stratal: ">=0.0.24"
     vitest: ^4.1.0
   peerDependenciesMeta:
+    "@better-auth/core":
+      optional: true
     "@stratal/framework":
       optional: true
     better-auth:

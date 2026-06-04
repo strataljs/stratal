@@ -75,6 +75,7 @@
     "msw": "^2.14.6"
   },
   "peerDependencies": {
+    "@better-auth/core": ">=1.6",
     "@stratal/framework": ">=0.0.24",
     "better-auth": ">=1.4",
     "pg": "^8.0.0",
@@ -82,6 +83,9 @@
     "vitest": "^4.1.0"
   },
   "peerDependenciesMeta": {
+    "@better-auth/core": {
+      "optional": true
+    },
     "@stratal/framework": {
       "optional": true
     },
@@ -93,6 +97,7 @@
     }
   },
   "devDependencies": {
+    "@better-auth/core": "^1.6.11",
     "@cloudflare/workers-types": "4.20260603.1",
     "@stratal/framework": "workspace:*",
     "@types/node": "^25.9.1",

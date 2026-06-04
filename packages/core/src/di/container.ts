@@ -186,6 +186,11 @@ export class Container {
     // must surface — swallowing it would silently inject `undefined` and turn a
     // bug into a baffling downstream failure.
     if (!this.isResolvable(realToken)) return undefined
+
+    // An optional request-scoped dependency outside a request scope is absent,
+    // not an error — mirrors `@inject(..., { isOptional: true })` semantics.
+    if (!this.isRequestScoped && this.scopeForToken(realToken) === Scope.Request) return undefined
+
     return this.resolve(realToken)
   }
 
@@ -298,6 +303,24 @@ export class Container {
     // A bare constructor token that is auto-resolvable (carries DI metadata).
     if (typeof token === 'function' && getClassMetadata(token as Constructor)) {
       return token as unknown as Constructor
+    }
+    return undefined
+  }
+
+  /**
+   * The effective scope a token would resolve with, following alias
+   * registrations. Bare constructor tokens fall back to their decorator
+   * metadata — the same scope {@link resolve} uses when auto-registering.
+   */
+  private scopeForToken(token: InjectionToken): Scope | undefined {
+    const reg = this.findRegistration(token)
+    if (reg) {
+      if (reg.kind === 'class') return reg.scope
+      if (reg.kind === 'alias') return this.scopeForToken(reg.target)
+      return undefined
+    }
+    if (typeof token === 'function') {
+      return getClassMetadata(token as Constructor)?.scope
     }
     return undefined
   }

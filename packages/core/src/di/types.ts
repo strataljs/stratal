@@ -17,4 +17,9 @@ export type ExtensionDecorator<T> = (service: T, container: ContainerLike) => T
 
 export interface ContainerLike {
   resolve<T>(token: InjectionToken<T>): T
+  /**
+   * Resolves an optional dependency: `undefined` when nothing is registered,
+   * or when a request-scoped provider is requested outside a request scope.
+   */
+  tryResolve<T>(token: InjectionToken<T>): T | undefined
 }

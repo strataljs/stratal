@@ -318,6 +318,36 @@ describe('Container', () => {
       // The provider IS registered; a failure constructing it is a real error.
       expect(() => container.tryResolve(THROWS_TOKEN)).toThrow('boom')
     })
+
+    it('should return undefined for a request-scoped provider outside a request scope', () => {
+      container.register(REQUEST_SCOPED_TOKEN, RequestScopedService)
+
+      // Optional request-scoped dependency outside a request = absent, not an
+      // error — mirrors `@inject(..., { isOptional: true })` semantics.
+      expect(container.tryResolve(REQUEST_SCOPED_TOKEN)).toBeUndefined()
+    })
+
+    it('should resolve a request-scoped provider inside a request scope', async () => {
+      container.register(REQUEST_SCOPED_TOKEN, RequestScopedService)
+      const routerContext = { getContainer: () => container } as unknown as RouterContext
+
+      await container.runInRequestScope(routerContext, (req) => {
+        expect(req.tryResolve(REQUEST_SCOPED_TOKEN)).toBeInstanceOf(RequestScopedService)
+      })
+    })
+
+    it('should return undefined for an alias to a request-scoped provider outside a request scope', () => {
+      container.register(REQUEST_SCOPED_TOKEN, RequestScopedService)
+      container.registerExisting(ALIAS_TOKEN, REQUEST_SCOPED_TOKEN)
+
+      expect(container.tryResolve(ALIAS_TOKEN)).toBeUndefined()
+    })
+
+    it('should return undefined for an unregistered request-scoped class token outside a request scope', () => {
+      // Auto-resolvable constructor: scope comes from decorator metadata, not a
+      // registration — must behave the same on the first call as on later ones.
+      expect(container.tryResolve(RequestScopedService)).toBeUndefined()
+    })
   })
 
 })
