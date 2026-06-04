@@ -90,6 +90,10 @@ export class EventRegistry implements IEventRegistry {
     this.logger.debug('Event handler unregistered', { event })
   }
 
+  hasListeners(event: EventName): boolean {
+    return this.findMatchingHandlers(event).length > 0
+  }
+
   once<E extends EventName>(event: E, handler: EventHandler<E>, options?: EventOptions): void {
     const wrappedHandler = (async (context: EventContext<E>) => {
       await handler(context)
