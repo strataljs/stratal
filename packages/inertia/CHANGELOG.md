@@ -1,5 +1,17 @@
 # @stratal/inertia
 
+## 0.0.25
+
+### Patch Changes
+
+- e93db60: Add `--inspector-port` option to `inertia:dev` for configuring the worker debugger inspector port
+
+  Set a distinct port per worker to avoid `EADDRINUSE` when running multiple Inertia workers concurrently, or pass `false` to disable the inspector entirely.
+
+- Updated dependencies [e93db60]
+  - stratal@0.0.25
+  - @stratal/testing@0.0.25
+
 ## 0.0.24
 
 ### Patch Changes

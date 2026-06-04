@@ -1,5 +1,14 @@
 # @stratal/testing
 
+## 0.0.25
+
+### Patch Changes
+
+- Updated dependencies [e93db60]
+- Updated dependencies [e93db60]
+  - stratal@0.0.25
+  - @stratal/framework@0.0.25
+
 ## 0.0.24
 
 ### Patch Changes
