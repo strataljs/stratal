@@ -209,7 +209,15 @@ interface EntityModelWildcardContext<M extends ModelName> {
   after: GetEntity<M> | undefined
 }
 
-/** Context for verb/global wildcard subscriptions (e.g. "entity.updated", "entity") */
+/** Context for verb wildcard subscriptions (e.g. "entity.updated") */
+interface EntityVerbWildcardContext<V extends EntityMutationVerb> {
+  model: ModelName
+  action: V
+  before: V extends 'created' ? undefined : unknown
+  after: V extends 'deleted' ? undefined : unknown
+}
+
+/** Context for the global wildcard subscription ("entity") */
 interface EntityWildcardContext {
   model: ModelName
   action: EntityMutationVerb
@@ -222,6 +230,7 @@ type EntityEventContext<E extends string> =
   : E extends `entity.${infer M extends ModelName}.updated` ? EntityUpdatedEventContext<M>
   : E extends `entity.${infer M extends ModelName}.deleted` ? EntityDeletedEventContext<M>
   : E extends `entity.${infer M extends ModelName}` ? EntityModelWildcardContext<M>
+  : E extends `entity.${infer V extends EntityMutationVerb}` ? EntityVerbWildcardContext<V>
   : EntityWildcardContext
 
 /**

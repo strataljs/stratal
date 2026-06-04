@@ -317,6 +317,8 @@ export class Container {
     if (reg) {
       if (reg.kind === 'class') return reg.scope
       if (reg.kind === 'alias') return this.scopeForToken(reg.target)
+      // Same scope derivation `resolveRegistration` uses for lazy registrations
+      if (reg.kind === 'lazy') return getClassMetadata(reg.factory())?.scope ?? Scope.Transient
       return undefined
     }
     if (typeof token === 'function') {

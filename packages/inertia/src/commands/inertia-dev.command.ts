@@ -13,12 +13,16 @@ export class InertiaDevCommand extends Command {
     const host = this.boolean('host')
     const persistTo = this.string('persist-to')
     const inspectorPortRaw = this.string('inspector-port')
-    const inspectorPort =
-      inspectorPortRaw === undefined
-        ? undefined
-        : inspectorPortRaw === 'false'
-          ? (false as const)
-          : Number(inspectorPortRaw)
+    let inspectorPort: number | false | undefined
+    if (inspectorPortRaw === 'false') {
+      inspectorPort = false
+    } else if (inspectorPortRaw !== undefined) {
+      inspectorPort = Number(inspectorPortRaw)
+      if (!Number.isInteger(inspectorPort) || inspectorPort < 0 || inspectorPort > 65535) {
+        this.fail(`Invalid --inspector-port "${inspectorPortRaw}". Expected an integer between 0 and 65535, or "false" to disable.`)
+        return 1
+      }
+    }
     const cwd = process.cwd()
 
     const entryPath = 'src/inertia/app.tsx'

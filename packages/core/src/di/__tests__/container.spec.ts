@@ -3,6 +3,7 @@ import type { RouterContext } from '../../router/router-context'
 import { Container } from '../container'
 import { ContainerError } from '../container.error'
 import { inject, Request, Transient } from '../decorators'
+import { lazy } from '../lazy'
 import { CONTAINER_TOKEN, DI_TOKENS } from '../tokens'
 
 // Test services
@@ -334,6 +335,14 @@ describe('Container', () => {
       await container.runInRequestScope(routerContext, (req) => {
         expect(req.tryResolve(REQUEST_SCOPED_TOKEN)).toBeInstanceOf(RequestScopedService)
       })
+    })
+
+    it('should return undefined for a lazily-registered request-scoped provider outside a request scope', () => {
+      container.register(REQUEST_SCOPED_TOKEN, lazy(() => RequestScopedService))
+
+      // Lazy registrations derive their scope from decorator metadata at
+      // resolution time — tryResolve must see the same scope and stay silent.
+      expect(container.tryResolve(REQUEST_SCOPED_TOKEN)).toBeUndefined()
     })
 
     it('should return undefined for an alias to a request-scoped provider outside a request scope', () => {

@@ -27,10 +27,13 @@ function pairEntities(
 ): { before: Entity | undefined; after: Entity | undefined }[] {
   const primary = after ?? before ?? []
   const counterpart = after ? before : undefined
+  const counterpartById = counterpart
+    ? new Map(counterpart.filter((c) => c.id !== undefined).map((c) => [c.id, c]))
+    : undefined
 
   return primary.map((entity, index) => {
     const match = counterpart
-      ? counterpart.find((c) => c.id !== undefined && c.id === entity.id) ?? counterpart[index]
+      ? (entity.id !== undefined ? counterpartById?.get(entity.id) : undefined) ?? counterpart[index]
       : undefined
 
     return after
