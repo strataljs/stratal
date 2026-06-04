@@ -1,4 +1,4 @@
-import { inject } from '../di'
+import { type Container, DI_TOKENS, inject } from '../di'
 import { Singleton } from '../di/decorators'
 import { Macroable } from '../macroable'
 import type { Next } from '../router/middleware.interface'
@@ -52,9 +52,19 @@ export class RateLimiterRegistry extends Macroable {
   private readonly resolvers = new Map<string, LimitResolver>()
 
   constructor(
-    @inject(RATE_LIMITER_TOKENS.Store) private readonly store: IRateLimiterStore,
+    @inject(DI_TOKENS.Container) private readonly container: Container,
   ) {
     super()
+  }
+
+  /**
+   * Resolve the store per access instead of capturing it at construction.
+   * The registry is a singleton built during module init; lazy resolution
+   * keeps later `RATE_LIMITER_TOKENS.Store` overrides (e.g. the testing
+   * harness disabling limits) effective.
+   */
+  private get store(): IRateLimiterStore {
+    return this.container.resolve<IRateLimiterStore>(RATE_LIMITER_TOKENS.Store)
   }
 
   /**

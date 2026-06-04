@@ -10,6 +10,7 @@ import { type Container } from 'stratal/di'
 import { LogLevel } from 'stratal/logger'
 import { type InjectionToken, Module, type ModuleClass, type ModuleOptions } from 'stratal/module'
 import { EMAIL_TOKENS } from 'stratal/email'
+import { RATE_LIMITER_TOKENS } from 'stratal/rate-limiter'
 import { STORAGE_TOKENS } from 'stratal/storage'
 import {
   BINDING_ENV_VAR,
@@ -24,6 +25,7 @@ import {
   normalizeIsolation,
 } from '../database'
 import { FakeStorageService } from '../storage'
+import { NoopRateLimiterStore } from '../mocks/noop-rate-limiter-store'
 import { TestEmailProvider } from '../mocks/test-email-provider'
 import { FEATURE_FLAG_SERVICE_TOKEN, FakeFeatureFlagService } from '../feature-flags'
 import { ProviderOverrideBuilder, type ProviderOverrideConfig } from './override'
@@ -152,12 +154,25 @@ export class TestingModuleBuilder {
 
       await app.initialize()
 
+      // Routing init is lazy in production (first fetch keeps cold starts
+      // lean), but tests may resolve request-scoped router services before
+      // any fetch — e.g. ActingAs minting a session resolves AUTH_OPTIONS,
+      // whose factory can inject ROUTER_TOKENS.Uri. Initialize eagerly so
+      // test ordering can never matter.
+      await app.ensureHono()
+
       // Auto-register FakeStorageService after initialize so it replaces module-registered StorageService
       app.container.registerSingleton(STORAGE_TOKENS.StorageService, FakeStorageService)
 
       // Auto-register FakeFeatureFlagService so feature-gated code resolves without a
       // real Cloudflare Flagship binding. Inert for apps that don't use feature flags.
       app.container.registerSingleton(FEATURE_FLAG_SERVICE_TOKEN, FakeFeatureFlagService)
+
+      // Disable rate limiting: suites fire many requests from one "IP" in
+      // seconds and would trip production limiter budgets (and Better Auth's
+      // built-in per-path limits, which share this store). Override the token
+      // back to a real store to test limiting behavior explicitly.
+      app.container.registerSingleton(RATE_LIMITER_TOKENS.Store, NoopRateLimiterStore)
 
       // Auto-register TestEmailProvider: the sync queue provider runs
       // EmailConsumer inline on dispatch, which would otherwise open a real
