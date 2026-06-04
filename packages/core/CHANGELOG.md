@@ -1,5 +1,13 @@
 # stratal
 
+## 0.0.25
+
+### Patch Changes
+
+- e93db60: Add `hasListeners()` to the event registry for checking whether any handler matches an event
+
+  Uses the same pattern matching as `emit()` (exact, model wildcard, operation wildcard, phase wildcard), letting emitters skip expensive payload construction when nobody is listening.
+
 ## 0.0.24
 
 ## 0.0.23
