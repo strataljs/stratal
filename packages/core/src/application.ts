@@ -325,6 +325,8 @@ export class Application {
     return {
       getLocale: () => locale,
       setLocale: () => { /* no-op */ },
+      // Non-HTTP scopes have no request headers
+      header: () => undefined,
       // Inside runInRequestScope the active container is the request-scoped child
       // (set in AsyncLocalStorage); return it so request-scoped providers resolve
       // against the scope, not the global container.
