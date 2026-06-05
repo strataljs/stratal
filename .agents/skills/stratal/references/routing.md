@@ -556,11 +556,44 @@ The configured mode is also applied to URL-generation helpers so generated links
 - `ctx.route(name, params?, options?)` (RouterContext)
 - `Uri.route()`, `Uri.to()`, `Uri.query()`, `Uri.current()`, `Uri.full()`
 
-Type export:
+### Exclusions
+
+For routes whose canonical form is dictated by an external party (e.g. an OAuth
+redirect URI registered with an IdP and matched byte-for-byte), pass
+`{ mode, exclude }` instead of a bare mode:
 
 ```typescript
-import type { TrailingSlashMode } from 'stratal/router'
-// 'ignore' | 'always' | 'never'
+export default new Stratal({
+  module: AppModule,
+  trailingSlash: {
+    mode: 'always',
+    exclude: ['/auth/oauth2', /^\/webhooks\//],
+  },
+})
+```
+
+Excluded paths are never redirected and never rewritten by URL generation —
+both slash forms are served as requested.
+
+- `string` patterns are segment-aware prefixes: `'/auth/oauth2'` exempts
+  `/auth/oauth2` and `/auth/oauth2/callback/x`, but not `/auth/oauth2-other`.
+- `RegExp` patterns are tested against both forms of the pathname (with and
+  without the trailing slash), so anchoring to either form exempts both.
+- Patterns match in **route space**: with path-based locale detection, a
+  leading locale segment is stripped before matching — `'/callback'` also
+  exempts `/fr/callback`.
+- Exclusions are server-side only. The Inertia adapter shares just the
+  resolved mode with the client; client-canonicalised URLs for excluded paths
+  never redirect because the server serves both forms.
+
+Type exports:
+
+```typescript
+import type { TrailingSlashConfig, TrailingSlashExclude, TrailingSlashMode, TrailingSlashOptions } from 'stratal/router'
+// TrailingSlashMode    — 'ignore' | 'always' | 'never'
+// TrailingSlashExclude — string | RegExp
+// TrailingSlashOptions — { mode: TrailingSlashMode; exclude?: readonly TrailingSlashExclude[] }
+// TrailingSlashConfig  — TrailingSlashMode | TrailingSlashOptions
 ```
 
 ## Response Validation

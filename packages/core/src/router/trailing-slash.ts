@@ -1,3 +1,4 @@
+import { stripLocalePrefix } from './locale-url'
 import type { TrailingSlashConfig, TrailingSlashExclude, TrailingSlashOptions } from './types'
 
 /** Normalise the `trailingSlash` config (bare mode or `{ mode, exclude }`). */
@@ -7,21 +8,43 @@ export function resolveTrailingSlash(config: TrailingSlashConfig | undefined): T
   return config
 }
 
+/** Strip a single trailing `/` from a path. Root (`/`) is left untouched. */
+const stripTrailingSlash = (path: string): string =>
+  path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path
+
 /**
  * Whether a pathname is exempt from trailing-slash canonicalisation.
- * String patterns are segment-aware prefixes; RegExps test the pathname.
- * Both forms of the path (with and without the trailing slash) are exempt.
+ *
+ * String patterns are segment-aware prefixes. RegExps are tested against
+ * both forms of the pathname (with and without the trailing slash), so a
+ * pattern anchored to either form exempts both — same guarantee as strings.
+ *
+ * When `locales` is given (path-based locale detection), a leading locale
+ * segment is stripped and the bare path matched too, so `'/callback'` also
+ * exempts `/fr/callback` — exclusions are written in route space, like the
+ * routes themselves.
  */
 export function isTrailingSlashExcluded(
   pathname: string,
   exclude: readonly TrailingSlashExclude[] | undefined,
+  locales?: readonly string[],
 ): boolean {
   if (!exclude?.length) return false
-  const bare = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname
-  return exclude.some((pattern) => {
-    if (typeof pattern !== 'string') return pattern.test(pathname)
-    const prefix = pattern.length > 1 && pattern.endsWith('/') ? pattern.slice(0, -1) : pattern
-    return bare === prefix || bare.startsWith(`${prefix}/`)
+
+  const candidates = [pathname]
+  if (locales?.length) {
+    const stripped = stripLocalePrefix(pathname, locales)
+    if (stripped !== pathname) candidates.push(stripped)
+  }
+
+  return candidates.some((candidate) => {
+    const bare = stripTrailingSlash(candidate)
+    const slashed = bare === '/' ? bare : `${bare}/`
+    return exclude.some((pattern) => {
+      if (typeof pattern !== 'string') return pattern.test(bare) || pattern.test(slashed)
+      const prefix = stripTrailingSlash(pattern)
+      return bare === prefix || bare.startsWith(`${prefix}/`)
+    })
   })
 }
 
@@ -36,7 +59,9 @@ export function isTrailingSlashExcluded(
  *
  * Paths matching the config's `exclude` list are returned as-is — their
  * canonical form is owned elsewhere (e.g. an OAuth redirect URI registered
- * with an IdP and matched byte-for-byte).
+ * with an IdP and matched byte-for-byte). Pass `locales` when path-based
+ * locale detection is active so locale-prefixed forms of excluded paths are
+ * exempt too (see {@link isTrailingSlashExcluded}).
  *
  * Preserves query string and hash. Handles both relative paths
  * (`/foo?x=1`) and absolute URLs (`https://host/foo?x=1`).
@@ -44,7 +69,7 @@ export function isTrailingSlashExcluded(
  * Used by URL-generation helpers and the redirect middleware so canonical
  * form is computed in one place.
  */
-export function applyTrailingSlash(url: string, config: TrailingSlashConfig): string {
+export function applyTrailingSlash(url: string, config: TrailingSlashConfig, locales?: readonly string[]): string {
   const { mode, exclude } = resolveTrailingSlash(config)
   if (mode === 'ignore') return url
 
@@ -55,7 +80,7 @@ export function applyTrailingSlash(url: string, config: TrailingSlashConfig): st
 
   const path = parsed.pathname
   if (path === '/') return url
-  if (isTrailingSlashExcluded(path, exclude)) return url
+  if (isTrailingSlashExcluded(path, exclude, locales)) return url
 
   const hasTrailing = path.endsWith('/')
 

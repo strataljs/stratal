@@ -14,7 +14,10 @@ const REDIRECT_STATUS = 308
  * - `'never'`  — trailing requests redirect to the non-trailing form.
  *
  * Paths in the config's `exclude` list are never redirected — both forms
- * are served as requested (routes match either, `strict: false`).
+ * are served as requested (routes match either, `strict: false`). When
+ * `getLocales` is provided, exclusions also match locale-prefixed request
+ * paths (`/fr/callback` for exclude `'/callback'`). It is a thunk because
+ * the middleware is created before the i18n module resolves its locales.
  *
  * Root (`/`) is always passed through unchanged.
  *
@@ -27,12 +30,14 @@ const REDIRECT_STATUS = 308
  */
 export function createTrailingSlashRedirect(
   config: TrailingSlashConfig,
+  getLocales?: () => readonly string[] | undefined,
 ): MiddlewareHandler<RouterEnv> | null {
-  if (resolveTrailingSlash(config).mode === 'ignore') return null
+  const options = resolveTrailingSlash(config)
+  if (options.mode === 'ignore') return null
 
   return async (c, next) => {
     const url = new URL(c.req.url)
-    const canonicalPath = applyTrailingSlash(url.pathname, config)
+    const canonicalPath = applyTrailingSlash(url.pathname, options, getLocales?.())
     if (canonicalPath === url.pathname) return next()
     return c.redirect(`${canonicalPath}${url.search}`, REDIRECT_STATUS)
   }

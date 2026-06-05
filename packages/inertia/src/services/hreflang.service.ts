@@ -2,7 +2,7 @@ import type { Application } from 'stratal'
 import { CONTAINER_TOKEN, type Container, DI_TOKENS, Singleton, inject } from 'stratal/di'
 import { I18N_TOKENS } from 'stratal/i18n'
 import type { I18nModuleOptions } from 'stratal/i18n'
-import { ROUTER_TOKENS, applyTrailingSlash, type LocaleUrlService, type TrailingSlashMode } from 'stratal/router'
+import { ROUTER_TOKENS, applyTrailingSlash, type LocaleUrlService, type TrailingSlashConfig } from 'stratal/router'
 import type { SeoLinkTag } from '../seo/types'
 
 /**
@@ -22,8 +22,8 @@ import type { SeoLinkTag } from '../seo/types'
  * navigation) as the rest of the SEO tags — no separate head path.
  *
  * Every generated `href` runs through {@link applyTrailingSlash} with the
- * app-wide mode so hreflang URLs match the canonical form the rest of the
- * router emits.
+ * app-wide config (mode + exclusions) so hreflang URLs match the canonical
+ * form the rest of the router emits.
  */
 @Singleton()
 export class HreflangService {
@@ -39,7 +39,7 @@ export class HreflangService {
     const defaultLocale = i18n.defaultLocale ?? 'en'
 
     const app = this.container.resolve<Application>(DI_TOKENS.Application)
-    const trailingSlash: TrailingSlashMode = app.config.trailingSlash ?? 'ignore'
+    const trailingSlash: TrailingSlashConfig = app.config.trailingSlash ?? 'ignore'
 
     const localeUrl = this.container.resolve<LocaleUrlService>(ROUTER_TOKENS.LocaleUrlService)
     if (localeUrl.pathEnabled) {
@@ -59,13 +59,13 @@ export class HreflangService {
     locales: string[],
     defaultLocale: string,
     localeUrl: LocaleUrlService,
-    trailingSlash: TrailingSlashMode,
+    trailingSlash: TrailingSlashConfig,
   ): SeoLinkTag[] {
     const basePath = localeUrl.stripPrefix(url.pathname)
     const links = locales.map((locale) =>
-      this.linkTag(locale, this.compose(url, localeUrl.applyPrefix(basePath, locale), url.search, trailingSlash)),
+      this.linkTag(locale, this.compose(url, localeUrl.applyPrefix(basePath, locale), url.search, trailingSlash, locales)),
     )
-    links.push(this.linkTag('x-default', this.compose(url, localeUrl.applyPrefix(basePath, defaultLocale), url.search, trailingSlash)))
+    links.push(this.linkTag('x-default', this.compose(url, localeUrl.applyPrefix(basePath, defaultLocale), url.search, trailingSlash, locales)))
     return links
   }
 
@@ -73,7 +73,7 @@ export class HreflangService {
     url: URL,
     locales: string[],
     defaultLocale: string,
-    trailingSlash: TrailingSlashMode,
+    trailingSlash: TrailingSlashConfig,
   ): SeoLinkTag[] {
     const params = new URLSearchParams(url.search)
     params.delete('locale')
@@ -87,8 +87,8 @@ export class HreflangService {
     return links
   }
 
-  private compose(url: URL, pathname: string, search: string, mode: TrailingSlashMode): string {
-    return applyTrailingSlash(url.origin + pathname + search, mode)
+  private compose(url: URL, pathname: string, search: string, config: TrailingSlashConfig, locales?: readonly string[]): string {
+    return applyTrailingSlash(url.origin + pathname + search, config, locales)
   }
 
   private composeQuery(baseQs: string, extra: [string, string] | null): string {

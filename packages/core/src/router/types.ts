@@ -257,7 +257,12 @@ export type TrailingSlashMode = 'ignore' | 'always' | 'never'
  * - `string` — matches that exact path and any subpath, segment-aware:
  *   `'/auth/oauth2'` exempts `/auth/oauth2` and `/auth/oauth2/callback/x`,
  *   but not `/auth/oauth2-other`.
- * - `RegExp` — tested against the request/generated pathname.
+ * - `RegExp` — tested against both forms of the pathname (with and without
+ *   the trailing slash), so a pattern anchored to either form exempts both.
+ *
+ * Both kinds match in route space: when path-based locale detection is on,
+ * a leading locale segment is stripped before matching, so `'/callback'`
+ * also exempts `/fr/callback`.
  */
 export type TrailingSlashExclude = string | RegExp
 

@@ -17,6 +17,8 @@ import { RouterError } from './router.error'
 import { createLoggerMiddleware, createMiddlewareChain, createTrailingSlashRedirect } from './middleware'
 import type { Middleware } from './middleware.interface'
 import { RouterContext } from './router-context'
+import { ROUTER_TOKENS } from './router.tokens'
+import type { LocalePathService } from './services/locale-path.service'
 import { RouteRegistrationService } from './services/route-registration.service'
 import type { RouterEnv, TrailingSlashConfig } from './types'
 
@@ -88,8 +90,10 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
     }) as typeof this.use
 
     // Trailing-slash redirect runs first so redirected requests skip request-scope
-    // and logger overhead.
-    const trailingSlashRedirect = createTrailingSlashRedirect(trailingSlash)
+    // and logger overhead. Locales are read lazily — the i18n module (and thus
+    // LocalePathService) initialises after HonoApp is constructed.
+    const trailingSlashRedirect = createTrailingSlashRedirect(trailingSlash, () =>
+      this._container.tryResolve<LocalePathService>(ROUTER_TOKENS.LocalePathService)?.localePathConfig?.allLocales)
     if (trailingSlashRedirect) {
       this.nativeUse('*', trailingSlashRedirect)
     }

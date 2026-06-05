@@ -1,3 +1,4 @@
+import type { MiddlewareHandler } from 'hono'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Application, type ApplicationOptions } from '../../application'
 import type { StratalEnv } from '../../env'
@@ -6,6 +7,7 @@ import { LogLevel } from '../../logger'
 import { Module } from '../../module/module.decorator'
 import { Controller } from '../decorators/controller.decorator'
 import { Route } from '../decorators/route.decorator'
+import { createTrailingSlashRedirect } from '../middleware/trailing-slash-redirect'
 import type { RouterContext } from '../router-context'
 
 const handlerHits = { index: 0, create: 0 }
@@ -224,6 +226,48 @@ describe('trailing-slash handling', () => {
     it('does not redirect the root path', async () => {
       const res = await fetchPath(app, '/')
       expect(res.status).not.toBe(308)
+    })
+  })
+
+  describe('createTrailingSlashRedirect with locales (path-based i18n)', () => {
+    async function invoke(mw: MiddlewareHandler, path: string) {
+      let redirected: string | null = null
+      let nexted = false
+      const c = {
+        req: { url: `http://localhost${path}` },
+        redirect: (location: string, status: number) => {
+          redirected = location
+          return new Response(null, { status })
+        },
+      }
+      await mw(c as never, () => {
+        nexted = true
+        return Promise.resolve()
+      })
+      return { redirected, nexted }
+    }
+
+    it('exempts locale-prefixed forms of excluded paths', async () => {
+      const mw = createTrailingSlashRedirect(
+        { mode: 'always', exclude: ['/callback'] },
+        () => ['en', 'fr'],
+      )!
+
+      expect(await invoke(mw, '/fr/callback')).toEqual({ redirected: null, nexted: true })
+      expect(await invoke(mw, '/callback')).toEqual({ redirected: null, nexted: true })
+      expect((await invoke(mw, '/fr/users')).redirected).toBe('/fr/users/')
+    })
+
+    it('locale list is read lazily per request', async () => {
+      let locales: string[] | undefined
+      const mw = createTrailingSlashRedirect({ mode: 'always', exclude: ['/callback'] }, () => locales)!
+
+      // Before i18n resolves its locales, the prefixed form is not exempt…
+      expect((await invoke(mw, '/fr/callback')).redirected).toBe('/fr/callback/')
+
+      // …after it resolves, it is.
+      locales = ['en', 'fr']
+      expect(await invoke(mw, '/fr/callback')).toEqual({ redirected: null, nexted: true })
     })
   })
 })

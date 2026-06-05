@@ -599,6 +599,28 @@ describe('Uri', () => {
         expect(uri.to('/users')).toBe('/users/')
       })
 
+      it('RegExp patterns exempt both slash forms regardless of anchoring', () => {
+        // Pattern anchored to the bare form still exempts the trailing form.
+        setupUri({}, {}, { mode: 'never', exclude: [/^\/webhooks$/] })
+        expect(uri.to('/webhooks/')).toBe('/webhooks/')
+
+        // Pattern anchored to the trailing form still exempts the bare form.
+        setupUri({}, {}, { mode: 'always', exclude: [/^\/webhooks\/$/] })
+        expect(uri.to('/webhooks')).toBe('/webhooks')
+      })
+
+      it('matches exclusions against the locale-stripped path', () => {
+        setupUri(
+          {},
+          {},
+          { mode: 'always', exclude: ['/callback'] },
+          { localePathConfig: { allLocales: ['en', 'fr'], prefixedLocales: ['fr'], defaultLocale: 'en' } },
+        )
+        expect(uri.to('/fr/callback')).toBe('/fr/callback')
+        expect(uri.to('/callback')).toBe('/callback')
+        expect(uri.to('/fr/users')).toBe('/fr/users/')
+      })
+
       it("applies to 'never' mode too", () => {
         setupUri({}, {}, { mode: 'never', exclude: ['/auth/oauth2'] })
         expect(uri.to('/auth/oauth2/callback/p1/')).toBe('/auth/oauth2/callback/p1/')
