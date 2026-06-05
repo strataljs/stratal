@@ -2,3 +2,4 @@
 export { createMock } from '@golevelup/ts-vitest'
 export type { DeepMocked, PartialFuncReturn } from '@golevelup/ts-vitest'
 
+export { TestEmailProvider } from './test-email-provider'

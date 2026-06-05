@@ -1,4 +1,5 @@
 import { Transient } from '../../di/decorators'
+import { defineMetadata, getMetadata } from '../../di/metadata'
 import type { Constructor } from '../../types'
 import { LISTENER_METADATA_KEYS } from '../constants'
 
@@ -22,7 +23,7 @@ import { LISTENER_METADATA_KEYS } from '../constants'
 export function Listener() {
   return function <T extends Constructor>(target: T) {
     Transient()(target)
-    Reflect.defineMetadata(LISTENER_METADATA_KEYS.IS_LISTENER, true, target)
+    defineMetadata(LISTENER_METADATA_KEYS.IS_LISTENER, true, target)
     return target
   }
 }
@@ -31,5 +32,5 @@ export function Listener() {
  * Check if a class is decorated with `@Listener()`
  */
 export function isListener(target: Constructor): boolean {
-  return Reflect.getMetadata(LISTENER_METADATA_KEYS.IS_LISTENER, target) === true
+  return getMetadata(LISTENER_METADATA_KEYS.IS_LISTENER, target) === true
 }

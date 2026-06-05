@@ -2,14 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
 import { LogLevel } from '../contracts/log-level'
 import type { ILogFormatter } from '../formatters/formatter.interface'
-import type { ILogTransport } from '../transports/transport.interface'
 import { LoggerService } from '../services/logger.service'
 
 describe('LoggerService', () => {
   let service: LoggerService
   let mockFormatter: DeepMocked<ILogFormatter>
-  let mockTransport: DeepMocked<ILogTransport>
-  let mockExecutionContext: DeepMocked<ExecutionContext>
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -17,26 +14,16 @@ describe('LoggerService', () => {
     mockFormatter = createMock<ILogFormatter>()
     mockFormatter.format.mockReturnValue('formatted-log')
 
-    mockTransport = createMock<ILogTransport>({
-      name: 'test-transport',
-    })
-    mockTransport.write.mockResolvedValue(undefined)
-
-    mockExecutionContext = createMock<ExecutionContext>()
-    mockExecutionContext.waitUntil.mockImplementation(() => {
-      // noop
-    })
-
     service = new LoggerService(
       LogLevel.DEBUG,
-      mockExecutionContext as unknown as ExecutionContext,
       mockFormatter as unknown as ILogFormatter,
-      [mockTransport] as unknown as ILogTransport[]
     )
   })
 
   describe('info()', () => {
-    it('should dispatch to transports with LogLevel.INFO', () => {
+    it('should format and write to console.info', () => {
+      const spy = vi.spyOn(console, 'info').mockImplementation(() => { /* noop */ })
+
       service.info('test message')
 
       expect(mockFormatter.format).toHaveBeenCalledWith(
@@ -45,12 +32,16 @@ describe('LoggerService', () => {
           message: 'test message',
         })
       )
-      expect(mockTransport.write).toHaveBeenCalled()
+      expect(spy).toHaveBeenCalledWith('formatted-log')
+
+      spy.mockRestore()
     })
   })
 
   describe('debug()', () => {
-    it('should dispatch with LogLevel.DEBUG', () => {
+    it('should format and write to console.debug', () => {
+      const spy = vi.spyOn(console, 'debug').mockImplementation(() => { /* noop */ })
+
       service.debug('debug message')
 
       expect(mockFormatter.format).toHaveBeenCalledWith(
@@ -59,11 +50,16 @@ describe('LoggerService', () => {
           message: 'debug message',
         })
       )
+      expect(spy).toHaveBeenCalledWith('formatted-log')
+
+      spy.mockRestore()
     })
   })
 
   describe('warn()', () => {
-    it('should dispatch with LogLevel.WARN', () => {
+    it('should format and write to console.warn', () => {
+      const spy = vi.spyOn(console, 'warn').mockImplementation(() => { /* noop */ })
+
       service.warn('warn message')
 
       expect(mockFormatter.format).toHaveBeenCalledWith(
@@ -72,11 +68,16 @@ describe('LoggerService', () => {
           message: 'warn message',
         })
       )
+      expect(spy).toHaveBeenCalledWith('formatted-log')
+
+      spy.mockRestore()
     })
   })
 
   describe('error()', () => {
-    it('should dispatch with LogLevel.ERROR', () => {
+    it('should format and write to console.error', () => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => { /* noop */ })
+
       service.error('error message', { code: 500 })
 
       expect(mockFormatter.format).toHaveBeenCalledWith(
@@ -85,9 +86,13 @@ describe('LoggerService', () => {
           message: 'error message',
         })
       )
+      expect(spy).toHaveBeenCalledWith('formatted-log')
+
+      spy.mockRestore()
     })
 
     it('should serialize error object with message, stack, and name', () => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => { /* noop */ })
       const error = new Error('test error')
       error.name = 'TestError'
 
@@ -103,54 +108,86 @@ describe('LoggerService', () => {
           }),
         })
       )
+
+      spy.mockRestore()
+    })
+
+    it('should accept both Error and context', () => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => { /* noop */ })
+      const error = new Error('db failed')
+
+      service.error('query failed', error, { query: 'SELECT 1' })
+
+      expect(mockFormatter.format).toHaveBeenCalledWith(
+        expect.objectContaining({
+          level: LogLevel.ERROR,
+          message: 'query failed',
+          context: expect.objectContaining({
+            query: 'SELECT 1',
+            timestamp: expect.any(Number),
+          }),
+          error: expect.objectContaining({
+            message: 'db failed',
+            stack: expect.any(String),
+          }),
+        })
+      )
+
+      spy.mockRestore()
     })
   })
 
   describe('log level filtering', () => {
     it('should suppress debug() when level is INFO', () => {
+      const spy = vi.spyOn(console, 'debug').mockImplementation(() => { /* noop */ })
       const infoService = new LoggerService(
         LogLevel.INFO,
-        mockExecutionContext as unknown as ExecutionContext,
         mockFormatter as unknown as ILogFormatter,
-        [mockTransport] as unknown as ILogTransport[]
       )
 
       infoService.debug('suppressed message')
 
       expect(mockFormatter.format).not.toHaveBeenCalled()
-      expect(mockTransport.write).not.toHaveBeenCalled()
+      expect(spy).not.toHaveBeenCalled()
+
+      spy.mockRestore()
     })
 
     it('should not suppress error() when level is INFO', () => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => { /* noop */ })
       const infoService = new LoggerService(
         LogLevel.INFO,
-        mockExecutionContext as unknown as ExecutionContext,
         mockFormatter as unknown as ILogFormatter,
-        [mockTransport] as unknown as ILogTransport[]
       )
 
       infoService.error('error message')
 
       expect(mockFormatter.format).toHaveBeenCalled()
-      expect(mockTransport.write).toHaveBeenCalled()
+      expect(spy).toHaveBeenCalled()
+
+      spy.mockRestore()
     })
 
     it('should suppress warn() when level is ERROR', () => {
+      const spy = vi.spyOn(console, 'warn').mockImplementation(() => { /* noop */ })
       const errorService = new LoggerService(
         LogLevel.ERROR,
-        mockExecutionContext as unknown as ExecutionContext,
         mockFormatter as unknown as ILogFormatter,
-        [mockTransport] as unknown as ILogTransport[]
       )
 
       errorService.warn('suppressed')
 
       expect(mockFormatter.format).not.toHaveBeenCalled()
+      expect(spy).not.toHaveBeenCalled()
+
+      spy.mockRestore()
     })
   })
 
   describe('context enrichment', () => {
     it('should add timestamp to context', () => {
+      const spy = vi.spyOn(console, 'info').mockImplementation(() => { /* noop */ })
+
       service.info('test')
 
       expect(mockFormatter.format).toHaveBeenCalledWith(
@@ -160,50 +197,8 @@ describe('LoggerService', () => {
           }),
         })
       )
-    })
-  })
 
-  describe('formatter and transports', () => {
-    it('should call formatter once and pass result to all transports', () => {
-      const transport2 = createMock<ILogTransport>({ name: 'transport-2' })
-      transport2.write.mockResolvedValue(undefined)
-
-      const multiService = new LoggerService(
-        LogLevel.DEBUG,
-        mockExecutionContext as unknown as ExecutionContext,
-        mockFormatter as unknown as ILogFormatter,
-        [mockTransport, transport2] as unknown as ILogTransport[]
-      )
-
-      multiService.info('test')
-
-      expect(mockFormatter.format).toHaveBeenCalledTimes(1)
-      expect(mockTransport.write).toHaveBeenCalledWith(expect.any(Object), 'formatted-log')
-      expect(transport2.write).toHaveBeenCalledWith(expect.any(Object), 'formatted-log')
-    })
-  })
-
-  describe('transport error handling', () => {
-    it('should swallow transport errors and call console.error', () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
-      // noop
-    })
-      mockTransport.write.mockRejectedValue(new Error('transport failed'))
-
-      service.info('test')
-
-      // waitUntil is called with the promise
-      expect(mockExecutionContext.waitUntil).toHaveBeenCalled()
-
-      consoleSpy.mockRestore()
-    })
-  })
-
-  describe('executionContext.waitUntil()', () => {
-    it('should be called with transport write promises', () => {
-      service.info('test')
-
-      expect(mockExecutionContext.waitUntil).toHaveBeenCalledWith(expect.any(Promise))
+      spy.mockRestore()
     })
   })
 })

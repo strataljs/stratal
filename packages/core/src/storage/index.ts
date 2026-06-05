@@ -24,6 +24,7 @@ export type { PresignedUrlConfig, StorageConfig, StorageEntry, StorageRouteConfi
 
 // Errors
 export * from './errors'
+export * from './storage.error'
 
 // Provider interfaces (for advanced usage)
 export type { IStorageProvider, StreamingBlobPayloadInputTypes } from './providers/storage-provider.interface'

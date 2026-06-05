@@ -1,8 +1,6 @@
-import 'reflect-metadata'
-
-import { container as tsyringeRootContainer, injectable } from 'tsyringe'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Container } from '../../../di/container'
+import { Transient } from '../../../di/decorators'
 import { DI_TOKENS } from '../../../di/tokens'
 import { Command } from '../../command'
 import { getCommandResult, setCommandInputs, setCommandQuarry } from '../../command-internals'
@@ -21,15 +19,13 @@ class GreetCommand extends Command {
 }
 
 beforeEach(() => {
-  const tsyringe = tsyringeRootContainer.createChildContainer()
-  childContainer = new Container({ container: tsyringe })
+  childContainer = new Container()
   childContainer.registerValue(DI_TOKENS.ExceptionHandler, { handle: (e: unknown) => ({ message: String(e) }) })
   quarry = new QuarryRegistry(childContainer)
 
   childContainer.registerValue(DI_TOKENS.Quarry, quarry)
 
-  // Apply @injectable() so tsyringe knows the constructor params
-  injectable()(HelpCommand)
+  Transient()(HelpCommand)
   childContainer.register(HelpCommand, HelpCommand)
 })
 

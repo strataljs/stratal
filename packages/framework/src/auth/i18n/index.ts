@@ -1,1 +1,0 @@
-export { authMessages } from './en';

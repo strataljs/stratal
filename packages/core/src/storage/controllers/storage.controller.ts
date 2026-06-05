@@ -1,9 +1,9 @@
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import { z } from '../../i18n/validation'
 import { Controller } from '../../router/decorators/controller.decorator'
 import { Delete, Get, Put } from '../../router/decorators/http-method.decorator'
 import { type RouterContext } from '../../router/router-context'
-import { FileNotFoundError } from '../errors'
+import { FileNotFoundError } from '../errors/file-not-found.error'
 import type { StorageService } from '../services/storage.service'
 import { STORAGE_TOKENS } from '../storage.tokens'
 

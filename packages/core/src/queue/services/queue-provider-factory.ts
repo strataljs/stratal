@@ -1,9 +1,11 @@
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
+import type { Container } from '../../di/container'
 import { type StratalEnv } from '../../env'
 import { Transient } from '../../di/decorators'
 import { DI_TOKENS } from '../../di/tokens'
 import { type ConsumerRegistry } from '../consumer-registry'
-import { QueueProviderNotSupportedError } from '../errors'
+import { QueueError } from '../queue.error'
+import type { Application } from '../../application'
 import { CloudflareQueueProvider, SyncQueueProvider, type IQueueProvider } from '../providers'
 import type { QueueModuleOptions } from '../queue.module'
 import { QUEUE_TOKENS } from '../queue.tokens'
@@ -36,6 +38,8 @@ export class QueueProviderFactory {
   constructor(
     @inject(DI_TOKENS.CloudflareEnv) private readonly env: StratalEnv,
     @inject(DI_TOKENS.ConsumerRegistry) private readonly registry: ConsumerRegistry,
+    @inject(DI_TOKENS.Container) private readonly container: Container,
+    @inject(DI_TOKENS.Application) private readonly app: Application,
     @inject(QUEUE_TOKENS.QueueModuleOptions, { isOptional: true }) private readonly options?: QueueModuleOptions,
   ) { }
 
@@ -43,7 +47,7 @@ export class QueueProviderFactory {
    * Create a queue provider based on module configuration
    *
    * @returns Queue provider instance
-   * @throws {QueueProviderNotSupportedError} If provider type is not supported
+   * @throws {QueueError} If provider type is not supported
    */
   create(): IQueueProvider {
     const providerType = this.options?.provider ?? 'cloudflare'
@@ -53,10 +57,10 @@ export class QueueProviderFactory {
         return new CloudflareQueueProvider(this.env)
 
       case 'sync':
-        return new SyncQueueProvider(this.registry)
+        return new SyncQueueProvider(this.registry, this.container, this.app)
 
       default:
-        throw new QueueProviderNotSupportedError(providerType)
+        throw new QueueError(`Queue provider "${String(providerType)}" is not supported`)
     }
   }
 }

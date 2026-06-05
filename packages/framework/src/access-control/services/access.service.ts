@@ -1,5 +1,5 @@
 import type { DatabaseService } from '@stratal/framework/database'
-import { DI_TOKENS, inject, Transient } from 'stratal/di'
+import { DI_TOKENS, inject, Request } from 'stratal/di'
 import type { AuthContext } from '../../context/auth-context'
 import { AC_TOKENS } from '../tokens'
 import type { AccessControlOptions } from '../types'
@@ -36,7 +36,7 @@ function parseRoles(role: string | null | undefined): string[] {
  * await accessService.setUserRole(userId, ['editor', 'reviewer'])
  * ```
  */
-@Transient(AC_TOKENS.AccessService)
+@Request(AC_TOKENS.AccessService)
 export class AccessService {
   constructor(
     @inject(DI_TOKENS.AuthContext)

@@ -1,8 +1,15 @@
-import type { InertiaAppSSRResponse, Page, SharedPageProps } from '@inertiajs/core'
+import type { Page, SharedPageProps } from '@inertiajs/core'
+import type { ContentfulStatusCode } from 'hono/utils/http-status'
+import type { MessageKeys } from 'stratal/i18n'
 import type { RouterContext } from 'stratal/router'
 
 
 export interface InertiaPageRegistry {}
+
+export interface InertiaI18nConfig {}
+
+export type InertiaTranslationKeys =
+  InertiaI18nConfig extends { translationKeys: infer T extends string } ? T : MessageKeys
 
 // Derive shared props from @inertiajs/core's InertiaConfig.sharedPageProps.
 // Users augment InertiaConfig in their global.d.ts — this type stays in sync automatically.
@@ -33,10 +40,22 @@ export interface InertiaRenderOptions {
   encryptHistory?: boolean
   clearHistory?: boolean
   preserveFragment?: boolean
+  /**
+   * HTTP status code to use for the rendered response. Defaults to `200`.
+   * Useful for rendering Inertia error pages (e.g. `Errors/404` with status 404).
+   */
+  status?: ContentfulStatusCode
 }
 
-// Use InertiaAppSSRResponse from @inertiajs/core — { head: string[]; body: string }
-export type InertiaSsrResult = InertiaAppSSRResponse
+/**
+ * Streaming SSR render result. `head` carries the document `<head>` tags Inertia
+ * collected during the synchronous shell render (known once the shell is ready);
+ * `stream` is React's `renderToReadableStream` output, piped into the `#app` body.
+ */
+export interface InertiaSsrResult {
+  head: string[]
+  stream: ReadableStream<Uint8Array>
+}
 
 export interface InertiaSsrBundle {
   render(page: Page): Promise<InertiaSsrResult>

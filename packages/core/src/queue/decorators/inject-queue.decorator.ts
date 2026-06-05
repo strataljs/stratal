@@ -1,23 +1,23 @@
-import { inject } from 'tsyringe'
-import type { QueueName } from '../queue-name'
+import { inject } from '../../di'
+import type { QueueBinding } from '../queue-binding'
 
 /**
- * Inject a queue sender by name.
+ * Inject a queue sender by binding name.
  *
- * Queue names are typed via module augmentation of QueueNames interface.
- * The queue name serves as both the identifier and the DI injection token.
+ * The binding name matches the `binding` field declared under `queues.producers`
+ * in `wrangler.jsonc` (e.g. `BACKGROUND_QUEUE`). Stratal looks the binding up
+ * directly on the worker's `env`; the underlying Cloudflare queue can be any
+ * env-specific name (e.g. `background-queue-dev`) without affecting code.
  *
- * @param name - Queue name (typed with autocomplete if QueueNames is augmented)
+ * @param binding - Queue binding identifier (typed against `StratalEnv`).
  * @returns Parameter decorator for constructor injection
  *
  * @example
  * ```typescript
- * // Direct injection by queue name
  * constructor(
- *   @InjectQueue('notifications-queue') private queue: IQueueSender
+ *   @InjectQueue('NOTIFICATIONS_QUEUE') private queue: IQueueSender
  * ) {}
  *
- * // Usage
  * await this.queue.dispatch({
  *   type: 'email.send',
  *   payload: { to: 'user@example.com', subject: 'Hello' }
@@ -25,10 +25,10 @@ import type { QueueName } from '../queue-name'
  * ```
  *
  * @remarks
- * The queue must be registered via `QueueModule.registerQueue(name)` before injection.
- * For module-internal queue bindings (e.g., EmailModule), use `@inject(TOKEN)` with
- * `useExisting` provider binding instead.
+ * The binding must be registered via `QueueModule.registerQueue(binding)`
+ * before injection. For module-internal bindings (e.g. EmailModule),
+ * use `@inject(TOKEN)` with `useExisting` provider binding instead.
  */
-export function InjectQueue(name: QueueName): ParameterDecorator {
-  return inject(name)
+export function InjectQueue(binding: QueueBinding): ParameterDecorator {
+  return inject(binding)
 }

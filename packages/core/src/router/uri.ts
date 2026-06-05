@@ -1,11 +1,17 @@
-import { inject } from 'tsyringe'
-import { Transient } from '../di/decorators'
-import { MissingRouteParamError, RouteNameNotFoundError } from './errors'
-import type { RouteName, RouteParams } from './route-map'
-import type { RegisteredRoute, RouteRegistry } from './route-registry'
-import type { RouterContext } from './router-context'
-import { ROUTER_TOKENS } from './router.tokens'
-import { signUrl, verifySignedUrl, type SignedUrlOptions } from './signed-url'
+import type { Application } from '../application';
+import { inject } from '../di';
+import { Request } from '../di/decorators';
+import { DI_TOKENS } from '../di/tokens';
+import { applyLocalePrefix } from './locale-url';
+import type { RouteName, RouteParams } from './route-map';
+import type { RegisteredRoute, RouteRegistry } from './route-registry';
+import type { RouterContext } from './router-context';
+import { RouterError } from './router.error';
+import { ROUTER_TOKENS } from './router.tokens';
+import type { LocalePathService } from './services/locale-path.service';
+import { signUrl, verifySignedUrl, type SignedUrlOptions } from './signed-url';
+import { applyTrailingSlash } from './trailing-slash';
+import type { LocaleUrlConfig, TrailingSlashMode } from './types';
 
 /**
  * Options for URL generation methods.
@@ -21,6 +27,18 @@ export interface UriOptions {
 export interface SignedUriOptions extends UriOptions, SignedUrlOptions { }
 
 /**
+ * Encode a value for use as a path parameter.
+ *
+ * Splits on `/` and encodes each segment with `encodeURIComponent`, so callers
+ * can pass slash-containing values for catch-all params (e.g. `:slug{.+}`) and
+ * still get a usable URL — `'auth/login'` becomes `'auth/login'`, not
+ * `'auth%2Flogin'`. Single segments behave exactly like `encodeURIComponent`.
+ */
+function encodePathParam(value: string): string {
+  return value.split('/').map(encodeURIComponent).join('/')
+}
+
+/**
  * Build a URL from a registered route, filling path/domain params and appending extras as query string.
  *
  * Pure function — no request context needed. Used by both the `Uri` class and the standalone `route()` function.
@@ -30,20 +48,20 @@ export interface SignedUriOptions extends UriOptions, SignedUrlOptions { }
  * @param params - Path params, domain params, and extra query params
  * @returns Relative URL string (or absolute with domain prefix if route has a domain pattern)
  *
- * @throws MissingRouteParamError if a required path or domain param is missing
+ * @throws RouterError if a required path or domain param is missing
  */
 export function buildRouteUrl(
   route: RegisteredRoute,
   name: string,
   params?: Record<string, string>,
+  localeConfig?: LocaleUrlConfig,
 ): string {
   const allParams = { ...params }
   const consumedKeys = new Set<string>()
   let url = route.path
 
-  // When locale is provided and route has locale variants, prepend locale segment
   if (allParams.locale && route.localePaths?.length) {
-    url = `/${allParams.locale}${url === '/' ? '' : url}`
+    url = applyLocalePrefix(url, allParams.locale, localeConfig)
     consumedKeys.add('locale')
   }
 
@@ -51,11 +69,11 @@ export function buildRouteUrl(
   for (const paramName of route.paramNames) {
     const value = allParams[paramName]
     if (value === undefined) {
-      throw new MissingRouteParamError(paramName, name, route.path)
+      throw new RouterError(`Missing required route parameter "${paramName}" for route "${name}" (path: ${route.path})`)
     }
     url = url.replace(
       new RegExp(`:${paramName}(\\{[^}]*\\})?`),
-      encodeURIComponent(value),
+      encodePathParam(value),
     )
     consumedKeys.add(paramName)
   }
@@ -67,7 +85,7 @@ export function buildRouteUrl(
     for (const domainParam of route.domainParamNames) {
       const value = allParams[domainParam]
       if (value === undefined) {
-        throw new MissingRouteParamError(domainParam, name, route.domain)
+        throw new RouterError(`Missing required domain parameter "${domainParam}" for route "${name}" (domain: ${route.domain})`)
       }
       domain = domain.replace(`{${domainParam}}`, encodeURIComponent(value))
       consumedKeys.add(domainParam)
@@ -111,14 +129,24 @@ export function buildRouteUrl(
  * uri.route('posts.index') // auto-fills :locale param
  * ```
  */
-@Transient()
+@Request(ROUTER_TOKENS.Uri)
 export class Uri {
   private _defaults: Record<string, string> = {}
+  private readonly trailingSlash: TrailingSlashMode
+  private readonly localeConfig: LocaleUrlConfig
 
   constructor(
     @inject(ROUTER_TOKENS.RouteRegistry) private readonly registry: RouteRegistry,
     @inject(ROUTER_TOKENS.RouterContext) private readonly routerContext: RouterContext,
-  ) { }
+    @inject(DI_TOKENS.Application) application: Application,
+    @inject(ROUTER_TOKENS.LocalePathService) localePathService: LocalePathService,
+  ) {
+    this.trailingSlash = application.config.trailingSlash ?? 'ignore'
+    this.localeConfig = {
+      defaultLocale: localePathService.localePathConfig?.defaultLocale ?? null,
+      prefixDefaultLocale: localePathService.prefixDefaultLocale,
+    }
+  }
 
   /**
    * Set default URL parameters for this request.
@@ -128,6 +156,17 @@ export class Uri {
    */
   defaults(params: Record<string, string>): void {
     this._defaults = { ...this._defaults, ...params }
+  }
+
+  /**
+   * Read the currently configured default URL parameters.
+   *
+   * Used by frameworks that need to share these with the client (e.g. the
+   * Inertia adapter ships them as a shared prop so `route()` calls in the
+   * browser auto-fill the same sticky params as the server).
+   */
+  getDefaults(): Record<string, string> {
+    return { ...this._defaults }
   }
 
   /**
@@ -143,17 +182,16 @@ export class Uri {
    * @param options - URL generation options
    * @returns Generated URL string
    *
-   * @throws RouteNameNotFoundError if route name not found
-   * @throws MissingRouteParamError if required params missing
+   * @throws RouterError if route name not found or required params missing
    */
   route<N extends RouteName>(name: N, params?: RouteParams<N>, options?: UriOptions): string {
     const registeredRoute = this.registry.get(name)
     if (!registeredRoute) {
-      throw new RouteNameNotFoundError(name)
+      throw new RouterError(`Route name "${name}" was not found in the registry`)
     }
 
     const mergedParams = { ...this._defaults, ...params } as Record<string, string>
-    let url = buildRouteUrl(registeredRoute, name, mergedParams)
+    let url = applyTrailingSlash(buildRouteUrl(registeredRoute, name, mergedParams, this.localeConfig), this.trailingSlash)
 
     if (options?.absolute && !url.startsWith('http')) {
       const origin = new URL(this.routerContext.c.req.url).origin
@@ -210,7 +248,7 @@ export class Uri {
    */
   current(): string {
     const parsed = new URL(this.routerContext.c.req.url)
-    return parsed.pathname
+    return applyTrailingSlash(parsed.pathname, this.trailingSlash)
   }
 
   /**
@@ -218,7 +256,7 @@ export class Uri {
    */
   full(): string {
     const parsed = new URL(this.routerContext.c.req.url)
-    return `${parsed.pathname}${parsed.search}`
+    return applyTrailingSlash(`${parsed.pathname}${parsed.search}`, this.trailingSlash)
   }
 
   /**
@@ -255,7 +293,7 @@ export class Uri {
    * @param options - URL generation options
    */
   to(path: string, queryParams?: Record<string, string>, options?: UriOptions): string {
-    let url = path
+    let url = applyTrailingSlash(path, this.trailingSlash)
 
     if (queryParams) {
       const entries = Object.entries(queryParams)
@@ -286,11 +324,11 @@ export class Uri {
     for (const [key, value] of Object.entries(queryParams)) {
       parsed.searchParams.set(key, value)
     }
-    return `${parsed.pathname}${parsed.search}`
+    return applyTrailingSlash(`${parsed.pathname}${parsed.search}`, this.trailingSlash)
   }
 
   private getAppSecret(): string {
-    const secret = (this.routerContext.c.env as unknown as Record<string, string>).APP_SECRET
+    const secret = this.routerContext.c.env.APP_SECRET
     if (!secret) {
       throw new Error('APP_SECRET environment variable is required for signed URLs')
     }

@@ -1,7 +1,7 @@
-import { z, withI18n } from '../../i18n/validation'
+import { z, withZodI18n } from '../../i18n/validation'
 
 export const getPresignedUrlInputSchema = z.object({
-  path: z.string().min(1, withI18n('zodI18n.errors.custom.filePathRequired')),
+  path: z.string().min(1, withZodI18n('zodI18n.errors.custom.filePathRequired')),
   method: z.enum(['GET', 'PUT', 'DELETE', 'HEAD']).default('GET'),
   expiresIn: z.number().int().min(1).max(604800).optional(),
   disk: z.string().optional(),

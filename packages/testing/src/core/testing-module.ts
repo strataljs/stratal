@@ -2,11 +2,15 @@ import type { ConnectionName, DatabaseService } from '@stratal/framework/databas
 import { connectionSymbol } from '@stratal/framework/database'
 import type { Application, Constructor, StratalEnv, StratalExecutionContext } from 'stratal'
 import { DI_TOKENS, type Container } from 'stratal/di'
+import type { ResolvedEmailMessage } from 'stratal/email'
 import { type InjectionToken } from 'stratal/module'
-import { SEEDER_TOKENS, SeederNotRegisteredError, type Seeder, type SeederRegistry } from 'stratal/seeder'
+import { SEEDER_TOKENS, SeederError, type Seeder, type SeederRegistry } from 'stratal/seeder'
 import { STORAGE_TOKENS } from 'stratal/storage'
 import { expect } from 'vitest'
+import { dropDatabase } from '../database'
+import { FEATURE_FLAG_SERVICE_TOKEN, type FakeFeatureFlagService } from '../feature-flags'
 import type { FakeStorageService } from '../storage'
+import type { TestEmailProvider } from '../mocks/test-email-provider'
 import { TestHttpClient } from './http/test-http-client'
 import { TestCommandRequest } from './quarry/test-command-request'
 import { TestSseRequest } from './sse/test-sse-request'
@@ -41,6 +45,17 @@ import { TestWsRequest } from './ws/test-ws-request'
  * await module.close()
  * ```
  */
+/**
+ * Identifies a per-file database created for test isolation, so it can be
+ * dropped on teardown. Produced by the testing module builder.
+ */
+export interface IsolatedDatabase {
+  /** Name of the cloned database. */
+  name: string
+  /** Admin (maintenance-database) connection string used to drop it. */
+  adminConnectionString: string
+}
+
 export class TestingModule {
   private _http: TestHttpClient | null = null
   private readonly _requestContainer: Container
@@ -49,9 +64,19 @@ export class TestingModule {
     private readonly app: Application,
     private readonly env: StratalEnv,
     private readonly ctx: StratalExecutionContext,
+    private readonly isolatedDatabase: IsolatedDatabase | null = null,
+    private readonly testEmailProvider: TestEmailProvider | null = null,
   ) {
     const mockContext = this.app.createMockRouterContext()
     this._requestContainer = this.app.container.createRequestScope(mockContext)
+  }
+
+  /**
+   * Emails recorded by the default {@link TestEmailProvider}, in send order.
+   * Empty when the email provider factory was overridden.
+   */
+  get sentEmails(): ResolvedEmailMessage[] {
+    return this.testEmailProvider?.sent ?? []
   }
 
   /**
@@ -82,6 +107,14 @@ export class TestingModule {
    */
   get storage(): FakeStorageService {
     return this.get<FakeStorageService>(STORAGE_TOKENS.StorageService)
+  }
+
+  /**
+   * Get the fake feature-flag service to configure flags in tests
+   * (e.g. `module.featureFlags.set('my-flag', true)`).
+   */
+  get featureFlags(): FakeFeatureFlagService {
+    return this.get<FakeFeatureFlagService>(FEATURE_FLAG_SERVICE_TOKEN)
   }
 
   /**
@@ -167,7 +200,7 @@ export class TestingModule {
     const registry = this._requestContainer.resolve<SeederRegistry>(SEEDER_TOKENS.SeederRegistry)
     for (const SeederClass of SeederClasses) {
       if (!registry.has(SeederClass)) {
-        throw new SeederNotRegisteredError(SeederClass.name)
+        throw new SeederError(`Seeder "${SeederClass.name}" is not registered`)
       }
       await registry.run(SeederClass, { container: this._requestContainer })
     }
@@ -208,6 +241,29 @@ export class TestingModule {
    */
   async close(): Promise<void> {
     await this._requestContainer.dispose()
-    await this.app.shutdown()
+    try {
+      await this.app.shutdown()
+    }
+    finally {
+      // Drop the per-file database AFTER shutdown so the app's pool connection is
+      // released; `WITH (FORCE)` evicts any that lingers. Runs even if shutdown
+      // throws, otherwise a failed shutdown would leak the database until the
+      // next run's stale-database sweep.
+      //
+      // A drop failure here is non-fatal: the next run's connection-guarded sweep
+      // reclaims the database. Swallow it (warn only) so a passing suite isn't
+      // marked failed by a teardown hiccup.
+      if (this.isolatedDatabase) {
+        try {
+          await dropDatabase(this.isolatedDatabase.adminConnectionString, this.isolatedDatabase.name)
+        } catch (error) {
+          console.warn(
+            `[stratal-testing] Failed to drop isolated test database "${this.isolatedDatabase.name}"; ` +
+              'it will be reclaimed by the next run\'s stale-database sweep.',
+            error,
+          )
+        }
+      }
+    }
   }
 }

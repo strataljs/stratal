@@ -1,59 +1,50 @@
-import type { InertiaAppSSRResponse, Page } from '@inertiajs/core'
-import { Transient, inject } from 'stratal/di'
-import { LOGGER_TOKENS, type LoggerService } from 'stratal/logger'
+import type { Page } from '@inertiajs/core'
+import { Singleton, inject } from 'stratal/di'
+import { ApplicationError } from 'stratal/errors'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { INERTIA_TOKENS } from '../inertia.tokens'
+import type { InertiaSsrBundle, InertiaSsrResult } from '../types'
 
-interface LoadedSsrBundle {
-  render(page: Page): Promise<InertiaAppSSRResponse>
-}
-
-@Transient()
+@Singleton()
 export class SsrRendererService {
-  private bundle: LoadedSsrBundle | null = null
+  private bundle: InertiaSsrBundle | null = null
   private loadPromise: Promise<void> | null = null
 
   constructor(
     @inject(INERTIA_TOKENS.Options) private readonly options: InertiaModuleOptions,
-    @inject(LOGGER_TOKENS.LoggerService) private readonly logger: LoggerService
   ) { }
 
-  async render(page: Page): Promise<InertiaAppSSRResponse> {
+  /**
+   * Render a page to a streaming SSR result.
+   *
+   * The SSR bundle is imported once per worker (memoized). Bundle-load and render
+   * errors propagate — there is no silent client-side fallback. Callers must only
+   * invoke this when `options.ssr` is configured.
+   */
+  async render(page: Page): Promise<InertiaSsrResult> {
     if (!this.options.ssr) {
-      return { head: [], body: '' }
+      throw new ApplicationError('[stratal:inertia] SSR bundle is not configured.')
     }
 
     await this.ensureBundle()
-
-    if (!this.bundle) {
-      return { head: [], body: '' }
-    }
-
-    return this.bundle.render(page)
+    return this.bundle!.render(page)
   }
 
   private async ensureBundle(): Promise<void> {
     if (this.bundle) return
-
     this.loadPromise ??= this.loadBundle()
-
     try {
       await this.loadPromise
-    } catch {
-      // loadBundle already clears loadPromise on failure
+    } catch (error) {
+      // Allow a later request to retry a transient import failure, but still
+      // surface the error to this request (no silent client-side fallback).
+      this.loadPromise = null
+      throw error
     }
   }
 
   private async loadBundle(): Promise<void> {
-    if (!this.options.ssr) return
-
-    try {
-      const mod = await this.options.ssr.bundle()
-      const resolved = ('default' in mod ? mod.default : mod) as LoadedSsrBundle
-      this.bundle = resolved
-    } catch (error: unknown) {
-      this.logger.warn('[stratal:inertia] Failed to load SSR bundle. Falling back to client-side rendering.', { error })
-      this.loadPromise = null
-    }
+    const mod = await this.options.ssr!.bundle()
+    this.bundle = ('default' in mod ? mod.default : mod)
   }
 }

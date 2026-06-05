@@ -154,4 +154,48 @@ describe('MessageRegistry', () => {
       expect(registry.getMergedMessages()).toEqual({})
     })
   })
+
+  describe('HMR reload re-registration', () => {
+    const CONTRIBUTIONS_KEY = Symbol.for('stratal:i18n:message-registry:contributions')
+
+    function contributionCount(): number {
+      const store = (globalThis as Record<symbol, unknown>)[CONTRIBUTIONS_KEY] as Map<string, unknown> | undefined
+      return store?.size ?? 0
+    }
+
+    it('should not grow when identical messages are re-registered (module re-evaluation)', () => {
+      for (let reload = 0; reload < 5; reload++) {
+        MessageRegistry.addMessages({ en: { common: { hello: 'Hello' } } })
+        MessageRegistry.addMessages({ en: { errors: { notFound: 'Not found' } } })
+      }
+
+      expect(contributionCount()).toBe(2)
+      expect(new MessageRegistry().getMergedMessages().en).toEqual({
+        common: { hello: 'Hello' },
+        errors: { notFound: 'Not found' },
+      })
+    })
+
+    it('should treat key order as identical content', () => {
+      MessageRegistry.addMessages({ en: { a: { x: '1' }, b: { y: '2' } } })
+      MessageRegistry.addMessages({ en: { b: { y: '2' }, a: { x: '1' } } })
+
+      expect(contributionCount()).toBe(1)
+    })
+
+    it('should keep latest registration order so re-registered modules retain override precedence', () => {
+      // Initial evaluation: module A, then module B — B overrides A.
+      MessageRegistry.addMessages({ en: { greeting: { hi: 'from-A' } } })
+      MessageRegistry.addMessages({ en: { greeting: { hi: 'from-B' } } })
+
+      // Reload after editing A: A' registers new content, B re-registers
+      // identical content — B must still take precedence over A'.
+      MessageRegistry.addMessages({ en: { greeting: { hi: 'from-A-edited' } } })
+      MessageRegistry.addMessages({ en: { greeting: { hi: 'from-B' } } })
+
+      expect(new MessageRegistry().getMergedMessages().en).toEqual({
+        greeting: { hi: 'from-B' },
+      })
+    })
+  })
 })
