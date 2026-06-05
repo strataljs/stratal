@@ -4,10 +4,10 @@ import { RouterError } from '../router.error'
 import type { RegisteredRoute, RouteRegistry } from '../route-registry'
 import type { RouterContext } from '../router-context'
 import type { LocalePathService } from '../services/locale-path.service'
-import type { LocalePathConfig, TrailingSlashMode } from '../types'
+import type { LocalePathConfig, TrailingSlashConfig } from '../types'
 import { Uri, buildRouteUrl } from '../uri'
 
-const createMockApplication = (trailingSlash?: TrailingSlashMode) => ({
+const createMockApplication = (trailingSlash?: TrailingSlashConfig) => ({
   config: { trailingSlash },
 }) as unknown as Application
 
@@ -213,7 +213,7 @@ describe('Uri', () => {
   const setupUri = (
     routes: Record<string, RegisteredRoute> = {},
     contextOverrides: Parameters<typeof createMockRouterContext>[0] = {},
-    trailingSlash?: TrailingSlashMode,
+    trailingSlash?: TrailingSlashConfig,
     localePathOverrides: Parameters<typeof createMockLocalePathService>[0] = {},
   ) => {
     mockRegistry = createMockRegistry(routes)
@@ -566,6 +566,43 @@ describe('Uri', () => {
           }),
         }, {}, 'always')
         expect(uri.route('tenant.dashboard', { tenant: 'acme' })).toBe('https://acme.myapp.com/dashboard/')
+      })
+    })
+
+    describe('exclusions ({ mode, exclude })', () => {
+      it('route() leaves excluded paths as authored (string pattern, segment-aware)', () => {
+        setupUri(
+          { 'oauth.callback': createRoute({ path: '/auth/oauth2/callback/:id', paramNames: ['id'] }) },
+          {},
+          { mode: 'always', exclude: ['/auth/oauth2'] },
+        )
+        expect(uri.route('oauth.callback', { id: 'p1' })).toBe('/auth/oauth2/callback/p1')
+      })
+
+      it('still canonicalises non-excluded paths', () => {
+        setupUri(
+          { 'users.index': createRoute() },
+          {},
+          { mode: 'always', exclude: ['/auth/oauth2'] },
+        )
+        expect(uri.route('users.index')).toBe('/users/')
+      })
+
+      it('does not treat string patterns as loose prefixes', () => {
+        setupUri({}, {}, { mode: 'always', exclude: ['/auth/oauth2'] })
+        expect(uri.to('/auth/oauth2-other')).toBe('/auth/oauth2-other/')
+      })
+
+      it('supports RegExp patterns', () => {
+        setupUri({}, {}, { mode: 'always', exclude: [/^\/webhooks\//] })
+        expect(uri.to('/webhooks/github')).toBe('/webhooks/github')
+        expect(uri.to('/users')).toBe('/users/')
+      })
+
+      it("applies to 'never' mode too", () => {
+        setupUri({}, {}, { mode: 'never', exclude: ['/auth/oauth2'] })
+        expect(uri.to('/auth/oauth2/callback/p1/')).toBe('/auth/oauth2/callback/p1/')
+        expect(uri.to('/users/')).toBe('/users')
       })
     })
 

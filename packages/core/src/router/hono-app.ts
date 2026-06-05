@@ -18,7 +18,7 @@ import { createLoggerMiddleware, createMiddlewareChain, createTrailingSlashRedir
 import type { Middleware } from './middleware.interface'
 import { RouterContext } from './router-context'
 import { RouteRegistrationService } from './services/route-registration.service'
-import type { RouterEnv, TrailingSlashMode } from './types'
+import type { RouterEnv, TrailingSlashConfig } from './types'
 
 const isMiddlewareClass = (arg: unknown): arg is Constructor<Middleware> =>
   // eslint-disable-next-line @typescript-eslint/no-unsafe-return
@@ -52,7 +52,7 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
     @inject(LOGGER_TOKENS.LoggerService) logger: LoggerService,
     @inject(DI_TOKENS.Application) application: Application,
   ) {
-    const trailingSlash: TrailingSlashMode = application.config.trailingSlash ?? 'ignore'
+    const trailingSlash: TrailingSlashConfig = application.config.trailingSlash ?? 'ignore'
 
     super({
       // Always non-strict: a registered `/foo` route matches both `/foo` and `/foo/`.

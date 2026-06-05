@@ -28,7 +28,15 @@ class UsersController {
   }
 }
 
-@Module({ controllers: [UsersController] })
+@Controller('/callback')
+class CallbackController {
+  @Route({ response: z.object({ ok: z.boolean() }) })
+  index(ctx: RouterContext) {
+    return ctx.json({ ok: true })
+  }
+}
+
+@Module({ controllers: [UsersController, CallbackController] })
 class TrailingSlashModule { }
 
 const mockEnv = { ENVIRONMENT: 'test' } as StratalEnv
@@ -150,6 +158,35 @@ describe('trailing-slash handling', () => {
     it('does not redirect the root path', async () => {
       const res = await fetchPath(app, '/')
       expect(res.status).not.toBe(308)
+    })
+  })
+
+  describe("mode 'always' with exclusions", () => {
+    let app: Application
+
+    beforeEach(async () => {
+      app = createApp({ trailingSlash: { mode: 'always', exclude: ['/callback'] } })
+      await app.initialize()
+    })
+
+    afterEach(async () => {
+      await app.shutdown()
+    })
+
+    it('serves the excluded path without redirecting (non-trailing form)', async () => {
+      const res = await fetchPath(app, '/callback')
+      expect(res.status).toBe(200)
+    })
+
+    it('serves the excluded path without redirecting (trailing form)', async () => {
+      const res = await fetchPath(app, '/callback/')
+      expect(res.status).toBe(200)
+    })
+
+    it('still redirects non-excluded paths', async () => {
+      const res = await fetchPath(app, '/users')
+      expect(res.status).toBe(308)
+      expect(res.headers.get('Location')).toBe('/users/')
     })
   })
 

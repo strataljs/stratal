@@ -11,7 +11,7 @@ import { ROUTER_TOKENS } from './router.tokens';
 import type { LocalePathService } from './services/locale-path.service';
 import { signUrl, verifySignedUrl, type SignedUrlOptions } from './signed-url';
 import { applyTrailingSlash } from './trailing-slash';
-import type { LocaleUrlConfig, TrailingSlashMode } from './types';
+import type { LocaleUrlConfig, TrailingSlashConfig } from './types';
 
 /**
  * Options for URL generation methods.
@@ -132,7 +132,7 @@ export function buildRouteUrl(
 @Request(ROUTER_TOKENS.Uri)
 export class Uri {
   private _defaults: Record<string, string> = {}
-  private readonly trailingSlash: TrailingSlashMode
+  private readonly trailingSlash: TrailingSlashConfig
   private readonly localeConfig: LocaleUrlConfig
 
   constructor(

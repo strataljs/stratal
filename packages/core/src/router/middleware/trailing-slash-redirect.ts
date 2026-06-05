@@ -1,6 +1,6 @@
 import type { MiddlewareHandler } from 'hono'
-import { applyTrailingSlash } from '../trailing-slash'
-import type { RouterEnv, TrailingSlashMode } from '../types'
+import { applyTrailingSlash, resolveTrailingSlash } from '../trailing-slash'
+import type { RouterEnv, TrailingSlashConfig } from '../types'
 
 const REDIRECT_STATUS = 308
 
@@ -13,6 +13,9 @@ const REDIRECT_STATUS = 308
  *   Paths whose last segment contains `.` (e.g. `/api/openapi.json`) are skipped.
  * - `'never'`  — trailing requests redirect to the non-trailing form.
  *
+ * Paths in the config's `exclude` list are never redirected — both forms
+ * are served as requested (routes match either, `strict: false`).
+ *
  * Root (`/`) is always passed through unchanged.
  *
  * 308 is used so that POST/PUT/PATCH bodies survive the redirect.
@@ -23,13 +26,13 @@ const REDIRECT_STATUS = 308
  * HTTP-speaking backend (which would otherwise produce a mixed-content block).
  */
 export function createTrailingSlashRedirect(
-  mode: TrailingSlashMode,
+  config: TrailingSlashConfig,
 ): MiddlewareHandler<RouterEnv> | null {
-  if (mode === 'ignore') return null
+  if (resolveTrailingSlash(config).mode === 'ignore') return null
 
   return async (c, next) => {
     const url = new URL(c.req.url)
-    const canonicalPath = applyTrailingSlash(url.pathname, mode)
+    const canonicalPath = applyTrailingSlash(url.pathname, config)
     if (canonicalPath === url.pathname) return next()
     return c.redirect(`${canonicalPath}${url.search}`, REDIRECT_STATUS)
   }
