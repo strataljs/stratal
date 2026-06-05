@@ -21,7 +21,15 @@ export class ChatGateway {
   }
 }
 
+@Gateway('/ws/no-close')
+export class NoCloseGateway {
+  @OnMessage()
+  handleMessage(evt: MessageEvent, ctx: GatewayContext) {
+    ctx.send(`echo:${evt.data as string}`)
+  }
+}
+
 @Module({
-  controllers: [ChatGateway],
+  controllers: [ChatGateway, NoCloseGateway],
 })
 export class GatewayAppModule { }

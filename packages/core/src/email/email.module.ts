@@ -2,26 +2,24 @@
  * Email Module
  *
  * Provides email sending capabilities with provider abstraction.
- * Supports multiple email providers (Resend, SMTP) with automatic provider selection.
+ * Sends email via SMTP. Emails are dispatched asynchronously via Cloudflare Queues.
  * Emails are sent asynchronously via Cloudflare Queues.
  *
  * **Usage:**
  * ```typescript
  * // In AppModule imports with static options
  * EmailModule.forRoot({
- *   provider: 'resend',
- *   apiKey: 'your-api-key',
  *   from: { name: 'App', email: 'noreply@example.com' },
- *   queue: 'notifications-queue',
+ *   smtp: { url: 'smtp://user:pass@smtp.example.com:587' },
+ *   queue: 'NOTIFICATIONS_QUEUE',
  * })
  *
  * // Or with async options from config namespaces
  * EmailModule.forRootAsync({
  *   inject: [emailConfig.KEY],
  *   useFactory: (email) => ({
- *     provider: email.provider,
- *     apiKey: email.apiKey,
  *     from: email.from,
+ *     smtp: email.smtp,
  *     queue: email.queue,
  *   }),
  * })
@@ -40,7 +38,7 @@
 
 import { Module } from '../module'
 import type { AsyncModuleOptions, DynamicModule } from '../module/types'
-import type { QueueName } from '../queue'
+import type { QueueBinding } from '../queue'
 import { QUEUE_TOKENS, type QueueRegistry } from '../queue'
 import { EmailConsumer } from './consumers/email.consumer'
 import { EMAIL_TOKENS } from './email.tokens'
@@ -48,44 +46,33 @@ import { EmailProviderFactory, EmailService } from './services'
 
 /**
  * SMTP configuration options
+ *
+ * URL format: `smtp://user:pass@host:port` or `smtps://user:pass@host:port`
+ * - `smtp://` → STARTTLS on port 587 (default)
+ * - `smtps://` → implicit TLS on port 465 (default)
  */
 export interface SmtpConfig {
-  /** SMTP server host */
-  host: string
-  /** SMTP server port */
-  port: number
-  /** Use TLS */
-  secure?: boolean
-  /** SMTP username */
-  username?: string
-  /** SMTP password */
-  password?: string
+  url: string
 }
 
 /**
  * Email module configuration options
  */
 export interface EmailModuleOptions {
-  /** Email provider type */
-  provider: 'resend' | 'smtp'
-
   /** Default from address */
   from: { name: string; email: string }
 
-  /** Resend API key (required for resend provider) */
-  apiKey?: string
-
-  /** SMTP configuration (required for smtp provider) */
-  smtp?: SmtpConfig
+  /** SMTP configuration */
+  smtp: SmtpConfig
 
   /** Default reply-to address */
   replyTo?: string
 
   /**
-   * Queue name for email dispatch.
-   * The queue must be registered via QueueModule.registerQueue(name).
+   * Queue binding for email dispatch.
+   * The binding must be registered via QueueModule.registerQueue(binding).
    */
-  queue: QueueName
+  queue: QueueBinding
 }
 
 @Module({
@@ -105,10 +92,9 @@ export class EmailModule {
    * @example
    * ```typescript
    * EmailModule.forRoot({
-   *   provider: 'resend',
-   *   apiKey: env.RESEND_API_KEY,
    *   from: { name: 'App', email: 'noreply@example.com' },
-   *   queue: 'notifications-queue',
+   *   smtp: { url: 'smtp://user:pass@smtp.example.com:587' },
+   *   queue: 'NOTIFICATIONS_QUEUE',
    * })
    * ```
    */
@@ -135,8 +121,6 @@ export class EmailModule {
    * EmailModule.forRootAsync({
    *   inject: [emailConfig.KEY],
    *   useFactory: (email) => ({
-   *     provider: email.provider,
-   *     apiKey: email.apiKey,
    *     from: email.from,
    *     smtp: email.smtp,
    *     queue: email.queue,
@@ -153,7 +137,7 @@ export class EmailModule {
           useFactory: options.useFactory,
           inject: options.inject,
         },
-        // Resolve queue from QueueRegistry using the queue name from options
+        // Resolve queue from QueueRegistry using the binding from options
         {
           provide: EMAIL_TOKENS.EmailQueue,
           useFactory: (emailOptions: EmailModuleOptions, registry: QueueRegistry) =>

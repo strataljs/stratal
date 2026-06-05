@@ -11,6 +11,7 @@ function createInertiaResponse(overrides: Partial<Page> = {}): TestResponse {
     version: '1.0',
     flash: {},
     rememberedState: {},
+    rescuedProps: [],
     ...overrides,
   }
 

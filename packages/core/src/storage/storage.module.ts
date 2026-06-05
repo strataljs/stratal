@@ -4,7 +4,6 @@
  * Supports multiple disk configurations with dynamic path templates
  */
 
-import { Scope } from '../di/types'
 import { Module } from '../module'
 import type { AsyncModuleOptions, DynamicModule } from '../module/types'
 import { StorageManagerService } from './services/storage-manager.service'
@@ -20,7 +19,7 @@ export type StorageModuleOptions = StorageConfig
 
 @Module({
   providers: [
-    { provide: STORAGE_TOKENS.StorageManager, useClass: StorageManagerService, scope: Scope.Singleton },
+    { provide: STORAGE_TOKENS.StorageManager, useClass: StorageManagerService },
     { provide: STORAGE_TOKENS.StorageService, useClass: StorageService },
   ],
 })

@@ -1,4 +1,4 @@
-import { withI18n, z } from '../../i18n/validation'
+import { withZodI18n, z } from '../../i18n/validation'
 import { emailAttachmentSchema, type ResolvedEmailAttachment } from './email-attachment'
 
 /**
@@ -70,7 +70,7 @@ export const emailMessageSchema = z
   })
   .refine(
     (data) => data.html ?? data.text,
-    withI18n('zodI18n.errors.custom.emailOrTextRequired')
+    withZodI18n('zodI18n.errors.custom.emailOrTextRequired')
   )
 
 /**

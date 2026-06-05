@@ -1,3 +1,4 @@
+import { defineMetadata, getMetadata } from '../../di/metadata'
 import { LISTENER_METADATA_KEYS } from '../constants'
 import type { EventName, EventOptions, ListenerHandlerMetadata } from '../types'
 
@@ -29,7 +30,7 @@ export function On<E extends EventName>(event: E, options?: EventOptions) {
     _descriptor: PropertyDescriptor
   ) {
     const existingHandlers: ListenerHandlerMetadata[] =
-      (Reflect.getMetadata(LISTENER_METADATA_KEYS.EVENT_HANDLERS, target.constructor) as ListenerHandlerMetadata[] | undefined) ?? []
+      getMetadata<ListenerHandlerMetadata[]>(LISTENER_METADATA_KEYS.EVENT_HANDLERS, target.constructor) ?? []
 
     existingHandlers.push({
       methodName: propertyKey,
@@ -37,7 +38,7 @@ export function On<E extends EventName>(event: E, options?: EventOptions) {
       options,
     })
 
-    Reflect.defineMetadata(
+    defineMetadata(
       LISTENER_METADATA_KEYS.EVENT_HANDLERS,
       existingHandlers,
       target.constructor
@@ -50,5 +51,5 @@ export function On<E extends EventName>(event: E, options?: EventOptions) {
  */
 export function getListenerHandlers(target: object): ListenerHandlerMetadata[] {
   const metadataTarget = typeof target === 'function' ? target : target.constructor
-  return (Reflect.getMetadata(LISTENER_METADATA_KEYS.EVENT_HANDLERS, metadataTarget) as ListenerHandlerMetadata[] | undefined) ?? []
+  return getMetadata<ListenerHandlerMetadata[]>(LISTENER_METADATA_KEYS.EVENT_HANDLERS, metadataTarget) ?? []
 }

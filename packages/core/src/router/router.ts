@@ -1,6 +1,7 @@
-import type { ZodObject } from '../i18n/validation'
+import type { ZodObject } from '../i18n/validation/zod'
+import { createThrottleMiddleware } from '../rate-limiter/throttle.middleware'
 import type { Constructor } from '../types'
-import { RouterUseScopeError } from './errors'
+import { RouterError } from './router.error'
 import type { Middleware } from './middleware.interface'
 import * as internal from './router.internals'
 
@@ -104,6 +105,24 @@ export class Router {
     return this
   }
 
+  /**
+   * Apply a named rate limiter to controllers in this scope.
+   *
+   * The named limiter must be registered via `RateLimiterRegistry.for(name, ...)`
+   * (typically inside a module's `onInitialize` hook), and the user must
+   * import `RateLimiterModule.forRoot({ store: ... })` in their AppModule.
+   *
+   * @example
+   * ```typescript
+   * router.prefix('/uploads').throttle('uploads')
+   * router.group([AdminController], (admin) => admin.throttle('admin'))
+   * ```
+   */
+  throttle(name: string): this {
+    this._defaultEntry.middleware.push(createThrottleMiddleware(name))
+    return this
+  }
+
   /** API version for controllers in this scope */
   version(version: string | string[]): this {
     this._defaultEntry.version = version
@@ -122,7 +141,7 @@ export class Router {
    */
   use(...middlewares: Constructor<Middleware>[]): this {
     if (this._isChild) {
-      throw new RouterUseScopeError()
+      throw new RouterError('router.use() is only allowed on the root Router. It cannot be called inside a group() callback.')
     }
     this._globalMiddleware.push(...middlewares)
     return this

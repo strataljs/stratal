@@ -88,7 +88,7 @@ The repo uses [husky](https://typicode.github.io/husky/) + [lint-staged](https:/
 
 - **ESLint** with strict + stylistic TypeScript rules is the single source of truth for code style. The pre-commit hook enforces this automatically.
 - **ESM-only** — use `import`/`export`, never `require`.
-- **Build uses `tsc`** (not esbuild/tsup) because tsyringe requires `emitDecoratorMetadata`, which esbuild doesn't support.
+- **Build uses `tsdown`** (powered by Rolldown/Oxc) for JS bundling and DTS generation.
 
 ## Testing
 

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { ConfigPath } from '../config.types'
 import { ConfigService } from '../services/config.service'
 import { ConfigStore } from '../services/config.store'
-import { ConfigNotInitializedError } from '../errors/config-not-initialized.error'
+import { ConfigError } from '../config.error'
 
 describe('ConfigService', () => {
   let store: ConfigStore<TestConfig>
@@ -53,9 +53,18 @@ describe('ConfigService', () => {
       expect(result).toBe('Test App')
     })
 
-    it('should return undefined for non-existent path', () => {
-      const result = service.get('nonexistent.path' as ConfigPath<TestConfig>)
-      expect(result).toBeUndefined()
+    it('should throw ConfigError for non-existent path', () => {
+      expect(() => service.get('nonexistent.path' as ConfigPath<TestConfig>)).toThrow(ConfigError)
+    })
+
+    it('should include the requested path in the thrown error message', () => {
+      try {
+        service.get('nonexistent.path' as ConfigPath<TestConfig>)
+        expect.fail('Expected ConfigError to be thrown')
+      } catch (error) {
+        expect(error).toBeInstanceOf(ConfigError)
+        expect((error as ConfigError).message).toContain('nonexistent.path')
+      }
     })
 
     it('should return top-level value', () => {
@@ -203,12 +212,12 @@ describe('ConfigService', () => {
       expect(service.all()).toEqual(createConfig())
     })
 
-    it('get() with __proto__ path should return undefined', () => {
-      expect(service.get('__proto__.toString' as ConfigPath<TestConfig>)).toBeUndefined()
+    it('get() with __proto__ path should throw ConfigError', () => {
+      expect(() => service.get('__proto__.toString' as ConfigPath<TestConfig>)).toThrow(ConfigError)
     })
 
-    it('get() with constructor path should return undefined', () => {
-      expect(service.get('constructor.prototype' as ConfigPath<TestConfig>)).toBeUndefined()
+    it('get() with constructor path should throw ConfigError', () => {
+      expect(() => service.get('constructor.prototype' as ConfigPath<TestConfig>)).toThrow(ConfigError)
     })
 
     it('has() with __proto__ path should return false', () => {
@@ -222,30 +231,38 @@ describe('ConfigService', () => {
     })
   })
 
-  describe('error handling', () => {
-    it('should throw ConfigNotInitializedError when reading from an uninitialized store', () => {
+  describe('uninitialized store', () => {
+    it('get() throws ConfigError for any key when the store was never initialized', () => {
       const uninitializedStore = new ConfigStore<TestConfig>()
       const uninitialized = new ConfigService<TestConfig>(uninitializedStore)
-      expect(() => uninitialized.get('any' as ConfigPath<TestConfig>)).toThrow(ConfigNotInitializedError)
+      expect(() => uninitialized.get('appName' as ConfigPath<TestConfig>)).toThrow(ConfigError)
     })
 
-    it('should throw ConfigNotInitializedError for has() before initialize()', () => {
+    it('has() returns false on an uninitialized store (no throw)', () => {
       const uninitializedStore = new ConfigStore<TestConfig>()
       const uninitialized = new ConfigService<TestConfig>(uninitializedStore)
-      expect(() => uninitialized.has('any' as ConfigPath<TestConfig>)).toThrow(ConfigNotInitializedError)
+      expect(uninitialized.has('appName' as ConfigPath<TestConfig>)).toBe(false)
     })
 
-    it('should throw ConfigNotInitializedError for all() before initialize()', () => {
+    it('all() returns an empty object on an uninitialized store (no throw)', () => {
       const uninitializedStore = new ConfigStore<TestConfig>()
       const uninitialized = new ConfigService<TestConfig>(uninitializedStore)
-      expect(() => uninitialized.all()).toThrow(ConfigNotInitializedError)
+      expect(uninitialized.all()).toEqual({})
     })
 
-    it('set() should be allowed on an uninitialized store (override layer is independent)', () => {
+    it('set() is allowed on an uninitialized store and is readable via the override layer', () => {
       const uninitializedStore = new ConfigStore<TestConfig>()
       const uninitialized = new ConfigService<TestConfig>(uninitializedStore)
       expect(() => uninitialized.set('appName' as ConfigPath<TestConfig>, 'Override')).not.toThrow()
       expect(uninitialized.get('appName' as ConfigPath<TestConfig>)).toBe('Override')
+      expect(uninitialized.has('appName' as ConfigPath<TestConfig>)).toBe(true)
+    })
+
+    it('all() merges request overrides into the empty base when uninitialized', () => {
+      const uninitializedStore = new ConfigStore<TestConfig>()
+      const uninitialized = new ConfigService<TestConfig>(uninitializedStore)
+      uninitialized.set('appName' as ConfigPath<TestConfig>, 'Override')
+      expect(uninitialized.all()).toEqual({ appName: 'Override' })
     })
   })
 })

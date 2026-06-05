@@ -2,7 +2,7 @@ import { type Context } from 'hono'
 import { describe, expect, it, vi } from 'vitest'
 import type { Constructor } from '../../types'
 import { ROUTER_CONTEXT_KEYS } from '../constants'
-import { MiddlewareNextCalledMultipleTimesError } from '../errors'
+import { RouterError } from '../router.error'
 import type { Middleware, Next } from '../middleware.interface'
 import { createMiddlewareChain } from '../middleware/middleware-chain'
 import type { RouterContext } from '../router-context'
@@ -108,7 +108,7 @@ describe('createMiddlewareChain', () => {
     expect(honoNext).not.toHaveBeenCalled()
   })
 
-  it('should throw MiddlewareNextCalledMultipleTimesError when next() is called twice', async () => {
+  it('should throw RouterError when next() is called twice', async () => {
     const chain = createMiddlewareChain([
       DoubleNextMiddleware as Constructor<Middleware>,
     ])
@@ -116,11 +116,11 @@ describe('createMiddlewareChain', () => {
     const honoNext = vi.fn(async () => { /**/ })
 
     const err = await chain(createContextStub(), honoNext).catch((e: unknown) => e)
-    expect(err).toBeInstanceOf(MiddlewareNextCalledMultipleTimesError)
-    expect((err as MiddlewareNextCalledMultipleTimesError).metadata).toMatchObject({ middlewareName: 'DoubleNextMiddleware' })
+    expect(err).toBeInstanceOf(RouterError)
+    expect((err as RouterError).message).toContain('DoubleNextMiddleware')
   })
 
-  it('should throw MiddlewareNextCalledMultipleTimesError when catch block re-calls next()', async () => {
+  it('should throw RouterError when catch block re-calls next()', async () => {
     // Simulates the SessionVerificationMiddleware bug:
     // try { await next() } catch { await next() }
     // When a downstream error propagates, the catch re-invokes next().
@@ -140,8 +140,8 @@ describe('createMiddlewareChain', () => {
     const honoNext = vi.fn(async () => { /**/ })
 
     const err = await chain(createContextStub(), honoNext).catch((e: unknown) => e)
-    expect(err).toBeInstanceOf(MiddlewareNextCalledMultipleTimesError)
-    expect((err as MiddlewareNextCalledMultipleTimesError).metadata).toMatchObject({ middlewareName: 'DoubleNextInCatchMiddleware' })
+    expect(err).toBeInstanceOf(RouterError)
+    expect((err as RouterError).message).toContain('DoubleNextInCatchMiddleware')
   })
 
   it('should work with an empty middleware array (just calls Hono next)', async () => {

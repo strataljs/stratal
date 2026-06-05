@@ -1,7 +1,6 @@
-import { DI_TOKENS, Transient } from 'stratal/di'
+import { DI_TOKENS, inject, Transient } from 'stratal/di'
 import { LOGGER_TOKENS, type LoggerService } from 'stratal/logger'
 import type { Middleware, Next, RouterContext } from 'stratal/router'
-import { inject } from 'tsyringe'
 import { type AuthContext } from '../../context/auth-context'
 import { AUTH_SERVICE } from '../auth.tokens'
 import type { AuthService } from '../services/auth.service'
@@ -9,11 +8,12 @@ import type { AuthService } from '../services/auth.service'
 /**
  * Session Verification Middleware
  *
- * Verifies user session via Better Auth and populates AuthContext with userId.
+ * Verifies user session via Better Auth and populates AuthContext with
+ * the authenticated user.
  *
  * **Responsibilities:**
  * - Calls Better Auth's getSession() API
- * - Populates AuthContext with userId if session is valid
+ * - Populates AuthContext with the user record if the session is valid
  * - Continues request chain regardless of session status
  */
 @Transient()
@@ -26,15 +26,14 @@ export class SessionVerificationMiddleware implements Middleware {
 
   async handle(ctx: RouterContext, next: Next): Promise<void> {
     try {
-      const session = await this.authService.auth.api.getSession({
+      const result = await this.authService.auth.api.getSession({
         headers: ctx.c.req.raw.headers
       })
 
-      if (session) {
+      if (result) {
         const authContext = ctx.getContainer().resolve<AuthContext>(DI_TOKENS.AuthContext)
         authContext.setAuthContext({
-          userId: session.user.id,
-          role: (session.user as Record<string, unknown>).role as string | undefined,
+          user: result.user,
         })
       }
     } catch (error: unknown) {

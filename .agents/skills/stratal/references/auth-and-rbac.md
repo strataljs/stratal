@@ -25,10 +25,10 @@ export class AppModule {}
 
 ### AuthContext (Request-Scoped)
 
-`AuthContext` is available in the request-scoped container. `SessionVerificationMiddleware` (auto-registered by AuthModule) populates it from session cookies/tokens on every request.
+`AuthContext` is available in the request-scoped container. `SessionVerificationMiddleware` (auto-registered by AuthModule) populates it with the full Better Auth user record on every request.
 
 ```typescript
-import type { AuthContext } from '@stratal/framework/context'
+import type { AuthContext, AuthUser } from '@stratal/framework/context'
 import { DI_TOKENS } from 'stratal/di'
 import { Transient, inject } from 'stratal/di'
 
@@ -40,14 +40,56 @@ export class ProfileService {
   ) {}
 
   async getProfile() {
-    const userId = this.authContext.requireUserId() // throws 401 if not authenticated
-    const roles  = this.authContext.getRoles()      // string[] — e.g. ['admin', 'editor']
-    const role   = this.authContext.getRole()       // raw comma-separated string from DB
+    const user: AuthUser = this.authContext.requireUser() // throws 401 if not authenticated
+    const userId = this.authContext.requireUserId()       // shorthand for requireUser().id
+    const maybeUser = this.authContext.getUser()          // AuthUser | undefined
+    const roles  = this.authContext.getRoles()            // string[] from user.role
+    const role   = this.authContext.getRole()             // raw string from user.role
   }
 }
 ```
 
 Prefer `@UseGuards(AuthGuard())` on controllers over manually checking `authContext.isAuthenticated()` — the guard throws proper 401 errors automatically.
+
+#### `ctx.user()` shorthand
+
+`AuthModule` augments `RouterContext` with `ctx.user()`, a shorthand for `AuthContext.requireUser()` (throws `UserNotAuthenticatedError` if unauthenticated). Use it where you have the context directly — controllers, middleware, or resolver callbacks — without injecting `AuthContext`:
+
+```typescript
+async show(ctx: RouterContext) {
+  const userId = ctx.user().id
+  return ctx.json(await this.service.forUser(userId))
+}
+```
+
+#### AuthContext API
+
+| Method | Returns | Notes |
+|--------|---------|-------|
+| `requireUser()` | `AuthUser` | Throws `UserNotAuthenticatedError` if not authenticated. |
+| `getUser()` | `AuthUser \| undefined` | Returns `undefined` when no session. |
+| `requireUserId()` / `getUserId()` | `string` / `string \| undefined` | Convenience accessors for `user.id`. |
+| `getRole()` | `string \| undefined` | Reads `user.role` (augment `AuthUser` to type it). |
+| `getRoles()` | `string[]` | Splits `user.role` on `,` (e.g. `"admin,editor"`). |
+| `getAuthInfo()` | `{ user: AuthUser }` | Throws if not authenticated. (Was `getAuthContext()`.) |
+| `isAuthenticated()` | `boolean` | True when a user is set. |
+| `setAuthContext({ user })` | `void` | Called by middleware; rarely called from app code. |
+| `clearAuthContext()` | `void` | Test/cleanup helper. |
+
+#### AuthUser augmentation
+
+`AuthUser` extends Better Auth's `BaseUser` with `name?` made optional (so apps using `firstName` / `lastName` aren't forced to declare a phantom `name`). Augment it via TypeScript module declaration to match whatever your Better Auth `additionalFields` / plugins return — typed access then flows through `requireUser()`, `getUser()`, and `getRole()`:
+
+```typescript
+// src/types/auth.d.ts
+declare module '@stratal/framework/context' {
+  interface AuthUser {
+    firstName: string
+    lastName: string
+    role: string
+  }
+}
+```
 
 ### AuthService
 
@@ -74,6 +116,71 @@ export class SessionService {
   }
 }
 ```
+
+## Rate-limit interop
+
+Import `RateLimiterModule` alongside `AuthModule`. `AuthModule.forRootAsync` auto-attaches `customStorage` (Stratal's store, namespaced under `ba-rl:`) and `customRules` (projected from every `RateLimiterRegistry.forPath(...)` entry), and sets `rateLimit.enabled: true`. `forPath` is added to `RateLimiterRegistry` as a `Macroable` macro on framework load — only available when `@stratal/framework/auth` is imported.
+
+```typescript
+import { Module } from 'stratal/module'
+import type { ModuleContext, OnInitialize } from 'stratal/module'
+import { Limit, RateLimiterModule, RATE_LIMITER_TOKENS, type RateLimiterRegistry } from 'stratal/rate-limiter'
+import { AuthModule } from '@stratal/framework/auth'
+import { DI_TOKENS } from 'stratal/di'
+
+@Module({})
+export class AuthRateLimitsModule implements OnInitialize {
+  onInitialize({ container }: ModuleContext): void {
+    const limiter = container.resolve<RateLimiterRegistry>(RATE_LIMITER_TOKENS.Registry)
+
+    limiter.forPath('/sign-in/email', () => Limit.perSeconds(10, 3))
+    limiter.forPath('/two-factor/*', async (req) =>
+      req.headers.get('x-tier') === 'pro' ? Limit.perSeconds(10, 10) : Limit.perSeconds(10, 3),
+    )
+    limiter.forPath('/forget-password', () => Limit.none())   // disable for path
+  }
+}
+
+@Module({
+  imports: [
+    RateLimiterModule.forRoot({ store: 'kv', binding: 'RATE_LIMITS' }),
+    AuthModule.forRootAsync({
+      inject: [DI_TOKENS.Database],
+      useFactory: (db) => ({ database: db, secret: '...', baseURL: '...' }),
+    }),
+    AuthRateLimitsModule,
+  ],
+})
+export class AppModule {}
+```
+
+`forPath` resolvers receive the native `Request` (not `RouterContext`).
+
+Path-rule rules:
+- `Limit.by(...)` ignored. Better-auth scopes per-IP+path.
+- Multiple `Limit`s reduce to the most restrictive (smallest `max / windowSeconds`).
+- `Limit.none()` → `false` (better-auth disable sentinel).
+- `.response(...)` ignored. Better-auth renders its own 429.
+- Register all `forPath` entries inside `OnInitialize`. `customRules` snapshots once at AuthService construction.
+
+Override per-path via the auth `useFactory` — user-supplied keys win:
+
+```typescript
+AuthModule.forRootAsync({
+  inject: [DI_TOKENS.Database],
+  useFactory: (db) => ({
+    database: db,
+    rateLimit: {
+      customRules: {
+        '/sign-in/email': false,                  // override projected entry
+        '/special': { window: 5, max: 1 },        // add a path not on the registry
+      },
+    },
+  }),
+})
+```
+
+Without `RateLimiterModule`, better-auth falls back to its own in-memory limiter.
 
 ## Access Control
 

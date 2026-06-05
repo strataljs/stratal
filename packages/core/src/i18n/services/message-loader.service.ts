@@ -1,15 +1,6 @@
-/**
- * Message Loader Service
- *
- * Singleton service that loads and caches all locale messages at startup.
- * Merges core messages with registry messages (from registerMessages() calls).
- * Lazily builds and caches CoreContext per locale on first access.
- */
-
-import type { CoreContext } from '@intlify/core-base'
-import { createCoreContext } from '@intlify/core-base'
-import { inject } from 'tsyringe'
-import { Transient } from '../../di/decorators'
+import IntlMessageFormat from 'intl-messageformat'
+import { inject } from '../../di'
+import { Singleton } from '../../di/decorators'
 import type { I18nModuleOptions } from '../i18n.options'
 import type { MessageKeyPrefix } from '../i18n.types'
 import { I18N_TOKENS } from '../i18n.tokens'
@@ -17,10 +8,12 @@ import { getLocales, getMessages } from '../messages'
 import { deepMerge } from '../utils/deep-merge'
 import type { MessageRegistry } from './message-registry'
 
-@Transient(I18N_TOKENS.MessageLoader)
+type CompiledMessages = Record<string, (params?: Record<string, unknown>) => string>
+
+@Singleton(I18N_TOKENS.MessageLoader)
 export class MessageLoaderService {
   private readonly cache: Map<string, Record<string, unknown>>
-  private readonly contextCache: Map<string, CoreContext>
+  private readonly compiledCache: Map<string, CompiledMessages>
   private readonly locales: string[]
   private readonly defaultLocale: string
 
@@ -31,21 +24,17 @@ export class MessageLoaderService {
   ) {
     this.defaultLocale = this.options?.defaultLocale ?? 'en'
     this.cache = new Map()
-    this.contextCache = new Map()
+    this.compiledCache = new Map()
 
-    // Core messages (always available)
     const coreMessages = getMessages()
     const coreLocales = getLocales()
 
-    // Registry messages (accumulated from all registerMessages() calls)
     const registryMessages = this.registry.getMergedMessages()
     const registryLocales = Object.keys(registryMessages)
 
-    // Union of all locales
     const allLocales = [...new Set([...coreLocales, ...registryLocales])]
     this.locales = allLocales
 
-    // Merge messages for each locale: core defaults + registry contributions
     for (const locale of allLocales) {
       const coreLocaleMessages = coreMessages[locale] ?? {}
       const registryLocaleMessages = registryMessages[locale] ?? {}
@@ -55,78 +44,29 @@ export class MessageLoaderService {
     }
   }
 
-  /**
-   * Get CoreContext for a locale (lazily built and cached on first access)
-   * Falls back to default locale if locale not found
-   */
-  getCoreContext(locale: string): CoreContext {
-    const cached = this.contextCache.get(locale)
-    if (cached) return cached
-
-    const effectiveLocale = this.cache.has(locale) ? locale : this.defaultLocale
-
-    const cachedEffective = this.contextCache.get(effectiveLocale)
-    if (cachedEffective) return cachedEffective
-
-    const messages = this.cache.get(effectiveLocale) ?? {}
-    const flattened = this.flattenMessages(messages)
-    const ctx = createCoreContext({
-      locale: effectiveLocale,
-      messages: { [effectiveLocale]: flattened },
-      missingWarn: false,
-      fallbackWarn: false,
-    })
-    this.contextCache.set(effectiveLocale, ctx)
-    return ctx
+  translate(locale: string, key: string, params?: Record<string, unknown>): string {
+    const compiled = this.getCompiledMessages(locale)
+    const fn = compiled[key]
+    if (!fn) return key
+    return fn(params)
   }
 
-  /**
-   * Get messages for a specific locale.
-   * Falls back to default locale if not found.
-   */
   getMessages(locale: string): Record<string, unknown> {
     return this.cache.get(locale) ?? this.cache.get(this.defaultLocale) ?? {}
   }
 
-  /** Get list of available locale codes */
   getAvailableLocales(): string[] {
     return this.locales
   }
 
-  /** Check if a locale is supported */
   isLocaleSupported(locale: string): boolean {
     return this.cache.has(locale)
   }
 
-  /** Get default locale */
   getDefaultLocale(): string {
     return this.defaultLocale
   }
 
-  /**
-   * Get flattened (dot-notation) messages for a locale, optionally filtered by namespace prefixes.
-   *
-   * Returns flat key-value pairs matching the format used by `@intlify/core-base`'s
-   * `createCoreContext`. Requires `registerMessageCompiler(compile)` to be called
-   * before `translate()` can resolve these flat keys.
-   *
-   * @param locale - Locale code (falls back to default locale if not found)
-   * @param options - Optional filter configuration
-   * @param options.only - Dot-notation prefixes to include (e.g., `['common', 'nav.sidebar']`)
-   * @returns Flattened messages as `{ 'key.path': 'translated value' }`
-   *
-   * @example
-   * ```typescript
-   * // All messages for the locale
-   * loader.getFilteredMessages('en')
-   *
-   * // Only 'common' and 'nav' namespaces
-   * loader.getFilteredMessages('en', { only: ['common', 'nav'] })
-   *
-   * // Deeply nested prefix
-   * loader.getFilteredMessages('en', { only: ['common.actions'] })
-   * ```
-   */
   getFilteredMessages(
     locale: string,
     options?: { only?: MessageKeyPrefix[] }
@@ -145,10 +85,25 @@ export class MessageLoaderService {
     return result
   }
 
-  /**
-   * Flatten nested messages to dot-notation.
-   * e.g. `{ a: { b: 'hello' } }` → `{ 'a.b': 'hello' }`
-   */
+  private getCompiledMessages(locale: string): CompiledMessages {
+    const effectiveLocale = this.cache.has(locale) ? locale : this.defaultLocale
+
+    const cached = this.compiledCache.get(effectiveLocale)
+    if (cached) return cached
+
+    const messages = this.cache.get(effectiveLocale) ?? {}
+    const flattened = this.flattenMessages(messages)
+
+    const compiled: CompiledMessages = {}
+    for (const [key, value] of Object.entries(flattened)) {
+      const msg = new IntlMessageFormat(value, effectiveLocale)
+      compiled[key] = (params) => String(msg.format(params as Record<string, string | number | boolean>))
+    }
+
+    this.compiledCache.set(effectiveLocale, compiled)
+    return compiled
+  }
+
   private flattenMessages(
     messages: Record<string, unknown>,
     prefix = ''
@@ -168,5 +123,4 @@ export class MessageLoaderService {
 
     return result
   }
-
 }

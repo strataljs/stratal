@@ -1,6 +1,6 @@
 import { OpenAPIHono } from '@hono/zod-openapi'
-import { injectable } from 'tsyringe'
 import { bench, describe } from 'vitest'
+import { Transient } from '../../di/decorators'
 import { z } from '../../i18n/validation'
 import type { LoggerService } from '../../logger'
 import type { ModuleRegistry } from '../../module/module-registry'
@@ -40,7 +40,7 @@ const mockLocalePathService = {
 // Fixture: controller with multiple OpenAPI routes
 
 @Controller('/api/bench/items')
-@injectable()
+@Transient()
 class ItemsController {
   @Route({
     summary: 'List items',
@@ -89,7 +89,7 @@ class ItemsController {
 }
 
 @Controller('/api/bench/simple')
-@injectable()
+@Transient()
 class SimpleController {
   @Route({
     summary: 'Simple endpoint',

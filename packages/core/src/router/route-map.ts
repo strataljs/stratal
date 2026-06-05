@@ -60,3 +60,46 @@ export interface SerializedRoute {
  * Serialized from `RouteRegistry.named()` on the server, consumed by `useRoute()` on the client.
  */
 export type SerializedRoutes = Record<string, SerializedRoute>
+
+/**
+ * Snapshot of the route bound to the current request — shared with the client
+ * so URL helpers can answer "which route am I on?", "what are its params?",
+ * and "which sticky defaults should I auto-apply?" without parsing the URL.
+ *
+ * Discriminated by `name`. When `StratalRouteMap` is augmented, narrowing on
+ * `name` strictly types `params` per route:
+ *
+ * ```ts
+ * if (route.name === 'users.show') {
+ *   route.params.id // typed as string
+ * }
+ * ```
+ */
+export type CurrentRoute =
+  | { [K in RouteName]: { name: K; params: NonNullable<RouteParams<K>>; defaults: Record<string, string> } }[RouteName]
+  | { name: null; params: Record<string, string>; defaults: Record<string, string> }
+
+/**
+ * All valid arguments to `current(name)` — strict route names plus dotted
+ * wildcard patterns like `'users.*'` derived from real route prefixes.
+ *
+ * When `StratalRouteMap` is augmented and contains `'admin.users.show'`,
+ * valid wildcards are `'admin.*'` and `'admin.users.*'`. When un-augmented,
+ * collapses to `string`. When augmented but no route name has a `.`
+ * separator, the wildcard alternative resolves to `never` and the union
+ * collapses to just `RouteName`.
+ */
+export type RouteMatcher = keyof StratalRouteMap extends never
+  ? string
+  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- RoutePrefixes<RouteName> can resolve to `never` when no route names contain a `.`; the union with `RouteName` is then equivalent to `RouteName` and is the intended fallback.
+  : RouteName | `${RoutePrefixes<RouteName>}.*`
+
+/**
+ * Recursively split a dotted name into all its prefix segments.
+ *
+ * @example
+ * RoutePrefixes<'admin.users.show'> // 'admin' | 'admin.users'
+ */
+export type RoutePrefixes<S extends string> = S extends `${infer Head}.${infer Rest}`
+  ? Head | `${Head}.${RoutePrefixes<Rest>}`
+  : never

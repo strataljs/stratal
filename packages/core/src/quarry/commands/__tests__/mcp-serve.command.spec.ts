@@ -1,8 +1,6 @@
-import 'reflect-metadata'
-
-import { injectable, container as tsyringeRootContainer } from 'tsyringe'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Container } from '../../../di/container'
+import { Transient } from '../../../di/decorators'
 import { DI_TOKENS } from '../../../di/tokens'
 import { OPENAPI_TOKENS } from '../../../openapi/openapi.tokens'
 import { setCommandInputs, setCommandQuarry } from '../../command-internals'
@@ -75,13 +73,13 @@ const mockOpenAPIService = {
   getSpec: () => testSpec,
 }
 
-const mockConfigService = {
-  getEffectiveConfig: () => ({ info: { title: 'Test API', version: '1.0.0' } }),
+const mockConfigStore = {
+  getBaseConfig: () => ({ info: { title: 'Test API', version: '1.0.0' } }),
 }
 
 const mockContainer = {
   resolve: (token: symbol) => {
-    if (token === OPENAPI_TOKENS.ConfigService) return mockConfigService
+    if (token === OPENAPI_TOKENS.ConfigStore) return mockConfigStore
     return undefined
   },
 }
@@ -102,12 +100,11 @@ beforeEach(() => {
   connectCalled = false
   stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
 
-  const tsyringe = tsyringeRootContainer.createChildContainer()
-  childContainer = new Container({ container: tsyringe })
+  childContainer = new Container()
   childContainer.registerValue(DI_TOKENS.Application, mockApp)
   childContainer.registerValue(OPENAPI_TOKENS.OpenAPIService, mockOpenAPIService)
 
-  injectable()(McpServeCommand)
+  Transient()(McpServeCommand)
   childContainer.register(McpServeCommand, McpServeCommand)
 })
 
