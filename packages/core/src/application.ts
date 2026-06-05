@@ -103,7 +103,18 @@ export class Application {
       return
     }
 
-    await runWithContainer(this._container, () => this.initializeInternal())
+    try {
+      await runWithContainer(this._container, () => this.initializeInternal())
+    } catch (error) {
+      // A failed boot can still hold live resources: every module whose
+      // onInitialize already ran (DB pools, timers) and every container-cached
+      // singleton. Tear them down here so callers never have to special-case
+      // a failed initialize() — shutdown() stays a no-op for it.
+      await this.teardown().catch((teardownError: unknown) => {
+        console.error('[stratal] Teardown after failed initialization also failed:', teardownError)
+      })
+      throw error
+    }
   }
 
   private async initializeInternal(): Promise<void> {
@@ -335,9 +346,16 @@ export class Application {
   }
 
   async shutdown(): Promise<void> {
+    // A failed initialize() has already torn itself down — only a fully
+    // initialized application owns resources here.
     if (!this.initialized) return
     this.initialized = false
 
+    await this.teardown()
+  }
+
+  /** Releases everything boot acquired: module resources, then the container. */
+  private async teardown(): Promise<void> {
     await this.moduleRegistry.shutdown()
 
     const logger = this._container.resolve<LoggerService>(LOGGER_TOKENS.LoggerService)
