@@ -1,4 +1,5 @@
 import { Transient } from '../../di/decorators'
+import { defineMetadata, getMetadata } from '../../di/metadata'
 import { type Constructor } from '../../types'
 import { ROUTE_METADATA_KEYS } from '../constants'
 import { type ControllerOptions } from '../types'
@@ -32,11 +33,11 @@ export function Controller(route: string, options?: ControllerOptions) {
     Transient()(target)
 
     // Store route metadata on the class
-    Reflect.defineMetadata(CONTROLLER_ROUTE_KEY, route, target)
+    defineMetadata(CONTROLLER_ROUTE_KEY, route, target)
 
     // Store options metadata if provided
     if (options) {
-      Reflect.defineMetadata(ROUTE_METADATA_KEYS.CONTROLLER_OPTIONS, options, target)
+      defineMetadata(ROUTE_METADATA_KEYS.CONTROLLER_OPTIONS, options, target)
     }
 
     return target
@@ -53,7 +54,7 @@ export function getControllerRoute(target: object): string | undefined {
   // Check if target is a class constructor (function) or an instance
   // If class, get metadata from it directly; if instance, get from constructor
   const metadataTarget = typeof target === 'function' ? target : (target as { constructor: object }).constructor
-  return Reflect.getMetadata(CONTROLLER_ROUTE_KEY, metadataTarget) as string | undefined
+  return getMetadata<string>(CONTROLLER_ROUTE_KEY, metadataTarget)
 }
 
 /**
@@ -64,7 +65,7 @@ export function getControllerRoute(target: object): string | undefined {
  */
 export function getControllerOptions(target: object): ControllerOptions | undefined {
   const metadataTarget = typeof target === 'function' ? target : (target as { constructor: object }).constructor
-  return Reflect.getMetadata(ROUTE_METADATA_KEYS.CONTROLLER_OPTIONS, metadataTarget) as ControllerOptions | undefined
+  return getMetadata<ControllerOptions>(ROUTE_METADATA_KEYS.CONTROLLER_OPTIONS, metadataTarget)
 }
 
 /**

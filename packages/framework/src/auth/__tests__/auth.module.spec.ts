@@ -1,9 +1,7 @@
 import type { BetterAuthOptions } from 'better-auth'
-import 'reflect-metadata'
 import { Container, CONTAINER_TOKEN } from 'stratal/di'
 import type { IRateLimiterStore } from 'stratal/rate-limiter'
 import { Limit, RATE_LIMITER_TOKENS, RateLimiterRegistry } from 'stratal/rate-limiter'
-import { container as rootContainer } from 'tsyringe'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthModule } from '../auth.module'
 import { AUTH_OPTIONS } from '../auth.tokens'
@@ -41,9 +39,7 @@ describe('AuthModule.forRootAsync — rate-limit auto-wiring', () => {
   let container: Container
 
   beforeEach(() => {
-    container = new Container({
-      container: rootContainer.createChildContainer(),
-    })
+    container = new Container()
   })
 
   afterEach(async () => {
@@ -68,7 +64,7 @@ describe('AuthModule.forRootAsync — rate-limit auto-wiring', () => {
 
   it('attaches customStorage and customRules when RateLimiterModule marker is present', () => {
     const store = new FakeStore()
-    const registry = new RateLimiterRegistry(store)
+    const registry = new RateLimiterRegistry(container)
     registry.forPath('/sign-in/email', () => Limit.perSeconds(10, 3))
 
     container.registerValue(RATE_LIMITER_TOKENS.ModuleMarker, { imported: true })
@@ -94,7 +90,7 @@ describe('AuthModule.forRootAsync — rate-limit auto-wiring', () => {
   it('respects user-supplied customStorage (does not overwrite)', () => {
     const userStorage = { get: vi.fn(), set: vi.fn() }
     const store = new FakeStore()
-    const registry = new RateLimiterRegistry(store)
+    const registry = new RateLimiterRegistry(container)
 
     container.registerValue(RATE_LIMITER_TOKENS.ModuleMarker, { imported: true })
     container.registerValue(RATE_LIMITER_TOKENS.Store, store)
@@ -114,7 +110,7 @@ describe('AuthModule.forRootAsync — rate-limit auto-wiring', () => {
 
   it('lets user-supplied customRules entries override projected entries on collision', () => {
     const store = new FakeStore()
-    const registry = new RateLimiterRegistry(store)
+    const registry = new RateLimiterRegistry(container)
     registry.forPath('/sign-in/email', () => Limit.perSeconds(10, 3))
 
     container.registerValue(RATE_LIMITER_TOKENS.ModuleMarker, { imported: true })

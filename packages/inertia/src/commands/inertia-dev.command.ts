@@ -5,13 +5,24 @@ import { Command } from 'stratal/quarry'
 import { writeTempViteConfig } from '../vite/create-vite-config'
 
 export class InertiaDevCommand extends Command {
-  static command = 'inertia:dev {--port= : Dev server port} {--host : Expose to network} {--persist-to= : Shared persist directory for @cloudflare/vite-plugin (relative to cwd; the plugin appends /v3). Use to share R2/KV/cache emulator state across multiple workers in dev.}'
+  static command = 'inertia:dev {--port= : Dev server port} {--host : Expose to network} {--inspector-port= : Worker debugger inspector port (number, or "false" to disable). Set a distinct value per worker to avoid EADDRINUSE when running multiple Inertia workers concurrently.} {--persist-to= : Shared persist directory for @cloudflare/vite-plugin (relative to cwd; the plugin appends /v3). Use to share R2/KV/cache emulator state across multiple workers in dev.}'
   static description = 'Start Inertia.js Vite development server'
 
   async handle(): Promise<number | undefined> {
     const port = this.number('port')
     const host = this.boolean('host')
     const persistTo = this.string('persist-to')
+    const inspectorPortRaw = this.string('inspector-port')
+    let inspectorPort: number | false | undefined
+    if (inspectorPortRaw === 'false') {
+      inspectorPort = false
+    } else if (inspectorPortRaw !== undefined) {
+      inspectorPort = Number(inspectorPortRaw)
+      if (!Number.isInteger(inspectorPort) || inspectorPort < 0 || inspectorPort > 65535) {
+        this.fail(`Invalid --inspector-port "${inspectorPortRaw}". Expected an integer between 0 and 65535, or "false" to disable.`)
+        return 1
+      }
+    }
     const cwd = process.cwd()
 
     const entryPath = 'src/inertia/app.tsx'
@@ -24,6 +35,7 @@ export class InertiaDevCommand extends Command {
       cwd,
       server: { port, host },
       persistTo,
+      inspectorPort,
     })
 
     this.info('Starting Vite dev server...')

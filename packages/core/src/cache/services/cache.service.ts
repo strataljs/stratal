@@ -1,24 +1,27 @@
-import { inject } from 'tsyringe'
-import { Transient } from '../../di/decorators'
+import { inject } from '../../di'
+import { Singleton } from '../../di/decorators'
 import { DI_TOKENS } from '../../di/tokens'
 import { type StratalEnv } from '../../env'
 import { LOGGER_TOKENS, type LoggerService } from '../../logger'
 import { CACHE_TOKENS } from '../cache.tokens'
-import {
-  CacheDeleteError,
-  CacheGetError,
-  CacheListError,
-  CachePutError,
-} from '../errors'
+import { CacheError } from '../cache.error'
 
 /**
  * Cache Service
  *
  * Type-safe wrapper around Cloudflare KV namespaces for caching operations.
  *
+ * Reads are eventually consistent — KV may serve an edge-cached value for up to
+ * ~60s after a write. When you need isolate-local read-after-write coherence
+ * (e.g. set-once markers like queue idempotency keys), opt into
+ * {@link TieredCacheService}, which layers an isolate-local L1 over this
+ * service. Do **not** use the L1 tier for read-modify-write counters that need
+ * cross-edge freshness (e.g. rate limiting) — plain KV is the correct primitive
+ * there.
+ *
  * **Features:**
  * - Mirrors all KVNamespace methods with full type safety
- * - Supports multiple KV bindings via `withBinding()`
+ * - Supports multiple KV bindings via `withBinding()` / `binding(name)`
  * - Automatic error handling with logging
  * - Security: Raw errors are logged, not exposed to users
  *
@@ -29,10 +32,9 @@ import {
  *
  *   constructor(
  *     @inject(CACHE_TOKENS.CacheService) private readonly cache: CacheService,
- *     @inject(DI_TOKENS.CloudflareEnv) private readonly env: Env
  *   ) {
  *     // Initialize specialized caches in constructor
- *     this.uploadsCache = this.cache.withBinding(this.env.UPLOADS_CACHE)
+ *     this.uploadsCache = this.cache.binding('UPLOADS_CACHE')
  *   }
  *
  *   async cacheData(key: string, value: string) {
@@ -44,7 +46,7 @@ import {
  *
  * @see https://developers.cloudflare.com/kv/api/
  */
-@Transient(CACHE_TOKENS.CacheService)
+@Singleton(CACHE_TOKENS.CacheService)
 export class CacheService {
   private kv: KVNamespace
 
@@ -55,47 +57,37 @@ export class CacheService {
     this.kv = env.CACHE
   }
 
-  /**
-   * Set the KV namespace binding
-   *
-   * Used internally by `withBinding()` to configure different KV instances.
-   *
-   * @param kv - KV namespace to use
-   */
-  setKV(kv: KVNamespace): void {
-    this.kv = kv
+  /** The KV namespace this instance is bound to. */
+  get namespace(): KVNamespace {
+    return this.kv
   }
 
   /**
-   * Create a new CacheService instance with a different KV binding
-   *
-   * **Pattern:** Returns a new instance (immutable)
-   *
-   * **Best Practice:** Initialize specialized caches as class properties in constructor
-   *
-   * @example
-   * ```typescript
-   * class MyService {
-   *   private readonly uploadsCache: CacheService
-   *   private readonly systemCache: CacheService
-   *
-   *   constructor(
-   *     @inject(CACHE_TOKENS.CacheService) private readonly cache: CacheService,
-   *     @inject(DI_TOKENS.CloudflareEnv) private readonly env: Env
-   *   ) {
-   *     this.uploadsCache = this.cache.withBinding(this.env.UPLOADS_CACHE)
-   *     this.systemCache = this.cache.withBinding(this.env.SYSTEM_CONFIG_KV)
-   *   }
-   * }
-   * ```
+   * Create a new CacheService instance bound to a different KV namespace.
    *
    * @param kv - KV namespace to use
-   * @returns New CacheService instance with the specified binding
+   * @returns A new CacheService for the given binding
    */
   withBinding(kv: KVNamespace): CacheService {
     const instance = new CacheService(this.env, this.logger)
-    instance.setKV(kv)
+    instance.kv = kv
     return instance
+  }
+
+  /**
+   * Create a new CacheService instance bound to a KV namespace by its binding
+   * name, resolved from the environment.
+   *
+   * @param name - KV namespace binding name (e.g. `'UPLOADS_CACHE'`)
+   * @returns A new CacheService for the given binding
+   * @throws {CacheError} If no binding with that name exists in the environment
+   */
+  binding(name: string): CacheService {
+    const kv = (this.env as unknown as Record<string, unknown>)[name] as KVNamespace | undefined
+    if (!kv) {
+      throw new CacheError(`KV binding "${name}" was not found in the environment`)
+    }
+    return this.withBinding(kv)
   }
 
   // ==================== GET METHODS ====================
@@ -106,7 +98,7 @@ export class CacheService {
    * @param key - Cache key
    * @param typeOrOptions - Type string or options object (defaults to 'text')
    * @returns Value in specified type, or null if not found
-   * @throws {CacheGetError} If operation fails
+   * @throws {CacheError} If operation fails
    */
   async get(key: string, typeOrOptions?: 'text' | KVNamespaceGetOptions<'text'>): Promise<string | null>
   async get<ExpectedValue = unknown>(key: string, typeOrOptions: 'json' | KVNamespaceGetOptions<'json'>): Promise<ExpectedValue | null>
@@ -131,7 +123,7 @@ export class CacheService {
       return await this.kv.get(key)
     } catch (error) {
       this.logger.error('Cache get operation failed', { key, error })
-      throw new CacheGetError(key)
+      throw new CacheError(`Failed to get cache key "${key}"`)
     }
   }
 
@@ -143,7 +135,7 @@ export class CacheService {
    * @param key - Cache key
    * @param typeOrOptions - Type string or options object (defaults to 'text')
    * @returns Object with value, metadata, and cacheStatus
-   * @throws {CacheGetError} If operation fails
+   * @throws {CacheError} If operation fails
    */
   async getWithMetadata<Metadata = unknown>(
     key: string,
@@ -185,7 +177,7 @@ export class CacheService {
       return await this.kv.getWithMetadata(key)
     } catch (error) {
       this.logger.error('Cache getWithMetadata operation failed', { key, error })
-      throw new CacheGetError(key)
+      throw new CacheError(`Failed to get cache key "${key}"`)
     }
   }
 
@@ -197,7 +189,7 @@ export class CacheService {
    * @param key - Cache key
    * @param value - Value to store (string, ArrayBuffer, ArrayBufferView, or ReadableStream)
    * @param options - Put options (expiration, expirationTtl, metadata)
-   * @throws {CachePutError} If operation fails
+   * @throws {CacheError} If operation fails
    *
    * @example
    * ```typescript
@@ -220,7 +212,7 @@ export class CacheService {
       await this.kv.put(key, value as string, options)
     } catch (error) {
       this.logger.error('Cache put operation failed', { key, error })
-      throw new CachePutError(key)
+      throw new CacheError(`Failed to store cache key "${key}"`)
     }
   }
 
@@ -230,14 +222,14 @@ export class CacheService {
    * Delete a value from cache
    *
    * @param key - Cache key to delete
-   * @throws {CacheDeleteError} If operation fails
+   * @throws {CacheError} If operation fails
    */
   async delete(key: string): Promise<void> {
     try {
       await this.kv.delete(key)
     } catch (error) {
       this.logger.error('Cache delete operation failed', { key, error })
-      throw new CacheDeleteError(key)
+      throw new CacheError(`Failed to delete cache key "${key}"`)
     }
   }
 
@@ -249,7 +241,7 @@ export class CacheService {
    *
    * @param options - List options (limit, prefix, cursor)
    * @returns List result with keys and pagination info
-   * @throws {CacheListError} If operation fails
+   * @throws {CacheError} If operation fails
    *
    * @example
    * ```typescript
@@ -273,7 +265,7 @@ export class CacheService {
       return await this.kv.list<Metadata>(options)
     } catch (error) {
       this.logger.error('Cache list operation failed', { options, error })
-      throw new CacheListError()
+      throw new CacheError('Failed to list cache keys')
     }
   }
 }

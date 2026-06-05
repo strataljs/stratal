@@ -1,7 +1,9 @@
+import { createMock } from '@stratal/testing/mocks'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Container } from '../../di/container'
 import type { Next } from '../../router/middleware.interface'
 import type { RouterContext } from '../../router/router-context'
-import { RateLimiterNotDefinedError, TooManyRequestsError } from '../errors'
+import { RateLimiterError, TooManyRequestsError } from '../errors'
 import { Limit } from '../limit'
 import { RateLimiterRegistry } from '../rate-limiter-registry'
 import { InMemoryRateLimiterStore } from '../stores/memory-store'
@@ -25,7 +27,9 @@ describe('RateLimiterRegistry', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
     store = new InMemoryRateLimiterStore()
-    registry = new RateLimiterRegistry(store)
+    const container = createMock<Container>()
+    container.resolve.mockReturnValue(store)
+    registry = new RateLimiterRegistry(container as unknown as Container)
   })
 
   afterEach(() => {
@@ -69,9 +73,9 @@ describe('RateLimiterRegistry', () => {
   })
 
   describe('handle()', () => {
-    it('throws RateLimiterNotDefinedError for an unknown name', async () => {
+    it('throws RateLimiterError for an unknown name', async () => {
       const next: Next = vi.fn((): Promise<void> => Promise.resolve())
-      await expect(registry.handle('missing', makeCtx(), next)).rejects.toBeInstanceOf(RateLimiterNotDefinedError)
+      await expect(registry.handle('missing', makeCtx(), next)).rejects.toBeInstanceOf(RateLimiterError)
       expect(next).not.toHaveBeenCalled()
     })
 

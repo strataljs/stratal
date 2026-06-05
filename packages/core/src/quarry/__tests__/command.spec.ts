@@ -1,5 +1,3 @@
-import 'reflect-metadata'
-
 import { describe, expect, it } from 'vitest'
 import { bold, cyan, dim, green, red, yellow } from '../colors'
 import { Command } from '../command'

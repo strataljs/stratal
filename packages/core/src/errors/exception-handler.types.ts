@@ -1,6 +1,7 @@
+import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { ApplicationError } from './application-error'
 import type { ErrorResponse } from './error-response'
-import type { ExceptionContext } from './exception-context'
+import type { ExceptionContext, HttpExceptionContext } from './exception-context'
 
 /**
  * Log severity levels for exception reporting.
@@ -66,3 +67,29 @@ export interface Reportable {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- any[] required for matching arbitrary constructor signatures
 export type ApplicationErrorConstructor<T extends ApplicationError = ApplicationError> = new (...args: any[]) => T
+
+/**
+ * Callback invoked to render the HTML error page for HTTP requests that
+ * accept `text/html`. Registered via {@link ExceptionHandler.errorPage}.
+ *
+ * Runs after content negotiation, after translation, after status resolution —
+ * everything is computed and handed to the callback. Return `undefined` to
+ * defer to the next registered `errorPage` callback, or — if none match —
+ * to the built-in minimal HTML page.
+ *
+ * Callbacks are walked in registration order (first non-undefined wins).
+ * Since the consumer's `register()` runs before module `onException()` hooks,
+ * user overrides take precedence over module-supplied defaults.
+ *
+ * @param errorResponse - The translated, env-stripped error response payload
+ * @param status - The resolved HTTP status code
+ * @param context - The HTTP exception context (with full RouterContext access)
+ * @param error - The original ApplicationError (escape hatch for metadata, etc.)
+ * @returns A Response, or undefined to defer to the next callback / default
+ */
+export type ErrorPageCallback = (
+  errorResponse: ErrorResponse,
+  status: ContentfulStatusCode,
+  context: HttpExceptionContext,
+  error: ApplicationError,
+) => Response | Promise<Response | undefined> | undefined

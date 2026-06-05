@@ -1,3 +1,4 @@
+import { defineMetadata, getMetadata } from '../../di/metadata'
 import { ROUTE_METADATA_KEYS } from '../../router/constants'
 
 const KEY = ROUTE_METADATA_KEYS.RATE_LIMIT
@@ -31,11 +32,11 @@ const KEY = ROUTE_METADATA_KEYS.RATE_LIMIT
 export function RateLimit(name: string): ClassDecorator & MethodDecorator {
   return (target: object, propertyKey?: string | symbol) => {
     if (propertyKey === undefined) {
-      const existing = (Reflect.getOwnMetadata(KEY, target) as string[] | undefined) ?? []
-      Reflect.defineMetadata(KEY, [...existing, name], target)
+      const existing = getMetadata<string[]>(KEY, target) ?? []
+      defineMetadata(KEY, [...existing, name], target)
     } else {
-      const existing = (Reflect.getOwnMetadata(KEY, target, propertyKey as string) as string[] | undefined) ?? []
-      Reflect.defineMetadata(KEY, [...existing, name], target, propertyKey as string)
+      const existing = getMetadata<string[]>(KEY, target, propertyKey as string) ?? []
+      defineMetadata(KEY, [...existing, name], target, propertyKey as string)
     }
   }
 }
@@ -48,8 +49,8 @@ export function RateLimit(name: string): ClassDecorator & MethodDecorator {
  *   For method metadata, pass `Controller.prototype` and the method name.
  */
 export function getRateLimits(target: object, propertyKey?: string): string[] {
-  const meta: unknown = propertyKey === undefined
-    ? Reflect.getMetadata(KEY, target)
-    : Reflect.getMetadata(KEY, target, propertyKey)
-  return Array.isArray(meta) ? (meta as string[]) : []
+  const meta = propertyKey === undefined
+    ? getMetadata<string[]>(KEY, target)
+    : getMetadata<string[]>(KEY, target, propertyKey)
+  return meta ?? []
 }

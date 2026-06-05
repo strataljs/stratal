@@ -1,3 +1,4 @@
+export * from './cache.error'
 export * from './cache.module'
 export * from './cache.tokens'
 export * from './errors'

@@ -46,20 +46,28 @@ export function toRoutingOpenAPIPath(path: string): string {
  * Scoring: static = 0, `:param{constraint}` = 5, `:param` = 10, wildcard `{.+}` / `{.*}` = 100.
  *
  * Packed as: score * 10000 - segmentCount (negative segment count so more segments = lower key = higher priority)
+ *
+ * Locale variants score against the path with the leading `/:locale{…}` segment
+ * stripped — the variant's score therefore matches its primary, but its larger
+ * segment count makes it sort just before the primary. Without this, a primary
+ * catch-all (e.g. `/:slug{.+}`) gobbles locale-prefixed URLs because Hono picks
+ * whichever matching route was registered first.
  */
-function getPathSpecificityKey(path: string): number {
+function getPathSpecificityKey(route: { path: string; isLocaleVariant?: boolean }): number {
+  const segmentCount = countSegments(route.path)
+  const scoringPath = route.isLocaleVariant
+    ? (route.path.replace(/^\/:locale\{[^}]*\}/, '') || '/')
+    : route.path
+
   let score = 0
-  let segmentCount = 0
   let i = 0
+  while (i < scoringPath.length) {
+    if (scoringPath.charCodeAt(i) === 47 /* '/' */) { i++; continue }
 
-  while (i < path.length) {
-    if (path.charCodeAt(i) === 47 /* '/' */) { i++; continue }
+    let end = scoringPath.indexOf('/', i)
+    if (end === -1) end = scoringPath.length
 
-    let end = path.indexOf('/', i)
-    if (end === -1) end = path.length
-
-    segmentCount++
-    const segment = path.substring(i, end)
+    const segment = scoringPath.substring(i, end)
 
     if (segment.includes('{.+}') || segment.includes('{.*}')) {
       score += 100
@@ -71,6 +79,19 @@ function getPathSpecificityKey(path: string): number {
   }
 
   return score * 10000 - segmentCount
+}
+
+function countSegments(path: string): number {
+  let count = 0
+  let i = 0
+  while (i < path.length) {
+    if (path.charCodeAt(i) === 47 /* '/' */) { i++; continue }
+    let end = path.indexOf('/', i)
+    if (end === -1) end = path.length
+    count++
+    i = end
+  }
+  return count
 }
 
 /**
@@ -99,13 +120,15 @@ export function getPathSpecificityScore(path: string): number {
  *
  * 1. Static paths before parameterized before wildcards
  * 2. More segments = more specific (tie-breaker)
- * 3. Primary paths before locale-prefixed variants
+ * 3. Locale-prefixed variants before their primary (so a locale-prefixed
+ *    request matches the variant first; a primary catch-all would otherwise
+ *    swallow the locale prefix into its param)
  */
-export function sortRoutesBySpecificity<T extends { path: string }>(routes: T[]): T[] {
+export function sortRoutesBySpecificity<T extends { path: string; isLocaleVariant?: boolean }>(routes: T[]): T[] {
   // Pre-compute packed specificity keys (avoids object allocation per route)
   const keys = new Map<T, number>()
   for (const route of routes) {
-    keys.set(route, getPathSpecificityKey(route.path))
+    keys.set(route, getPathSpecificityKey(route))
   }
 
   const copy = routes.slice()

@@ -1,16 +1,18 @@
 import type { BaseUser } from '@better-auth/core/db'
-import { Transient, DI_TOKENS } from 'stratal/di'
+import { Request, DI_TOKENS } from 'stratal/di'
+import { AuthError } from 'stratal/errors'
 import {
-  ContextNotInitializedError,
   UserNotAuthenticatedError
 } from './errors'
 
 /**
  * Authenticated user shape stored in {@link AuthContext}.
  *
- * Inherits Better Auth's base user fields, with `name` made optional so apps
- * that store `firstName`/`lastName` (or other name conventions) instead of
- * `name` aren't forced to declare a phantom value.
+ * Inherits Better Auth's base user fields. Apps whose schema stores
+ * `firstName`/`lastName` instead of a `name` column should expose a `name`
+ * via a ZenStack result extension (see
+ * https://zenstack.dev/docs/orm/plugins/extending-orm-client#adding-fields-to-query-results)
+ * so reads return a populated `name` for free.
  *
  * Augment via TypeScript module declaration to add app-specific fields. Match
  * the augmentation to whatever your Better Auth `user.additionalFields` /
@@ -20,22 +22,19 @@ import {
  * ```ts
  * declare module '@stratal/framework/context' {
  *   interface AuthUser {
- *     firstName: string
- *     lastName: string
  *     role: string
+ *     locale: string
  *   }
  * }
  * ```
  */
-export interface AuthUser extends Omit<BaseUser, 'name'> {
-  name?: string
-}
+export interface AuthUser extends BaseUser {}
 
 export interface AuthInfo {
   user: AuthUser
 }
 
-@Transient(DI_TOKENS.AuthContext)
+@Request(DI_TOKENS.AuthContext)
 export class AuthContext {
   protected user?: AuthUser
 
@@ -86,7 +85,7 @@ export class AuthContext {
    */
   getAuthInfo(): AuthInfo {
     if (!this.user) {
-      throw new ContextNotInitializedError('Authentication')
+      throw new AuthError('Auth context has not been initialized')
     }
     return { user: this.user }
   }

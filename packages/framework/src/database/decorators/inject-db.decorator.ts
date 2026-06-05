@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe'
+import { inject } from 'stratal/di'
 import type { ConnectionName } from '../types'
 import { connectionSymbol } from '../database.tokens'
 

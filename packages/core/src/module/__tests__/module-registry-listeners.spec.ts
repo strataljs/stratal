@@ -1,26 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
-import { container as tsyringeRootContainer, injectable } from 'tsyringe'
-import type { DependencyContainer } from 'tsyringe'
 import { Container } from '../../di/container'
-import { Scope } from '../../di/types'
+import { Transient } from '../../di/decorators'
 import { isListener, Listener } from '../../events'
 import type { LoggerService } from '../../logger/services/logger.service'
 import { Module } from '../module.decorator'
 import { ModuleRegistry } from '../module-registry'
 
 describe('ModuleRegistry - Listener Detection', () => {
-  let childContainer: DependencyContainer
   let container: Container
   let mockLogger: DeepMocked<LoggerService>
   let registry: ModuleRegistry
 
   beforeEach(() => {
     vi.clearAllMocks()
-    childContainer = tsyringeRootContainer.createChildContainer()
-    container = new Container({
-      container: childContainer,
-    })
+    container = new Container()
     mockLogger = createMock<LoggerService>()
     registry = new ModuleRegistry(container, mockLogger as unknown as LoggerService)
   })
@@ -50,7 +44,7 @@ describe('ModuleRegistry - Listener Detection', () => {
 
     @Module({
       providers: [
-        { provide: LISTENER_TOKEN, useClass: MyListener, scope: Scope.Singleton },
+        { provide: LISTENER_TOKEN, useClass: MyListener },
       ],
     })
     class TestModule {}
@@ -61,7 +55,7 @@ describe('ModuleRegistry - Listener Detection', () => {
   })
 
   it('should not collect non-listener providers', () => {
-    @injectable()
+    @Transient()
     class RegularService {
       getValue() { return 'value' }
     }
@@ -89,7 +83,7 @@ describe('ModuleRegistry - Listener Detection', () => {
     expect(registry.getAllListeners()).toHaveLength(0)
   })
 
-  it('should re-register listener as singleton', () => {
+  it('should register listener with its declared (transient) scope, not as a singleton', () => {
     @Listener()
     class MyListener {
       handle() { return 'handled' }
@@ -100,9 +94,10 @@ describe('ModuleRegistry - Listener Detection', () => {
 
     registry.register(TestModule)
 
-    // Resolving twice should return the same instance
+    // `@Listener()` applies `@Transient()`; the registry honors it (no forced
+    // singleton) so listeners resolve fresh per event from the request scope.
     const instance1 = container.resolve(MyListener)
     const instance2 = container.resolve(MyListener)
-    expect(instance1).toBe(instance2)
+    expect(instance1).not.toBe(instance2)
   })
 })

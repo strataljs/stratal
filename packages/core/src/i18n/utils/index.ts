@@ -1,1 +1,1 @@
-export { setupI18nCompiler } from './setup';
+export { deepMerge } from './deep-merge'

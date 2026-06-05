@@ -3,10 +3,10 @@ import type { QueueMessage } from './queue-consumer'
 /**
  * Message input for queue dispatch (without auto-generated fields)
  *
- * When dispatching a message, the id and timestamp are auto-generated.
+ * When dispatching a message, the id is auto-generated.
  * You only need to provide the type, payload, and optional metadata.
  */
-export type DispatchMessage<T = unknown> = Omit<QueueMessage<T>, 'id' | 'timestamp'>
+export type DispatchMessage<T = unknown> = Omit<QueueMessage<T>, 'id'>
 
 /**
  * Queue sender interface for dispatching messages to a queue.
@@ -38,10 +38,10 @@ export interface IQueueSender {
    *
    * Auto-adds:
    * - `id`: Unique message identifier (UUID)
-   * - `timestamp`: Current timestamp in milliseconds
    * - `metadata.locale`: Current locale from i18n context
+   * - `metadata.idempotencyKey`: Deterministic SHA-256 hash of type + payload (if not provided)
    *
-   * @param message - Message to dispatch (without id/timestamp)
+   * @param message - Message to dispatch (without id)
    */
   dispatch<T>(message: DispatchMessage<T>): Promise<void>
 }

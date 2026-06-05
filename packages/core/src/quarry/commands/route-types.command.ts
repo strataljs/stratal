@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import type { RouteRegistry, RegisteredRoute } from '../../router/route-registry'
 import { ROUTER_TOKENS } from '../../router/router.tokens'
 import type { LocalePathService } from '../../router/services/locale-path.service'

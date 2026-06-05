@@ -141,6 +141,14 @@ export interface IEventRegistry {
     handler: EventHandler<E>,
     options?: EventOptions
   ): void
+
+  /**
+   * Whether any registered handler matches the event, using the same
+   * pattern matching as `emit()` (exact, model wildcard, operation
+   * wildcard, phase wildcard). Lets emitters skip expensive payload
+   * construction when nobody is listening.
+   */
+  hasListeners(event: EventName): boolean
 }
 
 // ============================================================================

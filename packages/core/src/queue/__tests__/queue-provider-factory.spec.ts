@@ -1,27 +1,33 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import { type StratalEnv } from '../../env'
-import { ConsumerRegistry } from '../consumer-registry'
-import { QueueProviderNotSupportedError } from '../errors'
-import { CloudflareQueueProvider, SyncQueueProvider } from '../providers'
-import type { QueueModuleOptions } from '../queue.module'
-import { QueueProviderFactory } from '../services/queue-provider-factory'
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { Application } from '../../application';
+import { Container } from '../../di/container';
+import { type StratalEnv } from '../../env';
+import { ConsumerRegistry } from '../consumer-registry';
+import { CloudflareQueueProvider, SyncQueueProvider } from '../providers';
+import { QueueError } from '../queue.error';
+import type { QueueModuleOptions } from '../queue.module';
+import { QueueProviderFactory } from '../services/queue-provider-factory';
 
 describe('QueueProviderFactory', () => {
   let factory: QueueProviderFactory
   let mockEnv: StratalEnv
   let registry: ConsumerRegistry
+  let container: Container
+  let app: Application
 
   beforeEach(() => {
     mockEnv = {
       NOTIFICATIONS_QUEUE: {},
     } as unknown as StratalEnv
     registry = new ConsumerRegistry()
+    container = new Container()
+    app = { ensureScopedHandlers: () => Promise.resolve() } as unknown as Application
   })
 
   describe('create', () => {
     it('should return CloudflareQueueProvider for cloudflare config', () => {
-      const options: QueueModuleOptions = { provider: 'cloudflare' }
-      factory = new QueueProviderFactory(mockEnv, registry, options)
+      const options: QueueModuleOptions = { provider: 'cloudflare', store: { binding: 'CACHE' } }
+      factory = new QueueProviderFactory(mockEnv, registry, container, app, options)
 
       const provider = factory.create()
 
@@ -29,24 +35,24 @@ describe('QueueProviderFactory', () => {
     })
 
     it('should return SyncQueueProvider for sync config', () => {
-      const options: QueueModuleOptions = { provider: 'sync' }
-      factory = new QueueProviderFactory(mockEnv, registry, options)
+      const options: QueueModuleOptions = { provider: 'sync', store: { binding: 'CACHE' } }
+      factory = new QueueProviderFactory(mockEnv, registry, container, app, options)
 
       const provider = factory.create()
 
       expect(provider).toBeInstanceOf(SyncQueueProvider)
     })
 
-    it('should throw QueueProviderNotSupportedError for unknown provider', () => {
+    it('should throw QueueError for unknown provider', () => {
       const options = { provider: 'unknown' } as unknown as QueueModuleOptions
-      factory = new QueueProviderFactory(mockEnv, registry, options)
+      factory = new QueueProviderFactory(mockEnv, registry, container, app, options)
 
-      expect(() => factory.create()).toThrow(QueueProviderNotSupportedError)
+      expect(() => factory.create()).toThrow(QueueError)
     })
 
     it('should create new provider instance each time', () => {
-      const options: QueueModuleOptions = { provider: 'sync' }
-      factory = new QueueProviderFactory(mockEnv, registry, options)
+      const options: QueueModuleOptions = { provider: 'sync', store: { binding: 'CACHE' } }
+      factory = new QueueProviderFactory(mockEnv, registry, container, app, options)
 
       const provider1 = factory.create()
       const provider2 = factory.create()
@@ -58,8 +64,8 @@ describe('QueueProviderFactory', () => {
     })
 
     it('should pass correct dependencies to CloudflareQueueProvider', () => {
-      const options: QueueModuleOptions = { provider: 'cloudflare' }
-      factory = new QueueProviderFactory(mockEnv, registry, options)
+      const options: QueueModuleOptions = { provider: 'cloudflare', store: { binding: 'CACHE' } }
+      factory = new QueueProviderFactory(mockEnv, registry, container, app, options)
 
       const provider = factory.create()
 
@@ -68,8 +74,8 @@ describe('QueueProviderFactory', () => {
     })
 
     it('should pass correct dependencies to SyncQueueProvider', () => {
-      const options: QueueModuleOptions = { provider: 'sync' }
-      factory = new QueueProviderFactory(mockEnv, registry, options)
+      const options: QueueModuleOptions = { provider: 'sync', store: { binding: 'CACHE' } }
+      factory = new QueueProviderFactory(mockEnv, registry, container, app, options)
 
       const provider = factory.create()
 
@@ -78,7 +84,7 @@ describe('QueueProviderFactory', () => {
     })
 
     it('should default to cloudflare provider when no options provided', () => {
-      factory = new QueueProviderFactory(mockEnv, registry)
+      factory = new QueueProviderFactory(mockEnv, registry, container, app)
 
       const provider = factory.create()
 

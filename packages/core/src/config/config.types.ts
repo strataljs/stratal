@@ -1,4 +1,4 @@
-import type { z } from '../i18n/validation'
+import type { z } from '../i18n/validation/zod'
 
 export class ConfigValidationError extends Error {
   constructor(

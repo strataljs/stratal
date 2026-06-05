@@ -1,7 +1,6 @@
 import { createMock } from '@stratal/testing/mocks'
 import type { Context } from 'hono'
 import type { WSContext } from 'hono/ws'
-import 'reflect-metadata'
 import { describe, expect, it, vi } from 'vitest'
 import { VERSION_NEUTRAL } from '../../router/constants'
 import { Controller, getControllerOptions, getControllerRoute } from '../../router/decorators/controller.decorator'
@@ -15,8 +14,7 @@ import {
   getWsOnErrorMethod,
   getWsOnMessageMethod,
 } from '../decorators/ws-event.decorator'
-import { WebSocketBodyNotAvailableError } from '../errors/websocket-body-not-available.error'
-import { WebSocketDuplicateEventHandlerError } from '../errors/websocket-duplicate-event-handler.error'
+import { WebSocketError } from '../websocket.error'
 import { GatewayContext } from '../gateway-context'
 
 describe('WebSocket Support', () => {
@@ -156,7 +154,7 @@ describe('WebSocket Support', () => {
           @OnMessage()
           secondHandler() { /* noop */ }
         }
-      }).toThrow(WebSocketDuplicateEventHandlerError)
+      }).toThrow(WebSocketError)
     })
   })
 
@@ -240,10 +238,50 @@ describe('WebSocket Support', () => {
       expect(mockHonoContext.req.query).toHaveBeenCalledWith()
     })
 
-    it('body() should throw WebSocketBodyNotAvailableError', () => {
+    it('body() should throw WebSocketError', () => {
       const ctx = new GatewayContext(mockHonoContext, mockWsContext)
 
-      expect(() => ctx.body()).toThrow(WebSocketBodyNotAvailableError)
+      expect(() => ctx.body()).toThrow(WebSocketError)
+    })
+
+    describe('trySend()', () => {
+      const makeContext = (loggerWarn: ReturnType<typeof vi.fn>) =>
+        createMock<Context<RouterEnv>>({
+          get: vi.fn((key: string) => {
+            if (key === 'requestContainer') return { resolve: vi.fn(() => ({ warn: loggerWarn })) }
+            return undefined
+          }) as unknown as Context<RouterEnv>['get'],
+        })
+
+      it('should send and return true when the socket is OPEN', () => {
+        const loggerWarn = vi.fn()
+        const ws = createMock<WSContext>({ send: vi.fn(), readyState: 1 })
+        const ctx = new GatewayContext(makeContext(loggerWarn), ws)
+
+        expect(ctx.trySend('hello')).toBe(true)
+        expect(ws.send).toHaveBeenCalledWith('hello')
+        expect(loggerWarn).not.toHaveBeenCalled()
+      })
+
+      it('should skip, log a warning, and return false when the socket is CLOSED', () => {
+        const loggerWarn = vi.fn()
+        const ws = createMock<WSContext>({ send: vi.fn(), readyState: 3 })
+        const ctx = new GatewayContext(makeContext(loggerWarn), ws)
+
+        expect(ctx.trySend('hello')).toBe(false)
+        expect(ws.send).not.toHaveBeenCalled()
+        expect(loggerWarn).toHaveBeenCalledWith('Skipped WebSocket send on non-open socket', { readyState: 3 })
+      })
+
+      it('should skip when the socket is CLOSING', () => {
+        const loggerWarn = vi.fn()
+        const ws = createMock<WSContext>({ send: vi.fn(), readyState: 2 })
+        const ctx = new GatewayContext(makeContext(loggerWarn), ws)
+
+        expect(ctx.trySend('hello')).toBe(false)
+        expect(ws.send).not.toHaveBeenCalled()
+        expect(loggerWarn).toHaveBeenCalledWith('Skipped WebSocket send on non-open socket', { readyState: 2 })
+      })
     })
   })
 })

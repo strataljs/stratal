@@ -8,7 +8,6 @@ Customize how your app reports and renders errors. Extend `ExceptionHandler` and
 
 ```typescript
 import { ExceptionHandler } from 'stratal/errors'
-import type { ExceptionContext } from 'stratal/errors'
 import { Transient } from 'stratal/di'
 
 @Transient()
@@ -16,8 +15,7 @@ export class AppExceptionHandler extends ExceptionHandler {
   register(): void {
     // Report specific errors to external services
     this.reportable(PaymentError, (error, context) => {
-      // Fire-and-forget via waitUntil — runs after response is sent
-      sentry.captureException(error, { extra: error.metadata })
+      sentry.captureException(error)
     })
 
     // Custom rendering for specific errors
@@ -26,10 +24,10 @@ export class AppExceptionHandler extends ExceptionHandler {
     })
 
     // Suppress logging for expected errors
-    this.dontReport([NotFoundError, ValidationError])
+    this.dontReport([RouteNotFoundError])
 
     // Override log severity
-    this.level(RateLimitError, 'warn')
+    this.level(RecordNotFoundError, 'warn')
 
     // Add global context to all error logs
     this.context(() => ({
@@ -39,8 +37,18 @@ export class AppExceptionHandler extends ExceptionHandler {
 
     // Post-process all error responses
     this.respond((response, error, context) => {
-      response.headers.set('X-Error-Code', String(error.code))
+      response.headers.set('X-Request-Id', context.type === 'http' ? context.ctx.c.req.header('x-request-id') ?? '' : '')
       return response
+    })
+
+    // Render a custom HTML page per status (browser/Inertia first-loads)
+    this.errorPage((errorResponse, status, context) => {
+      if (status === 503) {
+        return new Response(myMaintenanceHtml(), {
+          status,
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        })
+      }
     })
   }
 }
@@ -60,24 +68,30 @@ export default new Stratal({
 ### Configuration Methods
 
 - `reportable(ErrorClass, callback)` — Custom reporting. Returns `Reportable` — chain `.stop()` to prevent default logging.
-- `renderable(ErrorClass, callback)` — Custom rendering. Callback is async, returns `Response | ErrorResponse | undefined`. Return `undefined` to fall through to default.
+- `renderable(ErrorClass, callback)` — Custom rendering. Return `Response | ErrorResponse | undefined`. Return `undefined` to fall through to default.
+- `errorPage(callback)` — Render the HTML error page for HTTP requests that accept `text/html`. Callback: `(errorResponse, status, context, error) => Response | Promise<Response | undefined> | undefined`. Walked in registration order (first non-undefined wins). Return `undefined` to defer.
 - `dontReport([...classes])` — Suppress logging for these error types.
 - `level(ErrorClass, severity)` — Override log level (`'debug' | 'info' | 'warn' | 'error'`).
 - `context(callback)` — Add key-value pairs to all error log entries.
 - `respond(callback)` — Transform the final Response before sending.
 - `resolve(token)` — Access DI container inside callbacks.
 
+### Default Behavior
+
+- **Severity**: 5xx → `'error'`, 4xx → `'warn'`.
+- **Production 5xx**: response message is replaced with a generic status text (e.g., "Internal Server Error"). Actual message is logged but not sent to the client.
+- **4xx or development**: response includes the actual `error.message`.
+- **Stack traces**: only included in development responses.
+
 ### ExceptionContext
 
 Discriminated union — check `context.type` to determine the error source:
 
 ```typescript
-this.renderable(AppError, (error, context) => {
+this.renderable(PaymentError, (error, context) => {
   if (context.type === 'http') {
-    // context.ctx is RouterContext
     return context.ctx.json({ error: error.message }, 500)
   }
-  // context.type === 'queue' | 'cron' | 'cli'
 })
 ```
 
@@ -90,80 +104,82 @@ this.renderable(AppError, (error, context) => {
 
 ### Content Negotiation
 
-The default handler automatically negotiates response format:
-- **HTML accepted + production** — Renders a minimal branded HTML error page
-- **HTML accepted + development** — Re-throws for runtime error UI
-- **Otherwise** — Returns JSON `ErrorResponse`
+- **HTML accepted** — Walks registered `errorPage` callbacks (first non-undefined wins); falls back to `renderDefaultHtml`.
+- **Otherwise** — Returns JSON `ErrorResponse` (`{ message, timestamp, stack? }`).
 
-Override with `renderable()` or override `wantsHtml(context)` in your subclass.
+Customize HTML: use `errorPage(cb)` for dynamic rendering, override `renderDefaultHtml()` for a branded static fallback, override `wantsHtml()` to change content negotiation.
 
 ### Reportable with Stop
-
-Chain `.stop()` to prevent the default logger from also reporting:
 
 ```typescript
 this.reportable(ExternalApiError, (error) => {
   externalLogger.log(error)
-}).stop()  // Only external logger reports, not Stratal's logger
+}).stop()
 ```
 
 ## ApplicationError
 
-Base class for all structured errors in Stratal. Extend it for custom domain errors.
+Base class for all errors. Non-abstract — can be instantiated directly or extended.
 
 ```typescript
 import { ApplicationError } from 'stratal/errors'
-import type { ErrorCode, MessageKeys } from 'stratal/errors'
 
-export class NoteNotFoundError extends ApplicationError {
-  constructor(noteId: string) {
-    super(
-      'notes.errors.notFound',  // i18n key (used as message)
-      5000 as ErrorCode,                         // Custom error code
-      { noteId },                                // Optional metadata
-    )
+class ApplicationError extends Error {
+  public readonly timestamp: string
+  constructor(message?: string, cause?: unknown)
+}
+```
+
+Defaults to 500 in the exception handler. Plain English messages, no i18n keys. Use `cause` to chain errors — the default reporter logs the full cause chain.
+
+### Custom App Errors (500)
+
+Extend `ApplicationError` for app-specific 500 errors:
+
+```typescript
+import { ApplicationError } from 'stratal/errors'
+
+export class PaymentProcessingError extends ApplicationError {
+  constructor(reason: string, cause?: unknown) {
+    super(`Payment processing failed: ${reason}`, cause)
   }
 }
 ```
 
-### ApplicationError Shape
+## HttpException
+
+For errors with a specific HTTP status code. Base for all non-500 error classes.
 
 ```typescript
-abstract class ApplicationError extends Error {
-  public readonly code: ErrorCode
-  public readonly timestamp: string           // ISO string
-  public readonly metadata?: Record<string, unknown>
+import { HttpException, abort } from 'stratal/errors'
 
-  constructor(i18nKey: MessageKeys, code: ErrorCode, metadata?: Record<string, unknown>)
-  toErrorResponse(env: 'development' | 'production', translatedMessage?: string): ErrorResponse
-}
+throw new HttpException(404, 'Resource not found')
+throw new HttpException(422, 'Invalid input')
+
+// abort() helper — throws HttpException, typed as never
+abort(403, 'Access denied')
 ```
 
-`Error.message` holds the i18n key. The `toErrorResponse()` method returns a structured JSON response (stack trace only included in development mode).
+### Custom Non-500 Error Classes
 
-## Error Code Ranges
-
-Built-in error code ranges (your custom errors should use 5000-8999):
-
-| Range | Category |
-|-------|----------|
-| 1000-1999 | Validation |
-| 2000-2999 | Database |
-| 3000-3099 | Authentication |
-| 3100-3199 | Authorization |
-| 4000-4199 | Resource |
-| 5000-8999 | **Available for app-specific errors** |
-| 9000-9999 | System/Infrastructure |
-
-Access built-in codes via `ERROR_CODES`:
+Extend `HttpException` with a baked-in status. No constructor args needed:
 
 ```typescript
-import { ERROR_CODES } from 'stratal/errors'
+import { HttpException } from 'stratal/errors'
 
-ERROR_CODES.DATABASE.RECORD_NOT_FOUND   // 2001
-ERROR_CODES.AUTH.INVALID_CREDENTIALS    // 3000
-ERROR_CODES.VALIDATION.GENERIC          // 1000
-ERROR_CODES.RESOURCE.TOO_MANY_REQUESTS  // 4290 → HTTP 429 (see references/rate-limiter.md)
+export class NoteNotFoundError extends HttpException {
+  constructor() {
+    super(404, 'Note not found')
+  }
+}
+
+// Usage
+throw new NoteNotFoundError()
+
+// Consumer instanceof
+this.renderable(NoteNotFoundError, (error, context) => {
+  return context.ctx.json({ error: 'Note not found' }, 404)
+})
 ```
 
 ## I18nModule
@@ -232,7 +248,7 @@ export class TenancyModule {}
 
 Access with flat dot-notation: `i18n.t('tenancy.errors.tenantNotFound')`.
 
-**Reserved top-level namespaces** (owned by core — do not reuse as a module namespace): `errors`, `common`, `emails`, `validation`, `zodI18n`. You may still register additional locale translations for these (e.g., providing `fr` strings for `errors.notFound`), but you may not augment their type shapes.
+**Reserved top-level namespaces** (owned by core — do not reuse as a module namespace): `common`, `emails`, `validation`, `zodI18n`. You may still register additional locale translations for these, but you may not augment their type shapes.
 
 The module auto-registers language detection middleware on all routes. Locale is detected based on the configured `detection` strategy.
 
@@ -276,29 +292,42 @@ export class MyService {
 
 Default locale messages are at `stratal/i18n/messages/en`.
 
-## withI18n() for Zod Validation
+## withZodI18n() for Zod Validation
 
-Use `withI18n()` to attach i18n message keys to Zod validators:
+Use `withZodI18n()` to attach i18n message keys to Zod validators:
 
 ```typescript
-import { z, withI18n } from 'stratal/validation'
+import { z, withZodI18n } from 'stratal/validation'
 
 export const createNoteSchema = z.object({
   title: z.string()
-    .min(1, withI18n('notes.validation.title.required'))
-    .max(255, withI18n('notes.validation.title.max', { max: 255 })),
+    .min(1, withZodI18n('notes.validation.title.required'))
+    .max(255, withZodI18n('notes.validation.title.max', { max: 255 })),
   content: z.string().optional(),
 }).openapi('CreateNote')
 ```
 
-`withI18n(key, params?)` returns `{ error: () => string }` — a Zod error config that resolves the i18n message at validation time using `AsyncLocalStorage` to read the current locale context.
+`withZodI18n(key, params?)` returns `{ error: () => string }` — a Zod error config that resolves the i18n message at validation time using the current request's locale context.
+
+## withI18n() — General Translation Helper
+
+Use `withI18n()` to translate a message key anywhere in request-scoped code — services, middleware, error handlers, etc. Not tied to Zod.
+
+```typescript
+import { withI18n } from 'stratal/i18n'
+
+const message = withI18n('errors.notFound')
+const greeting = withI18n('common.welcome', { name: 'Alice' })
+```
+
+Returns the translated string directly. Uses the current request's locale. Returns the key itself when called outside a request context (e.g., during startup).
 
 ## cuid2() — Use Instead of z.cuid2()
 
 Zod 4.3.6's `z.cuid2()` regex is `/^[0-9a-z]+$/`, which accepts any non-empty lowercase-alphanumeric string (including 2-letter locale codes like `'sw'`). Always use Stratal's `cuid2()` for real cuid2 validation:
 
 ```ts
-import { z, cuid2, withI18n } from 'stratal/validation'
+import { z, cuid2, withZodI18n } from 'stratal/validation'
 
 // Default — 24-32 lowercase alphanumeric chars, must start with a letter
 const tenantSchema = z.object({ tenantId: cuid2() })
@@ -309,9 +338,9 @@ cuid2({ pattern: /^[a-z][0-9a-z]{23}$/ })
 // Plain-string error
 cuid2({ error: 'Invalid tenant ID' })
 
-// Translatable error — pass a withI18n() result.
+// Translatable error — pass a withZodI18n() result.
 // NEVER pass an i18n key string directly to `error`.
-cuid2(withI18n('tenants.errors.invalidId'))
+cuid2(withZodI18n('tenants.errors.invalidId'))
 
 // Compose with anything Zod string accepts
 cuid2().describe('Tenant ID')
@@ -323,7 +352,7 @@ cuid2().describe('Tenant ID')
 
 `MessageKeys` is derived from two sources:
 
-1. **System keys** — inferred from core's built-in `errors.*`, `common.*`, `emails.*`, `validation.*`, `zodI18n.*` messages.
+1. **System keys** — inferred from core's built-in `common.*`, `emails.*`, `validation.*`, `zodI18n.*` messages.
 2. **App keys** — derived from `AppMessageNamespaces`, a keyed registry each module augments with its own distinct namespace.
 
 Augment `AppMessageNamespaces` from any module or app file (commonly colocated with the messages themselves):
@@ -442,3 +471,18 @@ I18nModule.forRoot({
 
 - `RouterContext.setLocale(locale)` / `RouterContext.getLocale()` for runtime locale changes
 - Falls back to `defaultLocale` if the detected locale is not in `locales`
+
+### CLI Introspection
+
+Audit and explore translations via Quarry CLI:
+
+```bash
+npx quarry i18n:check              # Audit missing/extra keys (exit code 1 = issues found)
+npx quarry i18n:stats              # Coverage % per locale
+npx quarry i18n:list --locale=fr --values  # Show translated values for a locale
+npx quarry i18n:search email       # Search keys/values
+npx quarry i18n:namespaces         # Key counts by namespace
+npx quarry i18n:duplicates         # Find duplicate values
+```
+
+See `references/quarry-cli.md` for all flags and options.

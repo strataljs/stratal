@@ -5,6 +5,20 @@ export interface TempViteConfigOptions {
   server?: { port?: number; host?: boolean }
   outDir?: string
   persistTo?: string
+  /**
+   * Worker debugger inspector port passed to `@cloudflare/vite-plugin`.
+   * Pass a distinct number per worker to avoid the `EADDRINUSE` race that
+   * happens when several Inertia workers boot concurrently and all probe the
+   * default port (9229). Pass `false` to disable the inspector entirely.
+   * Left `undefined` preserves the plugin's default auto-pick behaviour.
+   */
+  inspectorPort?: number | false
+  /**
+   * Path (relative to `cwd`) to the Vite client manifest the worker bundle
+   * should inline. Defaults to `dist/client/.vite/manifest.json`, matching
+   * what `quarry inertia:build` emits in phase 1.
+   */
+  clientManifestPath?: string
 }
 
 export function writeTempViteConfig(options: TempViteConfigOptions): string {
@@ -22,8 +36,17 @@ export function writeTempViteConfig(options: TempViteConfigOptions): string {
     ? `outDir: '${options.outDir}',`
     : ''
 
-  const cloudflareArgs = options.persistTo
-    ? `{ persistState: { path: ${JSON.stringify(options.persistTo)} } }`
+  const cloudflareOptions: string[] = []
+  if (options.persistTo) {
+    cloudflareOptions.push(`persistState: { path: ${JSON.stringify(options.persistTo)} }`)
+  }
+  if (options.inspectorPort !== undefined) {
+    cloudflareOptions.push(`inspectorPort: ${options.inspectorPort === false ? 'false' : options.inspectorPort}`)
+  }
+  const cloudflareArgs = cloudflareOptions.length ? `{ ${cloudflareOptions.join(', ')} }` : ''
+
+  const stratalArgs = options.clientManifestPath
+    ? `{ clientManifestPath: ${JSON.stringify(options.clientManifestPath)} }`
     : ''
 
   const content = `
@@ -39,12 +62,12 @@ try {
 } catch {}
 
 const baseConfig = {
+  publicDir: 'src/inertia/public',
   plugins: [
     cloudflare(${cloudflareArgs}),
     ...(inertiaPlugin ? [inertiaPlugin] : []),
-    ...stratalInertia(),
+    ...stratalInertia(${stratalArgs}),
   ],
-  publicDir: '${join(options.cwd, 'src', 'inertia', 'public').replace(/\\/g, '/')}',
   build: {
     ${outDirConfig}
   },

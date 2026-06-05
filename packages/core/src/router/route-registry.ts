@@ -1,7 +1,7 @@
-import { inject } from 'tsyringe'
-import { Transient } from '../di/decorators'
+import { inject } from '../di'
+import { Singleton } from '../di/decorators'
 import { type VERSION_NEUTRAL } from './constants'
-import { DuplicateRouteNameError } from './errors'
+import { RouterError } from './router.error'
 import { ROUTER_TOKENS } from './router.tokens'
 import type { LocalePathService } from './services/locale-path.service'
 import type { VersioningService } from './services/versioning.service'
@@ -66,7 +66,7 @@ export type RouteRegistrationInput = Omit<RegisteredRoute, 'paramNames' | 'domai
  *
  * Registered as a singleton in the container.
  */
-@Transient()
+@Singleton()
 export class RouteRegistry {
   private readonly routes: RegisteredRoute[] = []
   private readonly namedRoutes = new Map<string, RegisteredRoute>()
@@ -83,7 +83,7 @@ export class RouteRegistry {
    * Named routes must have unique names.
    *
    * @returns Array of expanded RegisteredRoute entries (primary + locale variants)
-   * @throws DuplicateRouteNameError if a named route with the same name already exists
+   * @throws RouterError if a named route with the same name already exists
    */
   register(input: RouteRegistrationInput): RegisteredRoute[] {
     const domainParamNames = input.domainParamNames ?? (input.domain ? extractDomainParamNames(input.domain) : [])
@@ -125,10 +125,8 @@ export class RouteRegistry {
         if (route.name) {
           if (this.namedRoutes.has(route.name)) {
             const existing = this.namedRoutes.get(route.name)!
-            throw new DuplicateRouteNameError(
-              route.name,
-              `${existing.controller}.${existing.action}`,
-              `${route.controller}.${route.action}`,
+            throw new RouterError(
+              `Duplicate route name "${route.name}": already registered by ${existing.controller}.${existing.action}, cannot register ${route.controller}.${route.action}`,
             )
           }
           this.namedRoutes.set(route.name, route)
@@ -181,7 +179,7 @@ export class RouteRegistry {
     return cache
   }
 
-  /** Get all routes sorted by specificity (static > param > wildcard, primary before locale) */
+  /** Get all routes sorted by specificity (static > param > wildcard, locale variant before its primary) */
   all(): RegisteredRoute[] {
     this._sortedCache ??= sortRoutesBySpecificity(this.routes);
     return this._sortedCache

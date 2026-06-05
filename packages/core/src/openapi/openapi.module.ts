@@ -38,11 +38,10 @@
  * ```
  */
 
-import { Scope } from '../di'
 import { Module } from '../module'
 import type { AsyncModuleOptions, DynamicModule } from '../module/types'
 import { OPENAPI_TOKENS } from './openapi.tokens'
-import { OpenAPIConfigService, OpenAPIService } from './services'
+import { OpenAPIConfigService, OpenAPIConfigStore, OpenAPIService } from './services'
 import type { OpenAPIModuleOptions } from './types'
 
 /** Default options when none provided */
@@ -56,10 +55,12 @@ const DEFAULT_OPTIONS: OpenAPIModuleOptions = {
 
 @Module({
   providers: [
+    // Static base config (singleton — resolvable outside a request scope)
+    { provide: OPENAPI_TOKENS.ConfigStore, useClass: OpenAPIConfigStore },
     // OpenAPI config service (request-scoped, supports runtime overrides)
-    { provide: OPENAPI_TOKENS.ConfigService, useClass: OpenAPIConfigService, scope: Scope.Request },
+    { provide: OPENAPI_TOKENS.ConfigService, useClass: OpenAPIConfigService },
     // OpenAPI service (singleton — serves spec and docs endpoints)
-    { provide: OPENAPI_TOKENS.OpenAPIService, useClass: OpenAPIService, scope: Scope.Singleton },
+    { provide: OPENAPI_TOKENS.OpenAPIService, useClass: OpenAPIService },
   ],
 })
 export class OpenAPIModule {

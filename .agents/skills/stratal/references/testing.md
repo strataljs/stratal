@@ -6,20 +6,87 @@
 
 ```typescript
 // vitest.config.ts
-import { stratalTest } from '@stratal/testing/vitest-plugin'
+import { fixNobleHashesCjs, fixPgCjs, stratalTest } from '@stratal/testing/vitest-plugin'
 
 export default defineConfig({
-  plugins: [stratalTest()],
+  plugins: [fixPgCjs(), fixNobleHashesCjs(), stratalTest()],
 })
 ```
 
 `stratalTest()` wraps `@cloudflare/vitest-pool-workers` with Stratal defaults (tslib alias, ZenStack mocks, SSR externals).
 
+Add `fixPgCjs()` and `fixNobleHashesCjs()` when the project uses `@stratal/framework` (ZenStack). Both are no-ops if the relevant packages aren't installed.
+
+### Parallel tests with an isolated database per file
+
+By default tests share one database and run serially (`isolation: 'shared'`). Pass `database: { isolation: 'database' }` to give **each test file its own database**, cloned from a migrated template and dropped on teardown — this enables file parallelism automatically.
+
+```typescript
+// vitest.config.ts
+import { fixNobleHashesCjs, fixPgCjs, stratalTest } from '@stratal/testing/vitest-plugin'
+import { defineConfig } from 'vitest/config'
+
+const DATABASE_URL = process.env.DATABASE_URL
+if (!DATABASE_URL) throw new Error('DATABASE_URL is required to run e2e tests')
+
+export default defineConfig({
+  plugins: [fixPgCjs(), fixNobleHashesCjs()],
+  test: {
+    projects: [
+      {
+        plugins: [
+          stratalTest({
+            wrangler: { configPath: './test/wrangler.jsonc' },
+            miniflare: { hyperdrives: { DB: DATABASE_URL } },
+            database: { isolation: 'database' }, // 'shared' (default) | 'database'
+          }),
+        ],
+        test: {
+          name: 'e2e',
+          include: ['test/e2e/**/*.spec.ts'],
+          globalSetup: ['./test/global-setup.ts'],
+        },
+      },
+    ],
+  },
+})
+```
+
+Wire `globalSetup` to build the template (database mode) or migrate the base database (shared mode) with `createTestDatabaseGlobalSetup` from `@stratal/testing/database`. It reads `DATABASE_URL` and calls your `migrate` callback against the connection string to migrate:
+
+```typescript
+// test/global-setup.ts
+import { execFileSync } from 'node:child_process'
+import { resolve } from 'node:path'
+import { createTestDatabaseGlobalSetup } from '@stratal/testing/database'
+
+const schemaPath = resolve(import.meta.dirname, 'schema.zmodel')
+const zenstackBin = resolve(import.meta.dirname, '../../../node_modules/.bin/zenstack')
+
+export default createTestDatabaseGlobalSetup({
+  isolation: 'database',
+  schema: schemaPath, // required in database mode — file or directory
+  migrate: (connectionString) => {
+    execFileSync(zenstackBin, ['db', 'push', '--force-reset', `--schema=${schemaPath}`, '--accept-data-loss'], {
+      stdio: 'inherit',
+      env: { ...process.env, DATABASE_URL: connectionString },
+    })
+  },
+})
+```
+
+Notes:
+- Run tests with `npx dotenv -- vitest run` so `.env`'s `DATABASE_URL` reaches `vitest.config.ts` and `globalSetup`.
+- **`schema` is required in `database` mode** (a file or directory path, or a list). Its contents plus the `migrate` routine are hashed into a fingerprint stored as the template database's COMMENT. The template is **reused across runs while the fingerprint is unchanged** and rebuilt + re-migrated only when it changes — so `migrate` runs only on the first run after a schema edit (or against a fresh database). Reuse is purely fingerprint-driven; there is no force/skip flag. For a ZenStack **multi-file schema, pass the root `.zmodel`** — its `import` graph is followed, so editing any imported file forces a rebuild (a directory path hashes every schema file in its tree).
+- The isolated binding defaults to `DB`. For a differently-named Hyperdrive binding, set `database: { isolation: 'database', binding: 'MY_DB' }` (typed to your declared Hyperdrive bindings).
+- Requires Postgres and the `pg` package (an optional peer of `@stratal/testing`). If isolation is enabled without `pg` installed, setup throws an actionable "install pg" error.
+- **Concurrency-safe.** The fingerprint check + template rebuild runs under a Postgres advisory lock, so multiple concurrent setups (CI sharding, several e2e projects) don't clobber each other. The setup-time stale-database sweep only drops per-file databases with **no active connections**, so a sibling process's live databases survive. Teardown is intentionally non-destructive (it neither sweeps nor drops the template); the next run's sweep reclaims any leak.
+- The base database name must be short enough that the per-file suffix (`<base>_t_<12-char token>`) and the template name (`<base>_template`) fit within Postgres' 63-character identifier limit. Setup throws a clear error if it doesn't, rather than silently truncating and colliding names.
+
 ### Setup File
 
 ```typescript
 // vitest.setup.ts
-import 'reflect-metadata'  // Required for tsyringe
 ```
 
 ### Test File Convention
@@ -234,6 +301,8 @@ await module.assertDatabaseHas('note', { title: 'Test' })
 await module.assertDatabaseMissing('note', { title: 'Deleted' })
 ```
 
+With `database` isolation (see Setup), each test **file** gets its own database cloned from the migrated template, and it is dropped automatically on `module.close()`. `truncateDb()` still resets rows between tests **within** a file.
+
 ## MockFetch (MSW)
 
 For mocking external HTTP requests using Mock Service Worker:
@@ -377,7 +446,6 @@ Add the side-effect import to your test setup file:
 
 ```typescript
 // vitest.setup.ts
-import 'reflect-metadata'
 import '@stratal/inertia/testing'  // Augments TestResponse with Inertia assertions
 ```
 

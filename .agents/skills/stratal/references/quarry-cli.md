@@ -1,15 +1,57 @@
 # Quarry CLI
 
-Quarry is Stratal's built-in CLI. It imports your app's default `Stratal` export from `src/index.ts` — no separate entry file needed.
+Quarry is Stratal's built-in CLI. It imports your app's default `Stratal` export from `src/quarry.ts`.
 
 ## Running Commands
 
 ```bash
 npx quarry <command> [arguments] [--options]
 
-# Custom entry path (if not src/index.ts)
+# Custom entry path (if not src/quarry.ts)
 npx quarry ./custom/entry.ts <command>
 ```
+
+### CLI Entry File
+
+Create `src/quarry.ts` using `QuarryRunner`:
+
+```typescript
+import { QuarryRunner } from 'stratal/quarry/runner'
+import { AppModule } from './app.module'
+
+export default QuarryRunner.run({
+  imports: [AppModule],
+  providers: [/* seeders */],
+})
+```
+
+For Inertia apps, add `InertiaQuarryModule`:
+
+```typescript
+import { QuarryRunner } from 'stratal/quarry/runner'
+import { InertiaQuarryModule } from '@stratal/inertia/quarry'
+import { AppModule } from './app.module'
+
+export default QuarryRunner.run({
+  imports: [AppModule, InertiaQuarryModule],
+})
+```
+
+## Wrangler Environment
+
+Use `--env <name>` / `-e <name>` to target a `wrangler.jsonc` environment (`env.staging`, `env.production`, …). Loads that environment's bindings and vars.
+
+```bash
+npx quarry --env staging route:list
+npx quarry -e staging db:seed
+npx quarry --env=production route:list
+npx quarry ./custom/entry.ts --env staging route:list
+```
+
+- Reserved at the CLI level — commands cannot define their own `--env` option.
+- Position-tolerant: works before or after the entry path.
+- Omit the flag to use the top-level (default) wrangler config.
+- Unknown env name: wrangler prints the available keys and exits.
 
 ## Built-in Commands
 
@@ -22,11 +64,20 @@ npx quarry ./custom/entry.ts <command>
 | `event:list` | List all registered event listeners |
 | `schedule:list` | List all cron job schedules |
 | `queue:list` | List all queue consumers |
+| `queue:failed {--queue=} {--limit=}` | List failed queue jobs |
+| `queue:retry {id?} {--all} {--queue=}` | Retry failed queue jobs |
+| `queue:purge {id?} {--all} {--queue=}` | Delete failed queue jobs without retrying |
 | `db:seed {name*} {--all}` | Run a specific seeder/seeders or all seeders |
 | `db:seed:list` | List all available seeders |
 | `api` | Serve the OpenAPI spec |
 | `mcp:serve` | Start an MCP stdio server exposing routes as tools |
 | `mcp:tools` | List routes that would be exposed as MCP tools |
+| `i18n:check {--locale=} {--prefix=}` | Audit translations: missing/extra keys vs `en`. Exit code 1 on issues (CI-friendly) |
+| `i18n:stats {--prefix=}` | Show translation coverage statistics per locale |
+| `i18n:list {--locale=} {--prefix=} {--values}` | List all message keys with Y/N coverage per locale |
+| `i18n:search {query} {--locale=} {--keys-only}` | Search message keys or values by substring |
+| `i18n:namespaces {--depth=} {--locale=}` | List namespaces with key counts per locale |
+| `i18n:duplicates {--locale=} {--prefix=}` | Find keys sharing identical translation values |
 
 ## Debugging Your App
 
@@ -50,6 +101,16 @@ npx quarry schedule:list
 
 # See what queue consumers are registered
 npx quarry queue:list
+
+# List failed queue jobs
+npx quarry queue:failed
+npx quarry queue:failed --queue=NOTIFICATIONS_QUEUE
+
+# Retry all failed jobs
+npx quarry queue:retry --all
+
+# Purge all failed jobs
+npx quarry queue:purge --all
 
 # List all available seeders
 npx quarry db:seed:list
@@ -103,6 +164,47 @@ npx quarry mcp:tools --tag=Notes --path=/api/v1
 ```
 
 Outputs a table with method, path, and description for each tool.
+
+## I18n Introspection
+
+Inspect translation coverage, find missing keys, and audit locales. Base locale is always `en`.
+
+```bash
+# Audit all non-en locales for missing/extra keys (returns exit code 1 if issues found)
+npx quarry i18n:check
+
+# Check only French translations
+npx quarry i18n:check --locale=fr
+
+# Check only the 'common' namespace
+npx quarry i18n:check --prefix=common
+
+# Coverage dashboard: keys, translated, missing, extra, % per locale
+npx quarry i18n:stats
+
+# List all keys with Y/N per locale
+npx quarry i18n:list
+
+# Show translated values for a specific locale
+npx quarry i18n:list --locale=fr --values
+
+# Search for keys or values matching a substring
+npx quarry i18n:search email
+npx quarry i18n:search obligatoire --locale=fr
+
+# Only search key names (skip value matching)
+npx quarry i18n:search validation --keys-only
+
+# Show namespaces with key counts
+npx quarry i18n:namespaces
+
+# Drill into sub-namespaces
+npx quarry i18n:namespaces --depth=2
+
+# Find duplicate values (copy-paste detection)
+npx quarry i18n:duplicates
+npx quarry i18n:duplicates --locale=fr
+```
 
 ## Creating Custom Commands
 

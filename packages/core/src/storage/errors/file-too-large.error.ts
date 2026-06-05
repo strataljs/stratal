@@ -1,11 +1,7 @@
-import { ERROR_CODES } from '../../errors'
-import { ApplicationError } from '../../errors'
+import { HttpException } from '../../errors'
 
-export class FileTooLargeError extends ApplicationError {
-  constructor(size: number, maxSize: number) {
-    super('errors.storage.fileTooLarge', ERROR_CODES.VALIDATION.INVALID_FORMAT, {
-      size,
-      maxSize,
-    })
+export class FileTooLargeError extends HttpException {
+  constructor(public readonly size?: number, public readonly maxSize?: number) {
+    super(413, 'File too large')
   }
 }

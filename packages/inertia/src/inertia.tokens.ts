@@ -4,4 +4,6 @@ export const INERTIA_TOKENS = {
   TemplateService: Symbol.for('stratal:inertia:template'),
   ManifestService: Symbol.for('stratal:inertia:manifest'),
   SsrRenderer: Symbol.for('stratal:inertia:ssr-renderer'),
+  HreflangService: Symbol.for('stratal:inertia:hreflang'),
+  SeoService: Symbol.for('stratal:inertia:seo'),
 } as const

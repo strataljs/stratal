@@ -1,23 +1,26 @@
 import type { Application } from '../application'
 import type { Container } from '../di/container'
+import { inject, Singleton } from '../di/decorators'
+import { DI_TOKENS } from '../di/tokens'
 import type { Constructor } from '../types'
-import { SeederNameCollisionError, SeederNotRegisteredError } from './errors'
+import { SeederError } from './seeder.error'
 import { type Seeder, SEEDER_INTERNALS } from './seeder'
 
 export const SEEDER_TOKENS = {
   SeederRegistry: Symbol.for('stratal:seeders:registry'),
 } as const
 
+@Singleton(SEEDER_TOKENS.SeederRegistry)
 export class SeederRegistry {
   private seeders = new Set<Constructor<Seeder>>()
   private nameIndex = new Map<string, Constructor<Seeder>>()
 
-  constructor(private app: Application) { }
+  constructor(@inject(DI_TOKENS.Application) private app: Application) { }
 
   register(SeederClass: Constructor<Seeder>): void {
     const existing = this.nameIndex.get(SeederClass.name)
     if (existing && existing !== SeederClass) {
-      throw new SeederNameCollisionError(SeederClass.name)
+      throw new SeederError(`Seeder name collision: "${SeederClass.name}" is already registered`)
     }
     this.seeders.add(SeederClass)
     this.nameIndex.set(SeederClass.name, SeederClass)
@@ -25,7 +28,7 @@ export class SeederRegistry {
 
   async run(SeederClass: Constructor<Seeder>, options?: { container?: Container }): Promise<void> {
     if (!this.seeders.has(SeederClass)) {
-      throw new SeederNotRegisteredError(SeederClass.name)
+      throw new SeederError(`Seeder "${SeederClass.name}" is not registered`)
     }
 
     const execute = async (container: Container) => {

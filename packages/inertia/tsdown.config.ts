@@ -8,11 +8,18 @@ export default defineConfig({
     'src/index.ts',
     'src/vite.ts',
     'src/react.ts',
+    'src/ssr.ts',
+    'src/seo-runtime.ts',
     'src/testing.ts',
+    'src/quarry.ts',
+    'src/generator/type-generator.worker.ts',
   ],
   tsconfig: './tsconfig.build.json',
   exports: {
-    customExports: withTypesExports,
+    customExports: (exports) => {
+      delete exports['./generator/type-generator.worker']
+      return withTypesExports(exports)
+    },
   },
   deps: {
     skipNodeModulesBundle: true,

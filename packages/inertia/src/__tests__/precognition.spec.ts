@@ -1,6 +1,5 @@
 import type { Context } from 'hono'
-import { ApplicationError, ERROR_CODES } from 'stratal/errors'
-import { type MessageKeys } from 'stratal/i18n'
+import { ApplicationError } from 'stratal/errors'
 import { RouterContext, SchemaValidationError } from 'stratal/router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { InertiaModule } from '../inertia.module'
@@ -39,15 +38,11 @@ function createMockExceptionContext(ctx: RouterContext) {
 
 function createSchemaError(issues: { path: string; message: string }[]) {
   const error = Object.create(SchemaValidationError.prototype)
-  error.metadata = { issues }
+  error.issues = issues
   return error as SchemaValidationError
 }
 
-class TestApplicationError extends ApplicationError {
-  constructor(message: string, metadata?: Record<string, unknown>) {
-    super(message as MessageKeys, ERROR_CODES.VALIDATION.SCHEMA_VALIDATION, metadata)
-  }
-}
+class TestApplicationError extends ApplicationError {}
 
 describe('Precognition', () => {
   describe('HandlePrecognitiveRequests middleware', () => {
@@ -101,6 +96,7 @@ describe('Precognition', () => {
         renderable: vi.fn((errorClass: unknown, handler: (error: unknown, context: unknown) => Response | undefined) => {
           capturedHandlers.set(errorClass, handler)
         }),
+        errorPage: vi.fn(),
       }
       module.onException(mockHandler as never)
     })
@@ -193,14 +189,11 @@ describe('Precognition', () => {
     })
 
     describe('ApplicationError with precognition', () => {
-      it('returns 422 JSON with _form error', () => {
-        const mockI18n = { t: vi.fn().mockReturnValue('Translated error message') }
-        const mockContainer = { resolve: vi.fn().mockReturnValue(mockI18n) }
+      it('returns 422 JSON with _form error using plain message', () => {
         const { ctx } = createMockContext({ headers: { precognition: 'true' } })
-        ;(ctx as unknown as { getContainer: () => unknown }).getContainer = () => mockContainer
 
         const context = createMockExceptionContext(ctx)
-        const error = new TestApplicationError('errors.testError', { key: 'value' })
+        const error = new TestApplicationError('Something went wrong')
 
         const response = capturedHandlers.get(ApplicationError)!(error, context)!
 
@@ -209,7 +202,7 @@ describe('Precognition', () => {
         expect(response.headers.get('Content-Type')).toBe('application/json')
 
         return response.json<{ errors: Record<string, string> }>().then((body) => {
-          expect(body.errors).toEqual({ _form: 'Translated error message' })
+          expect(body.errors).toEqual({ _form: 'Something went wrong' })
         })
       })
     })
