@@ -7,6 +7,7 @@ import type { QuarryRegistry } from 'stratal/quarry';
 import { type Application } from '../application';
 import { extractEnvFlag } from './argv';
 import { createDynamicCommands } from './commands/dynamic-command';
+import { resolveDevRegistryPath } from './registry';
 
 interface WranglerConfig {
   name?: string
@@ -25,7 +26,6 @@ interface WranglerModule {
 
 interface MiniflareModule {
   Miniflare: new (opts: MiniflareOptions) => { ready: Promise<URL>; getBindings: (name?: string) => Promise<Record<string, unknown>>; dispose: () => Promise<void> }
-  getDefaultDevRegistryPath: () => string
 }
 
 const require = createRequire(import.meta.url)
@@ -74,7 +74,7 @@ async function main(): Promise<void> {
   const cwdRequire = createRequire(join(process.cwd(), 'package.json'))
 
   const { unstable_readConfig: readConfig, unstable_getMiniflareWorkerOptions: getMiniflareWorkerOptions, unstable_getVarsForDev: getVarsForDev } = await import(cwdRequire.resolve('wrangler')) as WranglerModule
-  const { Miniflare, getDefaultDevRegistryPath } = await import(cwdRequire.resolve('miniflare')) as MiniflareModule
+  const { Miniflare } = await import(cwdRequire.resolve('miniflare')) as MiniflareModule
 
   const candidates = ['wrangler.jsonc', 'wrangler.json', 'wrangler.toml']
   const configName = candidates.find(c => existsSync(resolve(process.cwd(), c)))
@@ -96,20 +96,24 @@ async function main(): Promise<void> {
     if (existsSync(envPath)) process.loadEnvFile(envPath)
   }
 
-  // Bridge the documented `WRANGLER_REGISTRY_PATH` to `MINIFLARE_REGISTRY_PATH`,
-  // the variable Miniflare's `getDefaultDevRegistryPath()` actually reads.
-  // `wrangler dev` performs the same translation internally; mirroring it here
-  // lets a single documented env var redirect the dev service registry for BOTH
-  // this CLI's Miniflare (below) AND any vite dev server a command launches
-  // (`@cloudflare/vite-plugin` also resolves its registry via
-  // `getDefaultDevRegistryPath()`). That allows several isolated dev environments
-  // to run in parallel without sharing the global `~/.wrangler/registry`, where
-  // their identically-named workers would otherwise overwrite each other and
-  // break cross-worker service-binding resolution. Only set when unset so an
-  // explicit override still wins.
-  if (process.env.WRANGLER_REGISTRY_PATH && !process.env.MINIFLARE_REGISTRY_PATH) {
-    process.env.MINIFLARE_REGISTRY_PATH = process.env.WRANGLER_REGISTRY_PATH
-  }
+  // Deterministically resolve the dev service registry from the project root
+  // (`<projectRoot>/.wrangler/registry`) so a bare `quarry` invocation shares
+  // the SAME project-local registry every other process in this checkout uses —
+  // never the global `~/.wrangler/registry`, where parallel checkouts'
+  // identically-named workers would overwrite each other and break cross-worker
+  // service-binding resolution. An explicit `WRANGLER_REGISTRY_PATH` /
+  // `MINIFLARE_REGISTRY_PATH` (from the shell or the `.env` files above) wins.
+  //
+  // Exported as `MINIFLARE_REGISTRY_PATH` — the variable Miniflare's
+  // `getDefaultDevRegistryPath()` reads at call time — so any child process a
+  // command spawns (notably the vite dev server launched by `inertia:dev`,
+  // whose `@cloudflare/vite-plugin` resolves its registry the same way) lands
+  // in the identical registry.
+  const registryPath = resolveDevRegistryPath({
+    MINIFLARE_REGISTRY_PATH: process.env.MINIFLARE_REGISTRY_PATH,
+    WRANGLER_REGISTRY_PATH: process.env.WRANGLER_REGISTRY_PATH,
+  }, process.cwd())
+  process.env.MINIFLARE_REGISTRY_PATH = registryPath
 
   const config = readConfig({ config: configPath, env: environment })
   const { workerOptions } = getMiniflareWorkerOptions(config, environment)
@@ -132,10 +136,6 @@ async function main(): Promise<void> {
   // for service binding resolution — a collision would break the running session.
   const workerName = config.name ? `quarry-${config.name}-${process.pid}` : `quarry-${process.pid}`
   workerOptions.name = workerName
-
-  // Resolve the dev-registry path so Miniflare can discover running
-  // `wrangler dev` sessions for service binding resolution.
-  const registryPath = getDefaultDevRegistryPath()
 
   const mf = new Miniflare({
     ...workerOptions,
