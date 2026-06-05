@@ -1,6 +1,6 @@
 ---
-"stratal": minor
-"@stratal/inertia": minor
+"stratal": patch
+"@stratal/inertia": patch
 ---
 
 Trailing-slash exclusions: `trailingSlash` accepts `{ mode, exclude }`
