@@ -9,6 +9,7 @@ import { Listener, On } from '../events';
 import { z } from '../i18n/validation/zod';
 import { LogLevel } from '../logger';
 import { Module } from '../module/module.decorator';
+import type { ModuleContext, OnInitialize, OnShutdown } from '../module/types';
 import { Command } from '../quarry';
 import { InjectQueue, QueueModule, type IQueueConsumer, type IQueueSender, type QueueMessage } from '../queue';
 import { Controller } from '../router/decorators/controller.decorator';
@@ -600,5 +601,63 @@ describe('handleScheduled (queue processing from cron jobs)', () => {
     await app.handleScheduled(controller)
 
     expect(scheduledQueueHandled).toEqual(['from-cron'])
+  })
+})
+
+describe('Application (failed initialization teardown)', () => {
+  // A boot that fails partway can still hold live resources: modules whose
+  // onInitialize already ran (DB pools, timers) and container-cached
+  // singletons. initialize() must tear those down itself — callers can't,
+  // since shutdown() is deliberately a no-op for an uninitialized app.
+
+  const lifecycleEvents: string[] = []
+  const DISPOSABLE_TOKEN = Symbol('FailedInitDisposable')
+
+  class DisposableResource {
+    dispose() { lifecycleEvents.push('resource:disposed') }
+  }
+
+  @Module({})
+  class HealthyModule implements OnInitialize, OnShutdown {
+    onInitialize(context: ModuleContext) {
+      lifecycleEvents.push('healthy:init')
+      context.container.registerSingleton(DISPOSABLE_TOKEN, DisposableResource)
+      context.container.resolve(DISPOSABLE_TOKEN)
+    }
+
+    onShutdown() {
+      lifecycleEvents.push('healthy:shutdown')
+    }
+  }
+
+  @Module({})
+  class ExplodingModule implements OnInitialize {
+    onInitialize(): never {
+      throw new Error('exploding module')
+    }
+  }
+
+  @Module({ imports: [HealthyModule, ExplodingModule] })
+  class FailingAppModule { }
+
+  beforeEach(() => {
+    lifecycleEvents.length = 0
+  })
+
+  it('tears down already-initialized modules and the container, then rethrows', async () => {
+    const app = createTestApp({ module: FailingAppModule })
+
+    await expect(app.initialize()).rejects.toThrow('exploding module')
+
+    expect(lifecycleEvents).toEqual(['healthy:init', 'healthy:shutdown', 'resource:disposed'])
+  })
+
+  it('keeps shutdown() a no-op after a failed initialize (no double teardown)', async () => {
+    const app = createTestApp({ module: FailingAppModule })
+
+    await expect(app.initialize()).rejects.toThrow('exploding module')
+    await app.shutdown()
+
+    expect(lifecycleEvents.filter(e => e === 'healthy:shutdown')).toHaveLength(1)
   })
 })

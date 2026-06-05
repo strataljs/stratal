@@ -49,6 +49,10 @@
       "types": "./dist/mocks/index.d.mts",
       "import": "./dist/mocks/index.mjs"
     },
+    "./mocks/noop-rate-limiter-store": {
+      "types": "./dist/mocks/noop-rate-limiter-store.d.mts",
+      "import": "./dist/mocks/noop-rate-limiter-store.mjs"
+    },
     "./mocks/zenstack-language": {
       "types": "./dist/mocks/zenstack-language.d.mts",
       "import": "./dist/mocks/zenstack-language.mjs"
