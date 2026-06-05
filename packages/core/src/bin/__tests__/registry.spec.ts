@@ -61,6 +61,22 @@ describe('findProjectRoot', () => {
     expect(findProjectRoot(nested)).toBe(inner)
   })
 
+  it('terminates and returns an absolute root for a relative start directory', () => {
+    const root = makeFixture()
+    writeFileSync(join(root, 'yarn.lock'), '')
+    mkdirSync(join(root, 'apps', 'data-plane'), { recursive: true })
+
+    const previousCwd = process.cwd()
+    process.chdir(root)
+    try {
+      // Pre-normalization this either hung (no marker reachable relatively) or
+      // returned a relative '.' — assert the absolute lockfile root instead.
+      expect(findProjectRoot(join('apps', 'data-plane'))).toBe(process.cwd())
+    } finally {
+      process.chdir(previousCwd)
+    }
+  })
+
   it('returns the start directory itself when it holds the lockfile', () => {
     const root = makeFixture()
     writeFileSync(join(root, 'yarn.lock'), '')

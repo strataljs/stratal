@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { dirname, join, parse } from 'node:path'
+import { dirname, join, parse, resolve } from 'node:path'
 
 const LOCKFILES = [
   'yarn.lock',
@@ -22,7 +22,10 @@ const LOCKFILES = [
  * Returns `undefined` when neither marker is found.
  */
 export function findProjectRoot(startDir: string): string | undefined {
-  let dir = startDir
+  // A relative `startDir` would never equal its parsed root (`''`) — `dirname`
+  // converges to `'.'` and the walk never terminates. Resolve up front so the
+  // traversal (and the returned path) is always absolute.
+  let dir = resolve(startDir)
   const { root } = parse(dir)
   let outermostPackageJson: string | undefined
   while (true) {
