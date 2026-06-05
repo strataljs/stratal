@@ -1,10 +1,10 @@
-import { inject } from 'tsyringe'
+import { inject } from '../di'
 import { CONTAINER_TOKEN, type Container } from '../di'
 import { Transient } from '../di/decorators'
 import type { Middleware, Next } from '../router/middleware.interface'
 import type { RouterContext } from '../router/router-context'
 import type { Constructor } from '../types'
-import { RateLimiterModuleNotImportedError } from './errors'
+import { RateLimiterError } from './errors'
 import type { RateLimiterRegistry } from './rate-limiter-registry'
 import { RATE_LIMITER_TOKENS } from './rate-limiter.tokens'
 
@@ -16,11 +16,8 @@ const cache = new Map<string, Constructor<Middleware>>()
  * — important for `Router.middleware` deduplication via class identity.
  *
  * Detection of "module not imported" works against a per-app marker
- * registered by `RateLimiterModule.onInitialize` (NOT via inject decorator,
- * because tsyringe would still try to construct Registry — whose Store
- * inject would explode with a less-actionable tsyringe wrapping). We hold
- * the user's container, then check `isRegistered(marker, recursive=true)`
- * at request time before resolving Registry.
+ * registered by `RateLimiterModule.onInitialize`. We check
+ * `isRegistered(marker)` at request time before resolving Registry.
  */
 export function createThrottleMiddleware(name: string): Constructor<Middleware> {
   const existing = cache.get(name)
@@ -33,11 +30,8 @@ export function createThrottleMiddleware(name: string): Constructor<Middleware> 
     ) {}
 
     handle(ctx: RouterContext, next: Next): Promise<Response | void> {
-      // Walk the parent chain — marker lives in the app container, not the
-      // request-scoped child. `isRegistered(token, true)` is recursive.
-      const tsyringe = this.container.getTsyringeContainer()
-      if (!tsyringe.isRegistered(RATE_LIMITER_TOKENS.ModuleMarker, true)) {
-        throw new RateLimiterModuleNotImportedError(name)
+      if (!this.container.isRegistered(RATE_LIMITER_TOKENS.ModuleMarker)) {
+        throw new RateLimiterError(`RateLimiterModule was not imported. Cannot resolve throttle "${name}". Import RateLimiterModule.forRoot({ store: ... }) in your AppModule.`)
       }
       const registry = this.container.resolve<RateLimiterRegistry>(RATE_LIMITER_TOKENS.Registry)
       return registry.handle(name, ctx, next)

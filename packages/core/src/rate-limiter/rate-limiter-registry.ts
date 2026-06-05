@@ -1,9 +1,9 @@
-import { inject } from 'tsyringe'
-import { Transient } from '../di/decorators'
+import { type Container, DI_TOKENS, inject } from '../di'
+import { Singleton } from '../di/decorators'
 import { Macroable } from '../macroable'
 import type { Next } from '../router/middleware.interface'
 import type { RouterContext } from '../router/router-context'
-import { RateLimiterNotDefinedError, TooManyRequestsError } from './errors'
+import { RateLimiterError, TooManyRequestsError } from './errors'
 import type { Limit, RateLimitHeaders } from './limit'
 import { RATE_LIMITER_TOKENS } from './rate-limiter.tokens'
 import type { IRateLimiterStore, RateLimitHit } from './stores/rate-limiter-store.interface'
@@ -41,20 +41,30 @@ interface StoredHit {
  * can attach extra registration methods such as `forPath()` for better-auth
  * `customRules` interop.
  */
-// IMPORTANT: do not pass a token to @Transient — that would self-register
+// IMPORTANT: do not pass a token to @Singleton — that would self-register
 // the class globally at module-load time, making the Registry resolvable
 // even when the user never imported RateLimiterModule. We rely on
 // RateLimiterModule providers being the only binding source, so
 // `{ isOptional: true }` in ThrottleMiddleware correctly returns undefined
 // when the module is missing.
-@Transient()
+@Singleton()
 export class RateLimiterRegistry extends Macroable {
   private readonly resolvers = new Map<string, LimitResolver>()
 
   constructor(
-    @inject(RATE_LIMITER_TOKENS.Store) private readonly store: IRateLimiterStore,
+    @inject(DI_TOKENS.Container) private readonly container: Container,
   ) {
     super()
+  }
+
+  /**
+   * Resolve the store per access instead of capturing it at construction.
+   * The registry is a singleton built during module init; lazy resolution
+   * keeps later `RATE_LIMITER_TOKENS.Store` overrides (e.g. the testing
+   * harness disabling limits) effective.
+   */
+  private get store(): IRateLimiterStore {
+    return this.container.resolve<IRateLimiterStore>(RATE_LIMITER_TOKENS.Store)
   }
 
   /**
@@ -81,7 +91,7 @@ export class RateLimiterRegistry extends Macroable {
   async handle(name: string, ctx: RouterContext, next: Next): Promise<Response | void> {
     const resolver = this.resolvers.get(name)
     if (!resolver) {
-      throw new RateLimiterNotDefinedError(name)
+      throw new RateLimiterError(`Rate limiter "${name}" is not defined. Register it with limiter.for("${name}", ...) in a module's onInitialize hook.`)
     }
 
     const resolved = await resolver(ctx)

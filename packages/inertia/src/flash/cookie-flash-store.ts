@@ -30,14 +30,21 @@ export class CookieFlashStore implements FlashStore {
     if (!value) return {}
 
     try {
-      return JSON.parse(atob(value)) as Record<string, unknown>
+      const bytes = Uint8Array.from(atob(value), (char) => char.charCodeAt(0))
+      return JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>
     } catch {
       return {}
     }
   }
 
   async write(ctx: RouterContext, data: Record<string, unknown>): Promise<void> {
-    const encoded = btoa(JSON.stringify(data))
+    // UTF-8-safe base64: `btoa` alone throws on any character outside Latin1
+    // (em-dashes, smart quotes, non-Latin scripts) — flash messages are
+    // user-facing copy, so those are routine.
+    const bytes = new TextEncoder().encode(JSON.stringify(data))
+    let binary = ''
+    for (const byte of bytes) binary += String.fromCharCode(byte)
+    const encoded = btoa(binary)
     await setSignedCookie(ctx.c, this.cookieName, encoded, this.secret, this.cookieOptions)
   }
 

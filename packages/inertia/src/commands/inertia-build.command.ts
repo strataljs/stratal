@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { Command } from 'stratal/quarry'
+import { writeTempClientViteConfig } from '../vite/create-client-vite-config'
 import { writeTempViteConfig } from '../vite/create-vite-config'
 
 export class InertiaBuildCommand extends Command {
@@ -19,16 +20,41 @@ export class InertiaBuildCommand extends Command {
       return 1
     }
 
-    const configPath = writeTempViteConfig({ cwd, outDir })
+    // Phase 1: standalone browser-bundle build. Runs without the Cloudflare
+    // vite-plugin so it isn't subject to its parallel env orchestration. The
+    // resulting `<clientOutDir>/.vite/manifest.json` is what the worker build
+    // (phase 2) inlines into the worker entry via `stratal:inertia-inject-manifest`.
+    const clientOutDir = join(outDir, 'client').replace(/\\/g, '/')
+    const clientConfigPath = writeTempClientViteConfig({
+      cwd,
+      entry: entryPath,
+      outDir: clientOutDir,
+    })
 
-    this.info('Building Inertia.js frontend for production...')
-
-    const clientCode = await this.spawnVite(cwd, configPath, ['build'])
-    if (clientCode !== 0) {
-      this.fail('Client build failed.')
-      return clientCode
+    this.info('Building Inertia.js browser bundle...')
+    const browserCode = await this.spawnVite(cwd, clientConfigPath, ['build'])
+    if (browserCode !== 0) {
+      this.fail('Browser bundle build failed.')
+      return browserCode
     }
-    this.success('Client build complete!')
+    this.success(`Browser bundle written to ${clientOutDir}/`)
+
+    // Phase 2: worker build (Cloudflare vite-plugin). The injector plugin
+    // reads the manifest produced in phase 1 and inlines it onto the worker
+    // entry chunk.
+    const configPath = writeTempViteConfig({
+      cwd,
+      outDir,
+      clientManifestPath: join(clientOutDir, '.vite', 'manifest.json').replace(/\\/g, '/'),
+    })
+
+    this.info('Building Cloudflare worker bundle...')
+    const workerCode = await this.spawnVite(cwd, configPath, ['build'])
+    if (workerCode !== 0) {
+      this.fail('Worker build failed.')
+      return workerCode
+    }
+    this.success('Worker build complete!')
 
     if (shouldBuildSsr) {
       this.info('Building SSR bundle...')

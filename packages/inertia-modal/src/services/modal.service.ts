@@ -1,6 +1,6 @@
 import type { Page } from '@inertiajs/core'
 import { INERTIA_TOKENS, type SsrRendererService, type TemplateService } from '@stratal/inertia'
-import { Transient, inject } from 'stratal/di'
+import { Request as RequestScoped, inject } from 'stratal/di'
 import type { RouterContext } from 'stratal/router'
 import { ROUTER_TOKENS } from 'stratal/router'
 import { ModalBackgroundFetchError } from '../errors/modal-background-fetch.error'
@@ -11,7 +11,7 @@ export interface ModalData {
   baseURL: string
   redirectURL: string
   key: string
-  nonce: string
+  nativeBack: boolean
 }
 
 export interface ModalRenderOptions {
@@ -26,7 +26,7 @@ interface FetchableApp {
   fetch(request: Request, env: unknown, ctx: unknown): Promise<Response>
 }
 
-@Transient()
+@RequestScoped()
 export class ModalService {
   constructor(
     @inject(ROUTER_TOKENS.HonoApp) private readonly app: FetchableApp,
@@ -46,26 +46,26 @@ export class ModalService {
 
     const redirectURL = this.resolveRedirectURL(ctx, options.baseURL)
     const key = ctx.c.req.header('x-inertia-modal-key') ?? crypto.randomUUID()
-    const nonce = crypto.randomUUID()
     const modalURL = new URL(ctx.c.req.url).pathname
 
-    const modalData: ModalData = {
-      component,
-      props,
-      baseURL: options.baseURL,
-      redirectURL,
-      key,
-      nonce,
-    }
-
     // Partial reload requesting 'modal' — skip background sub-request,
-    // return just the modal prop with fresh data
+    // return just the modal prop with fresh data. The client already has
+    // the background page loaded, so nativeBack: true tells useModal()
+    // to use history.back() on close instead of a server round-trip.
     if (isInertia && partialComponent && partialData) {
       const requestedProps = partialData.split(',').map((s) => s.trim())
       if (requestedProps.includes('modal')) {
+        const partialModalData: ModalData = {
+          component,
+          props,
+          baseURL: options.baseURL,
+          redirectURL,
+          key,
+          nativeBack: true,
+        }
         const page: PageWithModal = {
           component: partialComponent,
-          props: { modal: modalData, errors: {} },
+          props: { modal: partialModalData, errors: {} },
           url: modalURL,
           version: null,
           flash: {},
@@ -81,6 +81,15 @@ export class ModalService {
           },
         })
       }
+    }
+
+    const modalData: ModalData = {
+      component,
+      props,
+      baseURL: options.baseURL,
+      redirectURL,
+      key,
+      nativeBack: false,
     }
 
     // Fetch background page as an Inertia JSON request to get its component and
@@ -120,9 +129,9 @@ export class ModalService {
     // page.url = modalURL in both the server-rendered HTML and the client
     // hydration pass. The Modal component renders null during SSR (effects
     // don't run server-side), so there is no hydration mismatch.
-    const ssrResult = await this.ssr.render(combinedPage)
-    const html = this.template.render(combinedPage, ssrResult.head, ssrResult.body)
-    return new Response(html, {
+    const { head, stream } = await this.ssr.render(combinedPage)
+    const body = this.template.renderStream(combinedPage, head, stream)
+    return new Response(body, {
       status: 200,
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     })
@@ -159,6 +168,8 @@ export class ModalService {
     const headers: Record<string, string> = {
       // Always request JSON — we run SSR ourselves with the combined page object
       'x-inertia': 'true',
+      // Eagerly resolve deferred props so the background page renders with data
+      'x-inertia-resolve-deferred': 'true',
       // Deliberately omit x-inertia-version: the InertiaMiddleware version check
       // returns a 409 with no body when versions don't match, which would make
       // JSON.parse fail. Internal sub-requests don't need cache-bust checks.

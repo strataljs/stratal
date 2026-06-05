@@ -1,4 +1,4 @@
-import { Scope } from '../di/types'
+import { CacheModule } from '../cache'
 import type { ExceptionHandler } from '../errors/exception-handler'
 import { Module } from '../module'
 import type { AsyncModuleOptions, DynamicModule, ModuleContext, OnException, OnInitialize } from '../module/types'
@@ -26,21 +26,21 @@ import type { IRateLimiterStore } from './stores/rate-limiter-store.interface'
  * The module:
  *  - eagerly validates the store at app boot (`onInitialize` resolves the
  *    factory and calls `create()`); a missing `forRoot` surfaces
- *    `RateLimiterNotConfiguredError` before any request is served.
+ *    `RateLimiterError` before any request is served.
  *  - registers a `respond()` callback on the `ExceptionHandler` (via
  *    `onException`) that injects `Retry-After` and `X-RateLimit-*` headers
  *    on every {@link TooManyRequestsError} response, regardless of whether
  *    the body was rendered as JSON, HTML, or via Inertia.
  */
 @Module({
+  imports: [CacheModule],
   providers: [
-    { provide: RATE_LIMITER_TOKENS.Registry, useClass: RateLimiterRegistry, scope: Scope.Singleton },
-    { provide: RATE_LIMITER_TOKENS.StoreFactory, useClass: RateLimiterStoreFactory, scope: Scope.Singleton },
+    { provide: RATE_LIMITER_TOKENS.Registry, useClass: RateLimiterRegistry },
+    { provide: RATE_LIMITER_TOKENS.StoreFactory, useClass: RateLimiterStoreFactory },
     {
       provide: RATE_LIMITER_TOKENS.Store,
       useFactory: (factory: RateLimiterStoreFactory) => factory.create(),
       inject: [RATE_LIMITER_TOKENS.StoreFactory],
-      scope: Scope.Singleton,
     },
   ],
 })

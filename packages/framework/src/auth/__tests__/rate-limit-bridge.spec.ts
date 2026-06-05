@@ -1,6 +1,6 @@
-import 'reflect-metadata'
+import { Container } from 'stratal/di'
 import type { IRateLimiterStore } from 'stratal/rate-limiter'
-import { Limit, RateLimiterRegistry } from 'stratal/rate-limiter'
+import { Limit, RATE_LIMITER_TOKENS, RateLimiterRegistry } from 'stratal/rate-limiter'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createBetterAuthRateLimitStorage,
@@ -27,7 +27,10 @@ class FakeStore implements IRateLimiterStore {
 }
 
 function buildRegistry(): RateLimiterRegistry {
-  return new RateLimiterRegistry(new FakeStore())
+  // The registry resolves its store lazily from the container per access.
+  const container = new Container()
+  container.registerValue(RATE_LIMITER_TOKENS.Store, new FakeStore())
+  return new RateLimiterRegistry(container)
 }
 
 describe('rate-limit-bridge', () => {

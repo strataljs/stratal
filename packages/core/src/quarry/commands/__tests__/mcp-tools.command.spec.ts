@@ -1,8 +1,6 @@
-import 'reflect-metadata'
-
-import { injectable, container as tsyringeRootContainer } from 'tsyringe'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { Container } from '../../../di/container'
+import { Transient } from '../../../di/decorators'
 import { DI_TOKENS } from '../../../di/tokens'
 import { OPENAPI_TOKENS } from '../../../openapi/openapi.tokens'
 import { getCommandResult, setCommandInputs, setCommandQuarry } from '../../command-internals'
@@ -50,12 +48,11 @@ const mockApp = {
 }
 
 beforeEach(() => {
-  const tsyringe = tsyringeRootContainer.createChildContainer()
-  childContainer = new Container({ container: tsyringe })
+  childContainer = new Container()
   childContainer.registerValue(DI_TOKENS.Application, mockApp)
   childContainer.registerValue(OPENAPI_TOKENS.OpenAPIService, mockOpenAPIService)
 
-  injectable()(McpToolsCommand)
+  Transient()(McpToolsCommand)
   childContainer.register(McpToolsCommand, McpToolsCommand)
 })
 

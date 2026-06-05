@@ -1,27 +1,50 @@
-import { Transient, inject } from 'stratal/di'
+/// <reference types="vite/client" />
+
+import { Singleton, inject } from 'stratal/di'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { INERTIA_TOKENS } from '../inertia.tokens'
 import type { ViteManifest } from '../types'
 
 const DEFAULT_ENTRY_CLIENT_PATH = 'src/inertia/app.tsx'
 
-@Transient()
+interface ManifestGlobal {
+  __STRATAL_INERTIA_MANIFEST__?: ViteManifest
+}
+
+@Singleton()
 export class ManifestService {
   private readonly manifest: ViteManifest | null
   private readonly entryClientPath: string
+  private readonly isDev: boolean = Boolean(import.meta.env.DEV)
+  // The manifest is static for the lifetime of the worker, so the derived
+  // head/script tag strings are computed once and cached.
+  private headTags: string | null = null
+  private scriptTags: string | null = null
 
   constructor(
     @inject(INERTIA_TOKENS.Options) options: InertiaModuleOptions,
   ) {
-    this.manifest = options.manifest ?? null
+    this.manifest = (globalThis as ManifestGlobal).__STRATAL_INERTIA_MANIFEST__ ?? null
     this.entryClientPath = (options.entryClientPath ?? DEFAULT_ENTRY_CLIENT_PATH).replace(/^\/+/, '')
-  }
 
-  private get isDev(): boolean {
-    return this.manifest === null
+    if (!this.isDev && !this.manifest) {
+      throw new Error(
+        '@stratal/inertia: production build is missing the Vite client manifest. '
+        + 'This is wired by stratalInertia() in vite.config.ts — confirm it is in your plugin list '
+        + 'and that the client environment built successfully before the worker environment.',
+      )
+    }
   }
 
   getHeadTags(): string {
+    return this.headTags ??= this.buildHeadTags()
+  }
+
+  getScriptTags(): string {
+    return this.scriptTags ??= this.buildScriptTags()
+  }
+
+  private buildHeadTags(): string {
     if (this.isDev) {
       return '<link rel="stylesheet" href="/__inertia/ssr-css" data-ssr-css />'
     }
@@ -41,7 +64,7 @@ export class ManifestService {
     return tags.join('\n')
   }
 
-  getScriptTags(): string {
+  private buildScriptTags(): string {
     if (this.isDev) {
       return [
         '<script type="module" src="/@vite/client"></script>',

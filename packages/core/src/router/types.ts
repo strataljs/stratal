@@ -1,6 +1,6 @@
 import type { Container } from '../di'
 import { type StratalEnv } from '../env'
-import type { RouteConfig as OpenAPIRouteConfig, ZodObject, ZodPipe, ZodType } from '../i18n/validation'
+import type { RouteConfig as OpenAPIRouteConfig, ZodObject, ZodPipe, ZodType } from '../i18n/validation/zod'
 import { type HTTP_METHODS, type ROUTER_CONTEXT_KEYS, type SECURITY_SCHEMES, type VERSION_NEUTRAL } from './constants'
 
 /**
@@ -292,4 +292,13 @@ export interface LocalePathConfig {
    * `null` when all locales are prefixed (`prefixDefaultLocale: true`).
    */
   defaultLocale: string | null
+}
+
+/**
+ * Locale configuration for URL generation.
+ * Controls whether the default locale gets a path prefix in generated URLs.
+ */
+export interface LocaleUrlConfig {
+  defaultLocale: string | null
+  prefixDefaultLocale: false | true | 'redirect'
 }

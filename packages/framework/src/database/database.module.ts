@@ -1,28 +1,28 @@
-import type { AnyPlugin, ClientOptions, ComputedFieldsOptions } from '@zenstackhq/orm'
-import type { SchemaDef } from '@zenstackhq/schema'
-import { delay, DI_TOKENS, Scope } from 'stratal/di'
-import type { IEventRegistry } from 'stratal/events'
-import { I18nModule } from 'stratal/i18n'
+import type { AnyPlugin, ClientOptions, ComputedFieldsOptions } from '@zenstackhq/orm';
+import type { SchemaDef } from '@zenstackhq/schema';
+import { DI_TOKENS, lazy } from 'stratal/di';
+import type { IEventRegistry } from 'stratal/events';
+import { I18nModule } from 'stratal/i18n';
 import {
-  Module,
-  type AsyncModuleOptions,
-  type DynamicModule,
-  type InjectionToken,
-  type ModuleContext,
-  type OnInitialize,
-  type OnShutdown,
-} from 'stratal/module'
-import { DbGenerateCommand } from './commands/db-generate.command'
-import { DbPullCommand } from './commands/db-pull.command'
-import { DbPushCommand } from './commands/db-push.command'
-import { MigrateDeployCommand } from './commands/migrate-deploy.command'
-import { MigrateDevCommand } from './commands/migrate-dev.command'
-import { MigrateResetCommand } from './commands/migrate-reset.command'
-import { MigrateStatusCommand } from './commands/migrate-status.command'
-import { createDatabaseService } from './database.helpers'
-import { connectionSymbol, DATABASE_TOKENS } from './database.tokens'
-import { databaseMessages } from './i18n'
-import type { ConnectionName, DefaultConnectionName } from './types'
+    Module,
+    type AsyncModuleOptions,
+    type DynamicModule,
+    type LazyModuleLoader,
+    type ModuleContext,
+    type OnInitialize,
+    type OnShutdown,
+} from 'stratal/module';
+import { DbGenerateCommand } from './commands/db-generate.command';
+import { DbPullCommand } from './commands/db-pull.command';
+import { DbPushCommand } from './commands/db-push.command';
+import { MigrateDeployCommand } from './commands/migrate-deploy.command';
+import { MigrateDevCommand } from './commands/migrate-dev.command';
+import { MigrateResetCommand } from './commands/migrate-reset.command';
+import { MigrateStatusCommand } from './commands/migrate-status.command';
+import { createDatabaseService, type DatabaseServiceClass } from './database.helpers';
+import { connectionSymbol, DATABASE_TOKENS } from './database.tokens';
+import { databaseMessages } from './i18n';
+import type { ConnectionName, DefaultConnectionName } from './types';
 
 export interface DatabaseConnectionConfig<
   Schema extends SchemaDef = SchemaDef,
@@ -60,6 +60,8 @@ export interface DatabaseModuleConfig {
   ],
 })
 export class DatabaseModule implements OnInitialize, OnShutdown {
+  private readonly services: DatabaseServiceClass[] = []
+
   static forRoot(config: DatabaseModuleConfig): DynamicModule {
     return {
       module: DatabaseModule,
@@ -82,18 +84,17 @@ export class DatabaseModule implements OnInitialize, OnShutdown {
     }
   }
 
-  onInitialize(context: ModuleContext): void {
+  async onInitialize(context: ModuleContext): Promise<void> {
     const config = context.container.resolve<DatabaseModuleConfig>(DATABASE_TOKENS.Options)
-    const eventRegistry = context.container.resolve<IEventRegistry>(DI_TOKENS.EventRegistry)
-    const container = context.container.getTsyringeContainer();
-
+    // EventRegistry is loaded on demand — pull in EventsModule via the loader.
+    const loader = context.container.resolve<LazyModuleLoader>(DI_TOKENS.LazyModuleLoader)
+    const eventsRef = await loader.load(() => import('stratal/events').then((m) => m.EventsModule))
+    const eventRegistry = eventsRef.get<IEventRegistry>(DI_TOKENS.EventRegistry)
     for (const conn of config.connections) {
       const Service = createDatabaseService(conn, eventRegistry);
 
-      container.register(connectionSymbol(conn.name) as InjectionToken<symbol>,
-        // @ts-expect-error Dynamic class type mismatch
-        delay(() => Service),
-        { lifecycle: Scope.Request })
+      this.services.push(Service)
+      context.container.register(connectionSymbol(conn.name), lazy(() => Service))
     }
 
     context.container.registerExisting(DI_TOKENS.Database, connectionSymbol(config.default))
@@ -101,7 +102,11 @@ export class DatabaseModule implements OnInitialize, OnShutdown {
     context.logger.info('DatabaseModule initialized')
   }
 
-  onShutdown(context: ModuleContext): void {
+  async onShutdown(context: ModuleContext): Promise<void> {
+    // Disconnect every live client so pools/sockets don't outlive the
+    // Application across dev-server hot reloads.
+    await Promise.all(this.services.map(service => service.disposeInstances()))
+    this.services.length = 0
     context.logger.info('DatabaseModule shutdown')
   }
 }

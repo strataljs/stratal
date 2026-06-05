@@ -1,5 +1,74 @@
 # @stratal/inertia-modal
 
+## 0.0.25
+
+### Patch Changes
+
+- Updated dependencies [e93db60]
+- Updated dependencies [e93db60]
+  - stratal@0.0.25
+  - @stratal/inertia@0.0.25
+
+## 0.0.24
+
+### Patch Changes
+
+- Updated dependencies [10cf223]
+  - @stratal/inertia@0.0.24
+  - stratal@0.0.24
+
+## 0.0.23
+
+### Patch Changes
+
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [be813bc]
+  - stratal@0.0.23
+  - @stratal/inertia@0.0.23
+
+## 0.0.22
+
+### Patch Changes
+
+- 4b273ea: Add `nativeBack` support to modal navigation and eagerly resolve deferred props in background page fetches
+
+  - `useModal().redirect()` now uses `history.back()` instead of a server round-trip when the modal was loaded via a partial reload, providing instant close behavior.
+  - Background page fetches send `x-inertia-resolve-deferred: true` to ensure deferred props are included in the response.
+
+- 1658945: Fix modal component re-rendering by tracking component path instead of nonce
+- Updated dependencies [1658945]
+- Updated dependencies [1658945]
+- Updated dependencies [4b273ea]
+- Updated dependencies [4b273ea]
+  - @stratal/inertia@0.0.22
+  - stratal@0.0.22
+
+## 0.0.21
+
+### Patch Changes
+
+- 3489cfd: Preserve query string and forwarded headers on modal background requests
+
+  - The background page request now keeps the referer URL's query string, so opening a modal no longer resets the parent list view's filter/pagination state to defaults.
+  - `x-forwarded-proto`, `x-forwarded-host`, `x-forwarded-for`, `x-forwarded-port`, `x-real-ip`, `accept-language`, and `user-agent` are forwarded from the original request when present. Middleware that reconstructs the canonical request URL (e.g. apps whose `appUrl` is derived from forwarded headers) now sees the same protocol/host as the original request, fixing background fetches that previously appeared unauthenticated because Better Auth's secure-cookie prefix was resolved against the wrong base URL.
+
+- Updated dependencies [3489cfd]
+- Updated dependencies [3489cfd]
+- Updated dependencies [3489cfd]
+- Updated dependencies [3489cfd]
+  - stratal@0.0.21
+  - @stratal/inertia@0.0.21
+
 ## 0.0.20
 
 ### Patch Changes

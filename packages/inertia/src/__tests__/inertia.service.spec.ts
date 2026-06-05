@@ -6,6 +6,7 @@ import { ROUTER_CONTEXT_KEYS, ROUTER_TOKENS, RouterContext, type RegisteredRoute
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { InertiaService } from '../services/inertia.service'
+import type { SeoService } from '../services/seo.service'
 import type { SsrRendererService } from '../services/ssr-renderer.service'
 import type { TemplateService } from '../services/template.service'
 
@@ -45,11 +46,17 @@ function createMockContext(overrides: {
     getDefaults: () => overrides.defaults ?? {},
   }
 
+  const mockLocalePathService = {
+    localePathConfig: null,
+    prefixDefaultLocale: false,
+  }
+
   const mockContainer = {
     resolve: (token: symbol) => {
       if (token === ROUTER_TOKENS.RouteRegistry) return mockRegistry
       if (token === DI_TOKENS.Application) return mockApplication
       if (token === ROUTER_TOKENS.Uri) return mockUri
+      if (token === ROUTER_TOKENS.LocalePathService) return mockLocalePathService
       throw new Error(`Unexpected token: ${String(token)}`)
     },
   }
@@ -84,22 +91,36 @@ describe('InertiaService', () => {
   let service: InertiaService
   let mockTemplate: TemplateService
   let mockSsr: SsrRendererService
+  let mockSeo: SeoService
 
   const options: InertiaModuleOptions = {
     rootView: '<html>@inertia</html>',
     version: '1.0',
+    ssr: {
+      bundle: vi.fn() as unknown as NonNullable<InertiaModuleOptions['ssr']>['bundle'],
+    },
+  }
+
+  function emptyStream(): ReadableStream<Uint8Array> {
+    return new ReadableStream<Uint8Array>({ start(controller) { controller.close() } })
   }
 
   beforeEach(() => {
     mockTemplate = {
-      render: vi.fn().mockReturnValue('<html><div id="app"></div></html>'),
+      renderStream: vi.fn().mockReturnValue(emptyStream()),
+      renderClientOnly: vi.fn().mockReturnValue('<html><div id="app"></div></html>'),
     } as unknown as TemplateService
 
     mockSsr = {
-      render: vi.fn().mockResolvedValue({ head: [], body: '' }),
+      render: vi.fn().mockResolvedValue({ head: [], stream: emptyStream() }),
     } as unknown as SsrRendererService
 
-    service = new InertiaService(options, mockTemplate, mockSsr)
+    mockSeo = {
+      resolve: vi.fn().mockResolvedValue({}),
+      tagsFor: vi.fn().mockReturnValue([]),
+    } as unknown as SeoService
+
+    service = new InertiaService(options, mockTemplate, mockSsr, mockSeo)
   })
 
   describe('render()', () => {
@@ -114,7 +135,7 @@ describe('InertiaService', () => {
 
       const body = await parsePageJson(response)
       expect(body.component).toBe('Home')
-      expect(body.props).toEqual({ message: 'Hello', errors: {} })
+      expect(body.props).toEqual({ message: 'Hello', seo: {}, errors: {} })
       expect(body.version).toBe('1.0')
       expect(body.flash).toEqual({})
     })
@@ -127,7 +148,7 @@ describe('InertiaService', () => {
       expect(response.status).toBe(200)
       expect(response.headers.get('Content-Type')).toBe('text/html; charset=utf-8')
       expect(mockSsr.render).toHaveBeenCalled()
-      expect(mockTemplate.render).toHaveBeenCalled()
+      expect(mockTemplate.renderStream).toHaveBeenCalled()
     })
 
     it('should include render options in page object when true', async () => {
@@ -168,7 +189,7 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ message: 'Hello', errors: {} })
+      expect(body.props).toEqual({ message: 'Hello', seo: {}, errors: {} })
       expect(body.props).not.toHaveProperty('extra')
     })
 
@@ -187,7 +208,7 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ user: { name: 'John', permissions: ['read'] }, errors: {} })
+      expect(body.props).toEqual({ user: { name: 'John', permissions: ['read'] }, seo: {}, errors: {} })
       expect(body.props).not.toHaveProperty('extra')
     })
 
@@ -206,7 +227,7 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ user: { settings: { theme: 'dark' } }, errors: {} })
+      expect(body.props).toEqual({ user: { settings: { theme: 'dark' } }, seo: {}, errors: {} })
     })
 
     it('should set version to null when not configured', async () => {
@@ -214,6 +235,7 @@ describe('InertiaService', () => {
         { rootView: '<html>@inertia</html>' },
         mockTemplate,
         mockSsr,
+        mockSeo,
       )
       const ctx = createMockContext({ isInertia: true })
 
@@ -250,7 +272,7 @@ describe('InertiaService', () => {
       const response = await service.render(ctx, 'Home', { message: 'Hello' })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ appName: 'MyApp', message: 'Hello', errors: {} })
+      expect(body.props).toEqual({ appName: 'MyApp', message: 'Hello', seo: {}, errors: {} })
     })
 
     it('should track shared prop keys in sharedProps field', async () => {
@@ -274,7 +296,7 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ name: 'John', errors: {} })
+      expect(body.props).toEqual({ name: 'John', seo: {}, errors: {} })
     })
   })
 
@@ -307,7 +329,26 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ comments: ['comment1'], errors: {} })
+      expect(body.props).toEqual({ comments: ['comment1'], seo: {}, errors: {} })
+      expect(body).not.toHaveProperty('deferredProps')
+    })
+
+    it('should resolve deferred props eagerly when x-inertia-resolve-deferred header is set', async () => {
+      const ctx = createMockContext({
+        isInertia: true,
+        headers: {
+          'x-inertia-resolve-deferred': 'true',
+        },
+      })
+
+      const response = await service.render(ctx, 'Home', {
+        name: 'John',
+        comments: service.defer(() => ['comment1']),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.props).toHaveProperty('comments', ['comment1'])
+      expect(body.props).toHaveProperty('name', 'John')
       expect(body).not.toHaveProperty('deferredProps')
     })
   })
@@ -322,7 +363,7 @@ describe('InertiaService', () => {
 
       const body = await parsePageJson(response)
       expect(body.mergeProps).toEqual(['items'])
-      expect(body.props).toEqual({ items: [1, 2, 3], errors: {} })
+      expect(body.props).toEqual({ items: [1, 2, 3], seo: {}, errors: {} })
     })
 
     it('should exclude merge props from partial reloads when not requested', async () => {
@@ -340,7 +381,7 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ stats: { total: 5 }, errors: {} })
+      expect(body.props).toEqual({ stats: { total: 5 }, seo: {}, errors: {} })
       expect(body).not.toHaveProperty('mergeProps')
     })
 
@@ -359,7 +400,7 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ items: [4, 5, 6], errors: {} })
+      expect(body.props).toEqual({ items: [4, 5, 6], seo: {}, errors: {} })
       expect(body.mergeProps).toEqual(['items'])
     })
 
@@ -446,7 +487,7 @@ describe('InertiaService', () => {
       await service.render(ctx, 'Home', { message: 'Hello' })
 
       expect(mockSsr.render).not.toHaveBeenCalled()
-      expect(mockTemplate.render).toHaveBeenCalled()
+      expect(mockTemplate.renderClientOnly).toHaveBeenCalled()
     })
 
     it('should skip SSR when URL matches ssr.disabled pattern', async () => {
@@ -459,13 +500,13 @@ describe('InertiaService', () => {
         },
       }
 
-      const ssrService = new InertiaService(ssrOptions, mockTemplate, mockSsr)
+      const ssrService = new InertiaService(ssrOptions, mockTemplate, mockSsr, mockSeo)
       const ctx = createMockContext({ url: 'http://localhost/admin/dashboard' })
 
       await ssrService.render(ctx, 'AdminDashboard', {})
 
       expect(mockSsr.render).not.toHaveBeenCalled()
-      expect(mockTemplate.render).toHaveBeenCalled()
+      expect(mockTemplate.renderClientOnly).toHaveBeenCalled()
     })
 
     it('should perform SSR for non-matching URL patterns', async () => {
@@ -478,12 +519,84 @@ describe('InertiaService', () => {
         },
       }
 
-      const ssrService = new InertiaService(ssrOptions, mockTemplate, mockSsr)
+      const ssrService = new InertiaService(ssrOptions, mockTemplate, mockSsr, mockSeo)
       const ctx = createMockContext({ url: 'http://localhost/home' })
 
       await ssrService.render(ctx, 'Home', {})
 
       expect(mockSsr.render).toHaveBeenCalled()
+    })
+
+    it('matches ssr.disabled against the pathname even with a query string', async () => {
+      const ssrOptions: InertiaModuleOptions = {
+        rootView: '<html>@inertia</html>',
+        version: '1.0',
+        ssr: {
+          bundle: vi.fn() as unknown as InertiaModuleOptions['ssr'] extends { bundle: infer B } ? B : never,
+          disabled: ['admin/*'],
+        },
+      }
+
+      const ssrService = new InertiaService(ssrOptions, mockTemplate, mockSsr, mockSeo)
+      const ctx = createMockContext({ url: 'http://localhost/admin/dashboard?tab=users' })
+
+      await ssrService.render(ctx, 'AdminDashboard', {})
+
+      expect(mockSsr.render).not.toHaveBeenCalled()
+      expect(mockTemplate.renderClientOnly).toHaveBeenCalled()
+    })
+  })
+
+  describe('seo injection', () => {
+    it('shares the resolved seo prop and injects its tags into the head', async () => {
+      ;(mockSeo.resolve as ReturnType<typeof vi.fn>).mockResolvedValue({ title: 'Dashboard' })
+      ;(mockSeo.tagsFor as ReturnType<typeof vi.fn>).mockReturnValue(['<title data-seo>Dashboard</title>'])
+      ;(mockSsr.render as ReturnType<typeof vi.fn>).mockResolvedValue({ head: ['<meta charset="utf-8" />'], stream: emptyStream() })
+
+      const ctx = createMockContext()
+      await service.render(ctx, 'Home', { message: 'Hello' })
+
+      expect(mockSeo.resolve).toHaveBeenCalledWith(ctx)
+      const [page, headArg] = (mockTemplate.renderStream as ReturnType<typeof vi.fn>).mock.calls[0]
+      expect((page as Page).props).toMatchObject({ seo: { title: 'Dashboard' }, message: 'Hello' })
+      expect((page as Page).sharedProps).toContain('seo')
+      // SEO tags (hreflang now among them) are appended after the SSR head.
+      expect(headArg).toEqual(['<meta charset="utf-8" />', '<title data-seo>Dashboard</title>'])
+    })
+
+    it('always shares the seo prop even when resolve returns empty metadata', async () => {
+      // SeoService.resolve always settles on a title (here mocked to `{}`); the
+      // service still shares `seo` so the client runtime never sees a missing
+      // key. The prop is persistent — present on every response.
+      const ctx = createMockContext({ isInertia: true })
+      const response = await service.render(ctx, 'Home', { message: 'Hello' })
+
+      const body = await parsePageJson(response)
+      expect(body.props).toHaveProperty('seo')
+      expect(body.props.seo).toEqual({})
+      expect(body.sharedProps ?? []).toContain('seo')
+    })
+
+    it('carries the seo prop on partial reloads that do not request it', async () => {
+      ;(mockSeo.resolve as ReturnType<typeof vi.fn>).mockResolvedValue({ title: 'Dashboard' })
+
+      // Partial reload requesting only `message` — `seo` is an always prop, so
+      // it must still be present (not filtered out), otherwise the client head
+      // would be wiped on a partial reload.
+      const ctx = createMockContext({
+        isInertia: true,
+        headers: {
+          'x-inertia-partial-component': 'Home',
+          'x-inertia-partial-data': 'message',
+        },
+      })
+
+      const response = await service.render(ctx, 'Home', { message: 'Hello', other: 'dropped' })
+
+      const body = await parsePageJson(response)
+      expect(body.props).toHaveProperty('seo', { title: 'Dashboard' })
+      expect(body.props).toHaveProperty('message', 'Hello')
+      expect(body.props).not.toHaveProperty('other')
     })
   })
 
@@ -514,7 +627,7 @@ describe('InertiaService', () => {
         version: '1.0',
         routes: true,
       }
-      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr)
+      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockSeo)
       const ctx = createMockContext({ isInertia: true, routes: [sampleRoute] })
 
       const response = await routesService.render(ctx, 'Home', {})
@@ -532,7 +645,7 @@ describe('InertiaService', () => {
         version: '1.0',
         routes: true,
       }
-      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr)
+      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockSeo)
       const ctx = createMockContext({
         isInertia: true,
         routes: [sampleRoute],
@@ -551,7 +664,7 @@ describe('InertiaService', () => {
         version: '1.0',
         routes: true,
       }
-      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr)
+      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockSeo)
       const tenantRoute: RegisteredRoute = {
         name: 'dashboard.index',
         method: 'get',
@@ -586,7 +699,7 @@ describe('InertiaService', () => {
         version: '1.0',
         routes: true,
       }
-      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr)
+      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockSeo)
       const ctx = createMockContext({
         isInertia: true,
         routes: [sampleRoute],
@@ -605,7 +718,7 @@ describe('InertiaService', () => {
         version: '1.0',
         routes: true,
       }
-      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr)
+      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockSeo)
       const ctx = createMockContext({
         isInertia: true,
         routes: [sampleRoute],

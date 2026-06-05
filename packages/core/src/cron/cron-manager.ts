@@ -1,5 +1,6 @@
 import type { Container } from '../di/container'
-import { Transient } from '../di/decorators'
+import { Singleton } from '../di/decorators'
+import { DI_TOKENS } from '../di/tokens'
 import { LOGGER_TOKENS } from '../logger/logger.tokens'
 import type { LoggerService } from '../logger/services/logger.service'
 import type { CronJob, RegisteredJob } from './cron-job'
@@ -16,7 +17,7 @@ import { CronExecutionError } from './errors/cron-execution.error'
  * Jobs are grouped by their cron expression, allowing multiple jobs
  * to run on the same schedule.
  */
-@Transient()
+@Singleton(DI_TOKENS.Cron)
 export class CronManager {
 	/**
 	 * Map of cron expressions to registered job entries
@@ -75,8 +76,6 @@ export class CronManager {
 			try {
 				// Register the job class in the request-scoped container so its
 				// dependencies are resolved from request scope (not the parent).
-				// Without this, tsyringe falls through to the parent container
-				// and request-scoped services (e.g. database) get stale instances.
 				container.register(jobClass, jobClass)
 				const job = container.resolve<CronJob>(jobClass)
 				await job.execute(controller)
@@ -96,14 +95,10 @@ export class CronManager {
 			}
 		}
 
-		// If any jobs failed, throw an aggregate error
-		// This ensures the error is logged by ExceptionHandler
+		// If any jobs failed, throw an aggregate error so ExceptionHandler logs
+		// it. The full per-job errors are passed through so cause/stacks survive.
 		if (errors.length > 0) {
-			const jobNames = errors
-				.map(({ job, error }) => `${job}: ${error.message}`)
-				.join('; ')
-
-			throw new CronExecutionError(cron, errors.length, jobNames)
+			throw new CronExecutionError(cron, errors)
 		}
 	}
 

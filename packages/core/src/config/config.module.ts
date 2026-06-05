@@ -1,11 +1,9 @@
 import { DI_TOKENS } from '../di/tokens'
-import { Scope } from '../di/types'
-import type { z } from '../i18n/validation'
+import type { z } from '../i18n/validation/zod'
 import { Module } from '../module'
 import type { DynamicModule, ModuleContext, OnInitialize, Provider } from '../module/types'
 import { CONFIG_TOKENS } from './config.tokens'
 import { ConfigValidationError, type ModuleConfig } from './config.types'
-import { ConfigModuleNotInitializedError } from './errors'
 import type { ConfigNamespace } from './register-as'
 import { ConfigService } from './services/config.service'
 import { ConfigStore } from './services/config.store'
@@ -84,14 +82,12 @@ let moduleOptions: ConfigModuleOptions | null = null
     {
       provide: CONFIG_TOKENS.ConfigStore,
       useClass: ConfigStore,
-      scope: Scope.Singleton,
     },
     // ConfigService is request-scoped: each request gets its own
     // overrides map layered over the shared ConfigStore.
     {
       provide: CONFIG_TOKENS.ConfigService,
       useClass: ConfigService,
-      scope: Scope.Request,
     },
   ],
 })
@@ -119,12 +115,15 @@ export class ConfigModule implements OnInitialize {
   }
 
   /**
-   * Initialize config service with merged namespaces
-   * Called after all providers are registered
+   * Initialize config service with merged namespaces.
+   * Called after all providers are registered. No-op when the module
+   * was imported without `forRoot()` — the store stays empty and
+   * `ConfigService.get()` will throw `ConfigError` only if
+   * someone actually asks for a key.
    */
   onInitialize(context: ModuleContext): void {
     if (!moduleOptions) {
-      throw new ConfigModuleNotInitializedError()
+      return
     }
 
     const env = context.container.resolve<unknown>(DI_TOKENS.CloudflareEnv)

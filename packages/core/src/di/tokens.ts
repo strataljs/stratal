@@ -13,6 +13,7 @@ export const DI_TOKENS = {
   Container: CONTAINER_TOKEN,
   Application: Symbol.for('stratal:application'),
   ModuleRegistry: Symbol.for('stratal:module:registry'),
+  LazyModuleLoader: Symbol.for('stratal:lazy-module-loader'),
   ExceptionHandler: Symbol.for('stratal:exception:handler'),
   Database: Symbol.for('stratal:database:service'),
   Queue: Symbol.for('stratal:queue:manager'),

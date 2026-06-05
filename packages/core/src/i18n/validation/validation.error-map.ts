@@ -10,8 +10,9 @@ import type {
   $ZodIssueUnrecognizedKeys,
   $ZodRawIssue,
 } from 'zod/v4/core'
-import type { MessageKeys } from '../i18n.types'
-import type { ErrorMapContext } from './validation.types'
+import { getContainer } from '../../di/container-storage'
+import { I18N_TOKENS } from '../i18n.tokens'
+import type { II18nService, MessageKeys } from '../i18n.types'
 
 /**
  * Type guards for narrowing Zod v4 issue types
@@ -110,8 +111,8 @@ function getMessageKey(issue: $ZodRawIssue): MessageKeys {
  * Extracts interpolation parameters from Zod issue
  * Uses proper type narrowing for v4
  */
-function getMessageParams(issue: $ZodRawIssue): Record<string, unknown> {
-  const params: Record<string, unknown> = {}
+function getMessageParams(issue: $ZodRawIssue): Record<string, string | number> {
+  const params: Record<string, string | number> = {}
 
   if (isInvalidType(issue)) {
     params.expected = issue.expected
@@ -134,14 +135,14 @@ function getMessageParams(issue: $ZodRawIssue): Record<string, unknown> {
     params.validation = issue.format
 
     // Check for specific string format issues with additional fields
-    if ('prefix' in issue) {
-      params.startsWith = (issue as { prefix?: string }).prefix
+    if ('prefix' in issue && typeof issue.prefix === 'string') {
+      params.startsWith = issue.prefix
     }
-    if ('suffix' in issue) {
-      params.endsWith = (issue as { suffix?: string }).suffix
+    if ('suffix' in issue && typeof issue.suffix === 'string') {
+      params.endsWith = issue.suffix
     }
-    if ('includes' in issue) {
-      params.includes = (issue as { includes?: string }).includes
+    if ('includes' in issue && typeof issue.includes === 'string') {
+      params.includes = issue.includes
     }
     if (issue.pattern) {
       params.pattern = issue.pattern
@@ -151,7 +152,7 @@ function getMessageParams(issue: $ZodRawIssue): Record<string, unknown> {
   }
 
   if (isTooSmall(issue)) {
-    params.minimum = issue.minimum
+    params.minimum = Number(issue.minimum)
     params.type = issue.origin
     if (issue.origin === 'date') {
       params.minimum = new Date(Number(issue.minimum)).toLocaleDateString()
@@ -160,7 +161,7 @@ function getMessageParams(issue: $ZodRawIssue): Record<string, unknown> {
   }
 
   if (isTooBig(issue)) {
-    params.maximum = issue.maximum
+    params.maximum = Number(issue.maximum)
     params.type = issue.origin
     if (issue.origin === 'date') {
       params.maximum = new Date(Number(issue.maximum)).toLocaleDateString()
@@ -180,24 +181,17 @@ function getMessageParams(issue: $ZodRawIssue): Record<string, unknown> {
  * Creates a Zod error map that uses i18n for translation
  * Uses Zod v4 native $ZodErrorMap signature (no ctx parameter)
  */
-export function createI18nErrorMap(getContext: () => ErrorMapContext | undefined): $ZodErrorMap {
+export function createI18nErrorMap(): $ZodErrorMap {
   return (issue: $ZodRawIssue): { message: string } => {
-    // Get message key and params for this issue
     const messageKey = getMessageKey(issue)
     const messageParams = getMessageParams(issue)
 
-    // Get translation context
-    const context = getContext()
-
-    if (!context) {
-      // Fallback: Use English messages directly
-      // This handles config validation at startup, tests, etc.
+    try {
+      const container = getContainer()
+      const i18n = container.resolve<II18nService>(I18N_TOKENS.I18nService)
+      return { message: i18n.t(messageKey, messageParams) }
+    } catch {
       return { message: 'Invalid input' }
-    }
-
-    // Normal flow: Use context-aware i18n (respects user locale)
-    return {
-      message: context.t(messageKey, messageParams),
     }
   }
 }

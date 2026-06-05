@@ -1,19 +1,12 @@
 /**
  * Translation Missing Error
  * Thrown when a translation key is missing from all locales
- *
- * HTTP Status: 500 Internal Server Error
- * Error Code: 9300
  */
 
-import { ApplicationError, ERROR_CODES } from '../../errors'
+import { I18nError } from '../i18n.error'
 
-export class TranslationMissingError extends ApplicationError {
+export class TranslationMissingError extends I18nError {
   constructor(key: string, locale: string) {
-    super(
-      'errors.translationMissing',
-      ERROR_CODES.I18N.TRANSLATION_MISSING,
-      { key, locale }
-    )
+    super(`Translation missing for key "${key}" in locale "${locale}"`)
   }
 }

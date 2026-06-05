@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { DuplicateRouteNameError } from '../errors'
+import { RouterError } from '../router.error'
 import { RouteRegistry, type RouteRegistrationInput } from '../route-registry'
 import type { LocalePathService } from '../services/locale-path.service'
 import type { VersioningService } from '../services/versioning.service'
@@ -43,11 +43,11 @@ describe('RouteRegistry', () => {
       expect(registry.all()).toHaveLength(1)
     })
 
-    it('should throw DuplicateRouteNameError on duplicate named routes', () => {
+    it('should throw RouterError on duplicate named routes', () => {
       registry.register(createInput({ name: 'users.index' }))
       expect(() =>
         registry.register(createInput({ name: 'users.index', controller: 'OtherController', action: 'list' }))
-      ).toThrow(DuplicateRouteNameError)
+      ).toThrow(RouterError)
     })
 
     it('should allow multiple unnamed routes', () => {

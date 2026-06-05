@@ -40,4 +40,11 @@ describe('WebSocket Gateway Integration', () => {
     await ws.assertMessage('echo:hello')
     ws.close()
   })
+
+  it('should complete the close handshake when gateway has no @OnClose()', async () => {
+    const ws = await module.ws('/ws/no-close').connect()
+    ws.send('hello')
+    await ws.assertMessage('echo:hello')
+    ws.close()
+  })
 })

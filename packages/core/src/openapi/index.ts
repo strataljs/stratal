@@ -7,6 +7,7 @@ export { OPENAPI_TOKENS } from './openapi.tokens'
 // Types
 export type {
   IOpenAPIConfigService,
+  IOpenAPIConfigStore,
   OpenAPIConfigOverride,
   OpenAPIEffectiveConfig,
   OpenAPIInfo,
@@ -18,6 +19,6 @@ export type {
 } from './types'
 
 // Services
-export { OpenAPIConfigService, OpenAPIService } from './services'
+export { OpenAPIConfigService, OpenAPIConfigStore, OpenAPIService } from './services'
 export { OpenApiToolsService } from './services/openapi-tools.service'
 export type { Dispatcher, ToolDefinition, ToolExecutionResult, ToolFilter } from './services/openapi-tools.service'

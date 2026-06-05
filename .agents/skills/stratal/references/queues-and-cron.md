@@ -2,7 +2,7 @@
 
 ## QueueModule Setup
 
-QueueModule must be configured before using queues. Each queue must be registered individually.
+Register each queue you want to inject. The string passed to `registerQueue()` is the **binding name** — it must match the `binding` field declared under `queues.producers[]` in `wrangler.jsonc` exactly (conventionally UPPER_SNAKE_CASE).
 
 ```typescript
 import { QueueModule } from 'stratal/queue'
@@ -14,38 +14,17 @@ import { DI_TOKENS } from 'stratal/di'
       inject: [DI_TOKENS.CloudflareEnv],
       useFactory: (env) => ({
         provider: 'cloudflare',  // 'cloudflare' | 'sync'
+        // store defaults to { binding: 'CACHE' } if omitted
       }),
     }),
-    QueueModule.registerQueue('notifications-queue'),
-    QueueModule.registerQueue('email-queue'),
+    QueueModule.registerQueue('NOTIFICATIONS_QUEUE'),
+    QueueModule.registerQueue('BACKGROUND_QUEUE'),
   ],
 })
 export class AppModule {}
 ```
 
-### Queue Name Type Safety
-
-Auto-derive queue names from `Cloudflare.Env` bindings:
-
-```typescript
-// src/types/queues.ts
-type QueueBindingKeys = {
-  [K in keyof Cloudflare.Env]: Cloudflare.Env[K] extends Queue ? K : never
-}[keyof Cloudflare.Env]
-
-type BindingToQueueName<T extends string> =
-  T extends `${infer Part}_${infer Rest}`
-  ? `${Lowercase<Part>}-${BindingToQueueName<Rest>}`
-  : Lowercase<T>
-
-type DerivedQueueNames = BindingToQueueName<QueueBindingKeys>
-
-declare module 'stratal' {
-  interface QueueNames extends Record<DerivedQueueNames, true> {}
-}
-```
-
-This converts bindings like `NOTIFICATIONS_QUEUE` to `'notifications-queue'` for typed queue name autocomplete.
+The binding string does three jobs at once: DI injection token, env lookup key (`env.NOTIFICATIONS_QUEUE`), and autocomplete source. The `QueueBinding` type derives the valid set from `StratalEnv` automatically — no extra type augmentation is needed beyond `interface StratalEnv extends Cloudflare.Env {}`.
 
 ## Queue Consumer
 
@@ -83,6 +62,8 @@ Register in module's `consumers` array:
 export class EmailModule {}
 ```
 
+Consumers are matched against `message.type`, not against which queue the message arrived on. A single consumer can handle messages from any queue, and a single queue can fan messages out to many consumers — `messageTypes` is the routing key.
+
 ### Wildcard Consumer
 
 ```typescript
@@ -101,11 +82,11 @@ export class AuditConsumer implements IQueueConsumer {
 ```typescript
 interface QueueMessage<T = unknown> {
   id: string           // UUID (auto-generated)
-  timestamp: number    // Epoch ms (auto-generated)
   type: string         // Message type for routing
   payload: T           // Message data
   metadata?: {
     locale?: string
+    idempotencyKey?: string
     [key: string]: unknown
   }
 }
@@ -123,7 +104,7 @@ import { Transient } from 'stratal/di'
 @Transient()
 export class NotificationService {
   constructor(
-    @InjectQueue('notifications-queue') private queue: IQueueSender,
+    @InjectQueue('NOTIFICATIONS_QUEUE') private queue: IQueueSender,
   ) {}
 
   async notify(userId: string, message: string) {
@@ -137,13 +118,20 @@ export class NotificationService {
 
 ### DispatchMessage
 
-When dispatching, `id` and `timestamp` are auto-generated:
+When dispatching, `id` and `metadata.idempotencyKey` are auto-generated. The idempotency key is a deterministic SHA-256 hash of `type` + `payload`, so identical dispatches are deduplicated automatically. Override with a custom key via `metadata.idempotencyKey`:
 
 ```typescript
+// Auto-generated idempotency key (hash of type + payload)
 await this.queue.dispatch({
   type: 'email.send',
   payload: { to: 'user@example.com', subject: 'Hello' },
-  metadata: { priority: 'high' },
+})
+
+// Custom idempotency key
+await this.queue.dispatch({
+  type: 'order.process',
+  payload: { orderId: '123' },
+  metadata: { idempotencyKey: 'order:123' },
 })
 ```
 
@@ -163,7 +151,120 @@ await this.queue.dispatch({
 }
 ```
 
+Stratal code only references the `binding` value (`NOTIFICATIONS_QUEUE`). The `queue` value is wrangler's routing identifier and can vary per environment (e.g. `notifications-queue-dev`) without touching application code.
+
+## QueueModuleOptions
+
+```typescript
+interface QueueModuleOptions {
+  provider: 'cloudflare' | 'sync'
+  store?: {
+    binding?: string  // KV namespace binding. Default: 'CACHE'
+  }
+  idempotency?: {
+    ttl?: number  // Seconds a processed idempotency key is remembered. Default: 86400 (24h)
+  }
+  failedJobs?: {
+    retention?: number  // Age (seconds) past which FailedJobCleanupJob deletes a failed job. Default: 604800 (7d)
+  }
+  maxRetries?: number  // Default: 3
+}
+```
+
+The `store` field is optional — it defaults to the `CACHE` KV binding. Override `store.binding` only if the KV namespace uses a different binding name. The configured KV binding is validated at app boot: if it is missing, `QueueModule` throws a `QueueError` during initialization (fail-fast) instead of letting every queue invocation hard-fail. Add the binding to `wrangler.jsonc`:
+
+```jsonc
+{
+  "kv_namespaces": [
+    { "binding": "CACHE", "id": "..." }
+  ]
+}
+```
+
+## Failed Job Management
+
+When a consumer throws after exhausting retries, the message is persisted to KV as a `FailedJob`. Failed jobs are kept **indefinitely** until retried (`queue:retry`) or purged (`queue:purge`).
+
+### Automatic cleanup (opt-in cron)
+
+To bound KV growth, register the `FailedJobCleanupJob` cron — it deletes failed jobs older than `failedJobs.retention` (default 7 days). It is **not** registered for you:
+
+```typescript
+import { FailedJobCleanupJob, failedJobCleanupJob, QueueModule } from 'stratal/queue'
+
+@Module({
+  imports: [
+    QueueModule.forRoot({ provider: 'cloudflare', failedJobs: { retention: 1209600 } }), // 14 days
+  ],
+  jobs: [FailedJobCleanupJob],                 // daily at 00:00 UTC
+  // ...or a custom schedule: jobs: [failedJobCleanupJob('0 3 * * 0')]
+})
+export class AppModule {}
+```
+
+Add a matching cron trigger to `wrangler.jsonc` (`"0 0 * * *"` for the default schedule).
+
+### FailedJob Type
+
+```typescript
+interface FailedJob {
+  id: string
+  queue: string
+  type: string
+  consumer: string
+  attempts: number
+  failedAt: string
+  message: QueueMessage
+  error: { name: string; message: string; stack?: string }
+}
+```
+
+### CLI Commands
+
+```bash
+# List failed jobs (default limit: 50)
+npx quarry queue:failed
+npx quarry queue:failed --queue=NOTIFICATIONS_QUEUE --limit=100
+
+# Retry a single job by ID
+npx quarry queue:retry <message-id>
+
+# Retry all failed jobs
+npx quarry queue:retry --all
+npx quarry queue:retry --all --queue=NOTIFICATIONS_QUEUE
+
+# Delete a single failed job
+npx quarry queue:purge <message-id>
+
+# Delete all failed jobs
+npx quarry queue:purge --all
+npx quarry queue:purge --all --queue=NOTIFICATIONS_QUEUE
+```
+
+### QueueStore API
+
+Inject via `QUEUE_TOKENS.QueueStore` for programmatic access:
+
+```typescript
+import { QUEUE_TOKENS } from 'stratal/queue'
+import type { QueueStore } from 'stratal/queue'
+
+@Transient()
+export class MyService {
+  constructor(@inject(QUEUE_TOKENS.QueueStore) private store: QueueStore) {}
+
+  async inspectFailures() {
+    const { keys, cursor } = await this.store.listFailedJobs({ limit: 50 })
+    const job = await this.store.getFailedJob(keys[0].id)
+    await this.store.removeFailedJob(keys[0].id)
+    await this.store.purgeFailedJobs()
+  }
+}
+```
+
 ## Cron Jobs
+
+Declare `schedule` as a **static** property on the class.
 
 ```typescript
 import { Transient, inject } from 'stratal/di'
@@ -172,7 +273,7 @@ import { LOGGER_TOKENS } from 'stratal/logger'
 
 @Transient()
 export class DataCleanupJob implements CronJob {
-  readonly schedule = '0 2 * * *'  // Daily at 2 AM UTC
+  static schedule = '0 2 * * *'  // Daily at 2 AM UTC
 
   constructor(
     @inject(LOGGER_TOKENS.LoggerService) private logger: LoggerService,
@@ -215,8 +316,9 @@ The `schedule` value MUST exactly match a trigger in `wrangler.jsonc`:
 
 ```typescript
 interface CronJob {
-  readonly schedule: string                     // Cron expression
   execute(controller: ScheduledController): Promise<void>
   onError?(error: Error, controller: ScheduledController): Promise<void>
 }
 ```
+
+Declare `static schedule` on the class — it is not part of the interface. Jobs without a static `schedule` property log a warning and are skipped at boot.

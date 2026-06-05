@@ -1,32 +1,26 @@
-import { Scope } from 'stratal/di'
 import { ApplicationError, type ApplicationErrorConstructor, type ExceptionHandler, type HttpExceptionContext } from 'stratal/errors'
-import { I18N_TOKENS, type II18nService } from 'stratal/i18n'
 import type { AsyncModuleOptions, DynamicModule, OnException, OnInitialize } from 'stratal/module'
 import { Module } from 'stratal/module'
 import { SchemaValidationError, type RouteConfigurable, type Router } from 'stratal/router'
 import { augmentRouterContext } from './augment/router-context'
-import { InertiaBuildCommand } from './commands/inertia-build.command'
-import { InertiaDevCommand } from './commands/inertia-dev.command'
-import { InertiaInstallCommand } from './commands/inertia-install.command'
-import { InertiaTypesCommand } from './commands/inertia-types.command'
 import type { InertiaModuleOptions } from './inertia.options'
 import { INERTIA_TOKENS } from './inertia.tokens'
 import { InertiaMiddleware } from './middleware/inertia.middleware'
+import { HreflangService } from './services/hreflang.service'
 import { InertiaService } from './services/inertia.service'
 import { ManifestService } from './services/manifest.service'
+import { SeoService } from './services/seo.service'
 import { SsrRendererService } from './services/ssr-renderer.service'
 import { TemplateService } from './services/template.service'
 
 @Module({
   providers: [
-    { provide: INERTIA_TOKENS.InertiaService, useClass: InertiaService, scope: Scope.Request },
+    { provide: INERTIA_TOKENS.InertiaService, useClass: InertiaService },
     { provide: INERTIA_TOKENS.TemplateService, useClass: TemplateService },
     { provide: INERTIA_TOKENS.ManifestService, useClass: ManifestService },
-    { provide: INERTIA_TOKENS.SsrRenderer, useClass: SsrRendererService, scope: Scope.Singleton },
-    InertiaInstallCommand,
-    InertiaTypesCommand,
-    InertiaDevCommand,
-    InertiaBuildCommand,
+    { provide: INERTIA_TOKENS.SsrRenderer, useClass: SsrRendererService },
+    { provide: INERTIA_TOKENS.HreflangService, useClass: HreflangService },
+    { provide: INERTIA_TOKENS.SeoService, useClass: SeoService },
   ],
 })
 export class InertiaModule implements RouteConfigurable, OnInitialize, OnException {
@@ -67,7 +61,12 @@ export class InertiaModule implements RouteConfigurable, OnInitialize, OnExcepti
 
       if (!this.isInertiaRequest(context)) return undefined
 
-      const issues = (error.metadata?.issues as { path: string; message: string }[]) ?? []
+      // GET/HEAD navigations (including deferred partial reloads) can't use the
+      // flash-errors + redirect-back convention — see `isReadRequest`. Fall
+      // through to the errorPage pipeline so the error renders in place.
+      if (this.isReadRequest(context)) return undefined
+
+      const issues = error.issues ?? []
       const errors: Record<string, string> = {}
       for (const issue of issues) {
         errors[issue.path] = issue.message
@@ -81,8 +80,7 @@ export class InertiaModule implements RouteConfigurable, OnInitialize, OnExcepti
     handler.renderable(ApplicationError as unknown as ApplicationErrorConstructor, (error, context) => {
       if (context.type !== 'http') return undefined
 
-      const i18n = context.ctx.getContainer().resolve<II18nService>(I18N_TOKENS.I18nService)
-      const message = i18n.t(error.message as Parameters<II18nService['t']>[0], error.metadata as Record<string, string | number>)
+      const message = error.message
 
       if (this.isPrecognitionRequest(context)) {
         return this.createPrecognitionErrorResponse({ _form: message })
@@ -90,8 +88,29 @@ export class InertiaModule implements RouteConfigurable, OnInitialize, OnExcepti
 
       if (!this.isInertiaRequest(context)) return undefined
 
+      // GET/HEAD navigations (including deferred partial reloads) can't use the
+      // flash-errors + redirect-back convention — see `isReadRequest`. Fall
+      // through to the errorPage pipeline so the error renders in place.
+      if (this.isReadRequest(context)) return undefined
+
       context.ctx.flash('errors', { _form: message } as const)
       return this.redirectBack(context)
+    })
+
+    // Render full Inertia error pages for HTTP HTML requests. Convention:
+    // consumers ship `pages/Errors/${status}.tsx` (e.g. Errors/404, Errors/500).
+    handler.errorPage(async (errorResponse, status, context) => {
+      try {
+        const inertia = context.ctx.getContainer().resolve<InertiaService>(INERTIA_TOKENS.InertiaService)
+        return await inertia.render(
+          context.ctx,
+          `Errors/${status}`,
+          { status, message: errorResponse.message },
+          { status },
+        )
+      } catch {
+        return undefined
+      }
     })
   }
 
@@ -106,12 +125,30 @@ export class InertiaModule implements RouteConfigurable, OnInitialize, OnExcepti
     return context.ctx.header('x-inertia') === 'true'
   }
 
+  /**
+   * GET/HEAD requests are idempotent navigations — including Inertia deferred
+   * partial reloads, which fetch deferred props over a follow-up XHR that still
+   * carries `X-Inertia: true`.
+   *
+   * Such requests must NOT use the flash-errors + redirect-back convention: the
+   * redirect points back at the very URL that just threw, so an error raised
+   * while resolving a deferred prop would redirect → re-request → throw again
+   * in an infinite loop (`ERR_TOO_MANY_REDIRECTS`). For these we fall through to
+   * the errorPage pipeline, which renders `Errors/${status}` in place as an
+   * Inertia response. Redirect-back stays for mutations (POST/PUT/PATCH/DELETE),
+   * where it drives the post-submit form-error flow.
+   */
+  private isReadRequest(context: HttpExceptionContext): boolean {
+    const method = context.ctx.c.req.method.toUpperCase()
+    return method === 'GET' || method === 'HEAD'
+  }
+
   private isPrecognitionRequest(context: HttpExceptionContext): boolean {
     return context.ctx.header('precognition') === 'true'
   }
 
   private handlePrecognitionValidationError(error: SchemaValidationError, context: HttpExceptionContext): Response {
-    const issues = (error.metadata?.issues as { path: string; message: string }[]) ?? []
+    const issues = error.issues ?? []
     let errors: Record<string, string> = {}
     for (const issue of issues) {
       errors[issue.path] = issue.message
