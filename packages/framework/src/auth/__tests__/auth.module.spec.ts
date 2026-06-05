@@ -42,8 +42,8 @@ describe('AuthModule.forRootAsync — rate-limit auto-wiring', () => {
     container = new Container()
   })
 
-  afterEach(() => {
-    container.dispose()
+  afterEach(async () => {
+    await container.dispose()
   })
 
   it('returns the user options unchanged when RateLimiterModule is NOT imported', () => {
@@ -64,7 +64,7 @@ describe('AuthModule.forRootAsync — rate-limit auto-wiring', () => {
 
   it('attaches customStorage and customRules when RateLimiterModule marker is present', () => {
     const store = new FakeStore()
-    const registry = new RateLimiterRegistry(store)
+    const registry = new RateLimiterRegistry(container)
     registry.forPath('/sign-in/email', () => Limit.perSeconds(10, 3))
 
     container.registerValue(RATE_LIMITER_TOKENS.ModuleMarker, { imported: true })
@@ -90,7 +90,7 @@ describe('AuthModule.forRootAsync — rate-limit auto-wiring', () => {
   it('respects user-supplied customStorage (does not overwrite)', () => {
     const userStorage = { get: vi.fn(), set: vi.fn() }
     const store = new FakeStore()
-    const registry = new RateLimiterRegistry(store)
+    const registry = new RateLimiterRegistry(container)
 
     container.registerValue(RATE_LIMITER_TOKENS.ModuleMarker, { imported: true })
     container.registerValue(RATE_LIMITER_TOKENS.Store, store)
@@ -110,7 +110,7 @@ describe('AuthModule.forRootAsync — rate-limit auto-wiring', () => {
 
   it('lets user-supplied customRules entries override projected entries on collision', () => {
     const store = new FakeStore()
-    const registry = new RateLimiterRegistry(store)
+    const registry = new RateLimiterRegistry(container)
     registry.forPath('/sign-in/email', () => Limit.perSeconds(10, 3))
 
     container.registerValue(RATE_LIMITER_TOKENS.ModuleMarker, { imported: true })

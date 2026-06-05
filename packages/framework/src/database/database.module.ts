@@ -19,7 +19,7 @@ import { MigrateDeployCommand } from './commands/migrate-deploy.command';
 import { MigrateDevCommand } from './commands/migrate-dev.command';
 import { MigrateResetCommand } from './commands/migrate-reset.command';
 import { MigrateStatusCommand } from './commands/migrate-status.command';
-import { createDatabaseService } from './database.helpers';
+import { createDatabaseService, type DatabaseServiceClass } from './database.helpers';
 import { connectionSymbol, DATABASE_TOKENS } from './database.tokens';
 import { databaseMessages } from './i18n';
 import type { ConnectionName, DefaultConnectionName } from './types';
@@ -60,6 +60,8 @@ export interface DatabaseModuleConfig {
   ],
 })
 export class DatabaseModule implements OnInitialize, OnShutdown {
+  private readonly services: DatabaseServiceClass[] = []
+
   static forRoot(config: DatabaseModuleConfig): DynamicModule {
     return {
       module: DatabaseModule,
@@ -91,6 +93,7 @@ export class DatabaseModule implements OnInitialize, OnShutdown {
     for (const conn of config.connections) {
       const Service = createDatabaseService(conn, eventRegistry);
 
+      this.services.push(Service)
       context.container.register(connectionSymbol(conn.name), lazy(() => Service))
     }
 
@@ -99,7 +102,11 @@ export class DatabaseModule implements OnInitialize, OnShutdown {
     context.logger.info('DatabaseModule initialized')
   }
 
-  onShutdown(context: ModuleContext): void {
+  async onShutdown(context: ModuleContext): Promise<void> {
+    // Disconnect every live client so pools/sockets don't outlive the
+    // Application across dev-server hot reloads.
+    await Promise.all(this.services.map(service => service.disposeInstances()))
+    this.services.length = 0
     context.logger.info('DatabaseModule shutdown')
   }
 }

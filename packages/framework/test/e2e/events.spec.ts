@@ -150,6 +150,117 @@ describe('Event System', () => {
     })
   })
 
+  describe('Entity Mutation Events', () => {
+    interface EntityEvent {
+      model: string
+      action: string
+      before?: Record<string, unknown>
+      after?: Record<string, unknown>
+    }
+
+    it('emits entity.Post.created with the after snapshot', async () => {
+      await module.runInRequestScope(async () => {
+        const db = module.getDb()
+        const eventRegistry = module.get<EventRegistry>(DI_TOKENS.EventRegistry)
+        const received: EntityEvent[] = []
+        const handler = (ctx: unknown): void => { received.push(ctx as EntityEvent) }
+
+        eventRegistry.on('entity.Post.created', handler, { blocking: true })
+        try {
+          await db.post.create({
+            data: { title: 'Fresh Post', content: 'Body', authorId: REGULAR_USER_ID },
+          })
+        } finally {
+          eventRegistry.off('entity.Post.created', handler)
+        }
+
+        expect(received).toHaveLength(1)
+        expect(received[0].action).toBe('created')
+        expect(received[0].before).toBeUndefined()
+        expect(received[0].after?.title).toBe('Fresh Post')
+      })
+    })
+
+    it('emits entity.Post.updated with before and after snapshots', async () => {
+      await module.runInRequestScope(async () => {
+        const db = module.getDb()
+        const eventRegistry = module.get<EventRegistry>(DI_TOKENS.EventRegistry)
+        const received: EntityEvent[] = []
+        const handler = (ctx: unknown): void => { received.push(ctx as EntityEvent) }
+
+        const post = await db.post.create({
+          data: { title: 'Original Title', content: 'Body', authorId: REGULAR_USER_ID },
+        })
+
+        eventRegistry.on('entity.Post.updated', handler, { blocking: true })
+        try {
+          await db.post.update({ where: { id: post.id }, data: { title: 'Changed Title' } })
+        } finally {
+          eventRegistry.off('entity.Post.updated', handler)
+        }
+
+        expect(received).toHaveLength(1)
+        expect(received[0].model).toBe('Post')
+        expect(received[0].action).toBe('updated')
+        expect(received[0].before?.title).toBe('Original Title')
+        expect(received[0].after?.title).toBe('Changed Title')
+      })
+    })
+
+    it('emits entity.Post.deleted with the before snapshot', async () => {
+      await module.runInRequestScope(async () => {
+        const db = module.getDb()
+        const eventRegistry = module.get<EventRegistry>(DI_TOKENS.EventRegistry)
+        const received: EntityEvent[] = []
+        const handler = (ctx: unknown): void => { received.push(ctx as EntityEvent) }
+
+        const post = await db.post.create({
+          data: { title: 'Doomed Post', content: 'Body', authorId: REGULAR_USER_ID },
+        })
+
+        eventRegistry.on('entity.Post.deleted', handler, { blocking: true })
+        try {
+          await db.post.delete({ where: { id: post.id } })
+        } finally {
+          eventRegistry.off('entity.Post.deleted', handler)
+        }
+
+        expect(received).toHaveLength(1)
+        expect(received[0].action).toBe('deleted')
+        expect(received[0].before?.title).toBe('Doomed Post')
+        expect(received[0].after).toBeUndefined()
+      })
+    })
+
+    it('emits one entity event per row for multi-row mutations', async () => {
+      await module.runInRequestScope(async () => {
+        const db = module.getDb()
+        const eventRegistry = module.get<EventRegistry>(DI_TOKENS.EventRegistry)
+        const received: EntityEvent[] = []
+        const handler = (ctx: unknown): void => { received.push(ctx as EntityEvent) }
+
+        await db.post.create({ data: { title: 'Bulk A', authorId: REGULAR_USER_ID } })
+        await db.post.create({ data: { title: 'Bulk B', authorId: REGULAR_USER_ID } })
+
+        eventRegistry.on('entity.Post.updated', handler, { blocking: true })
+        try {
+          await db.post.updateMany({
+            where: { title: { startsWith: 'Bulk' } },
+            data: { published: true },
+          })
+        } finally {
+          eventRegistry.off('entity.Post.updated', handler)
+        }
+
+        expect(received).toHaveLength(2)
+        const byTitle = new Map(received.map((e) => [e.before?.title, e]))
+        expect(byTitle.get('Bulk A')?.before?.published).toBe(false)
+        expect(byTitle.get('Bulk A')?.after?.published).toBe(true)
+        expect(byTitle.get('Bulk B')?.after?.published).toBe(true)
+      })
+    })
+  })
+
   describe('Error Isolation', () => {
     it('throwing handler does not crash other handlers', async () => {
       await module.runInRequestScope(async () => {

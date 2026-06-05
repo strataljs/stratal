@@ -198,19 +198,17 @@ describe('HTTP Method Decorators', () => {
       })
       class MixedAppModule {}
 
-      const testModule = await Test.createTestingModule({
-        imports: [MixedAppModule],
-      }).compile()
-
+      // The testing builder initializes routing eagerly, so the mixed-decorator
+      // configuration error surfaces as a compile() rejection.
       await expect(
-        testModule.application.ensureHono()
+        Test.createTestingModule({
+          imports: [MixedAppModule],
+        }).compile()
       ).rejects.toMatchObject({
         name: 'RouterError',
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         message: expect.stringContaining('Cannot mix @Route() with HTTP method decorators'),
       })
-
-      await testModule.close()
     })
   })
 })

@@ -2,6 +2,7 @@ import type { ConnectionName, DatabaseService } from '@stratal/framework/databas
 import { connectionSymbol } from '@stratal/framework/database'
 import type { Application, Constructor, StratalEnv, StratalExecutionContext } from 'stratal'
 import { DI_TOKENS, type Container } from 'stratal/di'
+import type { ResolvedEmailMessage } from 'stratal/email'
 import { type InjectionToken } from 'stratal/module'
 import { SEEDER_TOKENS, SeederError, type Seeder, type SeederRegistry } from 'stratal/seeder'
 import { STORAGE_TOKENS } from 'stratal/storage'
@@ -9,6 +10,7 @@ import { expect } from 'vitest'
 import { dropDatabase } from '../database'
 import { FEATURE_FLAG_SERVICE_TOKEN, type FakeFeatureFlagService } from '../feature-flags'
 import type { FakeStorageService } from '../storage'
+import type { TestEmailProvider } from '../mocks/test-email-provider'
 import { TestHttpClient } from './http/test-http-client'
 import { TestCommandRequest } from './quarry/test-command-request'
 import { TestSseRequest } from './sse/test-sse-request'
@@ -63,9 +65,18 @@ export class TestingModule {
     private readonly env: StratalEnv,
     private readonly ctx: StratalExecutionContext,
     private readonly isolatedDatabase: IsolatedDatabase | null = null,
+    private readonly testEmailProvider: TestEmailProvider | null = null,
   ) {
     const mockContext = this.app.createMockRouterContext()
     this._requestContainer = this.app.container.createRequestScope(mockContext)
+  }
+
+  /**
+   * Emails recorded by the default {@link TestEmailProvider}, in send order.
+   * Empty when the email provider factory was overridden.
+   */
+  get sentEmails(): ResolvedEmailMessage[] {
+    return this.testEmailProvider?.sent ?? []
   }
 
   /**
@@ -229,7 +240,7 @@ export class TestingModule {
    * Cleanup - call in afterAll
    */
   async close(): Promise<void> {
-    this._requestContainer.dispose()
+    await this._requestContainer.dispose()
     try {
       await this.app.shutdown()
     }

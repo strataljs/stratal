@@ -1,6 +1,6 @@
 {
   "name": "@stratal/testing",
-  "version": "0.0.23",
+  "version": "0.0.25",
   "description": "Testing utilities and mocks for Stratal framework applications",
   "type": "module",
   "license": "MIT",
@@ -49,6 +49,10 @@
       "types": "./dist/mocks/index.d.mts",
       "import": "./dist/mocks/index.mjs"
     },
+    "./mocks/noop-rate-limiter-store": {
+      "types": "./dist/mocks/noop-rate-limiter-store.d.mts",
+      "import": "./dist/mocks/noop-rate-limiter-store.mjs"
+    },
     "./mocks/zenstack-language": {
       "types": "./dist/mocks/zenstack-language.d.mts",
       "import": "./dist/mocks/zenstack-language.mjs"
@@ -75,13 +79,17 @@
     "msw": "^2.14.6"
   },
   "peerDependencies": {
-    "@stratal/framework": ">=0.0.23",
+    "@better-auth/core": ">=1.6",
+    "@stratal/framework": ">=0.0.25",
     "better-auth": ">=1.4",
     "pg": "^8.0.0",
-    "stratal": ">=0.0.23",
+    "stratal": ">=0.0.25",
     "vitest": "^4.1.0"
   },
   "peerDependenciesMeta": {
+    "@better-auth/core": {
+      "optional": true
+    },
     "@stratal/framework": {
       "optional": true
     },
@@ -93,6 +101,7 @@
     }
   },
   "devDependencies": {
+    "@better-auth/core": "^1.6.11",
     "@cloudflare/workers-types": "4.20260603.1",
     "@stratal/framework": "workspace:*",
     "@types/node": "^25.9.1",

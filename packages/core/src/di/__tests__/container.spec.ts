@@ -3,6 +3,7 @@ import type { RouterContext } from '../../router/router-context'
 import { Container } from '../container'
 import { ContainerError } from '../container.error'
 import { inject, Request, Transient } from '../decorators'
+import { lazy } from '../lazy'
 import { CONTAINER_TOKEN, DI_TOKENS } from '../tokens'
 
 // Test services
@@ -317,6 +318,164 @@ describe('Container', () => {
       container.register(THROWS_TOKEN, Throws)
       // The provider IS registered; a failure constructing it is a real error.
       expect(() => container.tryResolve(THROWS_TOKEN)).toThrow('boom')
+    })
+
+    it('should return undefined for a request-scoped provider outside a request scope', () => {
+      container.register(REQUEST_SCOPED_TOKEN, RequestScopedService)
+
+      // Optional request-scoped dependency outside a request = absent, not an
+      // error — mirrors `@inject(..., { isOptional: true })` semantics.
+      expect(container.tryResolve(REQUEST_SCOPED_TOKEN)).toBeUndefined()
+    })
+
+    it('should resolve a request-scoped provider inside a request scope', async () => {
+      container.register(REQUEST_SCOPED_TOKEN, RequestScopedService)
+      const routerContext = { getContainer: () => container } as unknown as RouterContext
+
+      await container.runInRequestScope(routerContext, (req) => {
+        expect(req.tryResolve(REQUEST_SCOPED_TOKEN)).toBeInstanceOf(RequestScopedService)
+      })
+    })
+
+    it('should return undefined for a lazily-registered request-scoped provider outside a request scope', () => {
+      container.register(REQUEST_SCOPED_TOKEN, lazy(() => RequestScopedService))
+
+      // Lazy registrations derive their scope from decorator metadata at
+      // resolution time — tryResolve must see the same scope and stay silent.
+      expect(container.tryResolve(REQUEST_SCOPED_TOKEN)).toBeUndefined()
+    })
+
+    it('should return undefined for an alias to a request-scoped provider outside a request scope', () => {
+      container.register(REQUEST_SCOPED_TOKEN, RequestScopedService)
+      container.registerExisting(ALIAS_TOKEN, REQUEST_SCOPED_TOKEN)
+
+      expect(container.tryResolve(ALIAS_TOKEN)).toBeUndefined()
+    })
+
+    it('should return undefined for an unregistered request-scoped class token outside a request scope', () => {
+      // Auto-resolvable constructor: scope comes from decorator metadata, not a
+      // registration — must behave the same on the first call as on later ones.
+      expect(container.tryResolve(RequestScopedService)).toBeUndefined()
+    })
+  })
+
+  describe('dispose()', () => {
+    it('should invoke dispose hooks on cached singletons, preferring async > sync > method', async () => {
+      const calls: string[] = []
+
+      class AsyncDisposableService {
+        [Symbol.asyncDispose]() {
+          calls.push('async')
+          return Promise.resolve()
+        }
+        [Symbol.dispose]() { calls.push('sync') }
+        dispose() { calls.push('method') }
+      }
+      class SyncDisposableService {
+        [Symbol.dispose]() { calls.push('sync-only') }
+      }
+      class MethodDisposableService {
+        dispose() { calls.push('method-only') }
+      }
+
+      container.registerSingleton(AsyncDisposableService)
+      container.registerSingleton(SyncDisposableService)
+      container.registerSingleton(MethodDisposableService)
+      container.resolve(AsyncDisposableService)
+      container.resolve(SyncDisposableService)
+      container.resolve(MethodDisposableService)
+
+      await container.dispose()
+
+      expect(calls.sort()).toEqual(['async', 'method-only', 'sync-only'])
+    })
+
+    it('should dispose instances in reverse creation order (LIFO)', async () => {
+      const order: string[] = []
+
+      class FirstService {
+        dispose() { order.push('first') }
+      }
+      class SecondService {
+        dispose() { order.push('second') }
+      }
+      class ThirdService {
+        dispose() { order.push('third') }
+      }
+
+      container.registerSingleton(FirstService)
+      container.registerSingleton(SecondService)
+      container.registerSingleton(ThirdService)
+      container.resolve(FirstService)
+      container.resolve(SecondService)
+      container.resolve(ThirdService)
+
+      await container.dispose()
+
+      // A disposer may still use dependencies constructed before its own
+      // instance, so teardown unwinds construction order.
+      expect(order).toEqual(['third', 'second', 'first'])
+    })
+
+    it('should not dispose singletons that were never resolved', async () => {
+      const disposeSpy = vi.fn()
+      class NeverResolvedService {
+        dispose() { disposeSpy() }
+      }
+
+      container.registerSingleton(NeverResolvedService)
+
+      await container.dispose()
+
+      expect(disposeSpy).not.toHaveBeenCalled()
+    })
+
+    it('should continue past a throwing disposer and log the failure', async () => {
+      const disposed: string[] = []
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => { /* silence */ })
+
+      class ThrowingService {
+        dispose() {
+          disposed.push('throwing')
+          throw new Error('boom')
+        }
+      }
+      class HealthyService {
+        dispose() { disposed.push('healthy') }
+      }
+
+      container.registerSingleton(ThrowingService)
+      container.registerSingleton(HealthyService)
+      container.resolve(ThrowingService)
+      container.resolve(HealthyService)
+
+      await container.dispose()
+
+      // LIFO disposal: HealthyService was created last, so it unwinds first.
+      expect(disposed).toEqual(['healthy', 'throwing'])
+      expect(consoleError).toHaveBeenCalledOnce()
+      consoleError.mockRestore()
+    })
+
+    it('should not dispose value registrations (instances the container does not own)', async () => {
+      const disposeSpy = vi.fn()
+      container.registerValue(TEST_TOKEN, { dispose: disposeSpy })
+      container.resolve(TEST_TOKEN)
+
+      await container.dispose()
+
+      expect(disposeSpy).not.toHaveBeenCalled()
+    })
+
+    it('should clear all registrations and caches', async () => {
+      // Symbol token: class tokens auto-resolve from decorator metadata even
+      // without a registration, so they can't prove the maps were cleared.
+      container.registerSingleton(TEST_TOKEN, TestService)
+      container.resolve(TEST_TOKEN)
+
+      await container.dispose()
+
+      expect(container.tryResolve(TEST_TOKEN)).toBeUndefined()
     })
   })
 

@@ -140,6 +140,107 @@ export type GetResult<M extends ModelName, O extends DatabaseOperation> =
   _ExtractResult<InferAnySchema, M, O> extends never ? unknown : _ExtractResult<InferAnySchema, M, O>
 
 // ============================================================================
+// Entity Mutation Events
+// ============================================================================
+
+/**
+ * Verb suffix for entity-mutation events (`entity.{Model}.{verb}`).
+ */
+export type EntityMutationVerb = 'created' | 'updated' | 'deleted'
+
+/**
+ * Entity-mutation event names with all supported patterns.
+ *
+ * Unlike `before.*`/`after.*` (raw query args/result), entity events carry
+ * full entity snapshots: `created` has `after`, `updated` has `before` and
+ * `after`, `deleted` has `before`. The pre-mutation snapshot is loaded inside
+ * the mutation's transaction, and only when a listener matches — a wildcard
+ * subscription (`entity`) makes every model pay that pre-read, so subscribe
+ * per model when cost matters.
+ */
+export type EntityEventName =
+  | `entity.${ModelName}.${EntityMutationVerb}`
+  | `entity.${ModelName}`
+  | `entity.${EntityMutationVerb}`
+  | 'entity'
+
+/**
+ * Distributive helper — resolves the full entity shape for a model.
+ */
+type _ExtractEntity<S, M extends string> =
+  S extends SchemaDef
+  ? M extends Extract<keyof S['models'], string>
+  ? ModelResult<S, M>
+  : never
+  : never
+
+/**
+ * Full entity snapshot type for a model, across all connections' schemas.
+ */
+export type GetEntity<M extends ModelName> =
+  _ExtractEntity<InferAnySchema, M> extends never ? unknown : _ExtractEntity<InferAnySchema, M>
+
+interface EntityCreatedEventContext<M extends ModelName> {
+  model: M
+  action: 'created'
+  before: undefined
+  after: GetEntity<M>
+}
+
+interface EntityUpdatedEventContext<M extends ModelName> {
+  model: M
+  action: 'updated'
+  before: GetEntity<M>
+  after: GetEntity<M>
+}
+
+interface EntityDeletedEventContext<M extends ModelName> {
+  model: M
+  action: 'deleted'
+  before: GetEntity<M>
+  after: undefined
+}
+
+/** Context for model wildcard subscriptions (e.g. "entity.User") */
+interface EntityModelWildcardContext<M extends ModelName> {
+  model: M
+  action: EntityMutationVerb
+  before: GetEntity<M> | undefined
+  after: GetEntity<M> | undefined
+}
+
+/** Context for verb wildcard subscriptions (e.g. "entity.updated") */
+interface EntityVerbWildcardContext<V extends EntityMutationVerb> {
+  model: ModelName
+  action: V
+  before: V extends 'created' ? undefined : unknown
+  after: V extends 'deleted' ? undefined : unknown
+}
+
+/** Context for the global wildcard subscription ("entity") */
+interface EntityWildcardContext {
+  model: ModelName
+  action: EntityMutationVerb
+  before: unknown
+  after: unknown
+}
+
+type EntityEventContext<E extends string> =
+  E extends `entity.${infer M extends ModelName}.created` ? EntityCreatedEventContext<M>
+  : E extends `entity.${infer M extends ModelName}.updated` ? EntityUpdatedEventContext<M>
+  : E extends `entity.${infer M extends ModelName}.deleted` ? EntityDeletedEventContext<M>
+  : E extends `entity.${infer M extends ModelName}` ? EntityModelWildcardContext<M>
+  : E extends `entity.${infer V extends EntityMutationVerb}` ? EntityVerbWildcardContext<V>
+  : EntityWildcardContext
+
+/**
+ * Mapped type producing all entity-mutation event name → context pairs.
+ */
+export type EntityEvents = {
+  [E in EntityEventName]: EntityEventContext<E>
+}
+
+// ============================================================================
 // Parse Event String
 // ============================================================================
 
@@ -261,5 +362,5 @@ export type DatabaseEvents = {
 // ============================================================================
 
 declare module 'stratal/events' {
-  interface CustomEventRegistry extends DatabaseEvents { }
+  interface CustomEventRegistry extends DatabaseEvents, EntityEvents { }
 }

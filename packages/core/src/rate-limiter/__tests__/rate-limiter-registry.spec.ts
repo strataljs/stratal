@@ -1,4 +1,6 @@
+import { createMock } from '@stratal/testing/mocks'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Container } from '../../di/container'
 import type { Next } from '../../router/middleware.interface'
 import type { RouterContext } from '../../router/router-context'
 import { RateLimiterError, TooManyRequestsError } from '../errors'
@@ -25,7 +27,9 @@ describe('RateLimiterRegistry', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
     store = new InMemoryRateLimiterStore()
-    registry = new RateLimiterRegistry(store)
+    const container = createMock<Container>()
+    container.resolve.mockReturnValue(store)
+    registry = new RateLimiterRegistry(container as unknown as Container)
   })
 
   afterEach(() => {

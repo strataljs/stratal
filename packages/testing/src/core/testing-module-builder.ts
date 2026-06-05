@@ -9,6 +9,8 @@ import type { ExceptionHandler } from 'stratal/errors'
 import { type Container } from 'stratal/di'
 import { LogLevel } from 'stratal/logger'
 import { type InjectionToken, Module, type ModuleClass, type ModuleOptions } from 'stratal/module'
+import { EMAIL_TOKENS } from 'stratal/email'
+import { RATE_LIMITER_TOKENS } from 'stratal/rate-limiter'
 import { STORAGE_TOKENS } from 'stratal/storage'
 import {
   BINDING_ENV_VAR,
@@ -23,6 +25,8 @@ import {
   normalizeIsolation,
 } from '../database'
 import { FakeStorageService } from '../storage'
+import { NoopRateLimiterStore } from '../mocks/noop-rate-limiter-store'
+import { TestEmailProvider } from '../mocks/test-email-provider'
 import { FEATURE_FLAG_SERVICE_TOKEN, FakeFeatureFlagService } from '../feature-flags'
 import { ProviderOverrideBuilder, type ProviderOverrideConfig } from './override'
 import { Test } from './test'
@@ -124,6 +128,7 @@ export class TestingModuleBuilder {
     // owns the drop via close()) can throw — module init, overrides, etc. If it
     // does, nothing would ever drop the freshly cloned database. Drop it (FORCE)
     // on failure before rethrowing so a compile() error doesn't leak a database.
+    let app: Application | null = null
     try {
       // Build root module from config
       const baseModules = Test.getBaseModules()
@@ -137,7 +142,7 @@ export class TestingModuleBuilder {
         jobs: this.config.jobs,
       })
 
-      const app = new Application({
+      app = new Application({
         module: rootModule,
         logging: {
           level: this.config.logging?.level ?? LogLevel.ERROR,
@@ -156,6 +161,21 @@ export class TestingModuleBuilder {
       // Auto-register FakeFeatureFlagService so feature-gated code resolves without a
       // real Cloudflare Flagship binding. Inert for apps that don't use feature flags.
       app.container.registerSingleton(FEATURE_FLAG_SERVICE_TOKEN, FakeFeatureFlagService)
+
+      // Disable rate limiting: suites fire many requests from one "IP" in
+      // seconds and would trip production limiter budgets (and Better Auth's
+      // built-in per-path limits, which share this store). Override the token
+      // back to a real store to test limiting behavior explicitly.
+      app.container.registerSingleton(RATE_LIMITER_TOKENS.Store, NoopRateLimiterStore)
+
+      // Auto-register TestEmailProvider: the sync queue provider runs
+      // EmailConsumer inline on dispatch, which would otherwise open a real
+      // SMTP connection from the test worker. Recorded messages are exposed
+      // via `module.sentEmails`; the user overrides below still replace this.
+      const testEmailProvider = new TestEmailProvider()
+      app.container.registerValue(EMAIL_TOKENS.EmailProviderFactory, {
+        create: () => testEmailProvider,
+      })
 
       // Apply user overrides AFTER initialize so they replace module-registered providers
       for (const override of this.overrides) {
@@ -184,8 +204,24 @@ export class TestingModuleBuilder {
         }
       }
 
-      return new TestingModule(app, env, ctx, isolatedDb)
+      // Routing init is lazy in production (first fetch keeps cold starts
+      // lean), but tests may resolve request-scoped router services before
+      // any fetch — e.g. ActingAs minting a session resolves AUTH_OPTIONS,
+      // whose factory can inject ROUTER_TOKENS.Uri. Initialize eagerly so
+      // test ordering can never matter. Runs last: singleton resolution
+      // caches by token without invalidation, so anything resolved here
+      // would permanently shadow auto-mocks and user overrides.
+      await app.ensureHono()
+
+      return new TestingModule(app, env, ctx, isolatedDb, testEmailProvider)
     } catch (error) {
+      // Tear down the partially built Application so module-held resources
+      // (DB pools, timers) don't outlive a failed compile().
+      if (app) {
+        await app.shutdown().catch(() => {
+          // Best-effort cleanup for partially initialized apps.
+        })
+      }
       if (isolatedDb) {
         await dropDatabase(isolatedDb.adminConnectionString, isolatedDb.name).catch(() => {
           // Best-effort cleanup; the next run's stale-database sweep is the backstop.

@@ -21,7 +21,7 @@ Per-package contributor rules: `packages/<name>/CLAUDE.md` — auto-load when wo
 - Don't hand-edit `packages/*/package.json` `exports` — `tsdown` regenerates on build. Add new sub-paths via the package's `tsdown.config.ts` `entry` list. For an alias (path A exposed at name B) use `customExports`.
 - Keep `experimentalDecorators` + `emitDecoratorMetadata` on (needed by the DI decorator system).
 - DI tokens: `Symbol.for('stratal:...')` in each package's `tokens.ts`. Never strings.
-- Inline type imports enforced (`consistent-type-imports`). Leading-underscore for unused vars.
+- Type-only imports must be marked `type` (`consistent-type-imports`). Both `import type { X }` and `import { type X }` satisfy the rule — `import type { X }` is the prevailing style; don't flag either form. Leading-underscore for unused vars.
 - `oxlint` lints. Husky + lint-staged auto-fixes staged `.ts/.mts` on commit. Don't pass `--no-verify`.
 - Shared build helpers in `tsdown.base.ts` (`baseConfig`, `withTypesExports`). Touching this file affects every package — typecheck and build all on changes.
 - Build target tsconfig is `tsconfig.build.json` per package (separate from the editor `tsconfig.json`). Don't point `tsdown` at the editor config.

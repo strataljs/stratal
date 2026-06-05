@@ -6,6 +6,7 @@ import { containerStorage } from './container-storage';
 import { ContainerError } from './container.error';
 import { getClassMetadata } from './decorators';
 import { getInjectionTokens } from './decorators/inject.decorator';
+import { disposeInstance, isDisposable } from './disposable';
 import { isLazyToken, type LazyToken } from './lazy';
 import { CONTAINER_TOKEN } from './tokens';
 import { Scope, type ExtensionDecorator, type InjectionToken, type WhenOptions } from './types';
@@ -186,6 +187,11 @@ export class Container {
     // must surface — swallowing it would silently inject `undefined` and turn a
     // bug into a baffling downstream failure.
     if (!this.isResolvable(realToken)) return undefined
+
+    // An optional request-scoped dependency outside a request scope is absent,
+    // not an error — mirrors `@inject(..., { isOptional: true })` semantics.
+    if (!this.isRequestScoped && this.scopeForToken(realToken) === Scope.Request) return undefined
+
     return this.resolve(realToken)
   }
 
@@ -245,7 +251,28 @@ export class Container {
 
   // ── Lifecycle ─────────────────────────────────────────────────
 
-  dispose(): void {
+  /**
+   * Disposes every container-instantiated instance that implements the
+   * {@link Disposable} contract (singletons and request-cached instances),
+   * then clears all registrations. Value registrations are not disposed —
+   * the container doesn't own them. A failing disposer is logged and
+   * skipped so it can't block the rest of the teardown.
+   *
+   * Instances are disposed in reverse creation order (LIFO): a disposer may
+   * still use dependencies that were constructed before its own instance.
+   */
+  async dispose(): Promise<void> {
+    const seen = new Set<unknown>()
+    for (const instance of [...this.singletons.values(), ...this.requestCache.values()].reverse()) {
+      if (seen.has(instance) || !isDisposable(instance)) continue
+      seen.add(instance)
+      try {
+        await disposeInstance(instance)
+      } catch (error) {
+        console.error('[stratal] Failed to dispose instance during container teardown:', error)
+      }
+    }
+
     this.registrations.clear()
     this.singletons.clear()
     this.requestCache.clear()
@@ -298,6 +325,26 @@ export class Container {
     // A bare constructor token that is auto-resolvable (carries DI metadata).
     if (typeof token === 'function' && getClassMetadata(token as Constructor)) {
       return token as unknown as Constructor
+    }
+    return undefined
+  }
+
+  /**
+   * The effective scope a token would resolve with, following alias
+   * registrations. Bare constructor tokens fall back to their decorator
+   * metadata — the same scope {@link resolve} uses when auto-registering.
+   */
+  private scopeForToken(token: InjectionToken): Scope | undefined {
+    const reg = this.findRegistration(token)
+    if (reg) {
+      if (reg.kind === 'class') return reg.scope
+      if (reg.kind === 'alias') return this.scopeForToken(reg.target)
+      // Same scope derivation `resolveRegistration` uses for lazy registrations
+      if (reg.kind === 'lazy') return getClassMetadata(reg.factory())?.scope ?? Scope.Transient
+      return undefined
+    }
+    if (typeof token === 'function') {
+      return getClassMetadata(token as Constructor)?.scope
     }
     return undefined
   }
