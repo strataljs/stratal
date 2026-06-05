@@ -2,7 +2,7 @@ import type { Page } from '@inertiajs/core'
 import type { Application } from 'stratal'
 import { DI_TOKENS, Request, inject } from 'stratal/di'
 import { I18N_TOKENS, type MessageLoaderService } from 'stratal/i18n'
-import { ROUTER_TOKENS, type CurrentRoute, type LocalePathService, type LocaleUrlConfig, type RegisteredRoute, type RouteRegistry, type RouterContext, type SerializedRoutes, type Uri } from 'stratal/router'
+import { ROUTER_TOKENS, resolveTrailingSlash, type CurrentRoute, type LocalePathService, type LocaleUrlConfig, type RegisteredRoute, type RouteRegistry, type RouterContext, type SerializedRoutes, type Uri } from 'stratal/router'
 import type { InertiaMergeOptions, InertiaOnceOptions } from '../augment/router-context'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { INERTIA_TOKENS } from '../inertia.tokens'
@@ -219,7 +219,10 @@ export class InertiaService {
       const localePathService = container.resolve<LocalePathService>(ROUTER_TOKENS.LocalePathService)
 
       shared.routes = this.serializeRoutes(registry.named())
-      shared.trailingSlash = application.config.trailingSlash ?? 'ignore'
+      // Share the resolved mode only — exclusions are server-side (RegExp
+      // patterns don't survive JSON). Excluded paths are served in both slash
+      // forms by the server, so a client-canonicalised URL never redirects.
+      shared.trailingSlash = resolveTrailingSlash(application.config.trailingSlash).mode
       shared.route = { name, params, defaults: uri.getDefaults() } satisfies CurrentRoute
       shared.localeConfig = {
         defaultLocale: localePathService.localePathConfig?.defaultLocale ?? null,

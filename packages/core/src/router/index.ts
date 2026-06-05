@@ -4,7 +4,7 @@
 // Core router types
 export type { IController } from './controller'
 export type { Middleware, Next } from './middleware.interface'
-export type { ControllerOptions, ConventionRouteMetadata, ExplicitRouteMetadata, LocalePathConfig, LocaleUrlConfig, RouteBody, RouteBodyObject, RouteConfig, RouteMetadata, RouterEnv, RouteResponse, RouteResponseObject, RouterVariables, SecurityScheme, TrailingSlashMode, VersioningOptions } from './types'
+export type { ControllerOptions, ConventionRouteMetadata, ExplicitRouteMetadata, LocalePathConfig, LocaleUrlConfig, RouteBody, RouteBodyObject, RouteConfig, RouteMetadata, RouterEnv, RouteResponse, RouteResponseObject, RouterVariables, SecurityScheme, TrailingSlashConfig, TrailingSlashExclude, TrailingSlashMode, TrailingSlashOptions, VersioningOptions } from './types'
 
 // Router constants
 export { HTTP_METHODS, ROUTE_METADATA_KEYS, ROUTER_CONTEXT_KEYS, SECURITY_SCHEMES, VERSION_NEUTRAL } from './constants'
@@ -38,7 +38,7 @@ export type { CurrentRoute, RouteMatcher, RouteName, RouteParams, RoutePrefixes,
 export { route } from './route-url'
 export { buildRouteUrl, Uri, type SignedUriOptions, type UriOptions } from './uri'
 export { applyLocalePrefix, shouldPrefixLocale, stripLocalePrefix } from './locale-url'
-export { applyTrailingSlash } from './trailing-slash'
+export { applyTrailingSlash, isTrailingSlashExcluded, resolveTrailingSlash } from './trailing-slash'
 
 // Router (replaces MiddlewareConfigurable — route + middleware configuration)
 export { Router, type RouteConfigurable, type RouterGroupConfig } from './router'

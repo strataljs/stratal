@@ -10,8 +10,8 @@ import { RouterError } from './router.error';
 import { ROUTER_TOKENS } from './router.tokens';
 import type { LocalePathService } from './services/locale-path.service';
 import { signUrl, verifySignedUrl, type SignedUrlOptions } from './signed-url';
-import { applyTrailingSlash } from './trailing-slash';
-import type { LocaleUrlConfig, TrailingSlashMode } from './types';
+import { applyTrailingSlash, resolveTrailingSlash } from './trailing-slash';
+import type { LocaleUrlConfig, TrailingSlashOptions } from './types';
 
 /**
  * Options for URL generation methods.
@@ -132,7 +132,8 @@ export function buildRouteUrl(
 @Request(ROUTER_TOKENS.Uri)
 export class Uri {
   private _defaults: Record<string, string> = {}
-  private readonly trailingSlash: TrailingSlashMode
+  private readonly trailingSlash: TrailingSlashOptions
+  private readonly locales?: readonly string[]
   private readonly localeConfig: LocaleUrlConfig
 
   constructor(
@@ -141,7 +142,9 @@ export class Uri {
     @inject(DI_TOKENS.Application) application: Application,
     @inject(ROUTER_TOKENS.LocalePathService) localePathService: LocalePathService,
   ) {
-    this.trailingSlash = application.config.trailingSlash ?? 'ignore'
+    // Resolved once — applyTrailingSlash accepts the resolved form directly.
+    this.trailingSlash = resolveTrailingSlash(application.config.trailingSlash)
+    this.locales = localePathService.localePathConfig?.allLocales
     this.localeConfig = {
       defaultLocale: localePathService.localePathConfig?.defaultLocale ?? null,
       prefixDefaultLocale: localePathService.prefixDefaultLocale,
@@ -191,7 +194,7 @@ export class Uri {
     }
 
     const mergedParams = { ...this._defaults, ...params } as Record<string, string>
-    let url = applyTrailingSlash(buildRouteUrl(registeredRoute, name, mergedParams, this.localeConfig), this.trailingSlash)
+    let url = applyTrailingSlash(buildRouteUrl(registeredRoute, name, mergedParams, this.localeConfig), this.trailingSlash, this.locales)
 
     if (options?.absolute && !url.startsWith('http')) {
       const origin = new URL(this.routerContext.c.req.url).origin
@@ -248,7 +251,7 @@ export class Uri {
    */
   current(): string {
     const parsed = new URL(this.routerContext.c.req.url)
-    return applyTrailingSlash(parsed.pathname, this.trailingSlash)
+    return applyTrailingSlash(parsed.pathname, this.trailingSlash, this.locales)
   }
 
   /**
@@ -256,7 +259,7 @@ export class Uri {
    */
   full(): string {
     const parsed = new URL(this.routerContext.c.req.url)
-    return applyTrailingSlash(`${parsed.pathname}${parsed.search}`, this.trailingSlash)
+    return applyTrailingSlash(`${parsed.pathname}${parsed.search}`, this.trailingSlash, this.locales)
   }
 
   /**
@@ -293,7 +296,7 @@ export class Uri {
    * @param options - URL generation options
    */
   to(path: string, queryParams?: Record<string, string>, options?: UriOptions): string {
-    let url = applyTrailingSlash(path, this.trailingSlash)
+    let url = applyTrailingSlash(path, this.trailingSlash, this.locales)
 
     if (queryParams) {
       const entries = Object.entries(queryParams)
@@ -324,7 +327,7 @@ export class Uri {
     for (const [key, value] of Object.entries(queryParams)) {
       parsed.searchParams.set(key, value)
     }
-    return applyTrailingSlash(`${parsed.pathname}${parsed.search}`, this.trailingSlash)
+    return applyTrailingSlash(`${parsed.pathname}${parsed.search}`, this.trailingSlash, this.locales)
   }
 
   private getAppSecret(): string {

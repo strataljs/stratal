@@ -1,7 +1,7 @@
 import type { Application } from 'stratal'
 import { DI_TOKENS } from 'stratal/di'
 import { I18N_TOKENS, type I18nModuleOptions } from 'stratal/i18n'
-import { ROUTER_TOKENS, type LocaleUrlService } from 'stratal/router'
+import { ROUTER_TOKENS, type LocaleUrlService, type TrailingSlashConfig } from 'stratal/router'
 import { describe, expect, it } from 'vitest'
 import { HreflangService } from '../services/hreflang.service'
 
@@ -15,7 +15,7 @@ interface StubOptions {
   i18n?: I18nModuleOptions
   /** When provided, simulates path-based locale detection being active. */
   pathConfig?: { allLocales: string[]; defaultLocale: string | null; prefixDefaultLocale: false | true | 'redirect' }
-  trailingSlash?: 'always' | 'never' | 'ignore'
+  trailingSlash?: TrailingSlashConfig
 }
 
 function createService(stub: StubOptions): HreflangService {
@@ -202,6 +202,16 @@ describe('HreflangService', () => {
       const service = createService({ ...base, trailingSlash: 'ignore' })
       const links = service.buildLinks(new URL('http://localhost/users'))
       expect(links[0]).toEqual(alt('en', 'http://localhost/users'))
+    })
+
+    it('exempts excluded paths — including locale-prefixed variants', () => {
+      const service = createService({ ...base, trailingSlash: { mode: 'always', exclude: ['/users'] } })
+      const links = service.buildLinks(new URL('http://localhost/users'))
+      expect(links).toEqual([
+        alt('en', 'http://localhost/users'),
+        alt('fr', 'http://localhost/fr/users'),
+        alt('x-default', 'http://localhost/users'),
+      ])
     })
   })
 })

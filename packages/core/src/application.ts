@@ -23,7 +23,7 @@ import type { QueueManager } from './queue/queue-manager'
 import type { RouterContext } from './router'
 import type { HonoApp } from './router/hono-app'
 import { ROUTER_TOKENS } from './router/router.tokens'
-import type { TrailingSlashMode, VersioningOptions } from './router/types'
+import type { TrailingSlashConfig, VersioningOptions } from './router/types'
 import type { Seeder } from './seeder/seeder'
 import { SEEDER_TOKENS } from './seeder/seeder-registry'
 import type { SeederRegistry } from './seeder/seeder-registry'
@@ -36,7 +36,7 @@ export interface ApplicationConfig {
     formatter?: 'json' | 'pretty'
   }
   versioning?: VersioningOptions
-  trailingSlash?: TrailingSlashMode
+  trailingSlash?: TrailingSlashConfig
   exceptionHandler?: Constructor<ExceptionHandler>
 }
 

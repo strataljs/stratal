@@ -89,7 +89,7 @@ Constructor config:
 - `exceptionHandler?` — Custom `ExceptionHandler` subclass
 - `logging?` — `{ level?, formatter? }` (`'json'` | `'pretty'`)
 - `versioning?` — `{ prefix?, defaultVersion? }`
-- `trailingSlash?` — `'ignore'` (default) | `'always'` | `'never'`. Redirects non-canonical forms with 308 and applies the same canonicalisation to all URL helpers. See `references/routing.md`.
+- `trailingSlash?` — `'ignore'` (default) | `'always'` | `'never'`, or `{ mode, exclude }` to exempt paths (string segment-prefixes or RegExps) whose canonical form is external (e.g. OAuth callbacks). Redirects non-canonical forms with 308 and applies the same canonicalisation to all URL helpers. See `references/routing.md`.
 
 ### CLI Entry (`src/quarry.ts`)
 

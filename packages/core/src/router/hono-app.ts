@@ -17,8 +17,10 @@ import { RouterError } from './router.error'
 import { createLoggerMiddleware, createMiddlewareChain, createTrailingSlashRedirect } from './middleware'
 import type { Middleware } from './middleware.interface'
 import { RouterContext } from './router-context'
+import { ROUTER_TOKENS } from './router.tokens'
+import type { LocalePathService } from './services/locale-path.service'
 import { RouteRegistrationService } from './services/route-registration.service'
-import type { RouterEnv, TrailingSlashMode } from './types'
+import type { RouterEnv, TrailingSlashConfig } from './types'
 
 const isMiddlewareClass = (arg: unknown): arg is Constructor<Middleware> =>
   // eslint-disable-next-line @typescript-eslint/no-unsafe-return
@@ -52,7 +54,7 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
     @inject(LOGGER_TOKENS.LoggerService) logger: LoggerService,
     @inject(DI_TOKENS.Application) application: Application,
   ) {
-    const trailingSlash: TrailingSlashMode = application.config.trailingSlash ?? 'ignore'
+    const trailingSlash: TrailingSlashConfig = application.config.trailingSlash ?? 'ignore'
 
     super({
       // Always non-strict: a registered `/foo` route matches both `/foo` and `/foo/`.
@@ -88,8 +90,10 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
     }) as typeof this.use
 
     // Trailing-slash redirect runs first so redirected requests skip request-scope
-    // and logger overhead.
-    const trailingSlashRedirect = createTrailingSlashRedirect(trailingSlash)
+    // and logger overhead. Locales are read lazily — the i18n module (and thus
+    // LocalePathService) initialises after HonoApp is constructed.
+    const trailingSlashRedirect = createTrailingSlashRedirect(trailingSlash, () =>
+      this._container.tryResolve<LocalePathService>(ROUTER_TOKENS.LocalePathService)?.localePathConfig?.allLocales)
     if (trailingSlashRedirect) {
       this.nativeUse('*', trailingSlashRedirect)
     }

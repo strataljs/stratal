@@ -252,6 +252,36 @@ export interface ControllerOptions {
 export type TrailingSlashMode = 'ignore' | 'always' | 'never'
 
 /**
+ * A path exempt from trailing-slash canonicalisation.
+ *
+ * - `string` — matches that exact path and any subpath, segment-aware:
+ *   `'/auth/oauth2'` exempts `/auth/oauth2` and `/auth/oauth2/callback/x`,
+ *   but not `/auth/oauth2-other`.
+ * - `RegExp` — tested against both forms of the pathname (with and without
+ *   the trailing slash), so a pattern anchored to either form exempts both.
+ *
+ * Both kinds match in route space: when path-based locale detection is on,
+ * a leading locale segment is stripped before matching, so `'/callback'`
+ * also exempts `/fr/callback`.
+ */
+export type TrailingSlashExclude = string | RegExp
+
+/**
+ * Trailing-slash handling with exclusions. Excluded paths are left exactly
+ * as requested/authored by BOTH the 308 redirect middleware and URL
+ * generation (`route()` and friends) — for routes whose canonical form is
+ * dictated by an external party (e.g. an OAuth redirect URI registered with
+ * an IdP, matched byte-for-byte).
+ */
+export interface TrailingSlashOptions {
+  mode: TrailingSlashMode
+  exclude?: readonly TrailingSlashExclude[]
+}
+
+/** `trailingSlash` application config: a bare mode, or `{ mode, exclude }`. */
+export type TrailingSlashConfig = TrailingSlashMode | TrailingSlashOptions
+
+/**
  * Versioning configuration for the application.
  * Enables URI-based API versioning when provided to Stratal config.
  */

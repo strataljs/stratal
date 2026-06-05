@@ -2,7 +2,7 @@ import type { Page } from '@inertiajs/core'
 import type { Context } from 'hono'
 import type { Application } from 'stratal'
 import { DI_TOKENS } from 'stratal/di'
-import { ROUTER_CONTEXT_KEYS, ROUTER_TOKENS, RouterContext, type RegisteredRoute, type RouteRegistry, type TrailingSlashMode } from 'stratal/router'
+import { ROUTER_CONTEXT_KEYS, ROUTER_TOKENS, RouterContext, type RegisteredRoute, type RouteRegistry, type TrailingSlashConfig } from 'stratal/router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { InertiaService } from '../services/inertia.service'
@@ -20,7 +20,7 @@ function createMockContext(overrides: {
   isInertia?: boolean
   withoutSsr?: boolean
   routes?: RegisteredRoute[]
-  trailingSlash?: TrailingSlashMode
+  trailingSlash?: TrailingSlashConfig
   routePath?: string
   validatedParams?: Record<string, string>
   defaults?: Record<string, string>
@@ -655,6 +655,26 @@ describe('InertiaService', () => {
       const response = await routesService.render(ctx, 'Home', {})
       const body = await parsePageJson(response)
 
+      expect(body.props.trailingSlash).toBe('always')
+    })
+
+    it('shares only the resolved mode when trailingSlash has exclusions', async () => {
+      const routesOptions: InertiaModuleOptions = {
+        rootView: '<html>@inertia</html>',
+        version: '1.0',
+        routes: true,
+      }
+      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockSeo)
+      const ctx = createMockContext({
+        isInertia: true,
+        routes: [sampleRoute],
+        trailingSlash: { mode: 'always', exclude: ['/callback', /^\/webhooks\//] },
+      })
+
+      const response = await routesService.render(ctx, 'Home', {})
+      const body = await parsePageJson(response)
+
+      // Exclusions are server-side only — RegExp patterns don't survive JSON.
       expect(body.props.trailingSlash).toBe('always')
     })
 
