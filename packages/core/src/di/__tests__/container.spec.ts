@@ -387,7 +387,34 @@ describe('Container', () => {
 
       await container.dispose()
 
-      expect(calls).toEqual(['async', 'sync-only', 'method-only'])
+      expect(calls.sort()).toEqual(['async', 'method-only', 'sync-only'])
+    })
+
+    it('should dispose instances in reverse creation order (LIFO)', async () => {
+      const order: string[] = []
+
+      class FirstService {
+        dispose() { order.push('first') }
+      }
+      class SecondService {
+        dispose() { order.push('second') }
+      }
+      class ThirdService {
+        dispose() { order.push('third') }
+      }
+
+      container.registerSingleton(FirstService)
+      container.registerSingleton(SecondService)
+      container.registerSingleton(ThirdService)
+      container.resolve(FirstService)
+      container.resolve(SecondService)
+      container.resolve(ThirdService)
+
+      await container.dispose()
+
+      // A disposer may still use dependencies constructed before its own
+      // instance, so teardown unwinds construction order.
+      expect(order).toEqual(['third', 'second', 'first'])
     })
 
     it('should not dispose singletons that were never resolved', async () => {
@@ -424,7 +451,8 @@ describe('Container', () => {
 
       await container.dispose()
 
-      expect(disposed).toEqual(['throwing', 'healthy'])
+      // LIFO disposal: HealthyService was created last, so it unwinds first.
+      expect(disposed).toEqual(['healthy', 'throwing'])
       expect(consoleError).toHaveBeenCalledOnce()
       consoleError.mockRestore()
     })

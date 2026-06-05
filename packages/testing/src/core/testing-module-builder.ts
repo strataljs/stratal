@@ -128,6 +128,7 @@ export class TestingModuleBuilder {
     // owns the drop via close()) can throw — module init, overrides, etc. If it
     // does, nothing would ever drop the freshly cloned database. Drop it (FORCE)
     // on failure before rethrowing so a compile() error doesn't leak a database.
+    let app: Application | null = null
     try {
       // Build root module from config
       const baseModules = Test.getBaseModules()
@@ -141,7 +142,7 @@ export class TestingModuleBuilder {
         jobs: this.config.jobs,
       })
 
-      const app = new Application({
+      app = new Application({
         module: rootModule,
         logging: {
           level: this.config.logging?.level ?? LogLevel.ERROR,
@@ -153,13 +154,6 @@ export class TestingModuleBuilder {
       })
 
       await app.initialize()
-
-      // Routing init is lazy in production (first fetch keeps cold starts
-      // lean), but tests may resolve request-scoped router services before
-      // any fetch — e.g. ActingAs minting a session resolves AUTH_OPTIONS,
-      // whose factory can inject ROUTER_TOKENS.Uri. Initialize eagerly so
-      // test ordering can never matter.
-      await app.ensureHono()
 
       // Auto-register FakeStorageService after initialize so it replaces module-registered StorageService
       app.container.registerSingleton(STORAGE_TOKENS.StorageService, FakeStorageService)
@@ -210,8 +204,24 @@ export class TestingModuleBuilder {
         }
       }
 
+      // Routing init is lazy in production (first fetch keeps cold starts
+      // lean), but tests may resolve request-scoped router services before
+      // any fetch — e.g. ActingAs minting a session resolves AUTH_OPTIONS,
+      // whose factory can inject ROUTER_TOKENS.Uri. Initialize eagerly so
+      // test ordering can never matter. Runs last: singleton resolution
+      // caches by token without invalidation, so anything resolved here
+      // would permanently shadow auto-mocks and user overrides.
+      await app.ensureHono()
+
       return new TestingModule(app, env, ctx, isolatedDb, testEmailProvider)
     } catch (error) {
+      // Tear down the partially built Application so module-held resources
+      // (DB pools, timers) don't outlive a failed compile().
+      if (app) {
+        await app.shutdown().catch(() => {
+          // Best-effort cleanup for partially initialized apps.
+        })
+      }
       if (isolatedDb) {
         await dropDatabase(isolatedDb.adminConnectionString, isolatedDb.name).catch(() => {
           // Best-effort cleanup; the next run's stale-database sweep is the backstop.

@@ -257,10 +257,13 @@ export class Container {
    * then clears all registrations. Value registrations are not disposed —
    * the container doesn't own them. A failing disposer is logged and
    * skipped so it can't block the rest of the teardown.
+   *
+   * Instances are disposed in reverse creation order (LIFO): a disposer may
+   * still use dependencies that were constructed before its own instance.
    */
   async dispose(): Promise<void> {
     const seen = new Set<unknown>()
-    for (const instance of [...this.singletons.values(), ...this.requestCache.values()]) {
+    for (const instance of [...this.singletons.values(), ...this.requestCache.values()].reverse()) {
       if (seen.has(instance) || !isDisposable(instance)) continue
       seen.add(instance)
       try {

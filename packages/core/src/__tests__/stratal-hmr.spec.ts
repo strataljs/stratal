@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Application, type ApplicationConfig } from '../application';
 import type { StratalEnv } from '../env';
-import { StratalSupersededError } from '../errors';
+import { StratalNotInitializedError, StratalSupersededError } from '../errors';
 import { z } from '../i18n/validation/zod';
 import { LogLevel } from '../logger';
 import { Module } from '../module/module.decorator';
@@ -151,6 +151,53 @@ describe('Stratal (HMR reload lifecycle)', () => {
     release()
 
     expect(await resolving).toBe(await getInitPromise(current))
+  })
+
+  it('logs real bootstrap failures even when nothing awaits initialization', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => { /* silence */ })
+    const failure = new Error('bootstrap exploded')
+    vi.spyOn(Application.prototype, 'initialize').mockRejectedValue(failure)
+
+    current = new Stratal(config)
+    await tick() // no awaiter — without the catch-and-log this would be invisible
+
+    expect(consoleError).toHaveBeenCalledWith('[stratal] Initialization failed:', failure)
+  })
+
+  it('does not log supersession as a bootstrap failure', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => { /* silence */ })
+    const { release } = gateInitialize()
+
+    const s1 = new Stratal(config)
+    void s1
+    await tick()
+    current = new Stratal(config)
+    release()
+    await current.hono
+
+    expect(consoleError).not.toHaveBeenCalled()
+  })
+
+  it('clears the static singleton when the live generation shuts down explicitly', async () => {
+    const instance = new Stratal(config)
+    await instance.hono
+
+    await instance.shutdown()
+
+    // No replacing generation exists — resolveApplication must not hand out
+    // the disposed Application.
+    await expect(Stratal.resolveApplication()).rejects.toBeInstanceOf(StratalNotInitializedError)
+  })
+
+  it('keeps the static singleton when a superseded generation shuts down', async () => {
+    const s1 = new Stratal(config)
+    await s1.hono
+    current = new Stratal(config)
+    await current.hono // teardown chain has already shut s1 down
+
+    await s1.shutdown() // explicit no-op shutdown of the old generation
+
+    expect(await Stratal.resolveApplication()).toBe(await getInitPromise(current))
   })
 
   it('releases the previous generation\'s Application for garbage collection', async () => {

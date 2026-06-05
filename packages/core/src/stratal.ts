@@ -61,7 +61,12 @@ export class Stratal<Env extends StratalEnv = StratalEnv> {
     Stratal._application = this.initPromise
     // A superseded generation rejects; without an awaiter (no in-flight
     // request during the reload) that would surface as an unhandled rejection.
-    this.initPromise.catch(() => { /* handled by awaiters */ })
+    // Anything else is a real bootstrap failure — log it so it isn't invisible
+    // until the first request arrives (awaiters still get the rejection).
+    this.initPromise.catch((error: unknown) => {
+      if (error instanceof StratalSupersededError) return
+      console.error('[stratal] Initialization failed:', error)
+    })
   }
 
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -89,6 +94,13 @@ export class Stratal<Env extends StratalEnv = StratalEnv> {
     if (this.app) {
       await this.app.shutdown()
       this.app = null
+    }
+    // If we're still the live generation (explicit shutdown, not supersession),
+    // clear the statics so resolveApplication() throws StratalNotInitializedError
+    // instead of handing out the disposed Application.
+    if (Stratal._current === this) {
+      Stratal._current = null
+      Stratal._application = null
     }
   }
 
