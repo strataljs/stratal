@@ -24,6 +24,10 @@ export class SessionExpiredError extends HttpException {
   constructor() { super(401, 'Session expired') }
 }
 
+export class FreshSessionRequiredError extends HttpException {
+  constructor() { super(403, 'Fresh session required') }
+}
+
 export class EmailNotVerifiedError extends HttpException {
   constructor(public readonly email?: string) {
     super(403, 'Email not verified')

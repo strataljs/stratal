@@ -11,6 +11,7 @@ import {
   EmailCannotBeUpdatedError,
   EmailMismatchError,
   EmailNotVerifiedError,
+  FreshSessionRequiredError,
   IdTokenNotSupportedError,
   InvalidCallbackUrlError,
   InvalidCredentialsError,
@@ -73,7 +74,8 @@ export function mapBetterAuthError(error: APIError): ApplicationError {
   if (errorCode === 'INVALID_EMAIL') return new InvalidEmailError()
 
   // Session errors
-  if (errorCode === 'SESSION_EXPIRED' || errorCode === 'SESSION_NOT_FRESH') return new SessionExpiredError()
+  if (errorCode === 'SESSION_EXPIRED') return new SessionExpiredError()
+  if (errorCode === 'SESSION_NOT_FRESH') return new FreshSessionRequiredError()
   if (errorCode === 'FAILED_TO_CREATE_SESSION') return new AuthError('Failed to create session')
   if (errorCode === 'FAILED_TO_GET_SESSION') return new AuthError('Failed to retrieve session')
 
