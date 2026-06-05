@@ -1,14 +1,17 @@
+import { type Constructor } from "../types"
+
 /**
  * Interface for cron jobs that can be registered by modules
  *
  * Cron jobs are executed when Cloudflare triggers match their schedule.
- * Jobs are registered via the module's getCronJobs() method.
+ * The `schedule` property must be declared as a **static** field so the
+ * framework can read it at registration time without instantiating the class.
  *
  * @example
  * ```typescript
  * @Transient()
  * export class DataCleanupJob implements CronJob {
- *   readonly schedule = '0 2 * * *' // Daily at 2 AM UTC
+ *   static schedule = '0 2 * * *' // Daily at 2 AM UTC
  *
  *   constructor(
  *     @inject(LOGGER_TOKENS.LoggerService) private logger: LoggerService,
@@ -25,16 +28,14 @@
  * }
  * ```
  */
-export interface CronJob {
-	/**
-	 * Cron expression that triggers this job
-	 *
-	 * Must match a cron trigger defined in wrangler.jsonc
-	 * @example '0 2 * * *' // Daily at 2 AM UTC
-	 * @example '* /15 * * * *' // Every 15 minutes
-	 */
-	readonly schedule: string
+export interface RegisteredJob {
+	/** The cron schedule expression */
+	schedule: string
+	/** The job class constructor (resolved from container at execution time) */
+	jobClass: Constructor<CronJob>
+}
 
+export interface CronJob {
 	/**
 	 * Execute the cron job
 	 *

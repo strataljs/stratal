@@ -20,14 +20,14 @@ Full guides and examples are available at **[stratal.dev](https://stratal.dev)**
 
 ## Features
 
-- **Dependency Injection** — Two-tier DI container (global + request-scoped) powered by tsyringe
+- **Dependency Injection** — Two-tier DI container (global + request-scoped) with built-in decorator support
 - **OpenAPI Documentation** — Define Zod schemas once and get a full OpenAPI 3.0 spec with interactive docs
 - **Modular Architecture** — NestJS-style modules with lifecycle hooks, dynamic configuration, and middleware
 - **Hono Routing** — Convention-based RESTful controllers with automatic HTTP method mapping
 - **Queue Consumers** — Typed Cloudflare Queue consumers with message-type filtering
 - **Cron Jobs** — Scheduled tasks via Cloudflare Workers cron triggers
 - **Storage** — S3-compatible file storage with presigned URLs and TUS upload support
-- **Email** — Resend and SMTP providers with React Email template support
+- **Email** — SMTP provider with React Email template support
 - **i18n** — Type-safe internationalization with locale detection from request headers
 - **Guards and Middleware** — Route protection and per-module middleware configuration
 
@@ -49,14 +49,14 @@ Available templates:
 
 | Template | Description | Example |
 |---|---|---|
-| `hello-world` | A minimal Stratal app with a single GET endpoint | [Source](https://github.com/strataljs/stratal/tree/main/examples/01-hello-world) |
-| `crud-api` | RESTful notes API with full CRUD operations and DI | [Source](https://github.com/strataljs/stratal/tree/main/examples/02-crud-api) |
-| `testing` | Vitest + @stratal/testing with Cloudflare worker pool | [Source](https://github.com/strataljs/stratal/tree/main/examples/03-testing) |
-| `guards` | Route protection with @UseGuards and CanActivate | [Source](https://github.com/strataljs/stratal/tree/main/examples/04-guards) |
-| `middleware` | Middleware configuration with apply/exclude/forRoutes | [Source](https://github.com/strataljs/stratal/tree/main/examples/05-middleware) |
-| `queues` | Queue producer/consumer pattern with Cloudflare Queues | [Source](https://github.com/strataljs/stratal/tree/main/examples/06-queues) |
-| `scheduled-tasks` | Cron job scheduling with the CronJob interface | [Source](https://github.com/strataljs/stratal/tree/main/examples/07-scheduled-tasks) |
-| `openapi` | OpenAPI docs with Swagger UI and Zod schema integration | [Source](https://github.com/strataljs/stratal/tree/main/examples/08-openapi) |
+| `hello-world` | A minimal Stratal app with a single GET endpoint | [Source](https://github.com/strataljs/examples/tree/main/01-hello-world) |
+| `crud-api` | RESTful notes API with full CRUD operations and DI | [Source](https://github.com/strataljs/examples/tree/main/02-crud-api) |
+| `testing` | Vitest + @stratal/testing with Cloudflare worker pool | [Source](https://github.com/strataljs/examples/tree/main/03-testing) |
+| `guards` | Route protection with @UseGuards and CanActivate | [Source](https://github.com/strataljs/examples/tree/main/04-guards) |
+| `middleware` | Middleware configuration with apply/exclude/forRoutes | [Source](https://github.com/strataljs/examples/tree/main/05-middleware) |
+| `queues` | Queue producer/consumer pattern with Cloudflare Queues | [Source](https://github.com/strataljs/examples/tree/main/06-queues) |
+| `scheduled-tasks` | Cron job scheduling with the CronJob interface | [Source](https://github.com/strataljs/examples/tree/main/07-scheduled-tasks) |
+| `openapi` | OpenAPI docs with Swagger UI and Zod schema integration | [Source](https://github.com/strataljs/examples/tree/main/08-openapi) |
 
 For benchmarks, see the [main README](https://github.com/strataljs/stratal#benchmarks).
 

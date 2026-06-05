@@ -1,6 +1,7 @@
 import type { AuthService } from '@stratal/framework/auth'
 import { AUTH_SERVICE } from '@stratal/framework/auth'
 import type { DetectionStrategy } from 'stratal/i18n'
+import { Macroable } from 'stratal/macroable'
 import { ActingAs } from '../../auth'
 import type { TestingModule } from '../testing-module'
 import { applyLocaleToHeaders, applyLocaleToUrl, resolveLocaleStrategy } from './locale-helper'
@@ -28,20 +29,22 @@ import { TestResponse } from './test-response'
  *   .send()
  * ```
  */
-export class TestHttpRequest {
-	private body: unknown = null
-	private requestHeaders: Headers
-	private actingAsUser: { id: string } | null = null
-	private localeConfig: { locale: string; strategy: DetectionStrategy } | null
+export class TestHttpRequest extends Macroable {
+	protected body: unknown = null
+	protected requestHeaders: Headers
+	protected actingAsUser: { id: string } | null = null
+	protected authResolver: ((module: TestingModule, user: { id: string }) => Promise<Headers>) | null = null
+	protected localeConfig: { locale: string; strategy: DetectionStrategy } | null
 
 	constructor(
-		private readonly method: string,
-		private readonly path: string,
+		protected readonly method: string,
+		protected readonly path: string,
 		headers: Headers,
-		private readonly module: TestingModule,
-		private readonly host: string | null = null,
+		protected readonly module: TestingModule,
+		protected readonly host: string | null = null,
 		localeConfig: { locale: string; strategy: DetectionStrategy } | null = null,
 	) {
+		super()
 		this.requestHeaders = new Headers(headers)
 		this.localeConfig = localeConfig
 	}
@@ -91,6 +94,7 @@ export class TestHttpRequest {
 	 */
 	actingAs(user: { id: string }): this {
 		this.actingAsUser = user
+		this.authResolver = null
 		return this
 	}
 
@@ -126,13 +130,21 @@ export class TestHttpRequest {
 		return new TestResponse(response)
 	}
 
-	private async applyAuthentication(): Promise<void> {
+	protected async applyAuthentication(): Promise<void> {
 		if (!this.actingAsUser) return
+
+		if (this.authResolver) {
+			const headers = await this.authResolver(this.module, this.actingAsUser)
+			for (const [key, value] of headers.entries()) {
+				this.requestHeaders.set(key, value)
+			}
+			return
+		}
 
 		await this.module.runInRequestScope(async () => {
 			const authService = this.module.get<AuthService>(AUTH_SERVICE)
 			const actingAs = new ActingAs(authService)
-			const authHeaders = this.actingAsUser ? await actingAs.createSessionForUser(this.actingAsUser) : new Headers()
+			const authHeaders = await actingAs.createSessionForUser(this.actingAsUser!)
 
 			for (const [key, value] of authHeaders.entries()) {
 				this.requestHeaders.set(key, value)

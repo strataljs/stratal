@@ -3,10 +3,7 @@ import { createMock, type DeepMocked } from '@stratal/testing/mocks'
 import type { LoggerService } from '../../logger/services/logger.service'
 import type { StratalEnv } from '../../env'
 import { CacheService } from '../services/cache.service'
-import { CacheGetError } from '../errors/cache-get.error'
-import { CachePutError } from '../errors/cache-put.error'
-import { CacheDeleteError } from '../errors/cache-delete.error'
-import { CacheListError } from '../errors/cache-list.error'
+import { CacheError } from '../cache.error'
 
 describe('CacheService', () => {
   let service: CacheService
@@ -63,10 +60,10 @@ describe('CacheService', () => {
       expect(result).toBeNull()
     })
 
-    it('should throw CacheGetError on KV failure and log error', async () => {
+    it('should throw CacheError on KV failure and log error', async () => {
       mockGet().mockRejectedValue(new Error('KV error'))
 
-      await expect(service.get('fail-key')).rejects.toThrow(CacheGetError)
+      await expect(service.get('fail-key')).rejects.toThrow(CacheError)
       expect(mockLogger.error).toHaveBeenCalledWith(
         'Cache get operation failed',
         expect.objectContaining({ key: 'fail-key' })
@@ -91,10 +88,10 @@ describe('CacheService', () => {
       expect(mockKv.put).toHaveBeenCalledWith('key', 'value', { expirationTtl: 3600 })
     })
 
-    it('should throw CachePutError on failure', async () => {
+    it('should throw CacheError on failure', async () => {
       mockKv.put.mockRejectedValue(new Error('KV put error'))
 
-      await expect(service.put('key', 'value')).rejects.toThrow(CachePutError)
+      await expect(service.put('key', 'value')).rejects.toThrow(CacheError)
       expect(mockLogger.error).toHaveBeenCalledWith(
         'Cache put operation failed',
         expect.objectContaining({ key: 'key' })
@@ -111,10 +108,10 @@ describe('CacheService', () => {
       expect(mockKv.delete).toHaveBeenCalledWith('key')
     })
 
-    it('should throw CacheDeleteError on failure', async () => {
+    it('should throw CacheError on failure', async () => {
       mockKv.delete.mockRejectedValue(new Error('KV delete error'))
 
-      await expect(service.delete('key')).rejects.toThrow(CacheDeleteError)
+      await expect(service.delete('key')).rejects.toThrow(CacheError)
       expect(mockLogger.error).toHaveBeenCalledWith(
         'Cache delete operation failed',
         expect.objectContaining({ key: 'key' })
@@ -142,10 +139,10 @@ describe('CacheService', () => {
       expect(mockKv.list).toHaveBeenCalledWith({ prefix: 'user:' })
     })
 
-    it('should throw CacheListError on failure', async () => {
+    it('should throw CacheError on failure', async () => {
       mockKv.list.mockRejectedValue(new Error('KV list error'))
 
-      await expect(service.list()).rejects.toThrow(CacheListError)
+      await expect(service.list()).rejects.toThrow(CacheError)
       expect(mockLogger.error).toHaveBeenCalledWith(
         'Cache list operation failed',
         expect.objectContaining({ options: undefined })
@@ -164,10 +161,10 @@ describe('CacheService', () => {
       expect(mockKv.getWithMetadata).toHaveBeenCalledWith('key')
     })
 
-    it('should throw CacheGetError on failure', async () => {
+    it('should throw CacheError on failure', async () => {
       mockGetWithMetadata().mockRejectedValue(new Error('KV error'))
 
-      await expect(service.getWithMetadata('key')).rejects.toThrow(CacheGetError)
+      await expect(service.getWithMetadata('key')).rejects.toThrow(CacheError)
       expect(mockLogger.error).toHaveBeenCalledWith(
         'Cache getWithMetadata operation failed',
         expect.objectContaining({ key: 'key' })
@@ -195,6 +192,42 @@ describe('CacheService', () => {
       expect(result).toBe('from-new-kv')
       expect(newKv.get).toHaveBeenCalledWith('key')
       expect(mockKv.get).not.toHaveBeenCalled()
+    })
+
+  })
+
+  describe('binding()', () => {
+    it('should resolve a namespace by name from the environment', async () => {
+      const uploadsKv = createMock<KVNamespace>()
+      const uploadsGet = uploadsKv.get as unknown as { mockResolvedValue(v: string | null): void }
+      uploadsGet.mockResolvedValue('from-uploads')
+      ;(mockEnv as unknown as Record<string, unknown>).UPLOADS_CACHE = uploadsKv
+
+      const instance = service.binding('UPLOADS_CACHE')
+      const result = await instance.get('key')
+
+      expect(instance).toBeInstanceOf(CacheService)
+      expect(result).toBe('from-uploads')
+      expect(uploadsKv.get).toHaveBeenCalledWith('key')
+    })
+
+    it('should throw CacheError when the binding is missing', () => {
+      expect(() => service.binding('NOPE')).toThrow(CacheError)
+    })
+  })
+
+  describe('does not cache (thin KV wrapper)', () => {
+    it('reads KV on every get — no L1 read-after-write coherence', async () => {
+      mockKv.put.mockResolvedValue(undefined)
+      mockGet().mockResolvedValue('from-kv')
+
+      await service.put('k', 'v')
+      const first = await service.get('k')
+      const second = await service.get('k')
+
+      expect(first).toBe('from-kv')
+      expect(second).toBe('from-kv')
+      expect(mockKv.get).toHaveBeenCalledTimes(2)
     })
   })
 })

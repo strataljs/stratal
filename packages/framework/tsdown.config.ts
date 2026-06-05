@@ -10,7 +10,7 @@ export default defineConfig({
     'src/database/index.ts',
     'src/factory/index.ts',
     'src/guards/index.ts',
-    'src/rbac/index.ts',
+    'src/access-control/index.ts',
   ],
   tsconfig: './tsconfig.build.json',
   exports: {

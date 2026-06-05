@@ -1,4 +1,4 @@
-import type { z } from '../i18n/validation'
+import type { z } from '../i18n/validation/zod'
 
 export class ConfigValidationError extends Error {
   constructor(
@@ -52,15 +52,13 @@ export type ConfigPathValue<T, P extends string> = P extends `${infer K}.${infer
   : never
 
 /**
- * ConfigService interface with dot notation support
+ * ConfigService interface with dot notation support.
+ *
+ * Values are initialized on the underlying {@link ConfigStore} via
+ * {@link ConfigModule}; the service itself exposes request-scoped
+ * reads and per-request overrides.
  */
 export interface IConfigService<T extends object = ModuleConfig> {
-  /**
-   * Initialize the config service with validated configuration
-   * Should be called once during application startup
-   */
-  initialize(config: T): void
-
   /**
    * Get config value using dot notation
    * @example config.get('database.url')

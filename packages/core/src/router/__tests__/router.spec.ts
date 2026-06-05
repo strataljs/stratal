@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { z } from '../../i18n/validation'
+import { z } from '../../i18n/validation/zod'
 import type { Constructor } from '../../types'
-import { RouterUseScopeError } from '../errors'
+import { RouterError } from '../router.error'
 import type { Middleware } from '../middleware.interface'
 import { Router } from '../router'
 import * as internal from '../router.internals'
@@ -101,6 +101,47 @@ describe('Router', () => {
     })
   })
 
+  describe('throttle() — named rate limiter', () => {
+    it('appends a Throttle middleware class to the default entry', () => {
+      const router = new Router()
+      const result = router.throttle('api')
+      expect(result).toBe(router)
+
+      const middleware = router[internal.getDefaultEntry]().middleware
+      expect(middleware).toHaveLength(1)
+      expect(middleware[0].name).toBe('Throttle(api)')
+    })
+
+    it('two throttle() calls with the same name reuse the same class (memoized)', () => {
+      const r1 = new Router()
+      r1.throttle('uploads')
+      const r2 = new Router()
+      r2.throttle('uploads')
+      expect(r1[internal.getDefaultEntry]().middleware[0])
+        .toBe(r2[internal.getDefaultEntry]().middleware[0])
+    })
+
+    it('different names produce different classes', () => {
+      const router = new Router()
+      router.throttle('api').throttle('uploads')
+      const middleware = router[internal.getDefaultEntry]().middleware
+      expect(middleware).toHaveLength(2)
+      expect(middleware[0].name).toBe('Throttle(api)')
+      expect(middleware[1].name).toBe('Throttle(uploads)')
+    })
+
+    it('works inside group() callbacks', () => {
+      const router = new Router()
+      router.group([UsersController as Constructor], (child) => {
+        child.throttle('api')
+      })
+
+      const groups = router[internal.getGroups]()
+      expect(groups[0].middleware).toHaveLength(1)
+      expect(groups[0].middleware[0].name).toBe('Throttle(api)')
+    })
+  })
+
   describe('use() — global middleware', () => {
     it('should register global middleware on root router', () => {
       const router = new Router()
@@ -115,13 +156,13 @@ describe('Router', () => {
       expect(router[internal.getGlobalMiddleware]()).toHaveLength(2)
     })
 
-    it('should throw RouterUseScopeError when called inside group()', () => {
+    it('should throw RouterError when called inside group()', () => {
       const router = new Router()
       expect(() => {
         router.group([UsersController as Constructor], (child) => {
           (child as Router).use(AuthMiddleware as unknown as Constructor<Middleware>)
         })
-      }).toThrow(RouterUseScopeError)
+      }).toThrow(RouterError)
     })
   })
 

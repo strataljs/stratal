@@ -1,20 +1,19 @@
 import { OpenAPIHono } from '@hono/zod-openapi'
-import { injectable } from 'tsyringe'
 import { bench, describe } from 'vitest'
+import { Transient } from '../../di/decorators'
 import { z } from '../../i18n/validation'
 import type { LoggerService } from '../../logger'
 import type { ModuleRegistry } from '../../module/module-registry'
 import type { Constructor } from '../../types'
-import type { IController } from '../controller'
 import { Controller } from '../decorators/controller.decorator'
+import { Route } from '../decorators/route.decorator'
 import type { HonoApp } from '../hono-app'
 import type { RegisteredRoute } from '../route-registry'
 import { RouteRegistry } from '../route-registry'
-import { Route } from '../decorators/route.decorator'
 import type { RouterContext } from '../router-context'
+import type { LocalePathService } from '../services/locale-path.service'
 import { RouteRegistrationService } from '../services/route-registration.service'
 import type { VersioningService } from '../services/versioning.service'
-import type { LocalePathService } from '../services/locale-path.service'
 import type { RouterEnv } from '../types'
 import { sortRoutesBySpecificity } from '../utils/path'
 import { extractParamNames } from '../utils/route-name'
@@ -41,7 +40,7 @@ const mockLocalePathService = {
 // Fixture: controller with multiple OpenAPI routes
 
 @Controller('/api/bench/items')
-@injectable()
+@Transient()
 class ItemsController {
   @Route({
     summary: 'List items',
@@ -90,7 +89,7 @@ class ItemsController {
 }
 
 @Controller('/api/bench/simple')
-@injectable()
+@Transient()
 class SimpleController {
   @Route({
     summary: 'Simple endpoint',
@@ -101,14 +100,14 @@ class SimpleController {
   }
 }
 
-const createMockModuleRegistry = (controllers: Constructor<IController>[]): ModuleRegistry => ({
+const createMockModuleRegistry = (controllers: Constructor[]): ModuleRegistry => ({
   getAllControllers: () => controllers,
 } as unknown as ModuleRegistry)
 
 describe('RouteRegistration - Configure', () => {
   bench('register controller with 5 OpenAPI routes', async () => {
     const app = new OpenAPIHono<RouterEnv>() as unknown as HonoApp
-    const controllers = [ItemsController as unknown as Constructor<IController>]
+    const controllers = [ItemsController as unknown as Constructor]
     const service = new RouteRegistrationService(
       noopLogger,
       new RouteRegistry(mockVersioningService, mockLocalePathService),
@@ -122,7 +121,7 @@ describe('RouteRegistration - Configure', () => {
 
   bench('register single-route controller', async () => {
     const app = new OpenAPIHono<RouterEnv>() as unknown as HonoApp
-    const controllers = [SimpleController as unknown as Constructor<IController>]
+    const controllers = [SimpleController as unknown as Constructor]
     const service = new RouteRegistrationService(
       noopLogger,
       new RouteRegistry(mockVersioningService, mockLocalePathService),
@@ -137,8 +136,8 @@ describe('RouteRegistration - Configure', () => {
   bench('register multiple controllers', async () => {
     const app = new OpenAPIHono<RouterEnv>() as unknown as HonoApp
     const controllers = [
-      ItemsController as unknown as Constructor<IController>,
-      SimpleController as unknown as Constructor<IController>,
+      ItemsController as unknown as Constructor,
+      SimpleController as unknown as Constructor,
     ]
     const service = new RouteRegistrationService(
       noopLogger,

@@ -1,8 +1,6 @@
-import 'reflect-metadata'
-
-import { container as tsyringeRootContainer, injectable } from 'tsyringe'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Container } from '../../../di/container'
+import { Transient } from '../../../di/decorators'
 import { DI_TOKENS } from '../../../di/tokens'
 import { getCommandResult, setCommandInputs, setCommandQuarry } from '../../command-internals'
 import type { QuarryRegistry } from '../../quarry-registry'
@@ -31,16 +29,15 @@ const mockHono = {
 }
 
 const mockApp = {
-  hono: mockHono,
+  ensureHono: () => mockHono,
   env: {},
 }
 
 beforeEach(() => {
-  const tsyringe = tsyringeRootContainer.createChildContainer()
-  childContainer = new Container({ container: tsyringe })
+  childContainer = new Container()
   childContainer.registerValue(DI_TOKENS.Application, mockApp)
 
-  injectable()(ApiCommand)
+  Transient()(ApiCommand)
   childContainer.register(ApiCommand, ApiCommand)
 })
 

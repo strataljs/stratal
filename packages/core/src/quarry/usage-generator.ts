@@ -95,7 +95,14 @@ export function generateListing(
 
   // Usage
   lines.push(bold(yellow('Usage')))
-  lines.push(`  $ ${bin} <command> [options]`)
+  lines.push(`  $ ${bin} [--env <name>] <command> [options]`)
+  lines.push('')
+
+  // Global Options
+  lines.push(bold(yellow('Global Options')))
+  lines.push(...formatTable([
+    [`-e, --env ${cyan('<name>')}`, `Select a wrangler config environment (e.g. staging, production)`],
+  ]))
   lines.push('')
 
   // Commands

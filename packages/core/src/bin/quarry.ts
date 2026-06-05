@@ -1,15 +1,32 @@
-import 'reflect-metadata'
+import type { MiniflareOptions } from 'miniflare';
+import { existsSync } from 'node:fs';
+import { createRequire, register } from 'node:module';
+import { dirname, join, resolve } from 'node:path';
+import { URL, pathToFileURL } from 'node:url';
+import type { QuarryRegistry } from 'stratal/quarry';
+import { type Application } from '../application';
+import { extractEnvFlag } from './argv';
+import { createDynamicCommands } from './commands/dynamic-command';
 
-import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs'
-import { createRequire, register } from 'node:module'
-import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
-import type { QuarryRegistry } from 'stratal/quarry'
+interface WranglerConfig {
+  name?: string
+  vars?: Record<string, unknown>
+}
 
-import { type Application } from '../application'
-import { errors as errorMessages } from '../i18n/messages/en/errors'
-import { createDynamicCommands } from './commands/dynamic-command'
+interface MiniflareWorkerResult {
+  workerOptions: Record<string, unknown>
+}
+
+interface WranglerModule {
+  unstable_readConfig: (args: { config?: string; env?: string }) => WranglerConfig
+  unstable_getMiniflareWorkerOptions: (config: WranglerConfig, env?: string) => MiniflareWorkerResult
+  unstable_getVarsForDev: (configPath: string | undefined, envFiles: undefined, vars: unknown, env: string | undefined) => Record<string, { value: string }>
+}
+
+interface MiniflareModule {
+  Miniflare: new (opts: MiniflareOptions) => { ready: Promise<URL>; getBindings: (name?: string) => Promise<Record<string, unknown>>; dispose: () => Promise<void> }
+  getDefaultDevRegistryPath: () => string
+}
 
 const require = createRequire(import.meta.url)
 
@@ -20,7 +37,17 @@ register(pathToFileURL(swcRegisterPath), pathToFileURL('./'))
 // Register cloudflare:workers virtual module loader
 register(new URL('./cloudflare-workers-loader.mjs', import.meta.url), pathToFileURL('./'))
 
-const DEFAULT_ENTRY = './src/index.ts'
+const DEFAULT_ENTRY = './src/quarry.ts'
+
+let environment: string | undefined
+try {
+  const parsed = extractEnvFlag(process.argv.slice(2))
+  environment = parsed.env
+  process.argv.splice(2, process.argv.length - 2, ...parsed.rest)
+} catch (e) {
+  console.error(`Error: ${(e as Error).message}`)
+  process.exit(1)
+}
 
 // Determine entry file: if first arg looks like a file path, use it; otherwise use default
 const firstArg = process.argv[2]
@@ -38,88 +65,106 @@ const entryPath = resolve(process.cwd(), entryFile)
 if (!existsSync(entryPath)) {
   console.error(`Error: Entry file not found: ${entryFile}`)
   console.error('')
-  console.error('Create src/index.ts with a default Stratal export, or specify a custom path:')
+  console.error('Create src/quarry.ts that exports `QuarryRunner.run({ module, seeders })`, or specify a custom path:')
   console.error('  npx quarry ./path/to/entry.ts <command> [options]')
   process.exit(1)
 }
 
-function stripDurableObjects(config: Record<string, unknown>): void {
-  delete config.durable_objects
-  delete config.migrations
-  if (config.env && typeof config.env === 'object') {
-    for (const envConfig of Object.values(config.env as Record<string, Record<string, unknown>>)) {
-      delete envConfig.durable_objects
-      delete envConfig.migrations
-    }
-  }
-}
-
-async function createStrippedConfig(cwdRequire: NodeRequire): Promise<string | undefined> {
-  const candidates = ['wrangler.jsonc', 'wrangler.json', 'wrangler.toml']
-  const configName = candidates.find(c => existsSync(resolve(process.cwd(), c)))
-  if (!configName) return undefined
-
-  const configPath = resolve(process.cwd(), configName)
-  const raw = readFileSync(configPath, 'utf-8')
-
-  let config: Record<string, unknown>
-  if (configName.endsWith('.toml')) {
-    const { parse } = await import(cwdRequire.resolve('smol-toml')) as { parse: (input: string) => Record<string, unknown> }
-    config = parse(raw)
-  } else {
-    const { parse: parseJsonc } = await import(cwdRequire.resolve('jsonc-parser')) as { parse: (input: string) => Record<string, unknown> }
-    config = parseJsonc(raw)
-  }
-
-  stripDurableObjects(config)
-
-  const tmpPath = resolve(tmpdir(), `quarry-wrangler-${Date.now()}.json`)
-  writeFileSync(tmpPath, JSON.stringify(config, null, 2))
-  return tmpPath
-}
-
-function discoverEnvFiles(): string[] {
-  const cwd = process.cwd()
-  const files = readdirSync(cwd)
-  return files
-    .filter(file => (/^\.dev\.vars($|\.)/.test(file) || /^\.env($|\.)/.test(file)) && !file.endsWith('.example') && !file.endsWith('.sample'))
-    .sort((a, b) => {
-      // Load .env files before .dev.vars so .dev.vars takes precedence
-      const aIsDevVars = a.startsWith('.dev.vars')
-      const bIsDevVars = b.startsWith('.dev.vars')
-      if (aIsDevVars !== bIsDevVars) return aIsDevVars ? 1 : -1
-      // Within each group, .local files load last (highest precedence)
-      const aIsLocal = a.endsWith('.local')
-      const bIsLocal = b.endsWith('.local')
-      if (aIsLocal !== bIsLocal) return aIsLocal ? 1 : -1
-      return a.localeCompare(b)
-    })
-    .map(file => join(cwd, file))
-}
-
 async function main(): Promise<void> {
   const cwdRequire = createRequire(join(process.cwd(), 'package.json'))
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const { getPlatformProxy } = await import(cwdRequire.resolve('wrangler')) as typeof import('wrangler')
 
-  const tmpConfigPath = await createStrippedConfig(cwdRequire)
-  const envFiles = discoverEnvFiles()
-  const { env, ctx, dispose } = await getPlatformProxy({
-    envFiles, configPath: tmpConfigPath,
+  const { unstable_readConfig: readConfig, unstable_getMiniflareWorkerOptions: getMiniflareWorkerOptions, unstable_getVarsForDev: getVarsForDev } = await import(cwdRequire.resolve('wrangler')) as WranglerModule
+  const { Miniflare, getDefaultDevRegistryPath } = await import(cwdRequire.resolve('miniflare')) as MiniflareModule
+
+  const candidates = ['wrangler.jsonc', 'wrangler.json', 'wrangler.toml']
+  const configName = candidates.find(c => existsSync(resolve(process.cwd(), c)))
+  const configPath = configName ? resolve(process.cwd(), configName) : undefined
+
+  // Load .env into process.env before building Miniflare options, mirroring
+  // `wrangler dev`'s precedence: base `.env`, then `.env.local`, then the
+  // env-specific `.env.<environment>` and `.env.<environment>.local` (later
+  // load wins).
+  const envFiles = [
+    '.env',
+    '.env.local',
+    environment ? `.env.${environment}` : null,
+    environment ? `.env.${environment}.local` : null,
+  ]
+  for (const envFile of envFiles) {
+    if (!envFile) continue
+    const envPath = resolve(process.cwd(), envFile)
+    if (existsSync(envPath)) process.loadEnvFile(envPath)
+  }
+
+  // Bridge the documented `WRANGLER_REGISTRY_PATH` to `MINIFLARE_REGISTRY_PATH`,
+  // the variable Miniflare's `getDefaultDevRegistryPath()` actually reads.
+  // `wrangler dev` performs the same translation internally; mirroring it here
+  // lets a single documented env var redirect the dev service registry for BOTH
+  // this CLI's Miniflare (below) AND any vite dev server a command launches
+  // (`@cloudflare/vite-plugin` also resolves its registry via
+  // `getDefaultDevRegistryPath()`). That allows several isolated dev environments
+  // to run in parallel without sharing the global `~/.wrangler/registry`, where
+  // their identically-named workers would otherwise overwrite each other and
+  // break cross-worker service-binding resolution. Only set when unset so an
+  // explicit override still wins.
+  if (process.env.WRANGLER_REGISTRY_PATH && !process.env.MINIFLARE_REGISTRY_PATH) {
+    process.env.MINIFLARE_REGISTRY_PATH = process.env.WRANGLER_REGISTRY_PATH
+  }
+
+  const config = readConfig({ config: configPath, env: environment })
+  const { workerOptions } = getMiniflareWorkerOptions(config, environment)
+
+  const vars = getVarsForDev(configPath, undefined, config.vars, environment)
+  const varsRecord: Record<string, string> = {}
+  for (const [key, binding] of Object.entries(vars)) {
+    varsRecord[key] = binding.value
+  }
+
+  const existingBindings = workerOptions.bindings as Record<string, unknown> ?? {}
+  workerOptions.bindings = {
+    ...existingBindings,
+    ...varsRecord,
+    QUEUE_PROVIDER: 'sync',
+  }
+
+  // Rename so quarry doesn't overwrite a running `wrangler dev` session's
+  // dev-registry entry. The registry is how Miniflare discovers peer workers
+  // for service binding resolution — a collision would break the running session.
+  const workerName = config.name ? `quarry-${config.name}-${process.pid}` : `quarry-${process.pid}`
+  workerOptions.name = workerName
+
+  // Resolve the dev-registry path so Miniflare can discover running
+  // `wrangler dev` sessions for service binding resolution.
+  const registryPath = getDefaultDevRegistryPath()
+
+  const mf = new Miniflare({
+    ...workerOptions,
+    script: '',
+    modules: true,
+    unsafeDevRegistryPath: registryPath,
+    // Persist every durable plugin (KV, D1, R2, Durable Objects, cache) under
+    // the same root `wrangler dev` uses, so state survives across `quarry`
+    // invocations and is shared with a running `wrangler dev` session.
+    defaultPersistRoot: join(process.cwd(), '.wrangler/state/v3'),
   })
+
+  await mf.ready
+  const env = await mf.getBindings()
+
+  const pendingPromises: Promise<unknown>[] = []
+  const trackedWaitUntil = (promise: Promise<unknown>) => {
+    pendingPromises.push(promise)
+  }
 
   let app: Application | undefined
   try {
-    // Store platform proxy on globalThis so the cloudflare:workers virtual module can read it
     (globalThis as Record<string, unknown>).__stratalPlatformProxy = {
       env,
-      waitUntil: ctx.waitUntil.bind(ctx),
+      waitUntil: trackedWaitUntil,
     }
 
-    // Import user's entry file — triggers `new Stratal(...)` + full Application init
     await import(pathToFileURL(entryPath).href)
 
-    // Parallel import of stratal modules
     const [
       { Stratal },
       { DI_TOKENS },
@@ -133,7 +178,6 @@ async function main(): Promise<void> {
     app = await Stratal.resolveApplication()
     const quarry = app.container.resolve<QuarryRegistry>(DI_TOKENS.Quarry)
 
-    // Build Clipanion CLI
     const { Cli } = await import('clipanion')
     const pkg = require('../../package.json') as { version: string }
 
@@ -149,23 +193,16 @@ async function main(): Promise<void> {
 
     await cli.runExit(process.argv.slice(2), { ...Cli.defaultContext })
   } finally {
+    await Promise.allSettled(pendingPromises)
     await app?.shutdown()
-    await dispose()
-    if (tmpConfigPath) {
-      try { unlinkSync(tmpConfigPath) } catch {
-        //
-      }
-    }
+    await mf.dispose()
   }
 }
 
 main().catch(async (error: unknown) => {
   const { ConfigValidationError } = await import('stratal/config')
-  const { StratalNotInitializedError } = await import('stratal/errors')
 
-  const message = error instanceof StratalNotInitializedError
-    ? errorMessages.stratalNotInitialized
-    : error instanceof Error ? error.message : String(error)
+  const message = error instanceof Error ? error.message : String(error)
   console.error('Fatal error:', message)
   if (error instanceof ConfigValidationError) {
     console.error(error.errors.message)

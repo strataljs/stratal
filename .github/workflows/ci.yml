@@ -5,8 +5,18 @@ permissions:
 on:
   push:
     branches: [main]
+    paths:
+      - 'packages/**'
+      - 'yarn.lock'
+      - '.github/workflows/**'
+      - '.github/actions/**'
   pull_request:
     branches: [main]
+    paths:
+      - 'packages/**'
+      - 'yarn.lock'
+      - '.github/workflows/**'
+      - '.github/actions/**'
 
 jobs:
   build:
@@ -25,23 +35,14 @@ jobs:
       - name: Build all packages
         run: yarn workspaces foreach -At run build
 
-      - name: Verify core package contents
-        run: cd packages/core && npm pack --dry-run
-
-      - name: Verify testing package contents
-        run: cd packages/testing && npm pack --dry-run
-
-      - name: Verify framework package contents
-        run: cd packages/framework && npm pack --dry-run
+      - name: Verify package contents
+        run: yarn workspaces foreach -At --no-private exec npm pack --dry-run
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dist-artifacts
-          path: |
-            packages/core/dist/
-            packages/testing/dist/
-            packages/framework/dist/
+          path: packages/*/dist/
           retention-days: 1
 
   lint:
@@ -70,14 +71,8 @@ jobs:
       - name: Lint
         run: yarn lint
 
-      - name: Typecheck core
-        run: yarn workspace stratal typecheck
-
-      - name: Typecheck testing
-        run: yarn workspace @stratal/testing typecheck
-
-      - name: Typecheck framework
-        run: yarn workspace @stratal/framework typecheck
+      - name: Typecheck
+        run: yarn workspaces foreach -At --no-private run typecheck
 
   test:
     name: Test
@@ -121,8 +116,5 @@ jobs:
       - name: Generate framework schema and types
         run: yarn workspace @stratal/framework pretest
 
-      - name: Run core tests
-        run: yarn workspace stratal test
-
-      - name: Run framework tests
-        run: yarn workspace @stratal/framework test
+      - name: Run tests
+        run: yarn workspaces foreach -At --no-private run test

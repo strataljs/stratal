@@ -1,6 +1,6 @@
 import type { Container } from '../di'
 import { type StratalEnv } from '../env'
-import type { RouteConfig as OpenAPIRouteConfig, ZodObject, ZodPipe, ZodType } from '../i18n/validation'
+import type { RouteConfig as OpenAPIRouteConfig, ZodObject, ZodPipe, ZodType } from '../i18n/validation/zod'
 import { type HTTP_METHODS, type ROUTER_CONTEXT_KEYS, type SECURITY_SCHEMES, type VERSION_NEUTRAL } from './constants'
 
 /**
@@ -113,7 +113,7 @@ export interface RouteConfig {
    * Status code auto-derived: create()->201, others->200
    * @example userSchema or { schema: userSchema, description: 'User details' }
    */
-  response: RouteResponse
+  response?: RouteResponse
 
   /**
    * OpenAPI tags for grouping endpoints
@@ -242,6 +242,16 @@ export interface ControllerOptions {
 }
 
 /**
+ * Trailing-slash handling for incoming requests.
+ *
+ * - `'ignore'` (default) — match both `/foo` and `/foo/` for the same route, no redirect.
+ * - `'always'`  — non-trailing requests redirect (308) to the trailing-slash form.
+ *                 Paths whose last segment contains `.` (e.g. `/api/openapi.json`) are skipped.
+ * - `'never'`   — trailing requests redirect (308) to the non-trailing form.
+ */
+export type TrailingSlashMode = 'ignore' | 'always' | 'never'
+
+/**
  * Versioning configuration for the application.
  * Enables URI-based API versioning when provided to Stratal config.
  */
@@ -282,4 +292,13 @@ export interface LocalePathConfig {
    * `null` when all locales are prefixed (`prefixDefaultLocale: true`).
    */
   defaultLocale: string | null
+}
+
+/**
+ * Locale configuration for URL generation.
+ * Controls whether the default locale gets a path prefix in generated URLs.
+ */
+export interface LocaleUrlConfig {
+  defaultLocale: string | null
+  prefixDefaultLocale: false | true | 'redirect'
 }

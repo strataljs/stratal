@@ -1,8 +1,6 @@
-import 'reflect-metadata'
-
-import { container as tsyringeRootContainer, injectable } from 'tsyringe'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { Container } from '../../../di/container'
+import { Transient } from '../../../di/decorators'
 import { DI_TOKENS } from '../../../di/tokens'
 import { OPENAPI_TOKENS } from '../../../openapi/openapi.tokens'
 import { getCommandResult, setCommandInputs, setCommandQuarry } from '../../command-internals'
@@ -45,17 +43,16 @@ const mockOpenAPIService = {
 }
 
 const mockApp = {
-  hono: {},
+  ensureHono: () => ({}),
   container: {},
 }
 
 beforeEach(() => {
-  const tsyringe = tsyringeRootContainer.createChildContainer()
-  childContainer = new Container({ container: tsyringe })
+  childContainer = new Container()
   childContainer.registerValue(DI_TOKENS.Application, mockApp)
   childContainer.registerValue(OPENAPI_TOKENS.OpenAPIService, mockOpenAPIService)
 
-  injectable()(McpToolsCommand)
+  Transient()(McpToolsCommand)
   childContainer.register(McpToolsCommand, McpToolsCommand)
 })
 
@@ -67,9 +64,9 @@ function createCommand(input: Record<string, unknown> = {}): McpToolsCommand {
 }
 
 describe('McpToolsCommand', () => {
-  it('should list all tools as a table', () => {
+  it('should list all tools as a table', async () => {
     const cmd = createCommand()
-    const exitCode = cmd.handle()
+    const exitCode = await cmd.handle()
     const result = getCommandResult(cmd)
 
     expect(exitCode).toBe(0)
@@ -81,9 +78,9 @@ describe('McpToolsCommand', () => {
     expect(output).toContain('POST')
   })
 
-  it('should filter by tag', () => {
+  it('should filter by tag', async () => {
     const cmd = createCommand({ tag: ['users'] })
-    const exitCode = cmd.handle()
+    const exitCode = await cmd.handle()
     const result = getCommandResult(cmd)
 
     expect(exitCode).toBe(0)
@@ -92,9 +89,9 @@ describe('McpToolsCommand', () => {
     expect(output).not.toContain('listNotes')
   })
 
-  it('should filter by path prefix', () => {
+  it('should filter by path prefix', async () => {
     const cmd = createCommand({ path: '/api/notes' })
-    const exitCode = cmd.handle()
+    const exitCode = await cmd.handle()
     const result = getCommandResult(cmd)
 
     expect(exitCode).toBe(0)
@@ -104,9 +101,9 @@ describe('McpToolsCommand', () => {
     expect(output).not.toContain('listUsers')
   })
 
-  it('should show "No tools found" when filters match nothing', () => {
+  it('should show "No tools found" when filters match nothing', async () => {
     const cmd = createCommand({ tag: ['nonexistent'] })
-    const exitCode = cmd.handle()
+    const exitCode = await cmd.handle()
     const result = getCommandResult(cmd)
 
     expect(exitCode).toBe(0)

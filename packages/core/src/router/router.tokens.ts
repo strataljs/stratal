@@ -27,6 +27,13 @@ export const ROUTER_TOKENS = {
   LocalePathService: Symbol.for('stratal:router:locale-path-service'),
 
   /**
+   * Token for LocaleUrlService (singleton)
+   * Ergonomic wrapper around the pure locale-url helpers — applies, strips,
+   * and tests locale prefixes against the resolved LocalePathService config.
+   */
+  LocaleUrlService: Symbol.for('stratal:router:locale-url-service'),
+
+  /**
    * Token for RouterResolver (singleton, may be null)
    * Internal resolver that computes effective Router config per controller
    */

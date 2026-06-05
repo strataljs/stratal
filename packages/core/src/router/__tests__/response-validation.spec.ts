@@ -1,9 +1,8 @@
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { createMock } from '@stratal/testing/mocks'
 import { describe, expect, it } from 'vitest'
-import { ERROR_CODES } from '../../errors/error-codes'
-import type { ZodType } from '../../i18n/validation'
-import { z } from '../../i18n/validation'
+import type { ZodType } from '../../i18n/validation/zod'
+import { z } from '../../i18n/validation/zod'
 import type { LoggerService } from '../../logger/services/logger.service'
 import type { ModuleRegistry } from '../../module/module-registry'
 import { ResponseValidationError } from '../errors'
@@ -117,7 +116,7 @@ describe('Response Validation', () => {
         .rejects.toThrow(ResponseValidationError)
     })
 
-    it('should include issues in the error metadata', async () => {
+    it('should include issues in the error', async () => {
       const service = createService()
       const response = new Response(JSON.stringify({ name: 123 }), {
         headers: { 'content-type': 'application/json' },
@@ -129,13 +128,12 @@ describe('Response Validation', () => {
       } catch (err) {
         expect(err).toBeInstanceOf(ResponseValidationError)
         const error = err as ResponseValidationError
-        expect(error.metadata?.issues).toBeDefined()
-        expect(error.metadata!.issues).toBeInstanceOf(Array)
-        const issues = error.metadata!.issues as { path: string; message: string; code: string }[]
-        expect(issues.length).toBeGreaterThan(0)
-        expect(issues[0]).toHaveProperty('path')
-        expect(issues[0]).toHaveProperty('message')
-        expect(issues[0]).toHaveProperty('code')
+        expect(error.issues).toBeDefined()
+        expect(error.issues).toBeInstanceOf(Array)
+        expect(error.issues.length).toBeGreaterThan(0)
+        expect(error.issues[0]).toHaveProperty('path')
+        expect(error.issues[0]).toHaveProperty('message')
+        expect(error.issues[0]).toHaveProperty('code')
       }
     })
 
@@ -219,24 +217,24 @@ describe('Response Validation', () => {
   })
 
   describe('ResponseValidationError', () => {
-    it('should have the correct error code', () => {
+    it('should have httpStatus 500', () => {
       const zodResult = testSchema.safeParse({ name: 123 })
       expect(zodResult.success).toBe(false)
       if (zodResult.success) return
 
       const error = new ResponseValidationError(zodResult.error)
-      expect(error.code).toBe(ERROR_CODES.VALIDATION.RESPONSE_VALIDATION)
+      expect(error.httpStatus).toBe(500)
     })
 
-    it('should have the correct i18n message key', () => {
+    it('should have the correct message', () => {
       const zodResult = testSchema.safeParse({ name: 123 })
       if (zodResult.success) return
 
       const error = new ResponseValidationError(zodResult.error)
-      expect(error.message).toBe('errors.responseValidation')
+      expect(error.message).toBe('Response validation failed')
     })
 
-    it('should map ZodError issues to metadata', () => {
+    it('should map ZodError issues to the issues property', () => {
       const schema = z.object({
         name: z.string(),
         age: z.number(),
@@ -245,10 +243,9 @@ describe('Response Validation', () => {
       if (zodResult.success) return
 
       const error = new ResponseValidationError(zodResult.error)
-      const issues = error.metadata?.issues as { path: string; message: string; code: string }[]
-      expect(issues).toHaveLength(2)
-      expect(issues[0].path).toBe('name')
-      expect(issues[1].path).toBe('age')
+      expect(error.issues).toHaveLength(2)
+      expect(error.issues[0].path).toBe('name')
+      expect(error.issues[1].path).toBe('age')
     })
   })
 })

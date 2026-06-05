@@ -1,10 +1,12 @@
 import type { Page } from '@inertiajs/core'
-import { Transient, inject } from 'stratal/di'
+import type { Application } from 'stratal'
+import { DI_TOKENS, Request, inject } from 'stratal/di'
 import { I18N_TOKENS, type MessageLoaderService } from 'stratal/i18n'
-import { ROUTER_TOKENS, type RegisteredRoute, type RouteRegistry, type RouterContext, type SerializedRoutes } from 'stratal/router'
+import { ROUTER_TOKENS, type CurrentRoute, type LocalePathService, type LocaleUrlConfig, type RegisteredRoute, type RouteRegistry, type RouterContext, type SerializedRoutes, type Uri } from 'stratal/router'
 import type { InertiaMergeOptions, InertiaOnceOptions } from '../augment/router-context'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { INERTIA_TOKENS } from '../inertia.tokens'
+import type { SeoData } from '../seo/types'
 import type {
   InertiaAlwaysProp,
   InertiaDeferredProp,
@@ -21,10 +23,11 @@ import {
   INERTIA_PROP_ONCE,
   INERTIA_PROP_OPTIONAL,
 } from '../types'
+import type { SeoService } from './seo.service'
 import type { SsrRendererService } from './ssr-renderer.service'
 import type { TemplateService } from './template.service'
 
-@Transient()
+@Request(INERTIA_TOKENS.InertiaService)
 export class InertiaService {
   private sharedData: Record<string, unknown> = {}
 
@@ -32,10 +35,15 @@ export class InertiaService {
     @inject(INERTIA_TOKENS.Options) private readonly options: InertiaModuleOptions,
     @inject(INERTIA_TOKENS.TemplateService) private readonly template: TemplateService,
     @inject(INERTIA_TOKENS.SsrRenderer) private readonly ssr: SsrRendererService,
+    @inject(INERTIA_TOKENS.SeoService) private readonly seoService: SeoService,
   ) { }
 
   share(key: string, value: unknown): void {
     this.sharedData[key] = value
+  }
+
+  seo(data: SeoData): void {
+    this.seoService.set(data)
   }
 
   location(url: string): Response {
@@ -81,17 +89,28 @@ export class InertiaService {
     props: Record<string, unknown> = {},
     renderOptions: InertiaRenderOptions = {},
   ): Promise<Response> {
-    const url = new URL(ctx.c.req.url).pathname
+    const reqUrl = new URL(ctx.c.req.url)
+    const url = reqUrl.search ? `${reqUrl.pathname}${reqUrl.search}` : reqUrl.pathname
+    // `ssr.disabled` globs match the path only — keep the query string out of it.
+    const pathname = reqUrl.pathname
     const isInertia = ctx.c.get('inertia')
 
     // Resolve shared data from module options
     const { shared: resolvedShared, sharedKeys } = await this.resolveSharedData(ctx)
 
-    // Merge shared data with route props
-    const allProps = { ...resolvedShared, ...this.sharedData, ...props }
+    // Resolve SEO once: shared as the `seo` prop (drives the client head-sync runtime)
+    // and rendered into <head> below for the initial paint. Wrapped as an ALWAYS
+    // prop so it is present on every response — including partial reloads that
+    // don't request it — otherwise the client runtime would see a missing `seo`
+    // key and wipe the managed head tags even though nothing changed.
+    const resolvedSeo = await this.seoService.resolve(ctx)
 
-    // Track all shared prop keys (module config + per-request .share())
-    const allSharedKeys = [...sharedKeys, ...Object.keys(this.sharedData)]
+    // Merge shared data with route props. `seo` is always-evaluated so it can
+    // never be filtered out by partial-reload prop selection.
+    const allProps = { ...resolvedShared, ...this.sharedData, seo: this.always(() => resolvedSeo), ...props }
+
+    // Track all shared prop keys (module config + per-request .share() + seo)
+    const allSharedKeys = [...sharedKeys, ...Object.keys(this.sharedData), 'seo']
 
     // Process props: handle optional, deferred, merge, once, always
     const result = await this.processProps(allProps, ctx, component, isInertia)
@@ -110,6 +129,7 @@ export class InertiaService {
       version: this.options.version ?? null,
       flash,
       rememberedState: {},
+      rescuedProps: [],
       ...(result.mergeProps.length > 0 ? { mergeProps: result.mergeProps } : {}),
       ...(result.prependProps.length > 0 ? { prependProps: result.prependProps } : {}),
       ...(result.deepMergeProps.length > 0 ? { deepMergeProps: result.deepMergeProps } : {}),
@@ -123,9 +143,11 @@ export class InertiaService {
       ...(renderOptions.preserveFragment ? { preserveFragment: true } : {}),
     }
 
+    const status = renderOptions.status ?? 200
+
     if (isInertia) {
       return new Response(JSON.stringify(page), {
-        status: 200,
+        status,
         headers: {
           'Content-Type': 'application/json',
           'X-Inertia': 'true',
@@ -134,18 +156,26 @@ export class InertiaService {
       })
     }
 
-    // Full page render — skip SSR if disabled for this route
-    const ssrDisabled = ctx.c.get('withoutSsr') || this.isSsrDisabled(url)
-    const ssrResult = ssrDisabled
-      ? { head: [] as string[], body: '' }
-      : await this.ssr.render(page)
-    const html = this.template.render(page, ssrResult.head, ssrResult.body)
+    // Full page render — skip SSR if disabled for this route or not configured
+    const seoTags = this.seoService.tagsFor(resolvedSeo)
+    const ssrDisabled = ctx.c.get('withoutSsr') || this.isSsrDisabled(pathname) || !this.options.ssr
 
-    return new Response(html, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-      },
+    if (ssrDisabled) {
+      const html = this.template.renderClientOnly(page, seoTags)
+      return new Response(html, {
+        status,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      })
+    }
+
+    // Streaming SSR: awaiting render resolves once the shell is ready (so the
+    // Inertia `<Head>` tags are known); the body then streams progressively.
+    const { head, stream } = await this.ssr.render(page)
+    const body = this.template.renderStream(page, [...head, ...seoTags], stream)
+
+    return new Response(body, {
+      status,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
     })
   }
 
@@ -178,8 +208,23 @@ export class InertiaService {
     }
 
     if (this.options.routes) {
-      const registry = ctx.getContainer().resolve<RouteRegistry>(ROUTER_TOKENS.RouteRegistry)
+      const container = ctx.getContainer()
+      const registry = container.resolve<RouteRegistry>(ROUTER_TOKENS.RouteRegistry)
+      const application = container.resolve<Application>(DI_TOKENS.Application)
+      const uri = container.resolve<Uri>(ROUTER_TOKENS.Uri)
+
+      const name = registry.findNameByRoute(ctx.c.req.method, ctx.c.req.routePath) ?? null
+      const params = { ...ctx.param() }
+
+      const localePathService = container.resolve<LocalePathService>(ROUTER_TOKENS.LocalePathService)
+
       shared.routes = this.serializeRoutes(registry.named())
+      shared.trailingSlash = application.config.trailingSlash ?? 'ignore'
+      shared.route = { name, params, defaults: uri.getDefaults() } satisfies CurrentRoute
+      shared.localeConfig = {
+        defaultLocale: localePathService.localePathConfig?.defaultLocale ?? null,
+        prefixDefaultLocale: localePathService.prefixDefaultLocale,
+      } satisfies LocaleUrlConfig
     }
 
     return { shared, sharedKeys: Object.keys(shared) }
@@ -218,6 +263,7 @@ export class InertiaService {
     const partialDataHeader = ctx.header('x-inertia-partial-data')
     const partialExceptHeader = ctx.header('x-inertia-partial-except')
     const resetHeader = ctx.header('x-inertia-reset')
+    const shouldResolveDeferred = ctx.header('x-inertia-resolve-deferred') === 'true'
     const isPartialReload = isInertia && partialComponent === component && partialDataHeader
 
     const requestedProps = partialDataHeader?.split(',').map((s) => s.trim()) ?? []
@@ -250,8 +296,12 @@ export class InertiaService {
         if (isPartialReload && this.isRequested(key, requestedProps)) {
           resolvedProps[key] = await value.callback()
         } else if (!isPartialReload) {
-          deferredProps[value.group] ??= []
-          deferredProps[value.group].push(key)
+          if (shouldResolveDeferred) {
+            resolvedProps[key] = await value.callback()
+          } else {
+            deferredProps[value.group] ??= []
+            deferredProps[value.group].push(key)
+          }
         }
         continue
       }

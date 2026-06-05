@@ -1,9 +1,27 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
 import { type StratalEnv } from '../../env'
-import { QueueBindingNotFoundError } from '../errors'
+import { QueueError } from '../queue.error'
 import { CloudflareQueueProvider } from '../providers/cloudflare-queue.provider'
 import type { QueueMessage } from '../queue-consumer'
+
+/** Minimal stubs matching Cloudflare Workers `Queue.send` / `sendBatch` return shapes */
+const mockSendResponse: QueueSendResponse = {
+  metadata: {
+    metrics: {
+      backlogCount: 0,
+      backlogBytes: 0,
+    },
+  },
+}
+const mockSendBatchResponse: QueueSendBatchResponse = {
+  metadata: {
+    metrics: {
+      backlogCount: 0,
+      backlogBytes: 0,
+    },
+  },
+}
 
 describe('CloudflareQueueProvider', () => {
   let provider: CloudflareQueueProvider
@@ -12,8 +30,8 @@ describe('CloudflareQueueProvider', () => {
 
   beforeEach(() => {
     mockQueue = createMock<Queue>()
-    mockQueue.send.mockResolvedValue(undefined)
-    mockQueue.sendBatch.mockResolvedValue(undefined)
+    mockQueue.send.mockResolvedValue(mockSendResponse)
+    mockQueue.sendBatch.mockResolvedValue(mockSendBatchResponse)
 
     mockEnv = {
       NOTIFICATIONS_QUEUE: mockQueue,
@@ -24,36 +42,39 @@ describe('CloudflareQueueProvider', () => {
 
   const createMessage = <T>(type: string, payload: T): QueueMessage<T> => ({
     id: 'test-id-123',
-    timestamp: Date.now(),
     type,
     payload,
   })
 
   describe('send', () => {
-    it('should resolve queue binding and send message', async () => {
+    it('should resolve binding directly on env and send message', async () => {
       const message = createMessage('email.send', { to: 'test@example.com' })
 
-      await provider.send('notifications-queue', message)
+      await provider.send('NOTIFICATIONS_QUEUE', message)
 
       expect(mockQueue.send).toHaveBeenCalledTimes(1)
       expect(mockQueue.send).toHaveBeenCalledWith(message)
     })
 
-    it('should throw QueueBindingNotFoundError when binding is missing', async () => {
+    it('should throw QueueError when binding is missing', async () => {
       const message = createMessage('email.send', { to: 'test@example.com' })
 
       await expect(
-        provider.send('non-existent-queue', message)
-      ).rejects.toThrow(QueueBindingNotFoundError)
+        provider.send('NON_EXISTENT_BINDING', message)
+      ).rejects.toThrow(QueueError)
     })
 
-    it('should convert queue name to binding name correctly', async () => {
+    it('should look up the binding verbatim without case or character transformation', async () => {
       const message = createMessage('email.send', { to: 'test@example.com' })
 
-      // notifications-queue -> NOTIFICATIONS_QUEUE
-      await provider.send('notifications-queue', message)
+      // kebab-case input would have matched in the old kebab→UPPER_SNAKE world,
+      // but the new API requires the exact binding key on env. env has
+      // NOTIFICATIONS_QUEUE, not notifications-queue → must throw.
+      await expect(
+        provider.send('notifications-queue', message)
+      ).rejects.toThrow(QueueError)
 
-      expect(mockQueue.send).toHaveBeenCalled()
+      expect(mockQueue.send).not.toHaveBeenCalled()
     })
 
     it('should propagate queue.send errors', async () => {
@@ -63,14 +84,13 @@ describe('CloudflareQueueProvider', () => {
       const message = createMessage('email.send', { to: 'test@example.com' })
 
       await expect(
-        provider.send('notifications-queue', message)
+        provider.send('NOTIFICATIONS_QUEUE', message)
       ).rejects.toThrow('Queue send failed')
     })
 
     it('should send message with metadata', async () => {
       const message: QueueMessage<{ to: string }> = {
         id: 'test-id-123',
-        timestamp: Date.now(),
         type: 'email.send',
         payload: { to: 'test@example.com' },
         metadata: {
@@ -79,7 +99,7 @@ describe('CloudflareQueueProvider', () => {
         },
       }
 
-      await provider.send('notifications-queue', message)
+      await provider.send('NOTIFICATIONS_QUEUE', message)
 
       expect(mockQueue.send).toHaveBeenCalledWith(message)
     })

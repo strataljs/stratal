@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import { Command } from '../../quarry/command'
 import { type SeederRegistry, SEEDER_TOKENS } from '../seeder-registry'
 

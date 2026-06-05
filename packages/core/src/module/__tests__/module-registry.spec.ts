@@ -1,10 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
-import { container as tsyringeRootContainer, injectable } from 'tsyringe'
-import type { DependencyContainer } from 'tsyringe'
 import type { Constructor } from '../../types'
 import { Container } from '../../di/container'
-import { Scope } from '../../di/types'
+import { Transient } from '../../di/decorators'
 import type { LoggerService } from '../../logger/services/logger.service'
 import { Module } from '../module.decorator'
 import { ModuleRegistry } from '../module-registry'
@@ -14,14 +12,14 @@ const SERVICE_TOKEN = Symbol('TestService')
 const IMPORTED_TOKEN = Symbol('ImportedService')
 
 // Test services
-@injectable()
+@Transient()
 class TestService {
   getValue() {
     return 'test'
   }
 }
 
-@injectable()
+@Transient()
 class ImportedService {
   getValue() {
     return 'imported'
@@ -34,17 +32,13 @@ class TestConsumer {}
 class TestJob {}
 
 describe('ModuleRegistry', () => {
-  let childContainer: DependencyContainer
   let container: Container
   let mockLogger: DeepMocked<LoggerService>
   let registry: ModuleRegistry
 
   beforeEach(() => {
     vi.clearAllMocks()
-    childContainer = tsyringeRootContainer.createChildContainer()
-    container = new Container({
-      container: childContainer,
-    })
+    container = new Container()
     mockLogger = createMock<LoggerService>()
     registry = new ModuleRegistry(container, mockLogger as unknown as LoggerService)
   })
@@ -53,7 +47,7 @@ describe('ModuleRegistry', () => {
     it('should register providers from module decorator', () => {
       @Module({
         providers: [
-          { provide: SERVICE_TOKEN, useClass: TestService, scope: Scope.Singleton },
+          { provide: SERVICE_TOKEN, useClass: TestService },
         ],
       })
       class TestModule {}
@@ -68,7 +62,7 @@ describe('ModuleRegistry', () => {
     it('should register imported modules recursively', () => {
       @Module({
         providers: [
-          { provide: IMPORTED_TOKEN, useClass: ImportedService, scope: Scope.Singleton },
+          { provide: IMPORTED_TOKEN, useClass: ImportedService },
         ],
       })
       class ChildModule {}
@@ -76,7 +70,7 @@ describe('ModuleRegistry', () => {
       @Module({
         imports: [ChildModule],
         providers: [
-          { provide: SERVICE_TOKEN, useClass: TestService, scope: Scope.Singleton },
+          { provide: SERVICE_TOKEN, useClass: TestService },
         ],
       })
       class ParentModule {}
@@ -126,17 +120,16 @@ describe('ModuleRegistry', () => {
 
   describe('initialize()', () => {
     it('should call onInitialize() lifecycle hook on modules', async () => {
-      const onInitialize = vi.fn()
-
       @Module({ providers: [] })
       class TestModule {
-        onInitialize = onInitialize
+        onInitialize(_ctx: unknown) { /* noop */ }
       }
 
+      const spy = vi.spyOn(TestModule.prototype, 'onInitialize')
       registry.register(TestModule)
       await registry.initialize()
 
-      expect(onInitialize).toHaveBeenCalledWith(
+      expect(spy).toHaveBeenCalledWith(
         expect.objectContaining({
           container,
           logger: expect.anything(),
@@ -144,18 +137,22 @@ describe('ModuleRegistry', () => {
       )
     })
 
-    it('should call configureRoutes() for RouteConfigurable modules', async () => {
-      const configureRoutes = vi.fn()
-
+    it('should defer configureRoutes() to getAllRouterConfigs()', async () => {
       @Module({ providers: [] })
       class TestModule {
-        configureRoutes = configureRoutes
+        configureRoutes(_router: unknown) { /* noop */ }
       }
 
+      const spy = vi.spyOn(TestModule.prototype, 'configureRoutes')
       registry.register(TestModule)
       await registry.initialize()
 
-      expect(configureRoutes).toHaveBeenCalledWith(expect.any(Object))
+      // Deferred — not called during initialize
+      expect(spy).not.toHaveBeenCalled()
+
+      // Called lazily when router configs are requested
+      registry.getAllRouterConfigs()
+      expect(spy).toHaveBeenCalledWith(expect.any(Object))
     })
   })
 
@@ -186,7 +183,7 @@ describe('ModuleRegistry', () => {
     it('should skip duplicate static modules', () => {
       @Module({
         providers: [
-          { provide: SERVICE_TOKEN, useClass: TestService, scope: Scope.Singleton },
+          { provide: SERVICE_TOKEN, useClass: TestService },
         ],
       })
       class TestModule {}
@@ -207,16 +204,12 @@ describe('ModuleRegistry', () => {
 
       @Module({ providers: [] })
       class ModuleA {
-        onShutdown = vi.fn(() => {
-          shutdownOrder.push('A')
-        })
+        onShutdown() { shutdownOrder.push('A') }
       }
 
       @Module({ providers: [] })
       class ModuleB {
-        onShutdown = vi.fn(() => {
-          shutdownOrder.push('B')
-        })
+        onShutdown() { shutdownOrder.push('B') }
       }
 
       registry.register(ModuleA)

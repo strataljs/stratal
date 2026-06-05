@@ -1,13 +1,12 @@
-import { swaggerUI } from '@hono/swagger-ui'
 import type { Container } from '../../di/container'
-import { Transient } from '../../di/decorators'
-import type { II18nService } from '../../i18n'
-import { I18N_TOKENS } from '../../i18n'
-import type { OpenAPIHono, OpenAPIObject, PathItemObject } from '../../i18n/validation'
+import { Singleton } from '../../di/decorators'
+import { I18N_TOKENS } from '../../i18n/i18n.tokens'
+import type { II18nService } from '../../i18n/i18n.types'
+import type { OpenAPIHono, OpenAPIObject, PathItemObject } from '../../i18n/validation/zod'
 import { ROUTER_CONTEXT_KEYS, SECURITY_SCHEMES } from '../../router/constants'
 import type { RouterEnv } from '../../router/types'
 import { OPENAPI_TOKENS } from '../openapi.tokens'
-import type { IOpenAPIConfigService, OpenAPIEffectiveConfig } from '../types'
+import type { IOpenAPIConfigService, IOpenAPIConfigStore, OpenAPIEffectiveConfig } from '../types'
 
 /**
  * OpenAPI Service
@@ -24,7 +23,7 @@ import type { IOpenAPIConfigService, OpenAPIEffectiveConfig } from '../types'
  * Configuration is resolved per-request from OpenAPIConfigService,
  * allowing middleware to override config based on domain context.
  */
-@Transient(OPENAPI_TOKENS.OpenAPIService)
+@Singleton(OPENAPI_TOKENS.OpenAPIService)
 export class OpenAPIService {
 
   /**
@@ -69,11 +68,16 @@ export class OpenAPIService {
    * Setup OpenAPI documentation endpoints
    */
   setupEndpoints(app: OpenAPIHono<RouterEnv>, container: Container): void {
-    const configService = container.resolve<IOpenAPIConfigService>(OPENAPI_TOKENS.ConfigService)
-    const config = configService.getEffectiveConfig()
+    // Endpoints are mounted at bootstrap (no request scope), so read the static
+    // mount paths from the singleton config store — request overrides (info /
+    // routeFilter) never affect jsonPath/ui and are resolved per request inside
+    // the handlers below via the request-scoped config service.
+    const config = container.resolve<IOpenAPIConfigStore>(OPENAPI_TOKENS.ConfigStore).getBaseConfig()
+    const jsonPath = config.jsonPath
+    const ui = config.ui
 
     // OpenAPI JSON spec endpoint
-    app.get(config.jsonPath, (c) => {
+    app.get(jsonPath, (c) => {
       const requestContainer = c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER)
       const fullSpec = this.getSpec(app, requestContainer)
 
@@ -90,11 +94,11 @@ export class OpenAPIService {
     this.nameLastHandler(app, 'OpenAPI', 'spec')
 
     // Docs UI endpoint
-    if (config.ui !== false) {
-      const uiPath = config.ui?.path ?? '/api/docs'
-      const uiRenderer = config.ui?.renderer
+    if (ui !== false) {
+      const uiPath = ui?.path ?? '/api/docs'
+      const uiRenderer = ui?.renderer
 
-      app.get(uiPath, (c, next) => {
+      app.get(uiPath, async (c, next) => {
         const requestContainer = c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER)
         const requestConfigService = requestContainer.resolve<IOpenAPIConfigService>(
           OPENAPI_TOKENS.ConfigService
@@ -106,6 +110,7 @@ export class OpenAPIService {
           return uiRenderer(uiContext)(c, next)
         }
 
+        const { swaggerUI } = await import('@hono/swagger-ui')
         return swaggerUI<RouterEnv>({ url: uiContext.specUrl })(c, next)
       })
       this.nameLastHandler(app, 'OpenAPI', 'docs')

@@ -1,16 +1,4 @@
-/**
- * Module Registry
- *
- * Manages module lifecycle for the @Module decorator pattern.
- * Simplified for tsyringe's flat container model:
- * - Imports are traversed for registration (organization only)
- * - Modules registered in declaration order
- * - Lifecycle hooks: onInitialize, onShutdown
- */
-
-import { injectable, instancePerContainerCachingFactory } from 'tsyringe'
 import type { Container } from '../di/container'
-import { Scope } from '../di/types'
 import { isListener } from '../events'
 import type { LoggerService } from '../logger'
 import { Router, type RouteConfigurable } from '../router/router'
@@ -21,6 +9,7 @@ import { getModuleOptions } from './module.decorator'
 import type { ExceptionHandler } from '../errors/exception-handler'
 import type {
   DynamicModule,
+  InjectionToken,
   ModuleClass,
   ModuleContext,
   ModuleOptions,
@@ -35,26 +24,14 @@ interface RegisteredModule {
   moduleClass: Constructor
   options: ModuleOptions
   instance: object | null
+  hasLifecycle: boolean
 }
 
-/**
- * ModuleRegistry - manages module lifecycle
- *
- * @example
- * ```typescript
- * const registry = new ModuleRegistry(container, logger)
- * registry.register(AppModule)  // Traverses imports recursively
- * await registry.initialize()
- * // ... application running ...
- * await registry.shutdown()
- * ```
- */
 export class ModuleRegistry {
   private modules: RegisteredModule[] = []
   private registeredClasses = new Set<Constructor>()
   private initialized = false
 
-  // Collected items from all modules for Application to use
   private allControllers: Constructor[] = []
   private allConsumers: Constructor[] = []
   private allJobs: Constructor[] = []
@@ -68,78 +45,155 @@ export class ModuleRegistry {
     private readonly logger: LoggerService
   ) { }
 
-  /**
-   * Register a module (static or dynamic)
-   *
-   * @param moduleOrDynamic - Module class decorated with `@Module` or DynamicModule from configure()
-   */
   register(moduleOrDynamic: ModuleClass | DynamicModule): void {
     const { moduleClass, options } = this.resolveModule(moduleOrDynamic)
-    const isDynamic = this.isDynamicModule(moduleOrDynamic)
 
-    // Check for duplicate registration
-    if (this.registeredClasses.has(moduleClass)) {
-      // For DynamicModules: Still register the additional providers
-      // This allows forRoot() to add configuration even if base module is registered
-      if (isDynamic) {
-        this.logger.debug(`Module ${moduleClass.name} already registered, registering DynamicModule providers`)
-        const { module: _, ...dynamicRest } = moduleOrDynamic
-        for (const provider of dynamicRest.providers ?? []) {
-          this.registerProvider(provider)
-        }
-      } else {
-        this.logger.debug(`Module ${moduleClass.name} already registered, skipping`)
-      }
-      return
-    }
+    if (this.handleAlreadyRegistered(moduleClass, moduleOrDynamic)) return
 
     this.registeredClasses.add(moduleClass)
     this.logger.info(`Registering module: ${moduleClass.name}`)
 
-    // First, register imported modules recursively
     for (const ImportedModule of options.imports ?? []) {
       this.register(ImportedModule)
     }
 
-    // Register providers in container
-    for (const provider of options.providers ?? []) {
-      this.registerProvider(provider)
-    }
+    const registered = this.registerModuleNode(moduleClass, options, { includeHttpWiring: true })
 
-    // Register controllers and collect them
-    for (const controller of options.controllers ?? []) {
-      this.container.register(controller)
-      this.allControllers.push(controller)
+    // Eager register() is synchronous and assumes the bootstrap initialize()
+    // batch will run lifecycle hooks. If it's called AFTER initialization (e.g. a
+    // built-in subsystem registered on first use), that batch has finished and
+    // won't revisit this module — so a lifecycle hook would be silently dropped.
+    // Surface it instead of failing silently; load such modules via
+    // LazyModuleLoader (registerLazy), which runs onInitialize immediately.
+    if (this.initialized && registered.hasLifecycle) {
+      this.logger.warn(
+        `Module ${moduleClass.name} was registered eagerly after initialization; its onInitialize/onShutdown/configureRoutes hooks will not run. Load it via LazyModuleLoader instead.`,
+      )
     }
-
-    // Register consumers as singletons by default and collect them
-    for (const consumer of options.consumers ?? []) {
-      this.container.register(consumer, Scope.Singleton)
-      this.allConsumers.push(consumer)
-      this.logger.info(`Collected consumer: ${consumer.name}`, { queueCount: this.allConsumers.length })
-    }
-
-    // Register jobs as singletons by default and collect them
-    for (const job of options.jobs ?? []) {
-      this.container.register(job, Scope.Singleton)
-      this.allJobs.push(job)
-    }
-
-    this.modules.push({ moduleClass, options, instance: null })
   }
 
   /**
-   * Register multiple modules in order
+   * Register a module on demand (NestJS-style lazy loading). Registers nested
+   * imports recursively and providers, then runs `onInitialize` immediately
+   * (the bootstrap-time batch {@link initialize} has already completed).
+   *
+   * Controllers, queue consumers, and cron jobs are SKIPPED — route, queue, and
+   * cron wiring is finalized at bootstrap and cannot be extended at runtime.
    */
+  async registerLazy(moduleOrDynamic: ModuleClass | DynamicModule): Promise<void> {
+    const { moduleClass, options } = this.resolveModule(moduleOrDynamic)
+
+    if (this.handleAlreadyRegistered(moduleClass, moduleOrDynamic)) return
+
+    this.registeredClasses.add(moduleClass)
+    this.logger.info(`Lazily registering module: ${moduleClass.name}`)
+
+    for (const ImportedModule of options.imports ?? []) {
+      await this.registerLazy(ImportedModule)
+    }
+
+    const registered = this.registerModuleNode(moduleClass, options, { includeHttpWiring: false })
+
+    if (registered.hasLifecycle) {
+      const instance = new registered.moduleClass()
+      registered.instance = instance
+      if (this.hasOnInitialize(instance)) {
+        const context: ModuleContext = { container: this.container, logger: this.logger }
+        this.logger.info(`Initializing (lazy): ${registered.moduleClass.name}`)
+        await instance.onInitialize(context)
+      }
+    }
+  }
+
   registerAll(modules: (ModuleClass | DynamicModule)[]): void {
     for (const module of modules) {
       this.register(module)
     }
   }
 
+  hasRegistered(moduleClass: Constructor): boolean {
+    return this.registeredClasses.has(moduleClass)
+  }
+
   /**
-   * Initialize all modules (call configure and onInitialize hooks)
+   * Handle re-registration of an already-known module. For a DynamicModule,
+   * its extra providers are wired (without re-running lifecycle); for a plain
+   * class it is a no-op. Returns true when the module was already registered.
    */
+  private handleAlreadyRegistered(
+    moduleClass: Constructor,
+    moduleOrDynamic: ModuleClass | DynamicModule,
+  ): boolean {
+    if (!this.registeredClasses.has(moduleClass)) return false
+
+    if (this.isDynamicModule(moduleOrDynamic)) {
+      this.logger.debug(`Module ${moduleClass.name} already registered, registering DynamicModule providers`)
+      const { module: _, ...dynamicRest } = moduleOrDynamic
+      for (const provider of dynamicRest.providers ?? []) {
+        this.registerProvider(provider)
+      }
+    } else {
+      this.logger.debug(`Module ${moduleClass.name} already registered, skipping`)
+    }
+    return true
+  }
+
+  /**
+   * Register a single module's providers (and, for eager registration, its
+   * controllers/consumers/jobs), detect lifecycle hooks, and record it.
+   * Assumes the module's `imports` have already been registered by the caller.
+   */
+  private registerModuleNode(
+    moduleClass: Constructor,
+    options: ModuleOptions,
+    { includeHttpWiring }: { includeHttpWiring: boolean },
+  ): RegisteredModule {
+    for (const provider of options.providers ?? []) {
+      this.registerProvider(provider, { lazy: !includeHttpWiring, moduleName: moduleClass.name })
+    }
+
+    if (includeHttpWiring) {
+      for (const controller of options.controllers ?? []) {
+        this.container.register(controller)
+        this.allControllers.push(controller)
+      }
+
+      for (const consumer of options.consumers ?? []) {
+        this.container.register(consumer)
+        this.allConsumers.push(consumer)
+        this.logger.info(`Collected consumer: ${consumer.name}`, { queueCount: this.allConsumers.length })
+      }
+
+      for (const job of options.jobs ?? []) {
+        this.container.register(job)
+        this.allJobs.push(job)
+      }
+    } else {
+      const skipped: string[] = []
+      if (options.controllers?.length) skipped.push('controllers')
+      if (options.consumers?.length) skipped.push('consumers')
+      if (options.jobs?.length) skipped.push('jobs')
+      if ('configureRoutes' in moduleClass.prototype) skipped.push('configureRoutes')
+      if ('onException' in moduleClass.prototype) skipped.push('onException')
+      if (skipped.length) {
+        this.logger.warn(
+          `Lazy module ${moduleClass.name} declares ${skipped.join('/')} which are skipped — ` +
+            `route, queue, cron, and exception-handler wiring is finalized at bootstrap`,
+        )
+      }
+    }
+
+    const hasLifecycle =
+      'onInitialize' in moduleClass.prototype ||
+      'onShutdown' in moduleClass.prototype ||
+      'onException' in moduleClass.prototype ||
+      'configureRoutes' in moduleClass.prototype
+
+    const registered: RegisteredModule = { moduleClass, options, instance: null, hasLifecycle }
+    this.modules.push(registered)
+    return registered
+  }
+
   async initialize(): Promise<void> {
     if (this.initialized) return
 
@@ -150,23 +204,16 @@ export class ModuleRegistry {
       logger: this.logger,
     }
 
-    for (const registered of this.modules) {
-      // Instantiate module class
+    // Snapshot: a module's onInitialize may lazily load another module
+    // (LazyModuleLoader.load → registerLazy), which pushes to this.modules and
+    // initializes it itself. Iterating a snapshot prevents the batch loop from
+    // re-visiting (and double-initializing) those lazily-added modules.
+    for (const registered of [...this.modules]) {
+      if (!registered.hasLifecycle) continue
+
       const instance = new registered.moduleClass()
       registered.instance = instance
 
-      // Call configureRoutes() for route + middleware configuration if implemented
-      if (this.hasRouteConfigurable(instance)) {
-        this.logger.debug(`Configuring routes for: ${registered.moduleClass.name}`)
-        const router = new Router()
-        instance.configureRoutes(router)
-        // Collect controllers belonging to this module for Router scoping
-        const moduleControllers = registered.options.controllers ?? []
-        this.allRouterConfigs.push({ router, controllers: moduleControllers })
-        this.logger.debug(`Collected route config from ${registered.moduleClass.name} (${moduleControllers.length} controllers)`)
-      }
-
-      // Call onInitialize if implemented
       if (this.hasOnInitialize(instance)) {
         this.logger.info(`Initializing: ${registered.moduleClass.name}`)
         await instance.onInitialize(context)
@@ -177,61 +224,45 @@ export class ModuleRegistry {
     this.logger.info('All modules initialized')
   }
 
-  /**
-   * Get all controllers registered from all modules
-   */
   getAllControllers(): Constructor[] {
     return this.allControllers
   }
 
-  /**
-   * Get all consumers registered from all modules
-   */
   getAllConsumers(): Constructor[] {
     return this.allConsumers
   }
 
-  /**
-   * Get all jobs registered from all modules
-   */
   getAllJobs(): Constructor[] {
     return this.allJobs
   }
 
-  /**
-   * Get all listeners registered from all modules
-   */
   getAllListeners(): Constructor[] {
     return this.allListeners
   }
 
-  /**
-   * Get all commands registered from all modules
-   */
   getAllCommands(): Constructor[] {
     return this.allCommands
   }
 
-  /**
-   * Get all seeders registered from all modules
-   */
   getAllSeeders(): Constructor[] {
     return this.allSeeders
   }
 
-  /**
-   * Get all Router configurations from modules implementing RouteConfigurable
-   */
   getAllRouterConfigs(): { router: Router; controllers: Constructor[] }[] {
+    if (this.allRouterConfigs.length === 0) {
+      for (const { moduleClass, options, instance } of this.modules) {
+        if (instance && this.hasRouteConfigurable(instance)) {
+          this.logger.debug(`Configuring routes for: ${moduleClass.name}`)
+          const router = new Router()
+          instance.configureRoutes(router)
+          const moduleControllers = options.controllers ?? []
+          this.allRouterConfigs.push({ router, controllers: moduleControllers })
+        }
+      }
+    }
     return this.allRouterConfigs
   }
 
-  /**
-   * Call `onException()` on all modules that implement the OnException interface.
-   * Invoked by Application after the ExceptionHandler is resolved and `register()` is called.
-   *
-   * @param handler - The resolved ExceptionHandler instance
-   */
   configureExceptionHandlers(handler: ExceptionHandler): void {
     for (const { moduleClass, instance } of this.modules) {
       if (instance && this.hasOnException(instance)) {
@@ -241,9 +272,6 @@ export class ModuleRegistry {
     }
   }
 
-  /**
-   * Shutdown all modules (call onShutdown hooks in reverse order)
-   */
   async shutdown(): Promise<void> {
     this.logger.info('Shutting down modules...')
 
@@ -252,7 +280,6 @@ export class ModuleRegistry {
       logger: this.logger,
     }
 
-    // Reverse order for shutdown
     const reversed = [...this.modules].reverse()
 
     for (const { moduleClass, instance } of reversed) {
@@ -268,9 +295,6 @@ export class ModuleRegistry {
     this.logger.info('All modules shut down')
   }
 
-  /**
-   * Type guard for RouteConfigurable
-   */
   private hasRouteConfigurable(instance: unknown): instance is RouteConfigurable {
     return (
       typeof instance === 'object' &&
@@ -280,9 +304,6 @@ export class ModuleRegistry {
     )
   }
 
-  /**
-   * Type guard for OnInitialize
-   */
   private hasOnInitialize(instance: unknown): instance is OnInitialize {
     return (
       typeof instance === 'object' &&
@@ -292,9 +313,6 @@ export class ModuleRegistry {
     )
   }
 
-  /**
-   * Type guard for OnShutdown
-   */
   private hasOnShutdown(instance: unknown): instance is OnShutdown {
     return (
       typeof instance === 'object' &&
@@ -304,9 +322,6 @@ export class ModuleRegistry {
     )
   }
 
-  /**
-   * Type guard for OnException
-   */
   private hasOnException(instance: unknown): instance is OnException {
     return (
       typeof instance === 'object' &&
@@ -316,28 +331,17 @@ export class ModuleRegistry {
     )
   }
 
-  /**
-   * Resolve module class and options from static or dynamic module
-   *
-   * For DynamicModules, merges the decorator metadata (consumers, controllers, jobs)
-   * with the DynamicModule options (providers, imports). This ensures modules using
-   * forRoot/forRootAsync patterns still have their decorator-defined consumers registered.
-   */
-  private resolveModule(moduleOrDynamic: ModuleClass | DynamicModule): {
+  resolveModule(moduleOrDynamic: ModuleClass | DynamicModule): {
     moduleClass: Constructor
     options: ModuleOptions
   } {
-    // DynamicModule (from forRoot/forRootAsync) - has module property
     if (this.isDynamicModule(moduleOrDynamic)) {
       const { module: moduleClass, ...dynamicRest } = moduleOrDynamic
 
-      // Get decorator options and merge with dynamic options
-      // This ensures consumers/controllers/jobs from @Module decorator are included
       const decoratorOptions = getModuleOptions(moduleClass) ?? {}
       const mergedOptions: ModuleOptions = {
         ...decoratorOptions,
         ...dynamicRest,
-        // Merge arrays: decorator providers first, then dynamic providers
         providers: [...(decoratorOptions.providers ?? []), ...(dynamicRest.providers ?? [])],
         imports: [...(decoratorOptions.imports ?? [])],
       }
@@ -345,74 +349,83 @@ export class ModuleRegistry {
       return { moduleClass: moduleClass, options: mergedOptions }
     }
 
-    // Static module (decorated with @Module)
     const moduleClass = moduleOrDynamic as Constructor
     const options = getModuleOptions(moduleClass) ?? {}
     return { moduleClass, options }
   }
 
-  /**
-   * Type guard for DynamicModule
-   */
-  private isDynamicModule(value: unknown): value is DynamicModule {
+  isDynamicModule(value: unknown): value is DynamicModule {
     return (
       typeof value === 'object' &&
       value !== null &&
-      'module' in value && // Required property for dynamic modules
+      'module' in value &&
       typeof (value as DynamicModule).module === 'function'
     )
   }
 
-  /**
-   * Register a single provider in the container
-   */
-  private registerProvider(provider: Provider): void {
+  private registerProvider(
+    provider: Provider,
+    { lazy = false, moduleName }: { lazy?: boolean; moduleName?: string } = {},
+  ): void {
+    if (lazy) {
+      const token = this.providerToken(provider)
+      // A lazy module registers onto the shared root container. If its token is
+      // already bound (by an eagerly-registered or previously-loaded module),
+      // overriding would silently clobber that binding — and break any
+      // shared-singleton rendezvous. Keep the existing binding and warn.
+      if (token !== null && this.container.isRegistered(token)) {
+        this.logger.warn(
+          `Lazy module ${moduleName ?? '(unknown)'} provides ${this.describeToken(token)}, ` +
+            `which is already registered by another module — keeping the existing binding and ignoring the lazy provider.`,
+        )
+        return
+      }
+    }
+
     if (typeof provider === 'function') {
-      // Class-only provider - transient by default
       this.container.register(provider as Constructor)
       this.collectIfListener(provider as Constructor)
       this.collectIfCommand(provider as Constructor)
       this.collectIfSeeder(provider as Constructor)
     } else if ('useClass' in provider) {
-      // ClassProvider with optional scope
-      this.container.register(provider.provide, provider.useClass as Constructor, provider.scope)
+      this.container.register(provider.provide, provider.useClass as Constructor)
       this.collectIfListener(provider.useClass as Constructor)
       this.collectIfCommand(provider.useClass as Constructor)
       this.collectIfSeeder(provider.useClass as Constructor)
     } else if ('useValue' in provider) {
-      // ValueProvider - no scope needed (values are inherently singleton)
       this.container.registerValue(provider.provide, provider.useValue)
     } else if ('useFactory' in provider) {
-      // FactoryProvider - use instancePerContainerCachingFactory to:
-      // 1. Get the actual container at resolution time (global vs request)
-      // 2. Cache result per container
       const { provide, useFactory, inject = [] } = provider
-      this.container.getTsyringeContainer().register(provide, {
-        useFactory: instancePerContainerCachingFactory((dependencyContainer) => {
-          const deps = inject.map((token) => dependencyContainer.resolve(token))
-          return useFactory(...deps)
-        })
+      this.container.registerFactory(provide, (c) => {
+        const deps = inject.map((token) => c.resolve(token))
+        return useFactory(...deps)
       })
     } else if ('useExisting' in provider) {
-      // ExistingProvider - alias to another token
       this.container.registerExisting(provider.provide, provider.useExisting)
     }
   }
 
-  /**
-   * Check if a class is a `Command` and collect it for auto-wiring
-   */
+  /** The DI token a provider binds, for collision detection. */
+  private providerToken(provider: Provider): InjectionToken | null {
+    if (typeof provider === 'function') return provider as Constructor
+    if ('provide' in provider) return provider.provide
+    return null
+  }
+
+  private describeToken(token: InjectionToken): string {
+    if (typeof token === 'function') return token.name
+    if (typeof token === 'symbol') return token.toString()
+    if (typeof token === 'string') return token
+    return 'lazy token'
+  }
+
   private collectIfCommand(providerClass: Constructor): void {
     if (isCommand(providerClass) && !this.allCommands.includes(providerClass)) {
-      injectable()(providerClass)
       this.allCommands.push(providerClass)
       this.logger.debug(`Collected command: ${providerClass.name}`)
     }
   }
 
-  /**
-   * Check if a class is a `Seeder` and collect it for auto-wiring
-   */
   private collectIfSeeder(providerClass: Constructor): void {
     if (isSeeder(providerClass) && !this.allSeeders.includes(providerClass)) {
       this.allSeeders.push(providerClass)
@@ -420,13 +433,13 @@ export class ModuleRegistry {
     }
   }
 
-  /**
-   * Check if a class is a `@Listener()` and collect it for auto-wiring
-   */
   private collectIfListener(providerClass: Constructor): void {
     if (isListener(providerClass)) {
-      // Re-register as singleton so the same instance is used across all event registrations
-      this.container.register(providerClass, providerClass, Scope.Singleton)
+      // Register with the listener's own scope (`@Listener()` applies
+      // `@Transient()`) rather than forcing a singleton: listeners are resolved
+      // fresh per event from the emitting request scope, so a listener may inject
+      // request-scoped providers (i18n, queue senders, auth context, …).
+      this.container.register(providerClass)
       this.allListeners.push(providerClass)
       this.logger.debug(`Collected listener: ${providerClass.name}`)
     }

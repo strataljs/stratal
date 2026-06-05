@@ -1,5 +1,5 @@
 import type { Context, MiddlewareHandler } from 'hono';
-import { DomainMismatchError } from '../errors';
+import { abort } from '../../errors';
 import type { RouterEnv } from '../types';
 
 /**
@@ -46,7 +46,7 @@ function stripPort(host: string): string {
  * When the host matches, domain parameters are extracted and stored in context
  * variables accessible via `ctx.domain(key)`.
  *
- * When the host does NOT match, throws `DomainMismatchError` (404).
+ * When the host does NOT match, aborts with 404.
  *
  * @param pattern - Domain pattern with `{param}` placeholders (e.g., '{tenant}.myapp.com')
  *
@@ -69,7 +69,7 @@ export function createDomainMiddleware(pattern: string): MiddlewareHandler<Route
     const match = regex.exec(host)
 
     if (!match) {
-      throw new DomainMismatchError()
+      abort(404, 'Domain mismatch')
     }
 
     // Store domain params as context variables

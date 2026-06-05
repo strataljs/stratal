@@ -1,23 +1,12 @@
 /**
  * Storage entry configuration
- * Represents a single storage disk with its credentials
+ * Represents a single storage disk backed by Cloudflare R2
  */
 export interface StorageEntry {
 	disk: string
-	provider: 's3' | 'gcs'
-	endpoint: string
-	/**
-	 * Base URL for generating presigned/temporary URLs (client-accessible).
-	 * When set, presigned URLs use this host instead of `endpoint`.
-	 * Useful when the S3 API endpoint differs from the client-facing URL.
-	 */
-	url?: string
-	bucket: string
-	region: string
-	accessKeyId: string
-	secretAccessKey: string
+	/** R2Bucket binding name from wrangler.toml */
+	binding: string
 	root: string
-	visibility: 'public' | 'private'
 }
 
 /**
@@ -29,10 +18,22 @@ export interface PresignedUrlConfig {
 }
 
 /**
+ * Storage route configuration
+ */
+export interface StorageRouteConfig {
+	/** Base path for storage routes. Default: '/storage' */
+	basePath?: string
+	/** Disable auto-registered storage routes. Default: false */
+	disabled?: boolean
+}
+
+/**
  * Storage configuration used by framework
  */
 export interface StorageConfig {
 	storage: StorageEntry[]
 	defaultStorageDisk: string
 	presignedUrl: PresignedUrlConfig
+	/** Config for auto-registered storage routes (presigned URL proxying) */
+	route?: StorageRouteConfig
 }

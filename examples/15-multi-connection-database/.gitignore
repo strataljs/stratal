@@ -1,5 +1,0 @@
-.wrangler
-.env
-db/zenstack/
-db/main/*.ts
-db/analytics/*.ts

@@ -1,7 +1,7 @@
 import { createMock } from '@stratal/testing/mocks'
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { describe, expect, it } from 'vitest'
-import { z, type RouteConfig as OpenAPIRouteConfig } from '../../i18n/validation'
+import { z, type RouteConfig as OpenAPIRouteConfig } from '../../i18n/validation/zod'
 import type { LoggerService } from '../../logger/services/logger.service'
 import type { ModuleRegistry } from '../../module/module-registry'
 import { DEFAULT_CONTENT_TYPE } from '../constants'
@@ -34,7 +34,6 @@ interface RouteRegistrationServicePrivate {
     path: string,
     routeConfig: RouteConfig,
     metadata: { tags: string[]; security: Record<string, string[]>[] },
-    guards: [],
     methodName?: string,
     statusCodeOverride?: number,
     hasLocaleParam?: boolean,
@@ -65,7 +64,7 @@ describe('Content Type Support', () => {
       const route = service.buildOpenAPIRoute('post', '/test', {
         body: testSchema,
         response: testSchema,
-      }, defaultMetadata, [])
+      }, defaultMetadata)
 
       expect(route.request?.body?.content).toHaveProperty(DEFAULT_CONTENT_TYPE)
     })
@@ -75,7 +74,7 @@ describe('Content Type Support', () => {
       const route = service.buildOpenAPIRoute('post', '/test', {
         body: { schema: testSchema, contentType: 'multipart/form-data' },
         response: testSchema,
-      }, defaultMetadata, [])
+      }, defaultMetadata)
 
       expect(route.request?.body?.content).toHaveProperty('multipart/form-data')
       expect(route.request?.body?.content).not.toHaveProperty(DEFAULT_CONTENT_TYPE)
@@ -86,7 +85,7 @@ describe('Content Type Support', () => {
       const route = service.buildOpenAPIRoute('post', '/test', {
         body: { schema: testSchema },
         response: testSchema,
-      }, defaultMetadata, [])
+      }, defaultMetadata)
 
       expect(route.request?.body?.content).toHaveProperty(DEFAULT_CONTENT_TYPE)
     })
@@ -97,7 +96,7 @@ describe('Content Type Support', () => {
       const service = createService()
       const route = service.buildOpenAPIRoute('get', '/test', {
         response: testSchema,
-      }, defaultMetadata, [])
+      }, defaultMetadata)
 
       const successResponse = (route.responses as AnyRecord)[200] as AnyRecord
       expect(successResponse.content).toHaveProperty(DEFAULT_CONTENT_TYPE)
@@ -107,7 +106,7 @@ describe('Content Type Support', () => {
       const service = createService()
       const route = service.buildOpenAPIRoute('get', '/test', {
         response: { schema: testSchema, contentType: 'application/octet-stream' },
-      }, defaultMetadata, [])
+      }, defaultMetadata)
 
       const successResponse = (route.responses as AnyRecord)[200] as AnyRecord
       expect(successResponse.content).toHaveProperty('application/octet-stream')
@@ -118,7 +117,7 @@ describe('Content Type Support', () => {
       const service = createService()
       const route = service.buildOpenAPIRoute('get', '/test', {
         response: { schema: testSchema, description: 'File' },
-      }, defaultMetadata, [])
+      }, defaultMetadata)
 
       const successResponse = (route.responses as AnyRecord)[200] as AnyRecord
       expect(successResponse.content).toHaveProperty(DEFAULT_CONTENT_TYPE)
@@ -131,7 +130,7 @@ describe('Content Type Support', () => {
       const route = service.buildOpenAPIRoute('post', '/test', {
         body: { schema: testSchema, contentType: 'multipart/form-data' },
         response: { schema: testSchema, contentType: 'application/octet-stream' },
-      }, defaultMetadata, [])
+      }, defaultMetadata)
 
       // Check that error responses (400, 401, etc.) still use application/json
       for (const status of [400, 401, 403, 404, 409, 500]) {

@@ -1,7 +1,5 @@
-import { ApplicationError, ERROR_CODES } from 'stratal/errors'
+import { HttpException } from 'stratal/errors'
 
-export class InvalidTokenError extends ApplicationError {
-  constructor() {
-    super('errors.auth.invalidToken', ERROR_CODES.AUTH.INVALID_TOKEN)
-  }
+export class InvalidTokenError extends HttpException {
+  constructor() { super(401, 'Invalid or expired token') }
 }

@@ -31,7 +31,7 @@ export const EMAIL_TOKENS = {
 
   /**
    * Queue sender for email dispatch.
-   * Bound via EmailModule.forRoot({ queue: 'queue-name' })
+   * Bound via EmailModule.forRoot({ queue: 'QUEUE_BINDING_NAME' })
    */
   EmailQueue: Symbol.for('stratal:email:queue'),
 } as const

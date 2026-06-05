@@ -13,7 +13,7 @@ import type { QueueMessage } from '../queue-consumer'
  * @example Implementing a custom provider
  * ```typescript
  * export class CustomQueueProvider implements IQueueProvider {
- *   async send<T>(queueName: string, message: QueueMessage<T>): Promise<void> {
+ *   async send<T>(binding: string, message: QueueMessage<T>): Promise<void> {
  *     // Custom implementation
  *   }
  * }
@@ -24,11 +24,11 @@ export interface IQueueProvider {
    * Send a message to a queue
    *
    * Provider handles the actual delivery mechanism:
-   * - CloudflareQueueProvider: Resolves CF binding and calls queue.send()
+   * - CloudflareQueueProvider: Looks up the binding on env and calls queue.send()
    * - SyncQueueProvider: Finds matching consumers and calls handle() directly
    *
-   * @param queueName - Queue name
-   * @param message - Complete message with id, timestamp, and metadata
+   * @param binding - Queue binding identifier
+   * @param message - Complete message with id and metadata
    */
-  send<T>(queueName: string, message: QueueMessage<T>): Promise<void>
+  send<T>(binding: string, message: QueueMessage<T>): Promise<void>
 }

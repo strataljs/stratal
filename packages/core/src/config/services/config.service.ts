@@ -1,102 +1,127 @@
-import { Transient } from '../../di/decorators'
+import { inject } from '../../di'
+import { Request } from '../../di/decorators'
+import { Macroable } from '../../macroable/macroable'
 import { CONFIG_TOKENS } from '../config.tokens'
 import type { ConfigPath, ConfigPathValue, IConfigService, ModuleConfig } from '../config.types'
-import { ConfigNotInitializedError } from '../errors'
+import { type ConfigStore } from './config.store'
 
 /**
- * ConfigService with dot notation support for get/set operations
+ * ConfigService with dot notation support and per-request overrides.
  *
- * Supports runtime overrides via set() - useful for request-specific config overrides.
- * Use reset() to restore original values.
+ * ConfigService is **request-scoped**: each request gets its own
+ * instance with a private `overrides` map layered over the shared
+ * {@link ConfigStore}. Calls to {@link set} mutate only the current
+ * request's overrides, which makes it safe to mutate config from
+ * middleware (e.g. to pin `environment.appUrl` to the request host).
+ *
+ * Extends {@link Macroable} so apps can add domain-specific getters
+ * and methods via `ConfigService.getter()` / `ConfigService.macro()`.
  *
  * @example
  * ```typescript
- * // Get with dot notation
+ * // Read with dot notation
  * const url = config.get('database.url')
  * const fromName = config.get('email.from.name')
  *
- * // Set at runtime (e.g., in middleware for runtime override)
- * config.set('email.from.name', 'Custom Name')
+ * // Per-request override (e.g. in middleware)
+ * config.set('environment.appUrl', `${proto}://${host}`)
  *
- * // Reset to original
- * config.reset('email.from.name') // reset specific path
- * config.reset() // reset entire config
+ * // Reset the override for the current request
+ * config.reset('environment.appUrl')
  * ```
  */
-@Transient(CONFIG_TOKENS.ConfigService)
-export class ConfigService<T extends object = ModuleConfig> implements IConfigService<T> {
-  private originalConfig: T | undefined
-  private currentConfig: T | undefined
+@Request(CONFIG_TOKENS.ConfigService)
+export class ConfigService<T extends object = ModuleConfig> extends Macroable implements IConfigService<T> {
+  private overrides = new Map<string, unknown>()
 
-  /**
-   * Initialize the config service with validated configuration
-   * Called by ConfigModule during initialization
-   */
-  initialize(config: T): void {
-    this.originalConfig = this.deepClone(config)
-    this.currentConfig = this.deepClone(config)
+  constructor(
+    @inject(CONFIG_TOKENS.ConfigStore) private readonly store: ConfigStore<T>,
+  ) {
+    super()
   }
 
   /**
-   * Get config value using dot notation
-   * @example config.get('database.url')
+   * Get config value using dot notation. Request overrides take
+   * precedence over the shared store.
    */
   get<P extends ConfigPath<T>>(path: P): ConfigPathValue<T, P> {
-    this.ensureInitialized()
-    return this.getByPath(this.currentConfig, path) as ConfigPathValue<T, P>
+    const override = this.readOverride(path)
+    if (override !== undefined) {
+      return override as ConfigPathValue<T, P>
+    }
+    return this.store.get(path)
   }
 
   /**
-   * Set config value at runtime (for runtime overrides)
-   * @example config.set('email.from.name', 'Custom Name')
+   * Set a config value for the lifetime of the current request.
+   * Does not mutate the shared store.
    */
   set<P extends ConfigPath<T>>(path: P, value: ConfigPathValue<T, P>): void {
-    this.ensureInitialized()
-    this.setByPath(this.currentConfig, path, value)
+    if (this.hasDangerousSegment(path)) return
+    this.overrides.set(path, value)
   }
 
   /**
-   * Reset config to original value
-   * @param path - Optional path to reset (resets entire config if omitted)
+   * Clear a single override, or all overrides for this request.
    */
   reset(path?: ConfigPath<T>): void {
-    this.ensureInitialized()
     if (path) {
-      const originalValue = this.getByPath(this.originalConfig, path)
-      this.setByPath(this.currentConfig, path, this.deepClone(originalValue))
-    } else {
-      this.currentConfig = this.deepClone(this.originalConfig)
+      this.overrides.delete(path)
+      return
     }
+    this.overrides.clear()
   }
 
   /**
-   * Get entire config object
+   * Get the full config object, with request overrides merged in.
    */
   all(): Readonly<T> {
-    this.ensureInitialized()
-    return this.currentConfig as Readonly<T>
+    const base = this.store.all() as T
+    if (this.overrides.size === 0) {
+      return base as Readonly<T>
+    }
+    const merged = this.deepClone(base)
+    for (const [path, value] of this.overrides) {
+      this.writeByPath(merged, path, value)
+    }
+    return merged as Readonly<T>
   }
 
   /**
-   * Check if a config path exists
+   * Check if a config path exists (in overrides or the store).
    */
   has(path: ConfigPath<T>): boolean {
-    this.ensureInitialized()
-    return this.getByPath(this.currentConfig, path) !== undefined
+    if (this.readOverride(path) !== undefined) return true
+    return this.store.has(path)
   }
 
-  private getByPath(obj: unknown, path: string): unknown {
-    const keys = path.split('.')
-    let current = obj
+  private readOverride(path: string): unknown {
+    if (this.hasDangerousSegment(path)) return undefined
+    if (this.overrides.has(path)) {
+      return this.overrides.get(path)
+    }
+    // Support partial-path reads: if an ancestor was overridden, walk into it.
+    const segments = path.split('.')
+    for (let i = segments.length - 1; i > 0; i--) {
+      const parent = segments.slice(0, i).join('.')
+      if (this.overrides.has(parent)) {
+        const parentValue = this.overrides.get(parent)
+        return this.walk(parentValue, segments.slice(i))
+      }
+    }
+    return undefined
+  }
+
+  private walk(value: unknown, keys: string[]): unknown {
+    let current = value
     for (const key of keys) {
-      if (this.isDangerousKey(key)) return undefined
       if (current === null || current === undefined) return undefined
       current = (current as Record<string, unknown>)[key]
     }
     return current
   }
 
-  private setByPath(obj: unknown, path: string, value: unknown): void {
+  private writeByPath(obj: unknown, path: string, value: unknown): void {
     const keys = path.split('.')
     if (keys.some((key) => this.isDangerousKey(key))) return
     let current = obj as Record<string, unknown>
@@ -120,14 +145,12 @@ export class ConfigService<T extends object = ModuleConfig> implements IConfigSe
     })
   }
 
-  private isDangerousKey(key: string): boolean {
-    return key === '__proto__' || key === 'constructor' || key === 'prototype'
+  private hasDangerousSegment(path: string): boolean {
+    return path.split('.').some((key) => this.isDangerousKey(key))
   }
 
-  private ensureInitialized(): void {
-    if (!this.currentConfig) {
-      throw new ConfigNotInitializedError()
-    }
+  private isDangerousKey(key: string): boolean {
+    return key === '__proto__' || key === 'constructor' || key === 'prototype'
   }
 
   private deepClone<V>(obj: V): V {

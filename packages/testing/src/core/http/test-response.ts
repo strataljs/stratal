@@ -1,3 +1,4 @@
+import { Macroable } from 'stratal/macroable'
 import { expect } from 'vitest'
 import { getValueAtPath, hasValueAtPath } from './path-utils'
 
@@ -14,11 +15,13 @@ import { getValueAtPath, hasValueAtPath } from './path-utils'
  *   .assertJsonPath('data.id', userId)
  * ```
  */
-export class TestResponse {
+export class TestResponse extends Macroable {
   private jsonData: unknown = null
   private textData: string | null = null
 
-  constructor(private readonly response: Response) {}
+  constructor(private readonly response: Response) {
+    super()
+  }
 
   /**
    * Get the raw Response object.

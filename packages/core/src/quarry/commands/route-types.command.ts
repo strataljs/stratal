@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import type { RouteRegistry, RegisteredRoute } from '../../router/route-registry'
 import { ROUTER_TOKENS } from '../../router/router.tokens'
 import type { LocalePathService } from '../../router/services/locale-path.service'
@@ -69,9 +69,14 @@ export class RouteTypesCommand extends Command {
           paramEntries.push(`locale${optionalMarker}: StratalLocale`)
         }
 
-        const paramsType = paramEntries.length === 0
-          ? 'never'
-          : `{ ${paramEntries.join('; ')} }`
+        // Extra keys become query-string params at runtime, so allow any
+        // string key. Typed path/domain params above still take precedence.
+        const indexSignature = localeType && route.localePaths?.length
+          ? '[key: string]: string | StratalLocale | undefined'
+          : '[key: string]: string | undefined'
+        paramEntries.push(indexSignature)
+
+        const paramsType = `{ ${paramEntries.join('; ')} }`
         return `    '${route.name}': { params: ${paramsType} }`
       })
       .join('\n')

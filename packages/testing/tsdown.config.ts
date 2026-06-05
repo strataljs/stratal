@@ -5,8 +5,10 @@ export default defineConfig({
   ...baseConfig,
   entry: [
     'src/index.ts',
+    'src/database/index.ts',
+    'src/feature-flags/index.ts',
     'src/mocks/index.ts',
-    'src/mocks/nodemailer.ts',
+    'src/mocks/noop-rate-limiter-store.ts',
     'src/mocks/zenstack-language.ts',
     'src/storage/index.ts',
     'src/vitest-plugin/index.ts',

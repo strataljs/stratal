@@ -1,30 +1,41 @@
-import { DI_TOKENS, Transient } from 'stratal/di'
+import { DI_TOKENS, inject, Transient } from 'stratal/di'
 import type { AuthGuardOptions, CanActivate, GuardClass } from 'stratal/guards'
 import { LOGGER_TOKENS, type LoggerService } from 'stratal/logger'
 import type { RouterContext } from 'stratal/router'
-import { inject } from 'tsyringe'
+import { InsufficientPermissionsError } from '../access-control/errors/insufficient-permissions.error'
+import type { AccessService } from '../access-control/services/access.service'
+import { AC_TOKENS } from '../access-control/tokens'
 import type { AuthContext } from '../context/auth-context'
 import { UserNotAuthenticatedError } from '../context/errors'
-import { InsufficientPermissionsError } from '../rbac/errors/insufficient-permissions.error'
-import type { CasbinService } from '../rbac/services/casbin.service'
-import { RBAC_TOKENS } from '../rbac/tokens'
+
+function parsePermissions(raw: string | string[]): Record<string, string[]> {
+  const list = Array.isArray(raw) ? raw : [raw]
+  return list.reduce<Record<string, string[]>>((acc, perm) => {
+    const colon = perm.indexOf(':')
+    const resource = colon === -1 ? perm : perm.slice(0, colon)
+    const action = colon === -1 ? '*' : perm.slice(colon + 1)
+    ;(acc[resource] ??= []).push(action)
+    return acc
+  }, {})
+}
+
 
 /**
  * AuthGuard Factory
  *
  * Creates a guard class that enforces authentication and optional authorization.
  *
- * **Authentication (no scopes):**
+ * **Authentication (no permissions):**
  * - Checks if user is authenticated via AuthContext.isAuthenticated()
  * - Throws UserNotAuthenticatedError (401) if not authenticated
  *
- * **Authorization (with scopes):**
+ * **Authorization (with permissions):**
  * - First verifies authentication
- * - Then checks permissions via CasbinService
+ * - Then checks permissions via AccessService (reads from AuthContext — no DB hit)
  * - Throws InsufficientPermissionsError (403) if unauthorized
  *
  * @param options - Configuration options
- * @param options.scopes - Required permissions for authorization
+ * @param options.permissions - Required permissions keyed by resource
  * @returns Guard class for use with @UseGuards decorator
  *
  * @example Authentication only
@@ -35,56 +46,51 @@ import { RBAC_TOKENS } from '../rbac/tokens'
  *
  * @example Authentication with permissions
  * ```typescript
- * @UseGuards(AuthGuard({ scopes: ['students:read'] }))
- * export class StudentsController { }
+ * @UseGuards(AuthGuard({ permissions: 'posts:update' }))
+ * @UseGuards(AuthGuard({ permissions: ['posts:update', 'posts:delete'] }))
+ * export class PostsController { }
  * ```
  */
 export function AuthGuard(options?: AuthGuardOptions): GuardClass {
-  const scopes = options?.scopes
+  const rawPermissions = options?.permissions
+  const permissions = rawPermissions ? parsePermissions(rawPermissions) : undefined
 
   @Transient()
   class ConfiguredAuthGuard implements CanActivate {
     constructor(
       @inject(DI_TOKENS.AuthContext) private readonly authContext: AuthContext,
       @inject(LOGGER_TOKENS.LoggerService) private readonly logger: LoggerService,
-      @inject(RBAC_TOKENS.CasbinService, { isOptional: true }) private readonly casbinService?: CasbinService
+      @inject(AC_TOKENS.AccessService, { isOptional: true }) private readonly accessService?: AccessService
     ) { }
 
-    async canActivate(context: RouterContext): Promise<boolean> {
+    async canActivate(_context: RouterContext): Promise<boolean> {
       if (!this.authContext.isAuthenticated()) {
         this.logger.debug('Auth guard: User not authenticated')
         throw new UserNotAuthenticatedError()
       }
 
-      if (!scopes || scopes.length === 0) {
-        this.logger.debug('Auth guard: Authentication passed (no scopes required)')
+      if (!permissions || Object.keys(permissions).length === 0) {
+        this.logger.debug('Auth guard: Authentication passed (no permissions required)')
         return true
       }
 
       const userId = this.authContext.getUserId()
       if (!userId) {
         this.logger.debug('Auth guard: No user ID in context')
-        throw new InsufficientPermissionsError(scopes, undefined)
+        throw new InsufficientPermissionsError(rawPermissions!)
       }
 
-      const httpMethod = context.c.req.method.toLowerCase()
-
-      if (this.casbinService) {
-        const hasPermission = await this.casbinService.hasAnyPermission(
-          userId,
-          scopes,
-          httpMethod
-        )
+      if (this.accessService) {
+        const allowed = await this.accessService.hasPermission(userId, permissions)
 
         this.logger.debug('Auth guard: Authorization check', {
           userId,
-          scopes,
-          httpMethod,
-          hasPermission,
+          permissions,
+          allowed,
         })
 
-        if (!hasPermission) {
-          throw new InsufficientPermissionsError(scopes, userId)
+        if (!allowed) {
+          throw new InsufficientPermissionsError(rawPermissions!, userId)
         }
       }
 

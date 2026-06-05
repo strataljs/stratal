@@ -1,10 +1,24 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 export interface TempViteConfigOptions {
   cwd: string
   server?: { port?: number; host?: boolean }
   outDir?: string
+  persistTo?: string
+  /**
+   * Worker debugger inspector port passed to `@cloudflare/vite-plugin`.
+   * Pass a distinct number per worker to avoid the `EADDRINUSE` race that
+   * happens when several Inertia workers boot concurrently and all probe the
+   * default port (9229). Pass `false` to disable the inspector entirely.
+   * Left `undefined` preserves the plugin's default auto-pick behaviour.
+   */
+  inspectorPort?: number | false
+  /**
+   * Path (relative to `cwd`) to the Vite client manifest the worker bundle
+   * should inline. Defaults to `dist/client/.vite/manifest.json`, matching
+   * what `quarry inertia:build` emits in phase 1.
+   */
+  clientManifestPath?: string
 }
 
 export function writeTempViteConfig(options: TempViteConfigOptions): string {
@@ -15,11 +29,24 @@ export function writeTempViteConfig(options: TempViteConfigOptions): string {
   const hasUserConfig = existsSync(join(options.cwd, 'vite.config.ts'))
 
   const serverConfig = options.server
-    ? `server: { port: ${options.server.port ?? 5173}, host: ${options.server.host ? 'true' : 'undefined'} },`
+    ? `server: { port: ${options.server.port}, host: ${options.server.host ? 'true' : 'undefined'} },`
     : ''
 
   const outDirConfig = options.outDir
     ? `outDir: '${options.outDir}',`
+    : ''
+
+  const cloudflareOptions: string[] = []
+  if (options.persistTo) {
+    cloudflareOptions.push(`persistState: { path: ${JSON.stringify(options.persistTo)} }`)
+  }
+  if (options.inspectorPort !== undefined) {
+    cloudflareOptions.push(`inspectorPort: ${options.inspectorPort === false ? 'false' : options.inspectorPort}`)
+  }
+  const cloudflareArgs = cloudflareOptions.length ? `{ ${cloudflareOptions.join(', ')} }` : ''
+
+  const stratalArgs = options.clientManifestPath
+    ? `{ clientManifestPath: ${JSON.stringify(options.clientManifestPath)} }`
     : ''
 
   const content = `
@@ -35,12 +62,12 @@ try {
 } catch {}
 
 const baseConfig = {
+  publicDir: 'src/inertia/public',
   plugins: [
-    cloudflare(),
+    cloudflare(${cloudflareArgs}),
     ...(inertiaPlugin ? [inertiaPlugin] : []),
-    ...stratalInertia(),
+    ...stratalInertia(${stratalArgs}),
   ],
-  publicDir: '${join(options.cwd, 'src', 'inertia', 'public').replace(/\\/g, '/')}',
   build: {
     ${outDirConfig}
   },
@@ -48,11 +75,11 @@ const baseConfig = {
 }
 
 ${hasUserConfig
-    ? `const userModule = await import('${join(options.cwd, 'vite.config.ts').replace(/\\/g, '/')}')
+      ? `const userModule = await import('${join(options.cwd, 'vite.config.ts').replace(/\\/g, '/')}')
 const userConfig = userModule.default ?? userModule
 export default mergeConfig(baseConfig, userConfig)`
-    : 'export default baseConfig'
-  }
+      : 'export default baseConfig'
+    }
 `
 
   writeFileSync(configPath, content, 'utf-8')

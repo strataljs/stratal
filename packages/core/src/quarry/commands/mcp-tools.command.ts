@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import type { Application } from '../../application'
 import { DI_TOKENS } from '../../di/tokens'
 import { OPENAPI_TOKENS } from '../../openapi/openapi.tokens'
@@ -17,11 +17,12 @@ export class McpToolsCommand extends Command {
     super()
   }
 
-  handle(): number | undefined {
+  async handle(): Promise<number | undefined> {
     const tags = this.array('tag')
     const pathPrefix = this.string('path')
 
-    const spec = this.openAPIService.getSpec(this.app.hono, this.app.container)
+    const hono = await this.app.ensureHono()
+    const spec = this.openAPIService.getSpec(hono, this.app.container)
 
     const service = new OpenApiToolsService(spec)
     const filter = {

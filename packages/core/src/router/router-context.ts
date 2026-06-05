@@ -1,10 +1,17 @@
 import type { Context } from 'hono'
+import {
+  deleteCookie as honoDeleteCookie,
+  getCookie as honoGetCookie,
+  setCookie as honoSetCookie,
+} from 'hono/cookie'
 import type { SSEStreamingApi } from 'hono/streaming'
 import { stream as honoStream, streamSSE as honoStreamSSE, streamText as honoStreamText } from 'hono/streaming'
+import type { CookieOptions } from 'hono/utils/cookie'
 import type { ContentfulStatusCode, RedirectStatusCode } from 'hono/utils/http-status'
 import type { StreamingApi } from 'hono/utils/stream'
 import type { Container } from '../di/container'
-import { RequestContainerNotInitializedError } from '../errors'
+import { ContainerError } from '../di/container.error'
+import { Macroable } from '../macroable'
 import { ROUTER_CONTEXT_KEYS } from './constants'
 import type { RouteName, RouteParams } from './route-map'
 import { ROUTER_TOKENS } from './router.tokens'
@@ -42,14 +49,24 @@ export type ContextQueryResult<R extends Record<string, unknown> | undefined, K 
  * }
  * ```
  */
-export class RouterContext<T extends RouterEnv = RouterEnv> {
+export class RouterContext<T extends RouterEnv = RouterEnv> extends Macroable {
   /**
    * Native Hono context
    * Access for advanced use cases not covered by helper methods
    */
   constructor(
     public readonly c: Context<T>
-  ) { }
+  ) {
+    super()
+  }
+
+  /**
+   * Cloudflare-provided request properties (geo, TLS, bot management, etc.).
+   * Always available on Cloudflare Workers requests via `c.req.raw.cf`.
+   */
+  get cf(): CfProperties {
+    return this.c.req.raw.cf!
+  }
 
   /**
    * Get request-scoped DI container
@@ -60,7 +77,7 @@ export class RouterContext<T extends RouterEnv = RouterEnv> {
   getContainer(): Container {
     const container = this.c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER)
     if (!container) {
-      throw new RequestContainerNotInitializedError()
+      throw new ContainerError('Request container has not been initialized')
     }
     return container as Container
   }
@@ -100,12 +117,24 @@ export class RouterContext<T extends RouterEnv = RouterEnv> {
   }
 
   /**
-   * Get route parameter value
+   * Get route parameter value(s).
+   *
+   * Reads the validated, Zod-coerced param record from `c.req.valid('param')`,
+   * which is what `@hono/zod-openapi` populates for every route registered
+   * via `app.openapi(...)`. Bare `c.req.param()` returns `undefined` for those
+   * routes — always go through the validated record.
+   *
+   * - With a key → returns the single string value.
+   * - With no args → returns the full `Record<string, string>` (or `{}` when
+   *   the matched route has no path params).
    *
    * @param key - Parameter name (e.g., 'id' for /users/:id)
    */
-  param(key: string): string {
-    return (this.c.req as unknown as { valid(target: 'param'): Record<string, string> }).valid('param')[key]
+  param(): Record<string, string>
+  param(key: string): string
+  param(key?: string): string | Record<string, string> {
+    const all = (this.c.req as unknown as { valid(target: 'param'): Record<string, string> | undefined }).valid('param') ?? {}
+    return key === undefined ? all : all[key]
   }
 
   /**
@@ -125,6 +154,64 @@ export class RouterContext<T extends RouterEnv = RouterEnv> {
    */
   header(name: string): string | undefined {
     return this.c.req.header(name)
+  }
+
+  /**
+   * Read a cookie value from the current request.
+   *
+   * @param name - Cookie name
+   * @returns The cookie value, or `undefined` if the cookie is not present
+   *
+   * @example
+   * ```typescript
+   * const redirectTo = ctx.getCookie('redirectTo')
+   * ```
+   */
+  getCookie(name: string): string | undefined {
+    return honoGetCookie(this.c, name)
+  }
+
+  /**
+   * Set a cookie on the response.
+   *
+   * Cookie operations must run while the response is mutable — call this
+   * before returning the final `Response` from the handler.
+   *
+   * @param name - Cookie name
+   * @param value - Cookie value
+   * @param options - Cookie attributes (httpOnly, secure, sameSite, path, etc.)
+   *
+   * @example
+   * ```typescript
+   * ctx.setCookie('redirectTo', '/app/', {
+   *   httpOnly: true,
+   *   secure: true,
+   *   sameSite: 'lax',
+   *   path: '/',
+   * })
+   * ```
+   */
+  setCookie(name: string, value: string, options?: CookieOptions): void {
+    honoSetCookie(this.c, name, value, options)
+  }
+
+  /**
+   * Delete a cookie from the response.
+   *
+   * Pass the same `path` and `domain` options that were used when the cookie
+   * was set, otherwise the browser will not clear the matching cookie.
+   *
+   * @param name - Cookie name
+   * @param options - Cookie attributes used at set time (path, domain, etc.)
+   * @returns The deleted cookie's previous value, or `undefined`
+   *
+   * @example
+   * ```typescript
+   * ctx.deleteCookie('redirectTo', { path: '/' })
+   * ```
+   */
+  deleteCookie(name: string, options?: CookieOptions): string | undefined {
+    return honoDeleteCookie(this.c, name, options)
   }
 
   /**

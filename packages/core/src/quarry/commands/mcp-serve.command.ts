@@ -1,4 +1,4 @@
-import { inject } from 'tsyringe'
+import { inject } from '../../di'
 import { z } from 'zod'
 import type { Application } from '../../application'
 import { DI_TOKENS } from '../../di/tokens'
@@ -6,7 +6,7 @@ import { OPENAPI_TOKENS } from '../../openapi/openapi.tokens'
 import type { Dispatcher } from '../../openapi/services/openapi-tools.service'
 import { OpenApiToolsService } from '../../openapi/services/openapi-tools.service'
 import type { OpenAPIService } from '../../openapi/services/openapi.service'
-import type { IOpenAPIConfigService } from '../../openapi/types'
+import type { IOpenAPIConfigStore } from '../../openapi/types'
 import { Command } from '../command'
 
 export class McpServeCommand extends Command {
@@ -37,7 +37,8 @@ export class McpServeCommand extends Command {
       }
     }
 
-    const spec = this.openAPIService.getSpec(this.app.hono, this.app.container)
+    const hono = await this.app.ensureHono()
+    const spec = this.openAPIService.getSpec(hono, this.app.container)
 
     const dispatcher: Dispatcher = baseUrl
       ? async (method, url, opts) => {
@@ -67,7 +68,7 @@ export class McpServeCommand extends Command {
           body: opts?.body !== undefined ? JSON.stringify(opts.body) : undefined,
         })
         try {
-          return await this.app.hono.fetch(request, this.app.env)
+          return await hono.fetch(request, this.app.env)
         } catch (error) {
           throw new Error(`MCP dispatch failed: ${method} ${url} — ${error instanceof Error ? error.message : String(error)}`, { cause: error })
         }
@@ -80,8 +81,11 @@ export class McpServeCommand extends Command {
     }
     const tools = service.getTools(filter)
 
-    const configService = this.app.container.resolve<IOpenAPIConfigService>(OPENAPI_TOKENS.ConfigService)
-    const config = configService.getEffectiveConfig()
+    // CLI runs outside a request scope; the store carries the static base config
+    // (there are no per-request overrides here).
+    const config = this.app.container
+      .resolve<IOpenAPIConfigStore>(OPENAPI_TOKENS.ConfigStore)
+      .getBaseConfig()
 
     const server = new McpServer({
       name: config.info.title,

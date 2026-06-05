@@ -15,14 +15,16 @@ describe('WebSocket Gateway Integration', () => {
     await module.close()
   })
 
-  it('should register gateway as a GET route', () => {
-    const routes = module.application.hono.routes
+  it('should register gateway as a GET route', async () => {
+    const hono = await module.application.ensureHono()
+    const routes = hono.routes
     const wsRoute = routes.find(r => r.path === '/ws/chat' && r.method === 'GET')
     expect(wsRoute).toBeDefined()
   })
 
-  it('should not register gateway as a non-GET route', () => {
-    const routes = module.application.hono.routes
+  it('should not register gateway as a non-GET route', async () => {
+    const hono = await module.application.ensureHono()
+    const routes = hono.routes
     const nonGetRoutes = routes.filter(r => r.path === '/ws/chat' && r.method !== 'GET' && r.method !== 'ALL')
     expect(nonGetRoutes).toHaveLength(0)
   })
@@ -34,6 +36,13 @@ describe('WebSocket Gateway Integration', () => {
 
   it('should echo messages back through the gateway', async () => {
     const ws = await module.ws('/ws/chat').connect()
+    ws.send('hello')
+    await ws.assertMessage('echo:hello')
+    ws.close()
+  })
+
+  it('should complete the close handshake when gateway has no @OnClose()', async () => {
+    const ws = await module.ws('/ws/no-close').connect()
     ws.send('hello')
     await ws.assertMessage('echo:hello')
     ws.close()

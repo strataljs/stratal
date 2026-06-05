@@ -33,7 +33,7 @@ beforeAll(async () => {
 
   app = new Application({ ...config, env, ctx: { waitUntil: ctx.waitUntil.bind(ctx) } })
   await app.initialize()
-  hono = app.hono
+  hono = await app.ensureHono()
 })
 
 afterAll(async () => {

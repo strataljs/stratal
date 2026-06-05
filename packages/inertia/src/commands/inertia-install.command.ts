@@ -1,7 +1,20 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { Command } from 'stratal/quarry'
+import type { SourceFile, SyntaxKind } from 'ts-morph'
 import { runTypeGeneration } from '../generator/type-generator'
+
+/** Outcome of reconciling `src/app.module.ts` with the SSR-enabled InertiaModule. */
+type AppModuleUpdate = 'created' | 'ssr-added' | 'unchanged' | 'unwired'
+/**
+ * The subset of ts-morph's runtime `SyntaxKind` enum that `ensureSsrWiring` reads.
+ * Declared structurally (via the enum-member literal types) so ts-morph stays a
+ * type-only import here and is loaded lazily where it's actually used.
+ */
+interface SyntaxKinds {
+  CallExpression: SyntaxKind.CallExpression
+  ObjectLiteralExpression: SyntaxKind.ObjectLiteralExpression
+}
 
 const ROOT_HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -20,6 +33,17 @@ const ROOT_HTML = `<!DOCTYPE html>
 const APP_TSX = `import { createInertiaApp } from '@inertiajs/react'
 
 createInertiaApp({
+  resolve: async (name) => {
+    const pages = import.meta.glob('./pages/**/*.tsx')
+    const page = await pages[\`./pages/\${name}.tsx\`]?.()
+    if (!page) throw new Error(\`Page not found: \${name}\`)
+    return page
+  },
+})`
+
+const SSR_TSX = `import { createInertiaSsrApp } from '@stratal/inertia/ssr'
+
+export const { render } = createInertiaSsrApp({
   resolve: async (name) => {
     const pages = import.meta.glob('./pages/**/*.tsx')
     const page = await pages[\`./pages/\${name}.tsx\`]?.()
@@ -63,6 +87,7 @@ export class InertiaInstallCommand extends Command {
     const files = [
       { path: join(inertiaDir, 'root.html'), content: ROOT_HTML, name: 'root.html' },
       { path: join(inertiaDir, 'app.tsx'), content: APP_TSX, name: 'app.tsx' },
+      { path: join(inertiaDir, 'ssr.tsx'), content: SSR_TSX, name: 'ssr.tsx' },
       { path: join(pagesDir, 'Home.tsx'), content: HOME_TSX, name: 'pages/Home.tsx' },
     ]
 
@@ -80,11 +105,16 @@ export class InertiaInstallCommand extends Command {
     if (existsSync(appModulePath)) {
       this.info('Updating src/app.module.ts...')
       try {
-        const updated = await this.updateAppModule(appModulePath)
-        if (updated) {
+        const result = await this.updateAppModule(appModulePath)
+        if (result === 'created') {
           this.success('Updated src/app.module.ts with InertiaModule')
+        } else if (result === 'ssr-added') {
+          this.success('Enabled streaming SSR in src/app.module.ts')
+        } else if (result === 'unchanged') {
+          this.info('InertiaModule (with SSR) already configured in app.module.ts')
         } else {
-          this.info('InertiaModule already configured in app.module.ts')
+          this.warn('InertiaModule is configured but SSR could not be auto-wired.')
+          this.info("Add `ssr: { bundle: () => import('./inertia/ssr') }` to your InertiaModule options")
         }
       } catch (err) {
         this.warn(`Could not auto-update app.module.ts: ${(err as Error).message}`)
@@ -117,27 +147,29 @@ export class InertiaInstallCommand extends Command {
     return 0
   }
 
-  private async updateAppModule(modulePath: string): Promise<boolean> {
+  private async updateAppModule(modulePath: string): Promise<AppModuleUpdate> {
     const { Project, SyntaxKind } = await import('ts-morph')
 
     const project = new Project({ useInMemoryFileSystem: false })
     const sourceFile = project.addSourceFileAtPath(modulePath)
 
-    // Check if InertiaModule is already imported
+    // Already importing the package — an older install that predates streaming
+    // SSR. Wire the existing InertiaModule config to the SSR bundle rather than
+    // bailing (which would leave SSR silently disabled).
     const existingImport = sourceFile.getImportDeclaration((decl) =>
       decl.getModuleSpecifierValue() === '@stratal/inertia',
     )
     if (existingImport) {
-      return false
+      const result = this.ensureSsrWiring(sourceFile, SyntaxKind)
+      if (result === 'ssr-added') await sourceFile.save()
+      return result
     }
 
-    // Add rootView import
+    // Fresh install: add the imports and an InertiaModule.forRoot wired for SSR.
     sourceFile.addImportDeclaration({
       defaultImport: 'rootView',
       moduleSpecifier: './inertia/root.html?raw',
     })
-
-    // Add InertiaModule import
     sourceFile.addImportDeclaration({
       namedImports: ['InertiaModule'],
       moduleSpecifier: '@stratal/inertia',
@@ -161,13 +193,13 @@ export class InertiaInstallCommand extends Command {
         const initializer = importsProp.asKind(SyntaxKind.PropertyAssignment)?.getInitializer()
         const arrayLiteral = initializer?.asKind(SyntaxKind.ArrayLiteralExpression)
         if (arrayLiteral) {
-          arrayLiteral.addElement(`InertiaModule.forRoot({\n    rootView,\n  })`)
+          arrayLiteral.addElement(`InertiaModule.forRoot({\n    rootView,\n    ssr: { bundle: () => import('./inertia/ssr') },\n  })`)
         }
       } else {
         // Add imports property
         objLiteral.addPropertyAssignment({
           name: 'imports',
-          initializer: `[\n    InertiaModule.forRoot({\n      rootView,\n    }),\n  ]`,
+          initializer: `[\n    InertiaModule.forRoot({\n      rootView,\n      ssr: { bundle: () => import('./inertia/ssr') },\n    }),\n  ]`,
         })
       }
 
@@ -175,6 +207,32 @@ export class InertiaInstallCommand extends Command {
     }
 
     await sourceFile.save()
-    return true
+    return 'created'
+  }
+
+  /**
+   * Ensure an existing `InertiaModule.forRoot({...})` call opts into the streaming
+   * SSR bundle. Returns `ssr-added` when the option is inserted, `unchanged` when
+   * one is already present, or `unwired` when no plain `forRoot({...})` object
+   * literal is found (e.g. `forRootAsync`, or a config passed by reference) — in
+   * which case the caller surfaces a manual instruction.
+   */
+  private ensureSsrWiring(sourceFile: SourceFile, syntaxKind: SyntaxKinds): AppModuleUpdate {
+    const calls = sourceFile.getDescendantsOfKind(syntaxKind.CallExpression)
+    for (const call of calls) {
+      if (call.getExpression().getText() !== 'InertiaModule.forRoot') continue
+
+      const objLiteral = call.getArguments()[0]?.asKind(syntaxKind.ObjectLiteralExpression)
+      if (!objLiteral) continue
+
+      if (objLiteral.getProperty('ssr')) return 'unchanged'
+
+      objLiteral.addPropertyAssignment({
+        name: 'ssr',
+        initializer: `{ bundle: () => import('./inertia/ssr') }`,
+      })
+      return 'ssr-added'
+    }
+    return 'unwired'
   }
 }

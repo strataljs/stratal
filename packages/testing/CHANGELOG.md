@@ -1,5 +1,184 @@
 # @stratal/testing
 
+## 0.0.25
+
+### Patch Changes
+
+- Updated dependencies [e93db60]
+- Updated dependencies [e93db60]
+  - stratal@0.0.25
+  - @stratal/framework@0.0.25
+
+## 0.0.24
+
+### Patch Changes
+
+- stratal@0.0.24
+- @stratal/framework@0.0.24
+
+## 0.0.23
+
+### Patch Changes
+
+- 13b0e8d: Auto-apply an in-memory `FakeFeatureFlagService` in tests (like the fake storage service). Feature-gated code now resolves without a real Cloudflare Flagship binding — no provider override needed. Configure flags via `module.featureFlags.set(key, value)` and import the fake from `@stratal/testing/feature-flags` for direct use.
+- 13b0e8d: Add opt-in database isolation for parallel test execution
+
+  Run test files in parallel against PostgreSQL without lock or data collisions: each file gets its own database cloned from a migrated template and dropped on teardown.
+
+  - Enable per-file isolation by passing `database: { isolation: 'database' }` to the Vitest plugin (and optionally `binding` to target a specific Hyperdrive binding, defaulting to `DB`).
+  - New `@stratal/testing/database` entry point exposing helpers to wire up the template-database lifecycle in a Vitest `globalSetup`.
+  - The migrated template is **reused across runs**: `createTestDatabaseGlobalSetup` fingerprints the `schema` source(s) + the `migrate` routine and stores it as the template's database COMMENT, so `migrate` runs only on the first run after a schema change (or against a fresh database) — subsequent runs clone the existing template directly. `schema` (a file or directory path, or a list) is now **required** in `database` mode. Reuse is purely fingerprint-driven — there is no force/skip flag.
+  - Isolation is opt-in — existing tests are unaffected. `pg` is an optional peer dependency, required only when isolation is enabled.
+
+- 13b0e8d: Fix correctness and security issues found in review.
+
+  Queue:
+
+  - Retry the correct binding: dispatch stamps the producer binding into message metadata and failed jobs record it, so `queue:retry` re-enqueues through the Cloudflare binding instead of the queue name (which is not a valid binding key and broke retry whenever the two differed). A message with no binding metadata is logged and acked rather than stored as an unretryable job.
+  - Honor the documented retry budget: `maxRetries` now counts retries correctly against Cloudflare's 1-based `message.attempts` (previously gave one fewer retry than configured).
+  - Derive idempotency keys from an order-stable serialization of `type` + `payload`, so payloads that differ only in key order dedupe correctly.
+  - `queue:retry --all` / `queue:purge --all --queue` collect matching keys before deleting, so cursor pagination no longer skips jobs; `queue:failed --queue --limit` now counts matching jobs rather than scanned keys.
+  - Documented that delivery is at-least-once with best-effort de-duplication (not exactly-once), since the processed marker is written only after a handler succeeds and KV is eventually consistent — handlers must be idempotent.
+
+  Email (SMTP):
+
+  - Upgrade STARTTLS onto the socket `startTls()` returns: the original socket is closed by the runtime, so the post-upgrade reader/writer are re-derived from the new secure socket and any pre-handshake bytes are discarded (fixes a broken `smtp://` STARTTLS path on real Workers and closes the STARTTLS plaintext-injection vector).
+  - Refuse to send credentials over an unencrypted connection: an `smtp://` server that doesn't offer STARTTLS now fails loudly instead of leaking the password (blocks STARTTLS-stripping downgrades). Credential-free connections (e.g. local Mailpit) are unaffected.
+  - AUTH is gated on the server's advertised mechanisms and supports both `PLAIN` and `LOGIN`; usernames are percent-decoded like passwords.
+  - Add a response timeout so a hung SMTP server can't wedge the worker; QUIT/socket close are now best-effort and never mask a successful send.
+  - MIME builder strips CR/LF from headers, escapes/RFC 2231-encodes attachment filenames (prevents header injection), base64-encodes message bodies (fixes long-line corruption), and rejects envelope addresses containing whitespace or angle brackets (prevents `MAIL FROM`/`RCPT TO` desync).
+
+  Inertia SEO:
+
+  - `titleTemplate` substitutes every `%s` and treats `$`-sequences in the title literally.
+  - Inject head/body content via function replacements, so SEO/page content containing `$`-sequences (`$$`, `$&`, `` $` ``, `$'`) is no longer corrupted or able to splice a template placeholder back into the output.
+  - Drop unsafe attribute names — including inline event handlers (`on*`) — from custom `meta`/`link` entries (prevents tag breakout server-side, `setAttribute` errors during client head-sync, and developer-supplied event-handler attributes).
+
+  Feature flags:
+
+  - `FeatureFlagService.use()` binds the target app exactly once.
+
+  Database (framework):
+
+  - The reentrant `$transaction` proxy forwards the receiver for non-transaction property access.
+
+  Testing:
+
+  - `TestingModule.close()` drops the isolated per-file database even if shutdown throws; the stale-database sweep escapes LIKE metacharacters so a prefix containing `_` can't over-match.
+
+  DI:
+
+  - Construct singletons against the root container so they can never capture a request-scoped dependency (which would leak one request's state across every later request); an illegal singleton→request dependency now throws loudly.
+  - Detect circular dependencies and throw a clear error naming the cycle instead of overflowing the stack.
+  - `tryResolve` only swallows "no provider"; a registered provider that throws while constructing now surfaces the real error instead of injecting `undefined`.
+  - Request-cache invalidation tracks transitive constructor dependencies, so re-registering a value rebuilds cached services that depend on it through a transient intermediary.
+
+  Quarry dev runtime:
+
+  - Persist every durable plugin (KV, D1, R2, Durable Objects, cache) under `.wrangler/state/v3`, matching `wrangler dev` (previously only R2 was persisted); load `.env.local` / `.env.<env>.local` into `process.env` for full parity.
+  - The `cloudflare:sockets` STARTTLS shim re-attaches the stream error handler to the upgraded socket, so post-upgrade connection errors still surface.
+
+- be813bc: Update bundled runtime dependencies to their latest patch releases (`@cloudflare/vitest-pool-workers`, MSW)
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [13b0e8d]
+- Updated dependencies [be813bc]
+  - stratal@0.0.23
+  - @stratal/framework@0.0.23
+
+## 0.0.22
+
+### Patch Changes
+
+- 1658945: Add `fixNobleHashesCjs` Vitest plugin to resolve `@noble/hashes` CJS compatibility issues with `@zenstackhq/orm`
+- 4b273ea: Update Vitest plugin tslib alias to use the direct tslib package instead of the tsyringe-bundled copy
+- Updated dependencies [1658945]
+- Updated dependencies [1658945]
+- Updated dependencies [4b273ea]
+- Updated dependencies [4b273ea]
+  - stratal@0.0.22
+  - @stratal/framework@0.0.22
+
+## 0.0.21
+
+### Patch Changes
+
+- 3489cfd: Allow tests to install a custom `ExceptionHandler` via `TestingModuleConfig`
+
+  `TestingModuleBuilder` now accepts `exceptionHandler` on its config, mirroring `ApplicationConfig.exceptionHandler`. This is the only way to swap the handler in tests because the framework resolves it during `app.initialize()`, which runs before `overrideProvider(DI_TOKENS.ExceptionHandler)` can take effect.
+
+- Updated dependencies [3489cfd]
+- Updated dependencies [3489cfd]
+- Updated dependencies [3489cfd]
+  - @stratal/framework@0.0.21
+  - stratal@0.0.21
+
+## 0.0.20
+
+### Patch Changes
+
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+- Updated dependencies [f8c61e1]
+  - @stratal/framework@0.0.20
+  - stratal@0.0.20
+
+## 0.0.19
+
+### Patch Changes
+
+- 3b16f5b: Make `TestHttpClient` immutable and extend test classes with `Macroable`
+
+  - `TestHttpClient.forHost()`, `withHeaders()`, and `withLocale()` now return new instances instead of mutating `this`, preventing shared state between tests.
+  - `TestHttpRequest` and `TestResponse` now extend `Macroable`, allowing apps to register custom assertion methods and helpers at runtime.
+  - Add `TestingModule.inertia` getter for convenient Inertia request testing.
+
+- Updated dependencies [3b16f5b]
+- Updated dependencies [3b16f5b]
+- Updated dependencies [3b16f5b]
+- Updated dependencies [5d26c24]
+- Updated dependencies [3b16f5b]
+- Updated dependencies [3b16f5b]
+- Updated dependencies [5d26c24]
+- Updated dependencies [5d26c24]
+- Updated dependencies [3b16f5b]
+  - @stratal/framework@0.0.19
+  - stratal@0.0.19
+
+## 0.0.18
+
+### Patch Changes
+
+- c9176ea: Add locale support to test HTTP client, SSE, and WebSocket requests
+
+  ### Details
+
+  - Add `withLocale()` method to `TestHttpClient`, `TestHttpRequest`, `TestSseRequest`, and `TestWsRequest`
+  - Automatically resolves locale detection strategy from the module's I18n configuration
+  - Export `getValueAtPath` and `hasValueAtPath` path utility functions
+
+- Updated dependencies [fcb71c4]
+- Updated dependencies [c9176ea]
+- Updated dependencies [17f8675]
+- Updated dependencies [c9176ea]
+- Updated dependencies [c9176ea]
+  - stratal@0.0.18
+  - @stratal/framework@0.0.18
+
 ## 0.0.17
 
 ### Patch Changes

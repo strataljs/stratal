@@ -1,58 +1,58 @@
-import type { Context, MiddlewareHandler } from 'hono'
-import type { UpgradeWebSocket, WSContext, WSEvents } from 'hono/ws'
-import { inject } from 'tsyringe'
-import { type Container, getMethodInjections } from '../../di'
-import { Transient } from '../../di/decorators'
-import { DI_TOKENS } from '../../di/tokens'
+import type { Context, MiddlewareHandler } from 'hono';
+import type { UpgradeWebSocket, WSContext, WSEvents } from 'hono/ws';
+import { type Container, getMethodInjections, inject } from '../../di';
+import { Singleton } from '../../di/decorators';
+import { DI_TOKENS } from '../../di/tokens';
 import {
-  type Guard,
-  GuardExecutionService,
-  getControllerGuards,
-  getMethodGuards,
-} from '../../guards'
-import type { ZodType } from '../../i18n/validation'
-import { createRoute, z } from '../../i18n/validation'
-import { LOGGER_TOKENS, type LoggerService } from '../../logger'
-import type { ModuleRegistry } from '../../module/module-registry'
-import type { Constructor } from '../../types'
-import { getWsOnCloseMethod, getWsOnErrorMethod, getWsOnMessageMethod, isGateway } from '../../websocket/decorators'
-import { GatewayContext } from '../../websocket/gateway-context'
-import { DEFAULT_CONTENT_TYPE, HTTP_METHODS, METHOD_STATUS_CODES, SECURITY_SCHEMES } from '../constants'
-import type { IController } from '../controller'
+    type Guard,
+    GuardExecutionService,
+    getControllerGuards,
+    getMethodGuards,
+} from '../../guards';
+import type { ZodType } from '../../i18n/validation/zod';
+import { createRoute, z } from '../../i18n/validation/zod';
+import { LOGGER_TOKENS, type LoggerService } from '../../logger';
+import type { ModuleRegistry } from '../../module/module-registry';
+import { getRateLimits } from '../../rate-limiter/decorators/rate-limit.decorator';
+import { createThrottleMiddleware } from '../../rate-limiter/throttle.middleware';
+import type { Constructor } from '../../types';
+import { getWsOnCloseMethod, getWsOnErrorMethod, getWsOnMessageMethod, isGateway } from '../../websocket/decorators';
+import { GatewayContext } from '../../websocket/gateway-context';
+import { DEFAULT_CONTENT_TYPE, HTTP_METHODS, METHOD_STATUS_CODES, SECURITY_SCHEMES } from '../constants';
+import type { IController } from '../controller';
 import {
-  getControllerOptions,
-  getControllerRoute,
-  getRouteDecoratedMethods,
-  getRouteMetadata,
-} from '../decorators'
+    getControllerOptions,
+    getControllerRoute,
+    getRouteDecoratedMethods,
+    getRouteMetadata,
+} from '../decorators';
 import {
-  ControllerMethodNotFoundError,
-  ControllerRegistrationError,
-  OpenAPIRouteRegistrationError,
-  ResponseValidationError,
-} from '../errors'
-import type { HonoApp } from '../hono-app'
-import { createDomainMiddleware } from '../middleware/domain.middleware'
-import { createMiddlewareChain } from '../middleware/middleware-chain'
-import { type RegisteredRoute, type RouteRegistry } from '../route-registry'
-import { RouterContext } from '../router-context'
-import type { RouterResolver } from '../router-resolver'
-import { ROUTER_TOKENS } from '../router.tokens'
-import { commonErrorSchemas } from '../schemas/common.schemas'
+    ResponseValidationError,
+} from '../errors';
+import type { HonoApp } from '../hono-app';
+import type { Middleware } from '../middleware.interface';
+import { createDomainMiddleware } from '../middleware/domain.middleware';
+import { createMiddlewareChain } from '../middleware/middleware-chain';
+import { type RegisteredRoute, type RouteRegistry } from '../route-registry';
+import { RouterContext } from '../router-context';
+import type { RouterResolver } from '../router-resolver';
+import { RouterError } from '../router.error';
+import { ROUTER_TOKENS } from '../router.tokens';
+import { commonErrorSchemas } from '../schemas/common.schemas';
 import type {
-  ControllerOptions,
-  HttpMethod,
-  OpenAPIRouteConfig,
-  RouteBodyObject,
-  RouteConfig,
-  RouteMetadata,
-  RouteResponseObject,
-  RouterEnv,
-  SecuritySchemeRecord,
-} from '../types'
-import { toOpenAPIPath, toRoutingOpenAPIPath } from '../utils/path'
-import { generateConventionRouteName } from '../utils/route-name'
-import type { LocalePathService } from './locale-path.service'
+    ControllerOptions,
+    HttpMethod,
+    OpenAPIRouteConfig,
+    RouteBodyObject,
+    RouteConfig,
+    RouteMetadata,
+    RouteResponseObject,
+    RouterEnv,
+    SecuritySchemeRecord,
+} from '../types';
+import { toOpenAPIPath, toRoutingOpenAPIPath } from '../utils/path';
+import { generateConventionRouteName } from '../utils/route-name';
+import type { LocalePathService } from './locale-path.service';
 
 const invokeHandler = (instance: Record<string, (...args: unknown[]) => unknown>, method: string, ...args: unknown[]): Promise<unknown> => {
   try {
@@ -77,15 +77,15 @@ const invokeHandler = (instance: Record<string, (...args: unknown[]) => unknown>
  * 1. Collect: iterate controllers, register in RouteRegistry, store Hono actions
  * 2. Register: iterate registry.all() (sorted), execute stored actions in Hono
  */
-@Transient()
+@Singleton()
 export class RouteRegistrationService {
-  private controllerClasses = new Map<string, Constructor<IController>>()
+  private controllerClasses = new Map<string, Constructor>()
   private upgradeWebSocketFn: UpgradeWebSocket | null = null
 
   constructor(
     @inject(LOGGER_TOKENS.LoggerService) private logger: LoggerService,
     @inject(ROUTER_TOKENS.RouteRegistry) private registry: RouteRegistry,
-    @inject(ROUTER_TOKENS.RouterResolver) private routerResolver: RouterResolver | null,
+    @inject(ROUTER_TOKENS.RouterResolver, { isOptional: true }) private routerResolver: RouterResolver | null,
     @inject(ROUTER_TOKENS.LocalePathService) private localePathService: LocalePathService,
     @inject(ROUTER_TOKENS.HonoApp) private app: HonoApp,
     @inject(DI_TOKENS.ModuleRegistry) private moduleRegistry: ModuleRegistry,
@@ -96,7 +96,7 @@ export class RouteRegistrationService {
    * Resolves controllers from ModuleRegistry and global middleware from RouterResolver.
    */
   async configure(): Promise<void> {
-    const controllers = this.moduleRegistry.getAllControllers() as Constructor<IController>[]
+    const controllers = this.moduleRegistry.getAllControllers()
     const globalMiddleware = this.routerResolver?.getGlobalMiddleware() ?? []
 
     this.logger.info('Registering controllers', {
@@ -133,18 +133,17 @@ export class RouteRegistrationService {
    * Versioning and locale expansion are handled by RouteRegistry.register().
    */
   private collectRoutes(
-    ControllerClass: Constructor<IController>,
+    ControllerClass: Constructor,
     actions: WeakMap<RegisteredRoute, () => void>,
   ): void {
     const isWsGateway = isGateway(ControllerClass)
     const controllerRoute = getControllerRoute(ControllerClass)
 
     if (!controllerRoute) {
-      throw new ControllerRegistrationError(
-        ControllerClass.name,
-        isWsGateway
+      throw new RouterError(
+        `Controller "${ControllerClass.name}" registration failed: ${isWsGateway
           ? 'Missing @Gateway decorator or route metadata'
-          : 'Missing @Controller decorator or route metadata'
+          : 'Missing @Controller decorator or route metadata'}`
       )
     }
 
@@ -152,7 +151,14 @@ export class RouteRegistrationService {
     const controllerGuards = getControllerGuards(ControllerClass)?.guards ?? []
 
     // Resolve Router config for this controller (prefix, domain, name, middleware, version, hideFromDocs)
-    const routerConfig = this.routerResolver?.resolveForController(ControllerClass as Constructor) ?? { middleware: [] }
+    const routerConfig = this.routerResolver?.resolveForController(ControllerClass) ?? { middleware: [] }
+
+    // Class-level @RateLimit decorators — same for every method on this controller.
+    // Throttle middleware classes are memoized by name in createThrottleMiddleware,
+    // so two `@RateLimit('a')` decorators yield the same class — Set dedupes them.
+    const classThrottleMiddleware = Array.from(
+      new Set(getRateLimits(ControllerClass).map(createThrottleMiddleware)),
+    )
 
     // Apply Router prefix to controller base path
     const basePath = routerConfig.prefix
@@ -167,6 +173,8 @@ export class RouteRegistrationService {
 
     // WebSocket gateway
     if (isWsGateway) {
+      // Class-level @RateLimit applies; methods on a gateway aren't decorated routes.
+      const wsMiddleware = [...routerConfig.middleware, ...classThrottleMiddleware]
       const expandedRoutes = this.registry.register({
         method: 'ws',
         basePath,
@@ -175,14 +183,17 @@ export class RouteRegistrationService {
         controller: ControllerClass.name,
         action: 'ws',
         hidden: routerConfig.hideFromDocs ?? false,
-        middleware: routerConfig.middleware.map(m => m.name),
+        middleware: wsMiddleware.map(m => m.name),
       })
 
       for (const route of expandedRoutes) {
         actions.set(route, () => {
-          // Apply scoped middleware
-          if (routerConfig.middleware.length > 0) {
-            this.app.use(`${route.path}/*`, createMiddlewareChain(routerConfig.middleware))
+          // Apply scoped middleware at the exact route path so it runs
+          // for this specific route (including the root of the group) —
+          // not via a `/*` sub-path wildcard, which would miss the exact
+          // path match.
+          if (wsMiddleware.length > 0) {
+            this.app.use(route.path, createMiddlewareChain(wsMiddleware))
           }
           // Apply domain middleware
           if (effectiveDomain) {
@@ -203,6 +214,8 @@ export class RouteRegistrationService {
 
     // Wildcard routes (non-RESTful controllers with handle())
     if (prototype.handle) {
+      // No method-level @RateLimit on wildcard handle() — only class-level applies.
+      const wildcardMiddleware = [...routerConfig.middleware, ...classThrottleMiddleware]
       const expandedRoutes = this.registry.register({
         method: 'all',
         basePath,
@@ -211,13 +224,13 @@ export class RouteRegistrationService {
         controller: className,
         action: 'handle',
         hidden: routerConfig.hideFromDocs ?? false,
-        middleware: routerConfig.middleware.map(m => m.name),
+        middleware: wildcardMiddleware.map(m => m.name),
       })
 
       for (const route of expandedRoutes) {
         actions.set(route, () => {
-          if (routerConfig.middleware.length > 0) {
-            this.app.use(`${route.path}/*`, createMiddlewareChain(routerConfig.middleware))
+          if (wildcardMiddleware.length > 0) {
+            this.app.use(route.path, createMiddlewareChain(wildcardMiddleware))
           }
           this.registerWildcardRoute(ControllerClass, route.path)
         })
@@ -229,9 +242,8 @@ export class RouteRegistrationService {
     const decoratedMethods = getRouteDecoratedMethods(ControllerClass)
 
     if (decoratedMethods.length === 0) {
-      throw new ControllerRegistrationError(
-        ControllerClass.name,
-        'No route decorators found. Use @Route() or HTTP method decorators (@Get, @Post, etc.) on controller methods.'
+      throw new RouterError(
+        `Controller "${ControllerClass.name}" registration failed: No route decorators found. Use @Route() or HTTP method decorators (@Get, @Post, etc.) on controller methods.`
       )
     }
 
@@ -249,36 +261,58 @@ export class RouteRegistrationService {
 
     // Enforce mutual exclusivity: no mixing @Route() with @Get/@Post/etc.
     if (hasConvention && hasExplicit) {
-      throw new ControllerRegistrationError(
-        ControllerClass.name,
-        'Cannot mix @Route() with HTTP method decorators (@Get, @Post, etc.) in the same controller. Use one pattern or the other.'
+      throw new RouterError(
+        `Controller "${ControllerClass.name}" registration failed: Cannot mix @Route() with HTTP method decorators (@Get, @Post, etc.) in the same controller. Use one pattern or the other.`
       )
     }
-
-    // Apply scoped middleware once for this controller
-    let scopedMiddlewareApplied = false
 
     const routerHidden = routerConfig.hideFromDocs
     const controllerHidden = controllerOpts?.hideFromDocs ?? false
 
-    // Resolve effective name prefix: controller name overrides router name entirely
-    const effectiveNamePrefix = controllerOpts?.name ?? routerConfig.name
-
-    // Hoist middleware name computation (same for all methods in this controller)
-    const middlewareNames = routerConfig.middleware.map(m => m.name)
+    // Resolve effective name prefix: router-level name (module + group merged by
+    // RouterResolver) concatenates with the controller-level name, mirroring how
+    // prefixes compose. A controller's `{ name: 'dashboard.' }` inside a module
+    // that calls `router.name('admin.')` becomes `admin.dashboard.*` — not
+    // `dashboard.*`.
+    const routerName = routerConfig.name
+    const controllerName = controllerOpts?.name
+    const effectiveNamePrefix =
+      routerName && controllerName
+        ? `${routerName}${controllerName}`
+        : (routerName ?? controllerName)
 
     for (const { method: methodName, meta } of methodMetadata) {
       const resolved = this.resolveMethodAndPath(meta, methodName, basePath, className)
       if (!resolved) continue
 
-      const { httpMethod, fullPath, routeConfig, statusCodeOverride } = resolved
+      // Compose per-method middleware: scope (router.throttle/.middleware)
+      // → class-level @RateLimit → method-level @RateLimit. Throttle classes
+      // are memoized by name, so duplicates across class + method (e.g.
+      // `@RateLimit('api')` on both) collapse to a single middleware.
+      const methodThrottleMiddleware = getRateLimits(prototype, methodName).map(createThrottleMiddleware)
+      const effectiveMiddleware = Array.from(
+        new Set([...routerConfig.middleware, ...classThrottleMiddleware, ...methodThrottleMiddleware]),
+      )
+      const middlewareNames = effectiveMiddleware.map(m => m.name)
 
-      // Auto-inject prefix params from Router.prefix() into route params
+      const { httpMethod, fullPath, routeConfig: rawRouteConfig, statusCodeOverride } = resolved
+
+      // Compose prefix params with route-level params WITHOUT mutating the
+      // route's metadata — `meta.config` lives on the controller prototype
+      // and is shared across every Application/RouteRegistry instance that
+      // resolves this controller. Mutating it leaks state across test runs
+      // (and any other multi-app setup), causing later registrations to
+      // re-extend an already-injected prefix from a previous run.
+      let mergedParams = rawRouteConfig.params
       if (routerConfig.params) {
-        routeConfig.params = routeConfig.params
-          ? (routerConfig.params as z.ZodObject<z.ZodRawShape>).extend((routeConfig.params as z.ZodObject<z.ZodRawShape>).shape)
-          : routerConfig.params
+        const prefixShape = (routerConfig.params as z.ZodObject).shape
+        mergedParams = mergedParams
+          ? (mergedParams as z.ZodObject).extend(prefixShape)
+          : (routerConfig.params as z.ZodObject).extend({})
       }
+      const routeConfig: RouteConfig = mergedParams === rawRouteConfig.params
+        ? rawRouteConfig
+        : { ...rawRouteConfig, params: mergedParams }
 
       const hideFromDocs = routeConfig.hideFromDocs ?? (routerHidden ?? controllerHidden)
 
@@ -318,14 +352,6 @@ export class RouteRegistrationService {
 
       for (const route of expandedRoutes) {
         actions.set(route, () => {
-          // Apply scoped middleware once per controller
-          if (!scopedMiddlewareApplied && routerConfig.middleware.length > 0) {
-            // Use the first primary path for middleware scope
-            const primaryRoute = expandedRoutes.find(r => !r.isLocaleVariant) ?? expandedRoutes[0]
-            this.app.use(`${primaryRoute.path}/*`, createMiddlewareChain(routerConfig.middleware))
-            scopedMiddlewareApplied = true
-          }
-
           // Apply domain middleware
           if (effectiveDomain) {
             const domainHandler = createDomainMiddleware(effectiveDomain)
@@ -343,7 +369,8 @@ export class RouteRegistrationService {
             })
           }
 
-          // @All routes can't use OpenAPI — register directly with guards
+          // @All routes can't use OpenAPI — register directly with
+          // scoped middleware (if any) + guard middleware + handler.
           if (httpMethod === 'all') {
             this.logger.info(`Registering @All route`, {
               controller: className,
@@ -351,11 +378,13 @@ export class RouteRegistrationService {
               methodName,
             })
 
-            if (allGuards.length > 0) {
-              this.app.all(route.path, this.createGuardMiddleware(allGuards), handler)
-            } else {
-              this.app.all(route.path, handler)
+            if (effectiveMiddleware.length > 0) {
+              this.app.use(route.path, createMiddlewareChain(effectiveMiddleware))
             }
+            if (allGuards.length > 0) {
+              this.app.use(route.path, this.createGuardMiddleware(allGuards))
+            }
+            this.app.all(route.path, handler)
             return
           }
 
@@ -366,7 +395,6 @@ export class RouteRegistrationService {
             route.path,
             routeConfig,
             metadata,
-            allGuards,
             meta.type === 'convention' ? methodName : undefined,
             statusCodeOverride,
             route.isLocaleVariant ?? false,
@@ -381,8 +409,19 @@ export class RouteRegistrationService {
             hidden: route.hidden,
           })
 
-          // Register Hono route (hidden from OpenAPI spec — clean paths registered separately)
-          this.app.openapi(openApiRoute, handler)
+          // Wrap the controller handler so scoped middleware and guards
+          // run AFTER Hono's request validators. @hono/zod-openapi
+          // composes a route as `...routeMiddleware, ...validators, handler`
+          // (see node_modules/@hono/zod-openapi/dist/index.js), which means
+          // anything attached via `route.middleware` runs *before*
+          // validation — and therefore can't read `c.req.valid('param')`.
+          // Wrapping the handler is the only place we can run middleware
+          // after validators in this Hono pipeline.
+          //
+          // Final order: global app.use → request validators → scoped
+          // middleware → guards → controller handler.
+          const wrappedHandler = this.wrapHandlerWithChain(handler, effectiveMiddleware, allGuards)
+          this.app.openapi(openApiRoute, wrappedHandler)
 
           // Register clean path in OpenAPI spec (strips regex constraints from params)
           if (!route.hidden) {
@@ -402,7 +441,7 @@ export class RouteRegistrationService {
    * Register a single WebSocket gateway route
    */
   private registerGatewayForPath(
-    GatewayClass: Constructor<IController>,
+    GatewayClass: Constructor,
     fullPath: string,
     guards: Guard[],
   ): void {
@@ -428,7 +467,9 @@ export class RouteRegistrationService {
         return (evt: MessageEvent | CloseEvent | Event, ws: WSContext) => {
           const ctx = new GatewayContext(c as Context<RouterEnv>, ws)
           invokeHandler(gateway as Record<string, (...args: unknown[]) => unknown>, method, evt, ctx).catch((err: unknown) => {
-            this.logger.error(`WebSocket ${method} handler error`, { gateway: GatewayClass.name, error: err instanceof Error ? err.message : String(err) })
+            this.logger.error(`WebSocket ${method} handler error`, err as Error, {
+              gateway: GatewayClass.name,
+            })
             onCatch?.(err, ws)
           })
         }
@@ -439,6 +480,15 @@ export class RouteRegistrationService {
       }
       if (onCloseMethod) {
         events.onClose = bindWsHandler(onCloseMethod)
+      } else {
+        // Cloudflare Workers (pre-2026-04-07 compat date) requires the server
+        // to complete the WebSocket close handshake explicitly. Without a close
+        // listener, Hono never calls server.addEventListener('close', ...),
+        // leaving the Worker alive until the runtime kills it with
+        // "script will never generate a response".
+        events.onClose = (_evt: CloseEvent, ws: WSContext) => {
+          ws.close()
+        }
       }
       if (onErrMethod) {
         events.onError = bindWsHandler(onErrMethod)
@@ -498,10 +548,58 @@ export class RouteRegistrationService {
   }
 
   /**
+   * Wrap a controller handler with a `scopedMiddleware → guards → handler`
+   * chain that runs *inside* the Hono route handler — after request
+   * validators have populated `c.req.valid(...)`. This is the only place
+   * we can run user middleware after `@hono/zod-openapi`'s validators in
+   * the same pipeline.
+   *
+   * Returns a Hono handler with the same signature as the original so
+   * `app.openapi(route, wrapped)` works transparently.
+   */
+  private wrapHandlerWithChain(
+    handler: (c: Context<RouterEnv>) => Promise<Response>,
+    scopedMiddleware: Constructor<Middleware>[],
+    guards: Guard[],
+  ) {
+    if (scopedMiddleware.length === 0 && guards.length === 0) {
+      return handler
+    }
+
+    const scopedChain = scopedMiddleware.length > 0
+      ? createMiddlewareChain(scopedMiddleware)
+      : null
+    const guardChain = guards.length > 0
+      ? this.createGuardMiddleware(guards)
+      : null
+
+    return async (c: Context<RouterEnv, string>): Promise<Response> => {
+      let captured: Response | undefined
+
+      const runHandler = async () => {
+        captured = await handler(c)
+      }
+      const runGuards = guardChain
+        ? () => guardChain(c, runHandler)
+        : runHandler
+      const runScoped = scopedChain
+        ? () => scopedChain(c, runGuards)
+        : runGuards
+
+      const result = await runScoped()
+      // A middleware (scoped or guard) may short-circuit by returning a
+      // Response from its createMiddlewareChain — surface that. Otherwise
+      // the handler always sets `captured`.
+      if (result instanceof Response) return result
+      return captured!
+    }
+  }
+
+  /**
    * Register wildcard route for non-RESTful controllers
    */
   private registerWildcardRoute(
-    ControllerClass: Constructor<IController>,
+    ControllerClass: Constructor,
     route: string
   ): void {
     this.logger.info(`Registering wildcard route`, {
@@ -530,7 +628,7 @@ export class RouteRegistrationService {
     if (meta.type === 'convention') {
       const derived = this.deriveHttpMethodAndPath(methodName, basePath)
       if (!derived) {
-        throw new ControllerRegistrationError(
+        throw new RouterError(
           `Cannot derive HTTP method/path for convention-based route "${className}.${methodName}". ` +
           `Ensure the method name follows the naming convention (e.g., index, create, show).`
         )
@@ -550,9 +648,9 @@ export class RouteRegistrationService {
    * Join a base path and a route path, normalizing slashes
    */
   private joinPaths(basePath: string, routePath: string): string {
-    if (routePath === '/') return basePath
-    if (basePath !== '/' && basePath.endsWith('/')) basePath = basePath.slice(0, -1)
-    if (routePath && !routePath.startsWith('/')) routePath = '/' + routePath
+    if (basePath.endsWith('/')) basePath = basePath.slice(0, -1)
+    if (routePath === '/' || routePath === '') return basePath || '/'
+    if (!routePath.startsWith('/')) routePath = '/' + routePath
     return basePath + routePath
   }
 
@@ -579,7 +677,7 @@ export class RouteRegistrationService {
   private mergeMetadata(
     controllerOpts: ControllerOptions | undefined,
     routeConfig: RouteConfig,
-    ControllerClass: Constructor<IController>,
+    ControllerClass: Constructor,
     methodName: string
   ): { tags: string[]; security: SecuritySchemeRecord[] } {
     const tags = [...(controllerOpts?.tags ?? []), ...(routeConfig.tags ?? [])]
@@ -617,17 +715,17 @@ export class RouteRegistrationService {
 
   /**
    * Build OpenAPI route configuration from metadata
-   * Creates a route definition compatible with @hono/zod-openapi
-   * Includes guard execution for proper access control
+   * Creates a route definition compatible with @hono/zod-openapi.
    *
-   * Execution order: Global middlewares → Guards → Handler
+   * Scoped middleware and guards are NOT attached to `route.middleware`
+   * here — they're composed into a wrapped handler in `collectRoutes` so
+   * they run after Hono's request validators. See `wrapHandlerWithChain`.
    */
   private buildOpenAPIRoute(
     method: Exclude<HttpMethod, 'all'>,
     path: string,
     routeConfig: RouteConfig,
     metadata: { tags: string[]; security: Record<string, string[]>[] },
-    guards: Guard[],
     methodName?: string,
     statusCodeOverride?: number,
     hasLocaleParam = false,
@@ -640,11 +738,6 @@ export class RouteRegistrationService {
         responses: {},
         // Always hide from OpenAPI registry — clean paths are registered separately via registerPath()
         hide: true,
-      }
-
-      // Add guard execution middleware using Hono's built-in middleware property
-      if (guards.length > 0) {
-        route.middleware = [this.createGuardMiddleware(guards)]
       }
 
       // Add request body if defined
@@ -695,7 +788,7 @@ export class RouteRegistrationService {
         route.request = {
           ...route.request,
           params: route.request!.params
-            ? (route.request!.params as z.ZodObject<z.ZodRawShape>).extend(localeParam.shape)
+            ? (route.request!.params as z.ZodObject).extend(localeParam.shape)
             : localeParam,
         }
       }
@@ -710,7 +803,6 @@ export class RouteRegistrationService {
 
       // Add success response with derived status code
       const responseDef = routeConfig.response
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- response may be undefined at runtime
       if (responseDef) {
         if (typeof responseDef === 'object' && 'schema' in responseDef) {
           const responseContentType = responseDef.contentType ?? DEFAULT_CONTENT_TYPE
@@ -760,7 +852,7 @@ export class RouteRegistrationService {
 
       return createRoute(route as OpenAPIRouteConfig)
     } catch (error) {
-      throw new OpenAPIRouteRegistrationError(path, error instanceof Error ? error.message : String(error))
+      throw new RouterError(`OpenAPI route registration failed for "${path}": ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -809,6 +901,13 @@ export class RouteRegistrationService {
     responseSchema: ZodType | null = null,
   ): (c: Context<RouterEnv>) => Promise<Response> {
     const handler = async (c: Context<RouterEnv>) => {
+      // Precognition short-circuit: HandlePrecognitiveRequests middleware
+      // sets `validationSuccessResponse` for `Precognition: true` requests.
+      // If we reach here, every request validator has passed — return the
+      // 204 without invoking the controller body.
+      const override = c.get('validationSuccessResponse')
+      if (override) return override
+
       const ctx = new RouterContext(c)
       const requestContainer = ctx.getContainer()
       const controller = requestContainer.resolve<IController>(ControllerClass)
@@ -825,7 +924,7 @@ export class RouteRegistrationService {
         return response
       }
 
-      throw new ControllerMethodNotFoundError(methodName, ControllerClass.name)
+      throw new RouterError(`Method "${methodName}" not found on controller "${ControllerClass.name}"`)
     }
 
     this.nameHandler(handler, ControllerClass.name, methodName)

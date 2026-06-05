@@ -1,23 +1,15 @@
-import { ApplicationError, ERROR_CODES } from '../../errors';
-import type { ZodError } from '../../i18n/validation';
-import { type z } from '../../i18n/validation';
-/**
- * SchemaValidationError
- *
- * Thrown when Zod schema validation fails
- */
-export class SchemaValidationError extends ApplicationError {
+import { HttpException } from '../../errors'
+import type { ZodError, z } from '../../i18n/validation/zod'
+
+export class SchemaValidationError extends HttpException {
+  public readonly issues: { path: string; message: string; code: string }[]
+
   constructor(zodError: ZodError) {
-    const issues = zodError.issues.map((err: z.core.$ZodIssue) => ({
+    super(400, 'Schema validation failed')
+    this.issues = zodError.issues.map((err: z.core.$ZodIssue) => ({
       path: err.path.join('.'),
       message: err.message,
-      code: err.code
+      code: err.code,
     }))
-
-    super(
-      'errors.schemaValidation',
-      ERROR_CODES.VALIDATION.SCHEMA_VALIDATION,
-      { issues }
-    )
   }
 }

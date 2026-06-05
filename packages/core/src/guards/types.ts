@@ -45,11 +45,20 @@ export type Guard = GuardClass | CanActivate
  */
 export interface AuthGuardOptions {
   /**
-   * Required permissions (scopes) for authorization
+   * Required permissions for authorization as `"resource:action"` strings.
    * If provided, permission check is performed after authentication.
    * If omitted, only authentication is required.
+   *
+   * Multiple permissions are combined with AND logic (all must be satisfied).
+   *
+   * @example
+   * ```typescript
+   * @UseGuards(AuthGuard({ permissions: 'posts:update' }))
+   * @UseGuards(AuthGuard({ permissions: ['posts:update', 'posts:delete'] }))
+   * @UseGuards(AuthGuard({ permissions: 'admin:access' }))
+   * ```
    */
-  scopes?: string[]
+  permissions?: string | string[]
 }
 
 /**

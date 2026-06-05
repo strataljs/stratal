@@ -19,6 +19,9 @@ on:
     types: [completed]
   pull_request:
     branches: [main]
+    paths:
+      - 'packages/**'
+      - 'yarn.lock'
 
 jobs:
   benchmark:

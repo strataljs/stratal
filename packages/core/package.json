@@ -1,6 +1,6 @@
 {
   "name": "stratal",
-  "version": "0.0.17",
+  "version": "0.0.25",
   "description": "A modular Cloudflare Workers framework with dependency injection, queue-based events, and type-safe configuration",
   "type": "module",
   "license": "MIT",
@@ -94,6 +94,10 @@
       "types": "./dist/logger/index.d.mts",
       "import": "./dist/logger/index.mjs"
     },
+    "./macroable": {
+      "types": "./dist/macroable/index.d.mts",
+      "import": "./dist/macroable/index.mjs"
+    },
     "./module": {
       "types": "./dist/module/index.d.mts",
       "import": "./dist/module/index.mjs"
@@ -106,9 +110,17 @@
       "types": "./dist/quarry/index.d.mts",
       "import": "./dist/quarry/index.mjs"
     },
+    "./quarry/runner": {
+      "types": "./dist/quarry/runner.d.mts",
+      "import": "./dist/quarry/runner.mjs"
+    },
     "./queue": {
       "types": "./dist/queue/index.d.mts",
       "import": "./dist/queue/index.mjs"
+    },
+    "./rate-limiter": {
+      "types": "./dist/rate-limiter/index.d.mts",
+      "import": "./dist/rate-limiter/index.mjs"
     },
     "./router": {
       "types": "./dist/router/index.d.mts",
@@ -147,53 +159,32 @@
     "bench:unit": "vitest bench --run --project unit",
     "bench:e2e": "vitest bench --run --project e2e",
     "bench:json": "vitest bench --run --outputJson benchmark-results.json",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:integration": "vitest run --project workerd",
-    "test:coverage": "vitest run --coverage",
+    "test": "NODE_OPTIONS='--expose-gc' vitest run",
+    "test:watch": "NODE_OPTIONS='--expose-gc' vitest",
+    "test:integration": "NODE_OPTIONS='--expose-gc' vitest run --project workerd",
+    "test:coverage": "NODE_OPTIONS='--expose-gc' vitest run --coverage",
     "lint": "npx oxlint .",
     "lint:fix": "npx oxlint --fix ."
   },
   "dependencies": {
     "@hono/swagger-ui": "^0.6.1",
-    "@hono/zod-openapi": "^1.2.3",
-    "@intlify/core-base": "^11.3.0",
-    "@intlify/message-compiler": "^11.3.0",
-    "@modelcontextprotocol/sdk": "^1.28.0",
+    "@hono/zod-openapi": "^1.4.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@swc-node/register": "^1.11.1",
-    "@swc/core": "^1.15.21",
-    "@swc/helpers": "^0.5.20",
-    "@xmldom/xmldom": "^0.8.11",
+    "@swc/core": "^1.15.40",
+    "@swc/helpers": "^0.5.23",
     "clipanion": "^4.0.0-rc.4",
-    "hono": "^4.12.9",
-    "tsyringe": "^4.10.0",
-    "zod": "^4.3.6"
+    "hono": "^4.12.23",
+    "intl-messageformat": "^11.2.7",
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@aws-sdk/client-s3": ">=3",
-    "@aws-sdk/lib-storage": ">=3",
-    "@aws-sdk/s3-request-presigner": ">=3",
-    "@react-email/components": ">=1",
-    "nodemailer": ">=7",
+    "@react-email/render": ">=2",
     "react": ">=19",
-    "react-dom": ">=19",
-    "reflect-metadata": ">=0.2",
-    "resend": ">=6"
+    "react-dom": ">=19"
   },
   "peerDependenciesMeta": {
-    "@aws-sdk/client-s3": {
-      "optional": true
-    },
-    "@aws-sdk/lib-storage": {
-      "optional": true
-    },
-    "@aws-sdk/s3-request-presigner": {
-      "optional": true
-    },
-    "@react-email/components": {
-      "optional": true
-    },
-    "nodemailer": {
+    "@react-email/render": {
       "optional": true
     },
     "react": {
@@ -201,34 +192,24 @@
     },
     "react-dom": {
       "optional": true
-    },
-    "resend": {
-      "optional": true
     }
   },
   "devDependencies": {
-    "@aws-sdk/client-s3": "3.1019.0",
-    "@aws-sdk/lib-storage": "^3.1019.0",
-    "@aws-sdk/s3-request-presigner": "3.1019.0",
-    "@cloudflare/vitest-pool-workers": "^0.13.5",
-    "@cloudflare/workers-types": "4.20260317.1",
-    "@react-email/components": "^1.0.10",
+    "@cloudflare/vitest-pool-workers": "^0.16.12",
+    "@cloudflare/workers-types": "4.20260603.1",
+    "@react-email/render": "^2.0.8",
     "@stratal/testing": "workspace:*",
-    "@types/node": "^25.5.0",
-    "@types/nodemailer": "^7.0.11",
-    "@types/react": "^19.2.14",
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.2.16",
     "@types/react-dom": "^19.2.3",
-    "@vitest/coverage-v8": "^4.1.2",
-    "@vitest/runner": "~4.1.2",
-    "@vitest/snapshot": "~4.1.2",
+    "@vitest/coverage-v8": "^4.1.8",
+    "@vitest/runner": "~4.1.8",
+    "@vitest/snapshot": "~4.1.8",
     "jsonc-parser": "^3.3.1",
-    "nodemailer": "^8.0.4",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "reflect-metadata": "^0.2.2",
-    "resend": "^6.9.4",
-    "tsdown": "^0.21.6",
-    "typescript": "^6.0.2",
-    "vitest": "~4.1.2"
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "tsdown": "^0.22.1",
+    "typescript": "^6.0.3",
+    "vitest": "~4.1.8"
   }
 }

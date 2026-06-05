@@ -1,15 +1,15 @@
-import { injectable, container as tsyringeRootContainer } from 'tsyringe'
 import { bench, describe } from 'vitest'
 import { Container } from '../container'
+import { Transient } from '../decorators'
 
 // Test fixtures
-@injectable()
+@Transient()
 class ServiceA { }
 
-@injectable()
+@Transient()
 class ServiceB { }
 
-@injectable()
+@Transient()
 class ServiceC { }
 
 const TOKEN_A = Symbol('BenchTokenA')
@@ -18,9 +18,7 @@ const TOKEN_C = Symbol('BenchTokenC')
 const TOKEN_COND = Symbol('BenchTokenCond')
 
 function createContainer(): Container {
-  return new Container({
-    container: tsyringeRootContainer.createChildContainer(),
-  })
+  return new Container()
 }
 
 describe('Container - Registration', () => {
