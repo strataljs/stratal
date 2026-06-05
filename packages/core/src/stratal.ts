@@ -1,6 +1,6 @@
 import { Application, type ApplicationConfig } from './application'
 import type { StratalEnv } from './env'
-import { StratalNotInitializedError } from './errors'
+import { StratalNotInitializedError, StratalSupersededError } from './errors'
 import type { HonoApp } from './router/hono-app'
 
 /**
@@ -23,7 +23,14 @@ export class Stratal<Env extends StratalEnv = StratalEnv> {
 
   private static _application: Promise<Application> | null = null
   private static _generation = 0
-  private static _previousInstance: Stratal | null = null
+  private static _current: Stratal | null = null
+  /**
+   * Serializes generation teardown: each new instance appends the previous
+   * instance's shutdown here, and `prepareApp` awaits the chain before
+   * allocating the new Application. Old and new DI graphs never coexist,
+   * so repeated Vite HMR reloads can't accumulate live object graphs.
+   */
+  private static _teardownChain: Promise<void> = Promise.resolve()
 
   constructor(config: ApplicationConfig) {
     this.fetch = this.fetch.bind(this)
@@ -33,13 +40,28 @@ export class Stratal<Env extends StratalEnv = StratalEnv> {
     // Invalidate any in-flight initialization from a previous instance (Vite HMR reload)
     const generation = ++Stratal._generation
 
-    if (Stratal._previousInstance) {
-      void Stratal._previousInstance.shutdown()
+    const previous = Stratal._current
+    Stratal._current = this
+    if (previous) {
+      Stratal._teardownChain = Stratal._teardownChain
+        .then(() => previous.shutdown())
+        .catch((error: unknown) => {
+          console.error('[stratal] Failed to shut down superseded instance:', error)
+        })
     }
-    Stratal._previousInstance = this
 
-    this.initPromise = this.prepareApp(config, generation)
+    // Capture the chain as of THIS construction: it contains only strictly
+    // older generations' teardowns. Reading the static inside prepareApp
+    // instead would deadlock when this generation is superseded before its
+    // first await — it would wait on a chain containing its own shutdown,
+    // which waits on this initPromise.
+    const teardownBarrier = Stratal._teardownChain
+
+    this.initPromise = this.prepareApp(config, generation, teardownBarrier)
     Stratal._application = this.initPromise
+    // A superseded generation rejects; without an awaiter (no in-flight
+    // request during the reload) that would surface as an unhandled rejection.
+    this.initPromise.catch(() => { /* handled by awaiters */ })
   }
 
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -59,7 +81,7 @@ export class Stratal<Env extends StratalEnv = StratalEnv> {
   }
 
   get hono(): Promise<HonoApp> {
-    return this.initPromise.then(app => app.ensureHono())
+    return this.ensureReady().then(app => app.ensureHono())
   }
 
   async shutdown(): Promise<void> {
@@ -75,27 +97,57 @@ export class Stratal<Env extends StratalEnv = StratalEnv> {
    * Resolves the Application instance from the static singleton.
    * Used by worker base classes (DurableObject, Workflow, WorkerEntrypoint)
    * to access the DI container without going through Cloudflare RPC.
+   * Generations superseded mid-boot reject with {@link StratalSupersededError};
+   * this retries against the replacing generation so callers always land on
+   * the live Application.
    */
-  static resolveApplication(): Promise<Application> {
-    if (!Stratal._application) {
-      throw new StratalNotInitializedError()
+  static async resolveApplication(): Promise<Application> {
+    let current = Stratal._application
+    while (current) {
+      try {
+        return await current
+      } catch (error) {
+        // Superseded by a newer generation while booting — its constructor has
+        // already swapped _application; retry against the replacement.
+        if (error instanceof StratalSupersededError && Stratal._application !== current) {
+          current = Stratal._application
+          continue
+        }
+        throw error
+      }
     }
-    return Stratal._application
+    throw new StratalNotInitializedError()
   }
 
   private async ensureReady(): Promise<Application> {
-    this.app ??= await this.initPromise;
-    return this.app
+    if (this.app) return this.app
+    try {
+      this.app = await this.initPromise
+      return this.app
+    } catch (error) {
+      if (error instanceof StratalSupersededError) {
+        // This instance was replaced mid-boot (Vite HMR reload) — serve the
+        // request from the generation that replaced it.
+        return Stratal.resolveApplication()
+      }
+      throw error
+    }
   }
 
-  private async prepareApp(config: ApplicationConfig, generation: number): Promise<Application> {
+  private async prepareApp(
+    config: ApplicationConfig,
+    generation: number,
+    teardownBarrier: Promise<void>,
+  ): Promise<Application> {
     const { env, waitUntil } = await import('cloudflare:workers')
 
-    // After async import, check if a newer instance has replaced us (Vite HMR reload)
+    // Let every previous generation finish tearing down before allocating the
+    // new DI graph — concurrent old+new graphs are what leak across reloads.
+    await teardownBarrier
+
+    // After the awaits, check if a newer instance has replaced us (Vite HMR reload)
     if (generation !== Stratal._generation) {
-      return new Promise<Application>(() => {
-        //
-      }) // Never resolves — avoids cross-request promise warning
+      throw new StratalSupersededError(generation)
     }
 
     const app = new Application({ ...config, env: env as Env, ctx: { waitUntil } })
@@ -104,9 +156,7 @@ export class Stratal<Env extends StratalEnv = StratalEnv> {
     // Check again after initialization completes
     if (generation !== Stratal._generation) {
       await app.shutdown()
-      return new Promise<Application>(() => {
-        //
-      })
+      throw new StratalSupersededError(generation)
     }
 
     return app

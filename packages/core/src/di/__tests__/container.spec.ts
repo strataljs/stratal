@@ -359,4 +359,96 @@ describe('Container', () => {
     })
   })
 
+  describe('dispose()', () => {
+    it('should invoke dispose hooks on cached singletons, preferring async > sync > method', async () => {
+      const calls: string[] = []
+
+      class AsyncDisposableService {
+        [Symbol.asyncDispose]() {
+          calls.push('async')
+          return Promise.resolve()
+        }
+        [Symbol.dispose]() { calls.push('sync') }
+        dispose() { calls.push('method') }
+      }
+      class SyncDisposableService {
+        [Symbol.dispose]() { calls.push('sync-only') }
+      }
+      class MethodDisposableService {
+        dispose() { calls.push('method-only') }
+      }
+
+      container.registerSingleton(AsyncDisposableService)
+      container.registerSingleton(SyncDisposableService)
+      container.registerSingleton(MethodDisposableService)
+      container.resolve(AsyncDisposableService)
+      container.resolve(SyncDisposableService)
+      container.resolve(MethodDisposableService)
+
+      await container.dispose()
+
+      expect(calls).toEqual(['async', 'sync-only', 'method-only'])
+    })
+
+    it('should not dispose singletons that were never resolved', async () => {
+      const disposeSpy = vi.fn()
+      class NeverResolvedService {
+        dispose() { disposeSpy() }
+      }
+
+      container.registerSingleton(NeverResolvedService)
+
+      await container.dispose()
+
+      expect(disposeSpy).not.toHaveBeenCalled()
+    })
+
+    it('should continue past a throwing disposer and log the failure', async () => {
+      const disposed: string[] = []
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => { /* silence */ })
+
+      class ThrowingService {
+        dispose() {
+          disposed.push('throwing')
+          throw new Error('boom')
+        }
+      }
+      class HealthyService {
+        dispose() { disposed.push('healthy') }
+      }
+
+      container.registerSingleton(ThrowingService)
+      container.registerSingleton(HealthyService)
+      container.resolve(ThrowingService)
+      container.resolve(HealthyService)
+
+      await container.dispose()
+
+      expect(disposed).toEqual(['throwing', 'healthy'])
+      expect(consoleError).toHaveBeenCalledOnce()
+      consoleError.mockRestore()
+    })
+
+    it('should not dispose value registrations (instances the container does not own)', async () => {
+      const disposeSpy = vi.fn()
+      container.registerValue(TEST_TOKEN, { dispose: disposeSpy })
+      container.resolve(TEST_TOKEN)
+
+      await container.dispose()
+
+      expect(disposeSpy).not.toHaveBeenCalled()
+    })
+
+    it('should clear all registrations and caches', async () => {
+      // Symbol token: class tokens auto-resolve from decorator metadata even
+      // without a registration, so they can't prove the maps were cleared.
+      container.registerSingleton(TEST_TOKEN, TestService)
+      container.resolve(TEST_TOKEN)
+
+      await container.dispose()
+
+      expect(container.tryResolve(TEST_TOKEN)).toBeUndefined()
+    })
+  })
+
 })

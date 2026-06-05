@@ -47,12 +47,19 @@ type ZenStackClientInstance = InstanceType<typeof ZenStackClient>
  * ZenStackClient's constructor returns a Proxy (for dynamic model accessors), so
  * a subclass method override is shadowed — hence the proxy wrapper here.
  */
-function makeReentrantTransaction<T extends object>(
+export function makeReentrantTransaction<T extends object>(
   client: T,
   activeTransaction: AsyncLocalStorage<ZenStackClientInstance>,
 ): T {
   return new Proxy(client, {
     get(target, prop, receiver) {
+      // DI disposal contract (stratal `Disposable`): release the underlying
+      // pool/socket when the owning container shuts down (e.g. a Vite HMR
+      // reload replacing the Application). Handled here because ZenStack's
+      // own constructor proxy shadows subclass method definitions.
+      if (prop === Symbol.asyncDispose) {
+        return () => (target as ZenStackClientInstance).$disconnect()
+      }
       if (prop !== '$transaction') {
         // Forward the receiver so getters/methods resolve `this` against the
         // proxy (correct for layered proxies / accessor properties).
@@ -85,10 +92,20 @@ function makeReentrantTransaction<T extends object>(
   })
 }
 
+export interface DatabaseServiceClass {
+  new (): InstanceType<typeof ZenStackClient>
+  /**
+   * Disconnects every still-live client created from this service class.
+   * Called by `DatabaseModule.onShutdown` so pools/sockets are released when
+   * the Application is torn down (e.g. a Vite HMR reload).
+   */
+  disposeInstances(): Promise<void>
+}
+
 export function createDatabaseService(
   conn: DatabaseConnectionConfig,
   eventRegistry: IEventRegistry,
-): new () => InstanceType<typeof ZenStackClient> {
+): DatabaseServiceClass {
   const plugins: AnyPlugin[] = [
     new ErrorHandlerPlugin(),
     new EventEmitterPlugin({
@@ -110,6 +127,12 @@ export function createDatabaseService(
   // single connection, which is also the correct semantics (one atomic unit).
   const activeTransaction = new AsyncLocalStorage<InstanceType<typeof ZenStackClient>>()
 
+  // Live clients created from this service class, tracked weakly: the client
+  // is `@Transient`, so request-scoped resolutions must stay GC-able with
+  // their request. Dead refs are pruned on each add; live ones are
+  // disconnected by `disposeInstances()` on module shutdown.
+  const instances = new Set<WeakRef<ZenStackClientInstance>>()
+
   @Transient()
   class DatabaseClient extends ZenStackClient<typeof conn.schema> {
     constructor() {
@@ -126,7 +149,26 @@ export function createDatabaseService(
       // accessors), so subclass method overrides are shadowed. Wrap it in a
       // proxy that makes `$transaction` reentrant. Returning from the
       // constructor replaces the instance DI receives.
-      return makeReentrantTransaction(this as InstanceType<typeof ZenStackClient>, activeTransaction)
+      const client = makeReentrantTransaction(this as InstanceType<typeof ZenStackClient>, activeTransaction)
+      for (const ref of instances) {
+        if (ref.deref() === undefined) instances.delete(ref)
+      }
+      instances.add(new WeakRef(client))
+      return client
+    }
+
+    static async disposeInstances(): Promise<void> {
+      const live = [...instances]
+      instances.clear()
+      await Promise.all(live.map(async (ref) => {
+        const client = ref.deref()
+        if (!client) return
+        try {
+          await client.$disconnect()
+        } catch (error) {
+          console.error(`[stratal] Failed to disconnect database client "${conn.name}":`, error)
+        }
+      }))
     }
   }
 

@@ -6,6 +6,7 @@ import { containerStorage } from './container-storage';
 import { ContainerError } from './container.error';
 import { getClassMetadata } from './decorators';
 import { getInjectionTokens } from './decorators/inject.decorator';
+import { disposeInstance, isDisposable } from './disposable';
 import { isLazyToken, type LazyToken } from './lazy';
 import { CONTAINER_TOKEN } from './tokens';
 import { Scope, type ExtensionDecorator, type InjectionToken, type WhenOptions } from './types';
@@ -250,7 +251,25 @@ export class Container {
 
   // ── Lifecycle ─────────────────────────────────────────────────
 
-  dispose(): void {
+  /**
+   * Disposes every container-instantiated instance that implements the
+   * {@link Disposable} contract (singletons and request-cached instances),
+   * then clears all registrations. Value registrations are not disposed —
+   * the container doesn't own them. A failing disposer is logged and
+   * skipped so it can't block the rest of the teardown.
+   */
+  async dispose(): Promise<void> {
+    const seen = new Set<unknown>()
+    for (const instance of [...this.singletons.values(), ...this.requestCache.values()]) {
+      if (seen.has(instance) || !isDisposable(instance)) continue
+      seen.add(instance)
+      try {
+        await disposeInstance(instance)
+      } catch (error) {
+        console.error('[stratal] Failed to dispose instance during container teardown:', error)
+      }
+    }
+
     this.registrations.clear()
     this.singletons.clear()
     this.requestCache.clear()

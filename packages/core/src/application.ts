@@ -343,7 +343,7 @@ export class Application {
     const logger = this._container.resolve<LoggerService>(LOGGER_TOKENS.LoggerService)
     logger.info('Disposing container...')
 
-    this._container.dispose()
+    await this._container.dispose()
   }
 
   async handleCommand(name: string, input?: CommandInput): Promise<CommandResult> {

@@ -6,6 +6,7 @@ export * from './types'
 export * from './lazy'
 export * from './metadata'
 export * from './conditional-binding-builder'
+export * from './disposable'
 export * from './errors'
 
 export { Container } from './container'
