@@ -16,7 +16,7 @@ Inertia.js v3 server adapter for [Stratal](https://github.com/strataljs/stratal)
 ## Features
 
 - **InertiaModule** — Drop-in Stratal module with `forRoot()` / `forRootAsync()` configuration
-- **Server-Side Rendering** — SSR support with configurable per-route disabling
+- **Streaming SSR** — React 19 `renderToReadableStream` streaming via `createInertiaSsrApp`, with configurable per-route disabling
 - **Shared Data** — Global shared props with static values or request-scoped resolvers
 - **@InertiaRoute Decorator** — Convention-based Inertia page routes with auto-applied response schema
 - **Partial Reloads** — Optional, deferred, and merge props for efficient data loading
@@ -81,6 +81,38 @@ export class NotesController {
   }
 }
 ```
+
+### Streaming SSR
+
+Enable SSR by pointing the module at a bundle that exports a streaming `render`:
+
+```typescript
+InertiaModule.forRoot({
+  rootView: 'app',
+  ssr: { bundle: () => import('./inertia/ssr') },
+})
+```
+
+`src/inertia/ssr.tsx` (scaffolded by `quarry inertia:install`) uses
+`createInertiaSsrApp`, which wires Inertia's `App`, head collection, and React 19's
+`renderToReadableStream` — the shell flushes early and the body streams progressively:
+
+```tsx
+import { createInertiaSsrApp } from '@stratal/inertia/ssr'
+
+export const { render } = createInertiaSsrApp({
+  resolve: async (name) => {
+    const pages = import.meta.glob('./pages/**/*.tsx')
+    const page = await pages[`./pages/${name}.tsx`]?.()
+    if (!page) throw new Error(`Page not found: ${name}`)
+    return page
+  },
+})
+```
+
+There is no client-side fallback — an SSR failure surfaces as an error rather than
+silently degrading. Skip SSR per route with `ctx.withoutSsr()` or globally with
+`ssr.disabled: ['admin/*']`.
 
 ## Documentation
 

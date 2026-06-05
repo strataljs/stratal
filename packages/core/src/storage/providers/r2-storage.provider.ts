@@ -1,7 +1,7 @@
 import { type StratalEnv } from '../../env'
 import { signUrl } from '../../router/signed-url'
 import type { DownloadResult, PresignedUrlResult, UploadOptions, UploadResult } from '../contracts'
-import { R2PresignedUrlSecretMissingError, StorageResponseBodyMissingError } from '../errors'
+import { StorageError } from '../storage.error'
 import type { StorageEntry, StorageRouteConfig } from '../types'
 import type {
   CompletedPart,
@@ -72,7 +72,7 @@ export class R2StorageProvider implements IMultipartProvider {
     const obj = await this.bucket.get(path)
 
     if (!obj) {
-      throw new StorageResponseBodyMissingError(path)
+      throw new StorageError(`Storage object not found at path "${path}"`)
     }
 
     // R2ObjectBody has body, text(), arrayBuffer(), etc.
@@ -104,7 +104,7 @@ export class R2StorageProvider implements IMultipartProvider {
   ): Promise<PresignedUrlResult> {
     const secret = this.env.APP_SECRET;
     if (!secret) {
-      throw new R2PresignedUrlSecretMissingError()
+      throw new StorageError('APP_SECRET is required for generating presigned URLs')
     }
 
     // Build a relative URL pointing to the StorageController route

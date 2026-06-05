@@ -1,10 +1,10 @@
-import { Test, type TestingModule } from '@stratal/testing'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { Module } from '../../src/module/module.decorator'
+import { Test, type TestingModule } from '@stratal/testing';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { Module } from '../../src/module/module.decorator';
 import {
-  HttpMethodAppModule,
-  MixedController,
-} from '../fixtures/http-method.controller'
+    HttpMethodAppModule,
+    MixedController,
+} from '../fixtures/http-method.controller';
 
 describe('HTTP Method Decorators', () => {
   let module: TestingModule
@@ -192,28 +192,23 @@ describe('HTTP Method Decorators', () => {
   })
 
   describe('Mutual exclusivity', () => {
-    it('throws ControllerRegistrationError when mixing @Route and HTTP method decorators', async () => {
+    it('throws RouterError when mixing @Route and HTTP method decorators', async () => {
       @Module({
         controllers: [MixedController],
       })
       class MixedAppModule {}
 
-      const testModule = await Test.createTestingModule({
-        imports: [MixedAppModule],
-      }).compile()
-
+      // The testing builder initializes routing eagerly, so the mixed-decorator
+      // configuration error surfaces as a compile() rejection.
       await expect(
-        testModule.application.ensureHono()
+        Test.createTestingModule({
+          imports: [MixedAppModule],
+        }).compile()
       ).rejects.toMatchObject({
-        name: 'ControllerRegistrationError',
+        name: 'RouterError',
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        metadata: expect.objectContaining({
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          reason: expect.stringContaining('Cannot mix @Route() with HTTP method decorators'),
-        }),
+        message: expect.stringContaining('Cannot mix @Route() with HTTP method decorators'),
       })
-
-      await testModule.close()
     })
   })
 })

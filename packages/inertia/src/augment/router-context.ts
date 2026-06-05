@@ -1,6 +1,7 @@
 import type { RedirectStatusCode } from 'hono/utils/http-status'
 import { RouterContext } from 'stratal/router'
 import type { InertiaService } from '../services/inertia.service'
+import type { SeoData } from '../seo/types'
 import type {
   InertiaAlwaysProp,
   InertiaDeferredProp,
@@ -47,6 +48,20 @@ declare module 'stratal/router' {
     always<T>(callback: () => T): InertiaAlwaysProp<T>
     /** Sets a flash data entry that will be available on the next page visit. */
     flash(key: string, value: unknown): void
+    /**
+     * Adds a shared prop to the current request, available on every Inertia page
+     * rendered during this request. Useful for middleware and packages that want
+     * to contribute data to the frontend without a controller passing it through.
+     */
+    share(key: string, value: unknown): void
+    /**
+     * Sets SEO metadata (title, description, Open Graph, Twitter, etc.) for the
+     * page rendered in this request. Merges with module-level defaults and any
+     * earlier `seo()` calls. The resolved tags are injected into `<head>` and
+     * shared as the `seo` prop; the client head is kept in sync automatically
+     * by the runtime the `stratalInertia()` Vite plugin injects.
+     */
+    seo(data: SeoData): void
     /** Disables server-side rendering for the current request. */
     withoutSsr(): void
   }
@@ -103,6 +118,16 @@ export function augmentRouterContext(resolveService: (ctx: RouterContext) => Ine
     if (flashOut) {
       flashOut[key] = value
     }
+  })
+
+  RouterContext.macro('share', function (this: RouterContext, key: string, value: unknown) {
+    const service = resolveService(this)
+    service.share(key, value)
+  })
+
+  RouterContext.macro('seo', function (this: RouterContext, data: SeoData) {
+    const service = resolveService(this)
+    service.seo(data)
   })
 
   RouterContext.macro('withoutSsr', function (this: RouterContext) {

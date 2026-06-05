@@ -1,6 +1,13 @@
-import { Transient } from '../di/decorators'
+import { Singleton } from '../di/decorators'
 import { DI_TOKENS } from '../di/tokens'
+import type { Constructor } from '../types'
 import type { IQueueConsumer } from './queue-consumer'
+
+/** A registered consumer class together with the message types it handles. */
+export interface ConsumerRegistration {
+  consumerClass: Constructor<IQueueConsumer>
+  messageTypes: string[]
+}
 
 /**
  * Consumer Registry
@@ -33,52 +40,59 @@ import type { IQueueConsumer } from './queue-consumer'
  * this.consumerRegistry.register(consumer)
  * ```
  */
-@Transient(DI_TOKENS.ConsumerRegistry)
+@Singleton(DI_TOKENS.ConsumerRegistry)
 export class ConsumerRegistry {
-  /** Map from message type to consumers handling that type */
-  private consumersByType = new Map<string, IQueueConsumer[]>()
+  /** Map from message type to consumer classes handling that type */
+  private classesByType = new Map<string, Constructor<IQueueConsumer>[]>()
 
-  /** Set of all registered consumers (for iteration) */
-  private allConsumers = new Set<IQueueConsumer>()
+  /** All registrations (for iteration / listing) */
+  private registrations: ConsumerRegistration[] = []
+
+  /** Registered consumer classes (dedupe) */
+  private registeredClasses = new Set<Constructor<IQueueConsumer>>()
 
   /**
-   * Register a queue consumer
+   * Register a queue consumer class.
    *
-   * Indexes the consumer by each of its declared message types.
+   * Indexes the class by each of its declared message types. A fresh instance
+   * is resolved per message from the request-scoped container at dispatch time —
+   * consumers are never held as long-lived singletons, so they may safely inject
+   * request-scoped providers (`@InjectQueue`, i18n, auth context, …).
    *
-   * @param consumer - Queue consumer to register
+   * @param consumerClass - Queue consumer class to register
+   * @param messageTypes - Message types the consumer handles
    */
-  register(consumer: IQueueConsumer): void {
-    if (this.allConsumers.has(consumer)) {
+  register(consumerClass: Constructor<IQueueConsumer>, messageTypes: string[]): void {
+    if (this.registeredClasses.has(consumerClass)) {
       return // Already registered
     }
 
-    this.allConsumers.add(consumer)
+    this.registeredClasses.add(consumerClass)
+    this.registrations.push({ consumerClass, messageTypes })
 
-    for (const messageType of consumer.messageTypes) {
-      const existing = this.consumersByType.get(messageType) ?? []
-      existing.push(consumer)
-      this.consumersByType.set(messageType, existing)
+    for (const messageType of messageTypes) {
+      const existing = this.classesByType.get(messageType) ?? []
+      existing.push(consumerClass)
+      this.classesByType.set(messageType, existing)
     }
   }
 
   /**
-   * Get all consumers that can handle a specific message type
+   * Get all consumer classes that can handle a specific message type.
    *
-   * Returns consumers that either:
-   * - Explicitly declare the message type
-   * - Use '*' wildcard to handle all types
+   * Returns classes that either declare the message type explicitly or use the
+   * `'*'` wildcard. Callers resolve a fresh instance per message from the
+   * request-scoped container.
    *
    * @param messageType - The message type to find consumers for
-   * @returns Array of consumers that can handle this message type
+   * @returns Array of consumer classes that can handle this message type
    */
-  getConsumers(messageType: string): IQueueConsumer[] {
-    const exactMatch = this.consumersByType.get(messageType) ?? []
-    const wildcardMatch = this.consumersByType.get('*') ?? []
+  getConsumerClasses(messageType: string): Constructor<IQueueConsumer>[] {
+    const exactMatch = this.classesByType.get(messageType) ?? []
+    const wildcardMatch = this.classesByType.get('*') ?? []
 
     // Combine and dedupe
-    const combined = new Set([...exactMatch, ...wildcardMatch])
-    return Array.from(combined)
+    return Array.from(new Set([...exactMatch, ...wildcardMatch]))
   }
 
   /**
@@ -88,7 +102,7 @@ export class ConsumerRegistry {
    * @returns true if at least one consumer can handle this type
    */
   hasConsumers(messageType: string): boolean {
-    return this.getConsumers(messageType).length > 0
+    return this.getConsumerClasses(messageType).length > 0
   }
 
   /**
@@ -97,15 +111,13 @@ export class ConsumerRegistry {
    * @returns Array of message types with registered consumers
    */
   getMessageTypes(): string[] {
-    return Array.from(this.consumersByType.keys())
+    return Array.from(this.classesByType.keys())
   }
 
   /**
-   * Get all registered consumers
-   *
-   * @returns Array of all registered consumers
+   * Get all consumer registrations (class + message types) for listing.
    */
-  getAllConsumers(): IQueueConsumer[] {
-    return Array.from(this.allConsumers)
+  getRegistrations(): readonly ConsumerRegistration[] {
+    return this.registrations
   }
 }

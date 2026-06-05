@@ -45,8 +45,12 @@ interface CacheService {
   delete(key: string): Promise<void>
   list<Metadata>(options?: KVNamespaceListOptions): Promise<KVNamespaceListResult<Metadata>>
   withBinding(kv: KVNamespace): CacheService   // Use a different KV binding
+  binding(name: string): CacheService          // Same, resolved by binding name from env
 }
 ```
+
+KV reads are eventually consistent — a `get` can return an edge-cached value for
+up to ~60s after a `put`.
 
 ### Multiple KV Namespaces
 
@@ -72,6 +76,41 @@ export class MultiCacheService {
 
 Default binding reads from `env.CACHE`.
 
+### Tiered cache (opt-in isolate-local L1)
+
+Inject `CACHE_TOKENS.TieredCacheService` instead of `CacheService` when you need
+isolate-local **read-after-write coherence**: it layers an in-memory L1 over KV,
+so a value written on an isolate is immediately and consistently readable by
+later reads on that same isolate — closing KV's eventual-consistency gap. Same
+API as `CacheService`, plus `binding(name)`.
+
+```typescript
+import { CACHE_TOKENS } from 'stratal/cache'
+import type { TieredCacheService } from 'stratal/cache'
+
+@Transient()
+export class OnceGuard {
+  constructor(
+    @inject(CACHE_TOKENS.TieredCacheService) private cache: TieredCacheService,
+  ) {}
+
+  async claim(id: string): Promise<boolean> {
+    if (await this.cache.get(`claim:${id}`)) return false
+    await this.cache.put(`claim:${id}`, '1', { expirationTtl: 86400 })
+    return true
+  }
+}
+```
+
+**Use it for** set-once / read-mostly keys (idempotency claims, immutable
+lookups). The framework's queue idempotency store is built on it.
+
+**Do NOT use it for** read-modify-write counters that need cross-edge freshness
+(e.g. rate limiting): the L1 only sees writes made on its own isolate, so an
+isolate reads its own value until the entry expires — concurrent increments from
+other isolates are missed and overwritten. Use plain `CacheService` (KV) or a
+Durable-Object store there.
+
 ## Logger
 
 ```typescript
@@ -89,7 +128,11 @@ export class MyService {
     this.logger.debug('Debug message', { key: 'value' })
     this.logger.info('Info message')
     this.logger.warn('Warning message')
-    this.logger.error('Error message', { error })
+
+    // error() overloads:
+    this.logger.error('Something failed', new Error('boom'))                    // (message, Error)
+    this.logger.error('Something failed', new Error('boom'), { userId: '123' }) // (message, Error, context)
+    this.logger.error('Something failed', { code: 500 })                        // (message, context)
   }
 }
 ```
@@ -101,12 +144,14 @@ export default new Stratal({
   module: AppModule,
   logging: {
     level: LogLevel.INFO,    // DEBUG, INFO, WARN, ERROR
-    formatter: 'json',       // 'json' or 'text'
+    formatter: 'json',       // 'json' or 'pretty'
   },
 })
 ```
 
 ## Email
+
+Sends email via a built-in SMTP client using `cloudflare:sockets`. Zero npm dependencies — no nodemailer, no Resend SDK. Works with any SMTP endpoint (Resend, Postmark, SendGrid, Mailgun, self-hosted).
 
 ### EmailModule Setup
 
@@ -118,16 +163,28 @@ import { EmailModule } from 'stratal/email'
     EmailModule.forRootAsync({
       inject: [DI_TOKENS.CloudflareEnv],
       useFactory: (env) => ({
-        provider: 'resend',              // 'resend' | 'smtp'
         from: { name: 'My App', email: 'noreply@example.com' },
-        apiKey: env.RESEND_API_KEY,      // required for resend provider
-        queue: 'email-queue',            // queue name for async sending
+        smtp: { url: env.SMTP_URL },
+        queue: 'NOTIFICATIONS_QUEUE',
       }),
     }),
-    QueueModule.registerQueue('email-queue'),
+    QueueModule.registerQueue('NOTIFICATIONS_QUEUE'),
   ],
 })
 export class AppModule {}
+```
+
+SMTP URL format: `smtp://user:pass@host:port` (STARTTLS, default port 587) or `smtps://user:pass@host:port` (implicit TLS, default port 465).
+
+### EmailModuleOptions
+
+```typescript
+interface EmailModuleOptions {
+  from: { name: string; email: string }
+  smtp: { url: string }
+  replyTo?: string
+  queue: QueueBinding
+}
 ```
 
 ### Sending Email
@@ -150,22 +207,41 @@ export class NotificationService {
       html: '<h1>Welcome to our app</h1>',
     })
   }
-
-  async sendWithReactTemplate(to: string, name: string) {
-    await this.email.send({
-      to,
-      subject: 'Welcome!',
-      template: <WelcomeEmail name={name} />,  // React email template
-    })
-  }
 }
 ```
 
-Email supports `html`, `text`, and `template` (React) props. Emails are dispatched via queue for async sending. Providers: Resend, SMTP (nodemailer). Both are optional peerDependencies.
+Email supports `html` and `text` props. Emails are dispatched via queue for async sending. Attachments supported (inline `Buffer`/`ReadableStream` or storage-backed via `StorageService`). Each attachment is hard-capped at 20 MB (it is fully buffered before base64 encoding); exceeding it throws. Inline attachment `content` must be valid base64 (invalid base64 throws rather than shipping a corrupt file), and envelope addresses containing raw CR/LF are rejected to prevent SMTP command injection.
 
 ## Storage
 
-S3-compatible storage using Cloudflare R2. Optional peerDependency: `@aws-sdk/client-s3`.
+Native Cloudflare R2 storage with multi-disk support. No third-party SDK dependency.
+
+### Setup
+
+Configure `StorageModule` with one or more disks. Each `disk` is a logical name; `binding` matches an `r2_buckets` binding in `wrangler.jsonc`; `root` is the path prefix written into the bucket.
+
+```typescript
+import { Module } from 'stratal/module'
+import { StorageModule } from 'stratal/storage'
+
+@Module({
+  imports: [
+    StorageModule.forRoot({
+      storage: [
+        { disk: 'uploads', binding: 'UPLOADS_BUCKET', root: 'uploads' },
+        { disk: 'avatars', binding: 'AVATAR_BUCKET',  root: 'avatars' },
+      ],
+      defaultStorageDisk: 'uploads',
+      presignedUrl: { defaultExpiry: 3600, maxExpiry: 86400 },
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+`APP_SECRET` env var is required for presigned URLs (added to `wrangler.jsonc` `[vars]`). Use `StorageModule.forRootAsync({ inject, useFactory })` when config depends on other services.
+
+### Using StorageService
 
 ```typescript
 import { STORAGE_TOKENS } from 'stratal/storage'
@@ -178,24 +254,21 @@ export class FileService {
     @inject(STORAGE_TOKENS.StorageService) private storage: StorageService,
   ) {}
 
-  async uploadFile(path: string, data: ReadableStream, contentType: string) {
-    return this.storage.upload(data, path, { contentType })
+  async uploadFile(path: string, data: ReadableStream, mimeType: string, size: number) {
+    return this.storage.upload(data, path, { mimeType, size })
+  }
+
+  async uploadStream(path: string, data: ReadableStream, mimeType: string) {
+    // Use chunkedUpload when the stream size is unknown — splits into R2 multipart parts.
+    return this.storage.chunkedUpload(data, path, { mimeType })
   }
 
   async downloadFile(path: string) {
     return this.storage.download(path)
   }
 
-  async deleteFile(path: string) {
-    await this.storage.delete(path)
-  }
-
-  async fileExists(path: string) {
-    return this.storage.exists(path)
-  }
-
   async getDownloadUrl(path: string) {
-    return this.storage.getPresignedDownloadUrl(path, 3600) // 1 hour expiry
+    return this.storage.getPresignedDownloadUrl(path, 3600)
   }
 
   async getUploadUrl(path: string) {
@@ -204,23 +277,44 @@ export class FileService {
 }
 ```
 
+Pass `disk` as the last argument to target a non-default disk: `this.storage.upload(data, path, options, 'avatars')`.
+
 ### Storage API
 
 ```typescript
 interface StorageService {
-  upload(body, relativePath, options: UploadOptions, disk?): Promise<UploadResult>
-  download(relativePath, disk?): Promise<DownloadResult>
-  delete(relativePath, disk?): Promise<void>
-  exists(relativePath, disk?): Promise<boolean>
-  getPresignedDownloadUrl(relativePath, expiresIn?, disk?): Promise<PresignedUrlResult>
-  getPresignedUploadUrl(relativePath, expiresIn?, disk?): Promise<PresignedUrlResult>
-  getPresignedDeleteUrl(relativePath, expiresIn?, disk?): Promise<PresignedUrlResult>
-  chunkedUpload(body, relativePath, options, disk?): Promise<UploadResult>
+  upload(body, path, options, disk?): Promise<UploadResult>
+  chunkedUpload(body, path, options, disk?): Promise<UploadResult>  // streams without known size
+  download(path, disk?): Promise<DownloadResult>
+  delete(path, disk?): Promise<void>
+  exists(path, disk?): Promise<boolean>
+  getPresignedDownloadUrl(path, expiresIn?, disk?): Promise<PresignedUrlResult>
+  getPresignedUploadUrl(path, expiresIn?, disk?): Promise<PresignedUrlResult>
+  getPresignedDeleteUrl(path, expiresIn?, disk?): Promise<PresignedUrlResult>
   getAvailableDisks(): string[]
 }
 ```
 
 Path supports template variables: `{date}`, `{year}`, `{month}`.
+
+### Auto-Registered Storage Routes
+
+`StorageModule` mounts a hidden `StorageController` that proxies R2 operations behind signed URLs. The presigned-URL helpers above return URLs that point at these routes:
+
+- `GET    /storage/:disk/*` — download (used by `getPresignedDownloadUrl`)
+- `PUT    /storage/:disk/*` — upload (used by `getPresignedUploadUrl`)
+- `DELETE /storage/:disk/*` — delete (used by `getPresignedDeleteUrl`)
+
+Override the base path or opt out:
+
+```typescript
+StorageModule.forRoot({
+  // ...
+  route: { basePath: '/files', disabled: false },  // default basePath: '/storage'
+})
+```
+
+Set `route: { disabled: true }` to skip auto-registration entirely (e.g. when fronting R2 with your own controller).
 
 ## OpenAPI
 
@@ -256,4 +350,4 @@ Custom schemes can be passed via `securitySchemes` option.
 
 ## I18n
 
-See `references/errors-and-i18n.md` for I18nModule configuration, I18nService usage, and `withI18n()` for Zod validation messages.
+See `references/errors-and-i18n.md` for I18nModule configuration, I18nService usage, `withZodI18n()` for Zod validation messages, and `withI18n()` from `stratal/i18n` for general translations.

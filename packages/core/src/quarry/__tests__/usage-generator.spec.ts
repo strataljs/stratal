@@ -230,6 +230,27 @@ describe('generateListing', () => {
   it('should show Usage section with binary name', () => {
     const listing = generateListing([], new Map(), { binaryName: 'mycli' })
 
-    expect(listing).toContain('$ mycli <command> [options]')
+    expect(listing).toContain('$ mycli [--env <name>] <command> [options]')
+  })
+
+  it('should show Global Options section with --env flag', () => {
+    const listing = generateListing([], new Map())
+
+    expect(listing).toContain('Global Options')
+    expect(listing).toContain('-e, --env')
+    expect(listing).toContain('wrangler config')
+  })
+
+  it('should show Global Options before Commands', () => {
+    const sig = parseSignature('greet')
+    const signatures = new Map([['greet', sig]])
+    const commands = [{ name: 'greet', description: 'Say hello', aliases: [] }]
+
+    const listing = generateListing(commands, signatures)
+    const globalIdx = listing.indexOf('Global Options')
+    const commandsIdx = listing.indexOf('Commands')
+
+    expect(globalIdx).toBeGreaterThan(-1)
+    expect(commandsIdx).toBeGreaterThan(globalIdx)
   })
 })

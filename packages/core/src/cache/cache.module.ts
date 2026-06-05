@@ -12,12 +12,14 @@
 
 import { Module } from '../module'
 import { CACHE_TOKENS } from './cache.tokens'
-import { CacheService } from './services'
+import { CacheService, TieredCacheService } from './services'
 
 @Module({
   providers: [
     // Singleton - CacheService has no request dependencies
     { provide: CACHE_TOKENS.CacheService, useClass: CacheService },
+    // Opt-in isolate-local L1 over CacheService (for set-once/read-mostly keys)
+    { provide: CACHE_TOKENS.TieredCacheService, useClass: TieredCacheService },
   ],
 })
 export class CacheModule {}

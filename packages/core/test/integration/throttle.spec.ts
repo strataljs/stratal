@@ -1,0 +1,92 @@
+import { Test, type TestingModule } from '@stratal/testing'
+import { afterEach, describe, expect, it } from 'vitest'
+import { RateLimiterError } from '../../src/rate-limiter/errors'
+import { RATE_LIMITER_TOKENS } from '../../src/rate-limiter/rate-limiter.tokens'
+import { InMemoryRateLimiterStore } from '../../src/rate-limiter/stores/memory-store'
+import { _resetThrottleMiddlewareCache } from '../../src/rate-limiter/throttle.middleware'
+import {
+  ThrottleDecoratorAppModule,
+  ThrottleNoModuleAppModule,
+  ThrottleScopeAppModule,
+  ThrottleUnconfiguredAppModule,
+} from '../fixtures/throttle.controller'
+
+/**
+ * End-to-end tests for the rate limiter — exercises both attachment paths
+ * (`router.throttle()` and `@RateLimit`), the success-path header tagging,
+ * the 429 path, and the two configuration-error surfaces.
+ */
+describe('Rate limiter (integration)', () => {
+  let module: TestingModule | null = null
+
+  afterEach(async () => {
+    await module?.close()
+    module = null
+    // Throttle middleware classes cache by name across tests; reset so each
+    // test gets a fresh class (per-test Application means a fresh registry).
+    _resetThrottleMiddlewareCache()
+  })
+
+  it('router.throttle() emits X-RateLimit-* headers and 429s once exhausted', async () => {
+    // The testing builder disables rate limiting by default (NoopRateLimiterStore);
+    // override back to a real store since limiting IS the behavior under test.
+    module = await Test.createTestingModule({
+      imports: [ThrottleScopeAppModule],
+    })
+      .overrideProvider(RATE_LIMITER_TOKENS.Store)
+      .useClass(InMemoryRateLimiterStore)
+      .compile()
+
+    const r1 = await module.http.get('/throttled').send()
+    r1.assertOk()
+    expect(r1.headers.get('x-ratelimit-limit')).toBe('2')
+    expect(r1.headers.get('x-ratelimit-remaining')).toBe('1')
+
+    const r2 = await module.http.get('/throttled').send()
+    r2.assertOk()
+    expect(r2.headers.get('x-ratelimit-remaining')).toBe('0')
+
+    const r3 = await module.http.get('/throttled').send()
+    r3.assertStatus(429)
+    expect(r3.headers.get('retry-after')).toBeTruthy()
+    expect(r3.headers.get('x-ratelimit-limit')).toBe('2')
+    expect(r3.headers.get('x-ratelimit-remaining')).toBe('0')
+  })
+
+  it('@RateLimit decorator enforces the same limits via the middleware chain', async () => {
+    module = await Test.createTestingModule({
+      imports: [ThrottleDecoratorAppModule],
+    })
+      .overrideProvider(RATE_LIMITER_TOKENS.Store)
+      .useClass(InMemoryRateLimiterStore)
+      .compile()
+
+    const r1 = await module.http.get('/decorated').send()
+    r1.assertOk()
+    expect(r1.headers.get('x-ratelimit-limit')).toBe('2')
+
+    await module.http.get('/decorated').send()
+
+    const r3 = await module.http.get('/decorated').send()
+    r3.assertStatus(429)
+    expect(r3.headers.get('x-ratelimit-limit')).toBe('2')
+  })
+
+  it('importing RateLimiterModule without forRoot fails fast at boot', async () => {
+    await expect(
+      Test.createTestingModule({ imports: [ThrottleUnconfiguredAppModule] }).compile(),
+    ).rejects.toBeInstanceOf(RateLimiterError)
+  })
+
+  it('using router.throttle without importing RateLimiterModule surfaces a 500 at request time', async () => {
+    module = await Test.createTestingModule({
+      imports: [ThrottleNoModuleAppModule],
+    }).compile()
+
+    const response = await module.http.get('/throttled').send()
+    response.assertStatus(500)
+    // In non-development environments, 500 error messages are masked to
+    // "Internal Server Error" for security. The underlying RateLimiterError
+    // message is still logged server-side.
+  })
+})

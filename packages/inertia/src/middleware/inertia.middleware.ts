@@ -58,15 +58,20 @@ export class InertiaMiddleware implements Middleware {
       }
     }
 
+    // Skip response mutation for statuses Hono can't clone (e.g. 101 WebSocket
+    // upgrades, Response.error()'s status 0). `c.header()` would otherwise call
+    // `new Response(c.res.body, c.res)` and the Response constructor throws a
+    // RangeError for any status outside 200-599.
+    const status = ctx.c.res?.status
+    if (typeof status !== 'number' || status < 200 || status > 599) return
+
     // Add Vary header to all responses
     ctx.c.header('Vary', 'X-Inertia')
 
     // Convert 302 to 303 for non-GET/HEAD Inertia requests
-    if (isInertia) {
+    if (isInertia && status === 302) {
       const method = ctx.c.req.method
-      const status = ctx.c.res.status
-
-      if (status === 302 && method !== 'GET' && method !== 'HEAD') {
+      if (method !== 'GET' && method !== 'HEAD') {
         ctx.c.status(303)
       }
     }

@@ -1,5 +1,3 @@
-import 'reflect-metadata'
-
 import { bold, cyan, dim, green, red, yellow } from './colors'
 import { COMMAND_INTERNALS } from './constants'
 import { CommandError } from './errors/command.error'

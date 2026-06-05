@@ -1,4 +1,4 @@
-import type { ZodObject } from '../i18n/validation'
+import type { ZodObject } from '../i18n/validation/zod'
 import type { Constructor } from '../types'
 import type { Middleware } from './middleware.interface'
 import type { Router, RouterEntry } from './router'

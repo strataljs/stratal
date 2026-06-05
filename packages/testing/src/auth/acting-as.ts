@@ -1,3 +1,4 @@
+import { runWithEndpointContext, type AuthEndpointContext } from '@better-auth/core/context'
 import type { AuthService } from '@stratal/framework/auth'
 import { type GenericEndpointContext } from 'better-auth'
 import { setSessionCookie } from 'better-auth/cookies'
@@ -43,10 +44,20 @@ export class ActingAs {
 
     const secret = ctx.secret
 
-    const session = await ctx.internalAdapter.createSession(
-      user.id,
-      undefined,
-      { ipAddress: '127.0.0.1', userAgent: 'test-client' }
+    // Mirror production: session writes always happen inside a Better Auth
+    // endpoint, so database hooks receive the endpoint context (e.g. for
+    // internalAdapter lookups). The cast bridges better-auth's own generic
+    // variance — `$context` is typed with the instance's concrete plugin
+    // registry while AuthEndpointContext expects the default generics (same
+    // impedance as the GenericEndpointContext cast below).
+    const session = await runWithEndpointContext(
+      { context: ctx } as unknown as AuthEndpointContext,
+      () =>
+        ctx.internalAdapter.createSession(
+          user.id,
+          undefined,
+          { ipAddress: '127.0.0.1', userAgent: 'test-client' }
+        )
     )
 
     const dbUser = await ctx.internalAdapter.findUserById(user.id)

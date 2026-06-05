@@ -22,6 +22,7 @@ export const ROUTE_METADATA_KEYS = {
   WS_ON_MESSAGE: Symbol.for('stratal:ws:on-message'),
   WS_ON_CLOSE: Symbol.for('stratal:ws:on-close'),
   WS_ON_ERROR: Symbol.for('stratal:ws:on-error'),
+  RATE_LIMIT: Symbol.for('stratal:route:rate-limit'),
 } as const
 
 /**

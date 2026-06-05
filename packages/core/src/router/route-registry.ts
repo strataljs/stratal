@@ -1,13 +1,15 @@
-import { inject } from 'tsyringe'
-import { Transient } from '../di/decorators'
+import { inject } from '../di'
+import { Singleton } from '../di/decorators'
 import { type VERSION_NEUTRAL } from './constants'
-import { DuplicateRouteNameError } from './errors'
+import { RouterError } from './router.error'
 import { ROUTER_TOKENS } from './router.tokens'
 import type { LocalePathService } from './services/locale-path.service'
 import type { VersioningService } from './services/versioning.service'
 import type { HttpMethod } from './types'
 import { sortRoutesBySpecificity } from './utils/path'
 import { extractDomainParamNames, extractParamNames } from './utils/route-name'
+
+const CONCRETE_HTTP_METHODS = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options', 'trace'] as const
 
 /**
  * A single registered route in the application.
@@ -64,11 +66,12 @@ export type RouteRegistrationInput = Omit<RegisteredRoute, 'paramNames' | 'domai
  *
  * Registered as a singleton in the container.
  */
-@Transient()
+@Singleton()
 export class RouteRegistry {
   private readonly routes: RegisteredRoute[] = []
   private readonly namedRoutes = new Map<string, RegisteredRoute>()
   private _sortedCache: RegisteredRoute[] | null = null
+  private _routeToNameCache: Map<string, string> | null = null
 
   constructor(
     @inject(ROUTER_TOKENS.VersioningService) private readonly versioningService: VersioningService,
@@ -80,7 +83,7 @@ export class RouteRegistry {
    * Named routes must have unique names.
    *
    * @returns Array of expanded RegisteredRoute entries (primary + locale variants)
-   * @throws DuplicateRouteNameError if a named route with the same name already exists
+   * @throws RouterError if a named route with the same name already exists
    */
   register(input: RouteRegistrationInput): RegisteredRoute[] {
     const domainParamNames = input.domainParamNames ?? (input.domain ? extractDomainParamNames(input.domain) : [])
@@ -122,10 +125,8 @@ export class RouteRegistry {
         if (route.name) {
           if (this.namedRoutes.has(route.name)) {
             const existing = this.namedRoutes.get(route.name)!
-            throw new DuplicateRouteNameError(
-              route.name,
-              `${existing.controller}.${existing.action}`,
-              `${route.controller}.${route.action}`,
+            throw new RouterError(
+              `Duplicate route name "${route.name}": already registered by ${existing.controller}.${existing.action}, cannot register ${route.controller}.${route.action}`,
             )
           }
           this.namedRoutes.set(route.name, route)
@@ -136,8 +137,9 @@ export class RouteRegistry {
       }
     }
 
-    // Invalidate sort cache once per register() call, not per route
+    // Invalidate caches once per register() call, not per route
     this._sortedCache = null
+    this._routeToNameCache = null
 
     return expandedRoutes
   }
@@ -152,7 +154,32 @@ export class RouteRegistry {
     return this.namedRoutes.has(name)
   }
 
-  /** Get all routes sorted by specificity (static > param > wildcard, primary before locale) */
+  /**
+   * Resolve a Hono-style route path pattern (e.g. as exposed by `c.req.routePath`)
+   * back to its registered name, scoped to the request's HTTP method. Locale variant
+   * paths resolve to the canonical primary route name. Method matching is
+   * case-insensitive; routes registered with `'all'` resolve under any verb.
+   */
+  findNameByRoute(method: string, path: string): string | undefined {
+    this._routeToNameCache ??= this.buildRouteToNameCache()
+    return this._routeToNameCache.get(`${method.toLowerCase()}:${path}`)
+  }
+
+  private buildRouteToNameCache(): Map<string, string> {
+    const cache = new Map<string, string>()
+    for (const route of this.namedRoutes.values()) {
+      const methods = route.method === 'all' ? CONCRETE_HTTP_METHODS : [route.method]
+      const paths = route.localePaths ? [route.path, ...route.localePaths] : [route.path]
+      for (const m of methods) {
+        for (const p of paths) {
+          cache.set(`${m}:${p}`, route.name!)
+        }
+      }
+    }
+    return cache
+  }
+
+  /** Get all routes sorted by specificity (static > param > wildcard, locale variant before its primary) */
   all(): RegisteredRoute[] {
     this._sortedCache ??= sortRoutesBySpecificity(this.routes);
     return this._sortedCache

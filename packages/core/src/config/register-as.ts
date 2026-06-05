@@ -1,4 +1,4 @@
-import type { InjectionToken } from 'tsyringe'
+import type { InjectionToken } from '../di/types'
 import { DI_TOKENS } from '../di/tokens'
 import type { FactoryProvider } from '../module/types'
 

@@ -1,5 +1,10 @@
-import { fixPgCjs, stratalTest } from '@stratal/testing/vitest-plugin'
-import { defineConfig } from 'vitest/config'
+import { fixPgCjs, stratalTest } from '@stratal/testing/vitest-plugin';
+import { defineConfig } from 'vitest/config';
+
+const DATABASE_URL = process.env.DATABASE_URL
+if (!DATABASE_URL) {
+  throw new Error('DATABASE_URL is required to run framework e2e tests. Set it in packages/framework/.env (loaded via `npx dotenv`).')
+}
 
 export default defineConfig({
   plugins: [fixPgCjs()],
@@ -26,6 +31,7 @@ export default defineConfig({
           exclude: ['**/node_modules/**', '**/dist/**'],
           setupFiles: ['./vitest.setup.ts'],
           globals: true,
+          sequence: { groupOrder: 0 },
         },
       },
       {
@@ -34,9 +40,14 @@ export default defineConfig({
             wrangler: { configPath: './test/wrangler.jsonc' },
             miniflare: {
               hyperdrives: {
-                DB: 'postgres://stratal:stratal_test@localhost:5438/stratal_test',
+                // Single source of truth shared with global setup. The Hyperdrive
+                // env-var override is wrangler-dev-only and ignored in tests.
+                DB: DATABASE_URL,
               },
             },
+            // Each test file gets its own database cloned from the migrated
+            // template; enables file parallelism. Set to 'shared' to opt out.
+            database: { isolation: 'database' },
           }),
         ],
         test: {
@@ -44,8 +55,7 @@ export default defineConfig({
           include: ['test/e2e/**/*.spec.ts'],
           setupFiles: ['./test/setup.ts'],
           globalSetup: ['./test/global-setup.ts'],
-          fileParallelism: false,
-          isolate: false,
+          sequence: { groupOrder: 1 },
         },
       },
     ],

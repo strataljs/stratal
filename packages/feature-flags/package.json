@@ -1,0 +1,98 @@
+{
+  "name": "@stratal/feature-flags",
+  "version": "0.0.25",
+  "description": "Cloudflare Flagship feature flags for the Stratal framework — binding API wrapper with Inertia.js sharing",
+  "type": "module",
+  "license": "MIT",
+  "author": "Temitayo Fadojutimi",
+  "homepage": "https://github.com/strataljs/stratal#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/strataljs/stratal.git",
+    "directory": "packages/feature-flags"
+  },
+  "bugs": {
+    "url": "https://github.com/strataljs/stratal/issues"
+  },
+  "keywords": [
+    "stratal",
+    "feature-flags",
+    "flagship",
+    "cloudflare-workers",
+    "inertia",
+    "react"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./react": {
+      "types": "./dist/react.d.mts",
+      "import": "./dist/react.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "npx oxlint .",
+    "lint:fix": "npx oxlint --fix ."
+  },
+  "peerDependencies": {
+    "@inertiajs/core": ">=3",
+    "@inertiajs/react": ">=3",
+    "@stratal/inertia": ">=0.0.25",
+    "hono": ">=4",
+    "react": ">=19",
+    "react-dom": ">=19",
+    "stratal": ">=0.0.25"
+  },
+  "peerDependenciesMeta": {
+    "@inertiajs/core": {
+      "optional": true
+    },
+    "@inertiajs/react": {
+      "optional": true
+    },
+    "@stratal/inertia": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20260603.1",
+    "@inertiajs/core": "^3.3.0",
+    "@inertiajs/react": "^3.3.0",
+    "@stratal/inertia": "workspace:*",
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.2.16",
+    "@types/react-dom": "^19.2.3",
+    "hono": "^4.12.23",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "stratal": "workspace:*",
+    "tsdown": "^0.22.1",
+    "typescript": "^6.0.3",
+    "vitest": "~4.1.8"
+  }
+}

@@ -1,7 +1,8 @@
-import { router, usePage } from '@inertiajs/react'
-import { useCallback } from 'react'
-import { type ModalData } from '../services/modal.service'
+import { router, usePage } from '@inertiajs/react';
+import { useCallback } from 'react';
+import { type ModalData } from '../services/modal.service';
 
+declare const window: { history: { back(): void } }
 
 interface UseModalReturn {
   /** Whether a modal is currently active on this page. */
@@ -18,10 +19,14 @@ export function useModal(): UseModalReturn {
 
   const redirect = useCallback(() => {
     if (!modal) return
-    router.visit(modal.redirectURL ?? modal.baseURL, {
-      preserveScroll: true,
-      preserveState: true,
-    })
+    if (modal.nativeBack) {
+      window.history.back()
+    } else {
+      router.visit(modal.redirectURL ?? modal.baseURL, {
+        preserveScroll: true,
+        preserveState: true,
+      })
+    }
   }, [modal])
 
   return {
