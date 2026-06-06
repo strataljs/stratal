@@ -18,10 +18,20 @@ interface MiniflareWorkerResult {
   workerOptions: Record<string, unknown>
 }
 
+interface RemoteProxySessionData {
+  session: {
+    ready: Promise<unknown>
+    dispose: () => Promise<void>
+    remoteProxyConnectionString: unknown
+  }
+  remoteBindings: Record<string, unknown>
+}
+
 interface WranglerModule {
   unstable_readConfig: (args: { config?: string; env?: string }) => WranglerConfig
-  unstable_getMiniflareWorkerOptions: (config: WranglerConfig, env?: string) => MiniflareWorkerResult
+  unstable_getMiniflareWorkerOptions: (config: WranglerConfig, env?: string, options?: { remoteProxyConnectionString?: unknown }) => MiniflareWorkerResult
   unstable_getVarsForDev: (configPath: string | undefined, envFiles: undefined, vars: unknown, env: string | undefined) => Record<string, { value: string }>
+  maybeStartOrUpdateRemoteProxySession: (config: { path: string; environment?: string }) => Promise<RemoteProxySessionData | null>
 }
 
 interface MiniflareModule {
@@ -73,7 +83,7 @@ if (!existsSync(entryPath)) {
 async function main(): Promise<void> {
   const cwdRequire = createRequire(join(process.cwd(), 'package.json'))
 
-  const { unstable_readConfig: readConfig, unstable_getMiniflareWorkerOptions: getMiniflareWorkerOptions, unstable_getVarsForDev: getVarsForDev } = await import(cwdRequire.resolve('wrangler')) as WranglerModule
+  const { unstable_readConfig: readConfig, unstable_getMiniflareWorkerOptions: getMiniflareWorkerOptions, unstable_getVarsForDev: getVarsForDev, maybeStartOrUpdateRemoteProxySession } = await import(cwdRequire.resolve('wrangler')) as WranglerModule
   const { Miniflare } = await import(cwdRequire.resolve('miniflare')) as MiniflareModule
 
   const candidates = ['wrangler.jsonc', 'wrangler.json', 'wrangler.toml']
@@ -116,7 +126,26 @@ async function main(): Promise<void> {
   process.env.MINIFLARE_REGISTRY_PATH = registryPath
 
   const config = readConfig({ config: configPath, env: environment })
-  const { workerOptions } = getMiniflareWorkerOptions(config, environment)
+
+  // Honor `remote: true` bindings (wrangler remote bindings): start a proxy
+  // session against the deployed Cloudflare resources and thread its
+  // connection string into the Miniflare worker options, so e.g. a service
+  // binding marked remote calls the deployed worker instead of the local dev
+  // registry. Returns null when the resolved config declares no remote
+  // bindings — plain local runs are untouched. Requires wrangler credentials
+  // (`wrangler login` / CLOUDFLARE_API_TOKEN) when a session does start.
+  const remoteProxy = configPath
+    ? await maybeStartOrUpdateRemoteProxySession({ path: configPath, environment })
+    : null
+  if (remoteProxy) {
+    await remoteProxy.session.ready
+    const remoteNames = Object.keys(remoteProxy.remoteBindings)
+    console.log(`Remote bindings: proxying ${remoteNames.length} binding(s) to deployed resources (${remoteNames.join(', ')})`)
+  }
+
+  const { workerOptions } = getMiniflareWorkerOptions(config, environment, {
+    remoteProxyConnectionString: remoteProxy?.session.remoteProxyConnectionString,
+  })
 
   const vars = getVarsForDev(configPath, undefined, config.vars, environment)
   const varsRecord: Record<string, string> = {}
@@ -196,6 +225,7 @@ async function main(): Promise<void> {
     await Promise.allSettled(pendingPromises)
     await app?.shutdown()
     await mf.dispose()
+    await remoteProxy?.session.dispose()
   }
 }
 
