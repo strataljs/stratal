@@ -1,5 +1,28 @@
 # stratal
 
+## 0.0.26
+
+### Patch Changes
+
+- ab95f52: Fix memory leaks that crashed the dev server (OOM) after repeated hot reloads
+
+  ### Details
+
+  - Hot reloads now fully tear down the previous application before the new one boots — old and new dependency graphs no longer coexist, so memory stays flat across reloads
+  - Instances superseded mid-boot by a newer reload now reject with `StratalSupersededError` instead of hanging forever; in-flight requests during a reload are transparently served by the replacing instance
+  - `Container.dispose()` is now async and invokes `Symbol.asyncDispose`, `Symbol.dispose`, or `dispose()` on container-created instances, letting services release timers, sockets, and pools on shutdown — `await` it if you call it directly
+  - i18n message registrations are deduplicated by content, so module re-evaluation on hot reload no longer grows the message store unboundedly
+
+- bb6d3b9: Trailing-slash exclusions: `trailingSlash` accepts `{ mode, exclude }`
+
+  ### Details
+
+  - `trailingSlash` application config now accepts `{ mode, exclude }` alongside a bare mode. Excluded paths are never redirected (308) and never rewritten by URL generation — for routes whose canonical form is owned externally (e.g. OAuth redirect URIs matched byte-for-byte).
+  - String patterns are segment-aware prefixes; RegExp patterns match both slash forms of the pathname regardless of anchoring.
+  - Exclusions match in route space: with path-based locale detection, a leading locale segment is stripped before matching, so `'/callback'` also exempts `/fr/callback` — in the redirect middleware, `Uri` helpers, and hreflang link generation.
+  - `@stratal/inertia` threads the widened config through hreflang URL generation and shares only the resolved mode with the React client (exclusions are server-side; excluded paths are served in both slash forms, so client-built URLs never redirect).
+  - New exports from `stratal/router`: `resolveTrailingSlash`, `isTrailingSlashExcluded`, and the `TrailingSlashConfig` / `TrailingSlashOptions` / `TrailingSlashExclude` types.
+
 ## 0.0.25
 
 ### Patch Changes
