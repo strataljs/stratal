@@ -7,8 +7,11 @@ Maintainer rules for `@stratal/feature-flags`. Consumer API depth lives in
 
 - Wraps **only** the Cloudflare Flagship **binding API** (`env.FLAGS`). No
   OpenFeature SDK (`@cloudflare/flagship`), no HTTP/server-provider fallback.
-- The binding never throws — it returns the supplied `defaultValue` on error.
-  Don't add a second fallback layer.
+- Evaluation never throws. The binding returns the supplied `defaultValue` on
+  evaluation errors, and `FeatureFlagService` additionally catches transport-level
+  binding failures (e.g. a `remote: true` dev-proxy WebSocket tunnel dropping) and
+  returns the same fallback with a logged warning. Don't add a fallback layer in
+  consumers.
 
 ## Layout
 
