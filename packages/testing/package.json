@@ -1,6 +1,6 @@
 {
   "name": "@stratal/testing",
-  "version": "0.0.26",
+  "version": "0.0.27",
   "description": "Testing utilities and mocks for Stratal framework applications",
   "type": "module",
   "license": "MIT",
@@ -80,10 +80,10 @@
   },
   "peerDependencies": {
     "@better-auth/core": ">=1.6",
-    "@stratal/framework": ">=0.0.26",
+    "@stratal/framework": ">=0.0.27",
     "better-auth": ">=1.4",
     "pg": "^8.0.0",
-    "stratal": ">=0.0.26",
+    "stratal": ">=0.0.27",
     "vitest": "^4.1.0"
   },
   "peerDependenciesMeta": {
