@@ -83,64 +83,55 @@ export class FeatureFlagService {
   /** Returns the raw flag value without type checking. */
   async get(flagKey: string, defaultValue?: unknown, context?: FlagshipEvaluationContext): Promise<unknown> {
     const fallback = this.fallback(flagKey, defaultValue)
-    const merged = await this.context(context)
-    return this.safe(flagKey, () => this.binding.get(flagKey, fallback, merged), () => fallback)
+    return this.safe(flagKey, async () => this.binding.get(flagKey, fallback, await this.context(context)), () => fallback)
   }
 
   /** Returns the flag value as a `boolean`. */
   async getBooleanValue(flagKey: string, defaultValue?: boolean, context?: FlagshipEvaluationContext): Promise<boolean> {
     const fallback = this.fallback(flagKey, defaultValue, false)
-    const merged = await this.context(context)
-    return this.safe(flagKey, () => this.binding.getBooleanValue(flagKey, fallback, merged), () => fallback)
+    return this.safe(flagKey, async () => this.binding.getBooleanValue(flagKey, fallback, await this.context(context)), () => fallback)
   }
 
   /** Returns the flag value as a `string`. */
   async getStringValue(flagKey: string, defaultValue?: string, context?: FlagshipEvaluationContext): Promise<string> {
     const fallback = this.fallback(flagKey, defaultValue, '')
-    const merged = await this.context(context)
-    return this.safe(flagKey, () => this.binding.getStringValue(flagKey, fallback, merged), () => fallback)
+    return this.safe(flagKey, async () => this.binding.getStringValue(flagKey, fallback, await this.context(context)), () => fallback)
   }
 
   /** Returns the flag value as a `number`. */
   async getNumberValue(flagKey: string, defaultValue?: number, context?: FlagshipEvaluationContext): Promise<number> {
     const fallback = this.fallback(flagKey, defaultValue, 0)
-    const merged = await this.context(context)
-    return this.safe(flagKey, () => this.binding.getNumberValue(flagKey, fallback, merged), () => fallback)
+    return this.safe(flagKey, async () => this.binding.getNumberValue(flagKey, fallback, await this.context(context)), () => fallback)
   }
 
   /** Returns the flag value as a typed object. */
   async getObjectValue<T extends object>(flagKey: string, defaultValue?: T, context?: FlagshipEvaluationContext): Promise<T> {
     const fallback = this.fallback(flagKey, defaultValue, {} as T)
-    const merged = await this.context(context)
-    return this.safe(flagKey, () => this.binding.getObjectValue<T>(flagKey, fallback, merged), () => fallback)
+    return this.safe(flagKey, async () => this.binding.getObjectValue<T>(flagKey, fallback, await this.context(context)), () => fallback)
   }
 
   /** Returns the `boolean` flag value with evaluation metadata. */
   async getBooleanDetails(flagKey: string, defaultValue?: boolean, context?: FlagshipEvaluationContext): Promise<FlagshipEvaluationDetails<boolean>> {
     const fallback = this.fallback(flagKey, defaultValue, false)
-    const merged = await this.context(context)
-    return this.safe(flagKey, () => this.binding.getBooleanDetails(flagKey, fallback, merged), (error) => this.errorDetails(flagKey, fallback, error))
+    return this.safe(flagKey, async () => this.binding.getBooleanDetails(flagKey, fallback, await this.context(context)), (error) => this.errorDetails(flagKey, fallback, error))
   }
 
   /** Returns the `string` flag value with evaluation metadata. */
   async getStringDetails(flagKey: string, defaultValue?: string, context?: FlagshipEvaluationContext): Promise<FlagshipEvaluationDetails<string>> {
     const fallback = this.fallback(flagKey, defaultValue, '')
-    const merged = await this.context(context)
-    return this.safe(flagKey, () => this.binding.getStringDetails(flagKey, fallback, merged), (error) => this.errorDetails(flagKey, fallback, error))
+    return this.safe(flagKey, async () => this.binding.getStringDetails(flagKey, fallback, await this.context(context)), (error) => this.errorDetails(flagKey, fallback, error))
   }
 
   /** Returns the `number` flag value with evaluation metadata. */
   async getNumberDetails(flagKey: string, defaultValue?: number, context?: FlagshipEvaluationContext): Promise<FlagshipEvaluationDetails<number>> {
     const fallback = this.fallback(flagKey, defaultValue, 0)
-    const merged = await this.context(context)
-    return this.safe(flagKey, () => this.binding.getNumberDetails(flagKey, fallback, merged), (error) => this.errorDetails(flagKey, fallback, error))
+    return this.safe(flagKey, async () => this.binding.getNumberDetails(flagKey, fallback, await this.context(context)), (error) => this.errorDetails(flagKey, fallback, error))
   }
 
   /** Returns the typed object flag value with evaluation metadata. */
   async getObjectDetails<T extends object>(flagKey: string, defaultValue?: T, context?: FlagshipEvaluationContext): Promise<FlagshipEvaluationDetails<T>> {
     const fallback = this.fallback(flagKey, defaultValue, {} as T)
-    const merged = await this.context(context)
-    return this.safe(flagKey, () => this.binding.getObjectDetails<T>(flagKey, fallback, merged), (error) => this.errorDetails(flagKey, fallback, error))
+    return this.safe(flagKey, async () => this.binding.getObjectDetails<T>(flagKey, fallback, await this.context(context)), (error) => this.errorDetails(flagKey, fallback, error))
   }
 
   /**
@@ -149,8 +140,17 @@ export class FeatureFlagService {
    * default's type. Powers `FeatureFlagShareMiddleware`.
    */
   async all(context?: FlagshipEvaluationContext): Promise<Record<string, FlagValue>> {
-    const merged = await this.context(context)
     const keys = Object.keys(this.manifest)
+    // Resolve the shared context once. A throwing resolver must not take the
+    // batch down — fall back to the manifest defaults, the same values each
+    // per-flag method returns when evaluation can't proceed.
+    let merged: FlagshipEvaluationContext | undefined
+    try {
+      merged = await this.context(context)
+    } catch (error) {
+      this.logger?.warn(`Feature flag context resolution failed on app "${this.bindingName}"; returning manifest defaults.`, { error: this.message(error) })
+      return { ...this.manifest }
+    }
     const values = await Promise.all(keys.map((key) => this.evaluate(key, this.manifest[key], merged)))
     const result: Record<string, FlagValue> = {}
     keys.forEach((key, i) => {
@@ -217,7 +217,7 @@ export class FeatureFlagService {
       return await evaluate()
     } catch (error) {
       this.logger?.warn(`Feature flag evaluation failed for "${flagKey}" on app "${this.bindingName}"; returning the fallback value.`, {
-        error: error instanceof Error ? error.message : String(error),
+        error: this.message(error),
       })
       return onError(error)
     }
@@ -225,6 +225,11 @@ export class FeatureFlagService {
 
   /** Synthesizes the details shape the binding would return for a failed evaluation. */
   private errorDetails<T>(flagKey: string, value: T, error: unknown): FlagshipEvaluationDetails<T> {
-    return { flagKey, value, reason: 'ERROR', errorMessage: error instanceof Error ? error.message : String(error) }
+    return { flagKey, value, reason: 'ERROR', errorMessage: this.message(error) }
+  }
+
+  /** Extracts a human-readable message from an unknown thrown value. */
+  private message(error: unknown): string {
+    return error instanceof Error ? error.message : String(error)
   }
 }

@@ -196,6 +196,24 @@ describe('FeatureFlagService', () => {
       const service = new FeatureFlagService(makeOptions(), makeEnv(flags, makeBinding()), undefined, undefined)
       expect(await service.getBooleanValue('new-checkout')).toBe(false)
     })
+
+    it('returns the fallback when the context resolver throws', async () => {
+      const ctxBoom = () => {
+        throw new Error('context resolver failed')
+      }
+      const { service, flags } = setup({ context: ctxBoom }, {} as RouterContext)
+      expect(await service.getStringValue('checkout-flow')).toBe('v1')
+      expect(flags.getStringValue).not.toHaveBeenCalled()
+    })
+
+    it('returns the manifest defaults when the context resolver throws in all()', async () => {
+      const ctxBoom = () => {
+        throw new Error('context resolver failed')
+      }
+      const { service, flags } = setup({ context: ctxBoom }, {} as RouterContext)
+      expect(await service.all()).toEqual({ 'new-checkout': false, 'checkout-flow': 'v1', 'max-uploads': 5 })
+      expect(flags.getBooleanValue).not.toHaveBeenCalled()
+    })
   })
 
   describe('DI resolution', () => {
