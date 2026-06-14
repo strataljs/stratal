@@ -1,5 +1,13 @@
 # @stratal/inertia
 
+## 0.0.27
+
+### Patch Changes
+
+- Updated dependencies [41a9140]
+  - stratal@0.0.27
+  - @stratal/testing@0.0.27
+
 ## 0.0.26
 
 ### Patch Changes

@@ -1,5 +1,17 @@
 # @stratal/feature-flags
 
+## 0.0.27
+
+### Patch Changes
+
+- 41a9140: Make feature flag evaluation resilient to runtime failures
+
+  Flag evaluation now returns the fallback value and logs a warning if a lookup throws — for example when a remote-binding dev tunnel drops — rather than failing the request. Detail methods return an `ERROR` reason with the fallback in these cases.
+
+- Updated dependencies [41a9140]
+  - stratal@0.0.27
+  - @stratal/inertia@0.0.27
+
 ## 0.0.26
 
 ### Patch Changes

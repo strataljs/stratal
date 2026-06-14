@@ -2679,11 +2679,11 @@ __metadata:
   peerDependencies:
     "@inertiajs/core": ">=3"
     "@inertiajs/react": ">=3"
-    "@stratal/inertia": ">=0.0.26"
+    "@stratal/inertia": ">=0.0.27"
     hono: ">=4"
     react: ">=19"
     react-dom: ">=19"
-    stratal: ">=0.0.26"
+    stratal: ">=0.0.27"
   peerDependenciesMeta:
     "@inertiajs/core":
       optional: true
@@ -2732,7 +2732,7 @@ __metadata:
     "@zenstackhq/schema": ">=3.6"
     better-auth: ">=1.6"
     pg: ^8.0.0
-    stratal: ^0.0.26
+    stratal: ^0.0.27
   languageName: unknown
   linkType: soft
 
@@ -2754,10 +2754,10 @@ __metadata:
   peerDependencies:
     "@inertiajs/core": ">=3"
     "@inertiajs/react": ">=3"
-    "@stratal/inertia": ">=0.0.26"
+    "@stratal/inertia": ">=0.0.27"
     hono: ">=4"
     react: ">=19"
-    stratal: ">=0.0.26"
+    stratal: ">=0.0.27"
   peerDependenciesMeta:
     "@inertiajs/core":
       optional: true
@@ -2799,11 +2799,11 @@ __metadata:
     "@inertiajs/core": ">=3"
     "@inertiajs/react": ">=3"
     "@inertiajs/vite": ">=3"
-    "@stratal/testing": ">=0.0.26"
+    "@stratal/testing": ">=0.0.27"
     hono: ">=4"
     react: ">=19"
     react-dom: ">=19"
-    stratal: ">=0.0.26"
+    stratal: ">=0.0.27"
     vite: ">=8"
     vitest: ">=4"
   peerDependenciesMeta:
@@ -2848,10 +2848,10 @@ __metadata:
     vitest: "npm:~4.1.8"
   peerDependencies:
     "@better-auth/core": ">=1.6"
-    "@stratal/framework": ">=0.0.26"
+    "@stratal/framework": ">=0.0.27"
     better-auth: ">=1.4"
     pg: ^8.0.0
-    stratal: ">=0.0.26"
+    stratal: ">=0.0.27"
     vitest: ^4.1.0
   peerDependenciesMeta:
     "@better-auth/core":
