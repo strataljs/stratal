@@ -129,7 +129,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitest/runner": "~4.1.8",
     "@vitest/snapshot": "~4.1.8",
-    "hono": "^4.12.23",
+    "hono": "^4.12.25",
     "jsdom": "^29.1.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

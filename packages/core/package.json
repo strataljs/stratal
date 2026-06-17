@@ -174,7 +174,7 @@
     "@swc/core": "^1.15.40",
     "@swc/helpers": "^0.5.23",
     "clipanion": "^4.0.0-rc.4",
-    "hono": "^4.12.23",
+    "hono": "^4.12.25",
     "intl-messageformat": "^11.2.7",
     "zod": "^4.4.3"
   },
