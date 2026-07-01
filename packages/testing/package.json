@@ -104,7 +104,7 @@
     "@better-auth/core": "^1.6.11",
     "@cloudflare/workers-types": "4.20260603.1",
     "@stratal/framework": "workspace:*",
-    "@types/node": "^25.9.1",
+    "@types/node": "^26.1.0",
     "@types/pg": "^8.20.0",
     "@vitest/runner": "~4.1.8",
     "@vitest/snapshot": "~4.1.8",

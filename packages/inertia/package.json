@@ -124,7 +124,7 @@
     "@inertiajs/react": "^3.3.0",
     "@inertiajs/vite": "^3.3.0",
     "@stratal/testing": "workspace:*",
-    "@types/node": "^25.9.1",
+    "@types/node": "^26.1.0",
     "@types/react": "^19.2.16",
     "@types/react-dom": "^19.2.3",
     "@vitest/runner": "~4.1.8",
