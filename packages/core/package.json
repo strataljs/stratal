@@ -195,8 +195,8 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.16.12",
-    "@cloudflare/workers-types": "4.20260603.1",
+    "@cloudflare/vitest-pool-workers": "^0.17.0",
+    "@cloudflare/workers-types": "4.20260701.1",
     "@react-email/render": "^2.0.8",
     "@stratal/testing": "workspace:*",
     "@types/node": "^25.9.1",

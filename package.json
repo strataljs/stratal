@@ -57,13 +57,13 @@
     "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.31.0",
     "@opentelemetry/api": "^1.9.1",
-    "globals": "^17.6.0",
+    "globals": "^17.7.0",
     "husky": "^9.1.7",
     "jiti": "^2.7.0",
-    "lint-staged": "^17.0.7",
-    "oxlint": "^1.68.0",
-    "oxlint-tsgolint": "^0.23.0",
-    "tsdown": "^0.22.1",
+    "lint-staged": "^17.0.8",
+    "oxlint": "^1.72.0",
+    "oxlint-tsgolint": "^0.24.0",
+    "tsdown": "^0.22.3",
     "typedoc": "^0.28.19",
     "typescript": "^6.0.3"
   }

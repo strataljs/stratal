@@ -74,7 +74,7 @@
     "lint:fix": "npx oxlint --fix ."
   },
   "dependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.16.12",
+    "@cloudflare/vitest-pool-workers": "^0.17.0",
     "@golevelup/ts-vitest": "^4.0.0",
     "msw": "^2.14.6"
   },
@@ -102,7 +102,7 @@
   },
   "devDependencies": {
     "@better-auth/core": "^1.6.11",
-    "@cloudflare/workers-types": "4.20260603.1",
+    "@cloudflare/workers-types": "4.20260701.1",
     "@stratal/framework": "workspace:*",
     "@types/node": "^25.9.1",
     "@types/pg": "^8.20.0",
