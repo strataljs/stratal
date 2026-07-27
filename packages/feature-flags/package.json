@@ -1,6 +1,6 @@
 {
   "name": "@stratal/feature-flags",
-  "version": "0.0.27",
+  "version": "0.1.0",
   "description": "Cloudflare Flagship feature flags for the Stratal framework — binding API wrapper with Inertia.js sharing",
   "type": "module",
   "license": "MIT",

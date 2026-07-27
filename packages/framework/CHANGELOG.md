@@ -1,5 +1,25 @@
 # @stratal/framework
 
+## 0.1.0
+
+### Minor Changes
+
+- ccb3f17: Share permissions with the client for Inertia access control, add a Workers-safe database pool factory, and fix role lookups against a renamed user model.
+
+  - Share the current user's permissions and roles automatically once `accessControl` is configured, so the client can gate on them. This backs the `<Can>`, `<Cannot>`, `<HasRole>` and `<HasNoRole>` components and the `useCan`, `useRole` and `useAccess` hooks in `@stratal/inertia`, with permission strings and role names type-checked against a generated registry.
+  - Add `createPoolFactory(env, makePool)` to `@stratal/framework/database`, which builds the lazy pool factory a connection's `dialect` hands to its dialect instance, choosing connection topology from the environment instead of hard-coding it. Write `const pool = createPoolFactory(env, () => new Pool(config))`, then `dialect: () => new PostgresDialect({ pool })`.
+    - By default it returns a fresh pool per resolution, so each request owns its own pool and socket. That is mandatory on the Workers runtime, where a pool opened in one request's I/O context cannot be reused by a later request without the runtime cancelling the cross-request I/O and hanging the request. The pool is created lazily on first query, so nothing opens a socket at module scope, which the runtime forbids. In production Hyperdrive fronts these pools and multiplexes the real server connections, so they never accumulate.
+    - When `STRATAL_DB_SHARED_POOL` is set, it instead memoizes one pool per connection, and tears that pool down exactly once no matter how many clients disconnect. `@stratal/testing` sets the flag automatically, because the harness runs against a direct Postgres with no Hyperdrive to multiplex — a fresh pool per resolution would accumulate until parallel test files exhausted the server's connection limit. One shared pool per connection mirrors what Hyperdrive does in production and is safe because the pool holds no per-instance state. Dev and production are unaffected.
+  - Add `AUTH_GATEWAY_PRIMERS`, exported from `@stratal/framework/auth`, so guarded and per-tenant routes can use `@Cacheable({ partitionBy: [...] })`. The response-cache gateway resolves partitions outside the app's middleware chain, so a resolver calling `ctx.user()` would otherwise throw `UserNotAuthenticatedError` on every request; pass the constant as `primers` alongside `gateway: { entrypoint }` to run `SessionVerificationMiddleware` first: `ResponseCacheModule.forRoot({ gateway: { entrypoint: 'Cached' }, primers: AUTH_GATEWAY_PRIMERS, partitions: { user: (ctx) => ctx.user().id } })`. `AUTH_GATEWAY_PRIMERS` is a `readonly` tuple, and `primers` accepts it directly — no need to spread it into a new array. Partitioned reads are then forwarded to the cached entrypoint, and a partition that fails to resolve runs inline and is stamped `private, no-store` rather than being cached publicly. On a cache miss the session lookup is paid twice, once in the gateway and once in the app's own chain; on a hit the app never runs, so only the gateway's lookup is paid.
+  - Adopt the plain-Hono router and `zod/mini` validation surface. Because this package re-exports the core routing and validation surface, the same migration applies — see Breaking Changes below.
+  - Fix role reads and writes failing for any app whose ZenStack user model is not named exactly `User`. Setting a user's role, reading another user's roles, checking a permission and listing a user's permissions all threw when the model resolved to a different accessor, such as a pluralized `Users` model. Role lookups now resolve the user model through Better Auth regardless of ORM naming, and changing a role refreshes that user's sessions so it takes effect immediately.
+  - Make disposing a shared test-harness database connection idempotent, so shutdown no longer logs "Called end on pool more than once" when multiple clients share one pool. Fresh-per-resolution pools used in dev, staging and production are unchanged.
+
+  ### Breaking Changes
+
+  - **The validation API is `zod/mini`.** The `z` re-export is gone from the validation surface this package re-exports. Import schema builders directly from `zod/mini` using named imports, and replace classic chaining with the functional API: `z.string().min(1).optional()` becomes `optional(string().check(minLength(1)))`. Use `describe()` and `named()` from `stratal/validation` for descriptions and OpenAPI component ids, since `zod/mini` has no `.describe()` or `.meta()`.
+  - **OpenAPI documents are generated lazily**, on the first request to the docs endpoint. `OpenAPIService.getSpec()` becomes `getSpec(container)` and is async, and `routeFilter` is now a metadata predicate `(route: RouteSchemaMeta) => boolean` instead of `(path, pathItem)`.
+
 ## 0.0.27
 
 ### Patch Changes

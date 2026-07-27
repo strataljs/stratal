@@ -1,6 +1,6 @@
 {
   "name": "@stratal/inertia-modal",
-  "version": "0.0.27",
+  "version": "0.1.0",
   "description": "Modal page primitive for Stratal Inertia — backend-driven modal dialogs",
   "type": "module",
   "license": "MIT",
