@@ -1,6 +1,6 @@
 {
   "name": "@stratal/testing",
-  "version": "0.0.27",
+  "version": "0.1.0",
   "description": "Testing utilities and mocks for Stratal framework applications",
   "type": "module",
   "sideEffects": false,
