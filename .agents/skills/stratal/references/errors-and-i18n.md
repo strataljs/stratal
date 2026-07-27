@@ -297,14 +297,16 @@ Default locale messages are at `stratal/i18n/messages/en`.
 Use `withZodI18n()` to attach i18n message keys to Zod validators:
 
 ```typescript
-import { z, withZodI18n } from 'stratal/validation'
+import { object, string, optional, minLength, maxLength } from 'zod/mini'
+import { withZodI18n, named } from 'stratal/validation'
 
-export const createNoteSchema = z.object({
-  title: z.string()
-    .min(1, withZodI18n('notes.validation.title.required'))
-    .max(255, withZodI18n('notes.validation.title.max', { max: 255 })),
-  content: z.string().optional(),
-}).openapi('CreateNote')
+export const createNoteSchema = named(object({
+  title: string().check(
+    minLength(1, withZodI18n('notes.validation.title.required')),
+    maxLength(255, withZodI18n('notes.validation.title.max', { max: 255 })),
+  ),
+  content: optional(string()),
+}), 'CreateNote')
 ```
 
 `withZodI18n(key, params?)` returns `{ error: () => string }` — a Zod error config that resolves the i18n message at validation time using the current request's locale context.
@@ -322,15 +324,16 @@ const greeting = withI18n('common.welcome', { name: 'Alice' })
 
 Returns the translated string directly. Uses the current request's locale. Returns the key itself when called outside a request context (e.g., during startup).
 
-## cuid2() — Use Instead of z.cuid2()
+## cuid2() — Strict cuid2 Validation
 
-Zod 4.3.6's `z.cuid2()` regex is `/^[0-9a-z]+$/`, which accepts any non-empty lowercase-alphanumeric string (including 2-letter locale codes like `'sw'`). Always use Stratal's `cuid2()` for real cuid2 validation:
+Use Stratal's `cuid2()` for real cuid2 validation. It rejects strings that are merely lowercase-alphanumeric (such as 2-letter locale codes like `'sw'`) and enforces the genuine cuid2 shape:
 
 ```ts
-import { z, cuid2, withZodI18n } from 'stratal/validation'
+import { object } from 'zod/mini'
+import { cuid2, withZodI18n, describe } from 'stratal/validation'
 
 // Default — 24-32 lowercase alphanumeric chars, must start with a letter
-const tenantSchema = z.object({ tenantId: cuid2() })
+const tenantSchema = object({ tenantId: cuid2() })
 
 // Custom pattern (e.g. fixed-length 24)
 cuid2({ pattern: /^[a-z][0-9a-z]{23}$/ })
@@ -342,8 +345,8 @@ cuid2({ error: 'Invalid tenant ID' })
 // NEVER pass an i18n key string directly to `error`.
 cuid2(withZodI18n('tenants.errors.invalidId'))
 
-// Compose with anything Zod string accepts
-cuid2().describe('Tenant ID')
+// Compose with field-level OpenAPI metadata
+describe(cuid2(), 'Tenant ID')
 ```
 
 `CUID2_REGEX` is also exported for callers who want to reuse the pattern in other shapes.

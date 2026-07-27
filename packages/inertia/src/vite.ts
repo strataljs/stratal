@@ -1,8 +1,47 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { isAbsolute, join } from 'node:path';
-import type { EnvironmentOptions, Plugin } from 'vite';
+import { fileURLToPath } from 'node:url';
+import type { Alias, EnvironmentOptions, Plugin } from 'vite';
 import { stratalInertiaDevCss } from './vite/inertia-dev-css-plugin';
 import { stratalInertiaTypes } from './vite/inertia-types-plugin';
+
+// Absolute path to the build-time stub that replaces react-dom's legacy
+// synchronous server renderer in the worker SSR bundle (see the stub module
+// and `reactDomServerLegacyAlias` for why). Resolves to the sibling
+// `dist/react-dom-server-legacy-stub.mjs` of the built `dist/vite.mjs`.
+const reactDomServerLegacyStub = fileURLToPath(
+  new URL('./react-dom-server-legacy-stub.mjs', import.meta.url),
+)
+
+// react-dom/server (workerd → server.edge.js) CJS-`require()`s the synchronous
+// legacy renderer alongside the streaming one; the require defeats tree-shaking,
+// so the unused ~200 KB legacy build ships in every worker. Redirect it to the
+// stub. The find matches the whole specifier (relative require or absolute id)
+// so the replacement fully replaces it.
+const reactDomServerLegacyAlias: Alias = {
+  find: /^.*react-dom-server-legacy\.browser\.(?:production|development)\.js$/,
+  replacement: reactDomServerLegacyStub,
+}
+
+// Packages reachable only through the optimize-excluded packages below — the
+// data-layer ORM and the email renderer — ship CJS that the dep scanner never
+// auto-discovers and that the workerd runner cannot evaluate. Force-optimize
+// each, but only when it resolves from the project (both are optional).
+const optionalCjsOptimizeTargets = ['@zenstackhq/orm', '@react-email/render']
+
+// Subset of `specifiers` that resolves from `root`'s module graph.
+function resolvableFrom(root: string, specifiers: string[]): string[] {
+  const requireFrom = createRequire(join(root, 'package.json'))
+  return specifiers.filter((specifier) => {
+    try {
+      requireFrom.resolve(specifier)
+      return true
+    } catch {
+      return false
+    }
+  })
+}
 
 export { stratalInertiaDevCss, stratalInertiaTypes };
 
@@ -28,6 +67,21 @@ export interface StratalInertiaPluginOptions {
    * `quarry inertia:build` produces.
    */
   clientManifestPath?: string
+  /**
+   * Page-component globs to exclude from server-side rendering, e.g.
+   * `['Admin/**', 'Reports/Heavy']`. Patterns match Inertia component names —
+   * the `./pages/<name>.tsx` glob key with the `./pages/` prefix and `.tsx`
+   * suffix stripped:
+   *
+   * - `*`  matches a single path segment (no `/`)
+   * - `**` matches any number of segments (including `/`)
+   *
+   * Excluded pages are dropped from the worker/SSR bundle entirely (smaller cold
+   * start) and rendered client-only at runtime; the browser bundle still includes
+   * them so they hydrate normally. Requires the conventional
+   * `import.meta.glob('./pages/**\/*.tsx')` page resolver in the SSR entry.
+   */
+  ssrExclude?: string[]
 }
 
 export function stratalInertia(options?: StratalInertiaPluginOptions): Plugin[] {
@@ -55,8 +109,13 @@ export function stratalInertia(options?: StratalInertiaPluginOptions): Plugin[] 
     'blake3-wasm',
     '@stratal/inertia',
     'stratal',
+    // `@stratal/framework` re-exports `stratal`'s DI tokens and Hono surface, so it must share their
+    // module space. If the optimizer pre-bundles it while `stratal` is excluded, the bundled copy's
+    // token identities diverge from the excluded `stratal`'s — and under a portal/symlinked checkout the
+    // optimized `@stratal/framework/database` subpath even drops named exports (a guest SSR render then
+    // throws "createPoolFactory is not a function"). Excluding it keeps it in one copy with `stratal`.
+    '@stratal/framework',
     'hono',
-    '@hono/zod-openapi',
     '@hono/swagger-ui',
   ]
   const dedupe = [
@@ -76,7 +135,25 @@ export function stratalInertia(options?: StratalInertiaPluginOptions): Plugin[] 
     '@inertiajs/core',
     '@inertiajs/react',
   ]
-  const optimizeDepsInclude = ['buffer', 'buffer/', 'base64-js', 'ieee754']
+  const optimizeDepsInclude = [
+    'buffer',
+    'buffer/',
+    'base64-js',
+    'ieee754',
+    // `@stratal/inertia`'s SSR renderer imports the `react-dom/server` subpath. Because
+    // `@stratal/inertia` is optimize-EXCLUDED above, the optimizer never crawls into it and so
+    // never auto-discovers `react-dom/server`. React 19's `react-dom/server` is a CJS shim whose
+    // conditional `require('./cjs/react-dom-server.<env>.<mode>.js')` only gets resolved by the
+    // optimizer's CJS→ESM conversion — left undiscovered, that `require` reaches the workerd SSR
+    // runner (which has no `require`) and every SSR page 500s with "require is not defined".
+    // Force-optimizing the exact subpath makes esbuild convert it; the framework's import then
+    // redirects to the converted copy. (Optimizing `react-dom` alone is not enough — the optimizer
+    // keys on the specifier, and the import is `react-dom/server`, condition-resolved per env.)
+    'react-dom/server',
+    // Same mechanism as `react-dom/server`: CJS packages reachable only through the optimize-excluded
+    // packages above, force-optimized when installed (see `optionalCjsOptimizeTargets`).
+    ...resolvableFrom(process.cwd(), optionalCjsOptimizeTargets),
+  ]
   // Dev/build-time-only packages that must never reach the worker or browser
   // bundle. `ts-morph` is used by the type generator. The langium / zenstack
   // CLI/SDK group is dragged in transitively by ZenStack's runtime barrel
@@ -93,14 +170,28 @@ export function stratalInertia(options?: StratalInertiaPluginOptions): Plugin[] 
   ]
 
   const clientManifestPath = options?.clientManifestPath ?? 'dist/client/.vite/manifest.json'
+  const ssrExclude = options?.ssrExclude ?? []
 
   return [
     stratalInertiaDevCss({ entries }),
     stratalInertiaTypes(),
+    ...(ssrExclude.length ? [excludeSsrPages({ patterns: ssrExclude })] : []),
     {
       name: 'stratal:optimize-deps-fix',
       config(config) {
         config.publicDir ??= 'src/inertia/public';
+
+        // Strip react-dom's unused legacy synchronous renderer from every
+        // build. `alias` must carry RegExp entries in array form; normalize an
+        // existing object/array form before prepending ours.
+        config.resolve ??= {}
+        const existingAlias = config.resolve.alias
+        const existingAliasArray: Alias[] = Array.isArray(existingAlias)
+          ? (existingAlias as Alias[])
+          : existingAlias != null
+            ? Object.entries(existingAlias).map(([find, replacement]) => ({ find, replacement: replacement as string }))
+            : []
+        config.resolve.alias = [reactDomServerLegacyAlias, ...existingAliasArray]
       },
       configEnvironment(name: string, env: EnvironmentOptions) {
         const existing = env.optimizeDeps?.exclude ?? []
@@ -129,7 +220,7 @@ export function stratalInertia(options?: StratalInertiaPluginOptions): Plugin[] 
 
         const existingExternal = env.build?.rolldownOptions?.external
         const existingExternalArray: (string | RegExp)[] = Array.isArray(existingExternal)
-          ? (existingExternal as (string | RegExp)[])
+          ? (existingExternal)
           : existingExternal != null
             ? [existingExternal as string | RegExp]
             : []
@@ -229,5 +320,60 @@ function injectClientManifestIntoWorker(args: { clientManifestPath: string }): P
       }
     },
   }
+}
+
+// Build-time half of the SSR page-exclusion feature (runtime half lives in
+// `services/ssr-exclusion.ts`). Two coordinated effects, both keyed off the same
+// `ssrExclude` glob list so there is a single source of truth:
+//
+//  1. `transform` rewrites the worker/SSR `import.meta.glob('./pages/**\/*.tsx')`
+//     to add an `ignore`, so excluded page modules (and their heavy deps) never
+//     enter the worker bundle — the cold-start win. The browser environment is
+//     left untouched so excluded pages still hydrate client-side.
+//  2. `config` defines the runtime global with the same glob list, so
+//     `InertiaService` renders matching components client-only. `define` (rather
+//     than a `generateBundle` injection) makes it present in dev as well as build.
+function excludeSsrPages(args: { patterns: string[] }): Plugin {
+  // Vite excludes glob matches via negative patterns in the array-form first
+  // argument (there is no `ignore` option), so each exclusion becomes a `!`
+  // entry appended to the page glob.
+  const negativeGlobs = args.patterns.map(toSsrNegativeGlob).map((g) => JSON.stringify(g)).join(', ')
+  // Mirrors `SSR_EXCLUDE_GLOBAL` in `services/ssr-exclusion.ts`. Kept as a literal
+  // here to honour the Vite-entry boundary (no imports from worker-runtime code).
+  const runtimeGlobal = 'globalThis.__STRATAL_INERTIA_SSR_EXCLUDE__'
+
+  return {
+    name: 'stratal:inertia-ssr-exclude',
+    enforce: 'pre',
+    config(config) {
+      config.define = {
+        ...config.define,
+        [runtimeGlobal]: JSON.stringify(args.patterns),
+      }
+    },
+    transform(code, _id) {
+      if (this.environment.name === 'client') return null
+      if (!code.includes('import.meta.glob')) return null
+
+      const next = code.replace(
+        // The optional trailing group preserves a second `import.meta.glob`
+        // argument (e.g. `{ eager: true }`) so option-bearing resolvers are
+        // rewritten rather than silently skipped.
+        /import\.meta\.glob\(\s*(['"])([^'"]*pages[^'"]*)\1\s*(,[^)]*)?\)/g,
+        (_match, quote: string, arg: string, rest = '') =>
+          `import.meta.glob([${quote}${arg}${quote}, ${negativeGlobs}]${rest})`,
+      )
+
+      return next === code ? null : { code: next, map: null }
+    },
+  }
+}
+
+// Convert a component-name glob (`Admin/**`, `Reports/Heavy`) into a negative
+// `import.meta.glob` pattern relative to the `./pages` resolver root. A trailing
+// `**` already spans the file segment; everything else targets a single `.tsx`
+// file (or a single-segment `*` wildcard over `.tsx` files).
+function toSsrNegativeGlob(pattern: string): string {
+  return pattern.endsWith('**') ? `!./pages/${pattern}` : `!./pages/${pattern}.tsx`
 }
 

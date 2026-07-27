@@ -1,9 +1,9 @@
-import type { z } from '../i18n/validation/zod'
+import type { $ZodError } from 'zod/v4/core'
 
 export class ConfigValidationError extends Error {
   constructor(
     message: string,
-    public readonly errors: z.ZodError
+    public readonly errors: $ZodError
   ) {
     super(message)
     this.name = 'ConfigValidationError'

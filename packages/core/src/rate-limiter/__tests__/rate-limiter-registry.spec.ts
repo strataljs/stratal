@@ -29,7 +29,7 @@ describe('RateLimiterRegistry', () => {
     store = new InMemoryRateLimiterStore()
     const container = createMock<Container>()
     container.resolve.mockReturnValue(store)
-    registry = new RateLimiterRegistry(container as unknown as Container)
+    registry = new RateLimiterRegistry(container)
   })
 
   afterEach(() => {

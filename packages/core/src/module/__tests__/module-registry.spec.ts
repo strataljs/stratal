@@ -1,11 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createMock, type DeepMocked } from '@stratal/testing/mocks'
-import type { Constructor } from '../../types'
-import { Container } from '../../di/container'
-import { Transient } from '../../di/decorators'
-import type { LoggerService } from '../../logger/services/logger.service'
-import { Module } from '../module.decorator'
-import { ModuleRegistry } from '../module-registry'
+import { createMock, type DeepMocked } from '@stratal/testing/mocks';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Container } from '../../di/container';
+import { Transient } from '../../di/decorators';
+import type { LoggerService } from '../../logger/services/logger.service';
+import { ModuleRegistry } from '../module-registry';
+import { Module } from '../module.decorator';
 
 // Test tokens
 const SERVICE_TOKEN = Symbol('TestService')
@@ -40,7 +39,7 @@ describe('ModuleRegistry', () => {
     vi.clearAllMocks()
     container = new Container()
     mockLogger = createMock<LoggerService>()
-    registry = new ModuleRegistry(container, mockLogger as unknown as LoggerService)
+    registry = new ModuleRegistry(container, mockLogger)
   })
 
   describe('register()', () => {
@@ -86,7 +85,7 @@ describe('ModuleRegistry', () => {
 
     it('should collect controllers', () => {
       @Module({
-        controllers: [TestController as Constructor],
+        controllers: [TestController],
       })
       class TestModule {}
 
@@ -97,7 +96,7 @@ describe('ModuleRegistry', () => {
 
     it('should collect consumers', () => {
       @Module({
-        consumers: [TestConsumer as Constructor],
+        consumers: [TestConsumer],
       })
       class TestModule {}
 
@@ -108,7 +107,7 @@ describe('ModuleRegistry', () => {
 
     it('should collect jobs', () => {
       @Module({
-        jobs: [TestJob as Constructor],
+        jobs: [TestJob],
       })
       class TestModule {}
 

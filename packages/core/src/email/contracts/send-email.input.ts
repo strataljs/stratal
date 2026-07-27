@@ -1,39 +1,41 @@
-import { z } from '../../i18n/validation'
-import { emailMessageSchema } from './email-message.contract'
+import { array, maxLength, minLength, object, optional, record, string, unknown } from 'zod/mini'
+import type { infer as Infer } from 'zod/mini'
+import { emailContentRule, emailMessageObject } from './email-message.contract'
 
 /**
  * Send Email Input Schema
  *
- * Input schema for sending emails through the EmailService.
- * Extends the base email message with optional metadata.
- * Uses safeExtend() because emailMessageSchema contains refinements.
+ * Input schema for sending emails through the EmailService. Extends the base
+ * email message object with optional metadata, re-applying the html-or-text
+ * rule (a refined schema can't be extended directly).
  */
-export const sendEmailInputSchema = emailMessageSchema.safeExtend({
+export const sendEmailInputSchema = object({
+  ...emailMessageObject.shape,
   /**
    * Optional metadata to include with the email
    * Can be used for tracking, categorization, etc.
    */
-  metadata: z.record(z.string(), z.unknown()).optional(),
-})
+  metadata: optional(record(string(), unknown())),
+}).check(emailContentRule)
 
 /**
  * Type definition for send email input
  */
-export type SendEmailInput = z.infer<typeof sendEmailInputSchema>
+export type SendEmailInput = Infer<typeof sendEmailInputSchema>
 
 /**
  * Send Batch Email Input Schema
  *
  * Schema for sending multiple emails in a batch
  */
-export const sendBatchEmailInputSchema = z.object({
+export const sendBatchEmailInputSchema = object({
   /**
    * Array of email messages to send
    */
-  messages: z.array(sendEmailInputSchema).min(1).max(100),
+  messages: array(sendEmailInputSchema).check(minLength(1), maxLength(100)),
 })
 
 /**
  * Type definition for send batch email input
  */
-export type SendBatchEmailInput = z.infer<typeof sendBatchEmailInputSchema>
+export type SendBatchEmailInput = Infer<typeof sendBatchEmailInputSchema>

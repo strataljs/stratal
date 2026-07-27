@@ -1,12 +1,13 @@
-import { OpenAPIHono } from '@hono/zod-openapi'
+import { Hono } from 'hono'
 import { createMock } from '@stratal/testing/mocks'
 import { describe, expect, it } from 'vitest'
 import type { ZodType } from '../../i18n/validation/zod'
-import { z } from '../../i18n/validation/zod'
+import { number, object, string } from 'zod/mini'
 import type { LoggerService } from '../../logger/services/logger.service'
 import type { ModuleRegistry } from '../../module/module-registry'
 import { ResponseValidationError } from '../errors'
 import type { HonoApp } from '../hono-app'
+import { RouteMetadataRegistry } from '../route-metadata'
 import { RouteRegistry } from '../route-registry'
 import type { LocalePathService } from '../services/locale-path.service'
 import { RouteRegistrationService } from '../services/route-registration.service'
@@ -26,7 +27,7 @@ const mockLocalePathService = {
   resolve: (path: string) => [{ path, isLocaleVariant: false }],
 } as unknown as LocalePathService
 
-const mockApp = new OpenAPIHono<RouterEnv>() as unknown as HonoApp
+const mockApp = new Hono<RouterEnv>() as unknown as HonoApp
 const mockModuleRegistry = { getAllControllers: () => [] } as unknown as ModuleRegistry
 
 interface RouteRegistrationServicePrivate {
@@ -36,17 +37,18 @@ interface RouteRegistrationServicePrivate {
 
 const createService = () => {
   const service = new RouteRegistrationService(
-    mockLogger as unknown as LoggerService,
+    mockLogger,
     new RouteRegistry(mockVersioningService, mockLocalePathService),
     null,
     mockLocalePathService,
     mockApp,
     mockModuleRegistry,
+    new RouteMetadataRegistry(),
   )
   return service as unknown as RouteRegistrationServicePrivate
 }
 
-const testSchema = z.object({ name: z.string() })
+const testSchema = object({ name: string() })
 
 describe('Response Validation', () => {
   describe('extractResponseSchema', () => {
@@ -235,9 +237,9 @@ describe('Response Validation', () => {
     })
 
     it('should map ZodError issues to the issues property', () => {
-      const schema = z.object({
-        name: z.string(),
-        age: z.number(),
+      const schema = object({
+        name: string(),
+        age: number(),
       })
       const zodResult = schema.safeParse({ name: 123, age: 'not a number' })
       if (zodResult.success) return

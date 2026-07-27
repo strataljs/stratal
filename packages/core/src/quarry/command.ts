@@ -1,6 +1,7 @@
 import { bold, cyan, dim, green, red, yellow } from './colors'
 import { COMMAND_INTERNALS } from './constants'
 import { CommandError } from './errors/command.error'
+import { writeStderr, writeStdout } from './output-stream'
 import type { CommandInput, CommandInternals, CommandResult } from './types'
 
 /**
@@ -147,40 +148,60 @@ export abstract class Command {
   }
 
   // ── Output Helpers ───────────────────────────────────────────────
+  //
+  // Output is written to the terminal immediately (streamed), not buffered and
+  // flushed after handle() returns — long-running commands (e.g. inertia:dev,
+  // which resolves only when the dev server stops) must show progress live. The
+  // buffer is still recorded so getCommandResult()/tests and this.call() can
+  // capture what was produced, and so commands run inside a worker (via
+  // quarry.call(), where there is no process.stdout) still return their output.
+  // writeStdout/writeStderr are no-ops when no real stream exists.
+
+  /** Record a line in the output buffer and stream it to stdout (if any). */
+  private emit(line: string): void {
+    this[COMMAND_INTERNALS].output.push(line)
+    writeStdout(`${line}\n`)
+  }
+
+  /** Record a line in the errors buffer and stream it to stderr (if any). */
+  private emitError(line: string): void {
+    this[COMMAND_INTERNALS].errors.push(line)
+    writeStderr(`${line}\n`)
+  }
 
   /** Write an informational message to output */
   info(message: string): void {
-    this[COMMAND_INTERNALS].output.push(cyan(message))
+    this.emit(cyan(message))
   }
 
   /** Write a success message to output */
   success(message: string): void {
-    this[COMMAND_INTERNALS].output.push(`${green(bold('✔'))} ${green(message)}`)
+    this.emit(`${green(bold('✔'))} ${green(message)}`)
   }
 
   /** Write a warning message to output */
   warn(message: string): void {
-    this[COMMAND_INTERNALS].output.push(`${yellow(bold('⚠'))} ${yellow(message)}`)
+    this.emit(`${yellow(bold('⚠'))} ${yellow(message)}`)
   }
 
   /** Write an error message to errors */
   error(message: string): void {
-    this[COMMAND_INTERNALS].errors.push(red(message))
+    this.emitError(red(message))
   }
 
   /** Write a plain line to output */
   line(message?: string): void {
-    this[COMMAND_INTERNALS].output.push(message ?? '')
+    this.emit(message ?? '')
   }
 
   /** Write an empty line to output */
   newLine(): void {
-    this[COMMAND_INTERNALS].output.push('')
+    this.emit('')
   }
 
   /** Write a comment-style line to output */
   comment(message: string): void {
-    this[COMMAND_INTERNALS].output.push(dim(`// ${message}`))
+    this.emit(dim(`// ${message}`))
   }
 
   /** Write a formatted table to output */
@@ -193,16 +214,16 @@ export abstract class Command {
     const formatRow = (cells: string[]) =>
       cells.map((cell, i) => cell.padEnd(colWidths[i])).join('  ')
 
-    this[COMMAND_INTERNALS].output.push(bold(formatRow(headers)))
-    this[COMMAND_INTERNALS].output.push(dim(colWidths.map((w) => '-'.repeat(w)).join('  ')))
+    this.emit(bold(formatRow(headers)))
+    this.emit(dim(colWidths.map((w) => '-'.repeat(w)).join('  ')))
     for (const row of rows) {
-      this[COMMAND_INTERNALS].output.push(formatRow(row))
+      this.emit(formatRow(row))
     }
   }
 
   /** Write an error message and set exit code */
   fail(message: string, exitCode = 1): void {
-    this[COMMAND_INTERNALS].errors.push(`${red(bold('✖'))} ${red(message)}`)
+    this.emitError(`${red(bold('✖'))} ${red(message)}`)
     this[COMMAND_INTERNALS].exitCode = exitCode
   }
 

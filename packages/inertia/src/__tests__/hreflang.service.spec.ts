@@ -22,6 +22,9 @@ function createService(stub: StubOptions): HreflangService {
   const pathEnabled = !!stub.pathConfig
   const localeUrl = {
     pathEnabled,
+    // These suites use static detection, so the whole app is path-localized
+    // (or not) uniformly — mirror that per-path.
+    isPathLocalized: () => pathEnabled,
     shouldPrefix: (locale: string) => {
       if (!stub.pathConfig) return true
       if (stub.pathConfig.prefixDefaultLocale === true) return true

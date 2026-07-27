@@ -5,6 +5,7 @@ import { TieredCacheService } from '../services/tiered-cache.service'
 interface CacheMock {
   get: ReturnType<typeof vi.fn>
   put: ReturnType<typeof vi.fn>
+  putDurable: ReturnType<typeof vi.fn>
   delete: ReturnType<typeof vi.fn>
   list: ReturnType<typeof vi.fn>
   getWithMetadata: ReturnType<typeof vi.fn>
@@ -14,6 +15,7 @@ interface CacheMock {
 const makeCacheMock = (): CacheMock => ({
   get: vi.fn(),
   put: vi.fn().mockResolvedValue(undefined),
+  putDurable: vi.fn().mockResolvedValue(undefined),
   delete: vi.fn().mockResolvedValue(undefined),
   list: vi.fn(),
   getWithMetadata: vi.fn(),
@@ -37,6 +39,16 @@ describe('TieredCacheService', () => {
 
       expect(result).toBe('v')
       expect(cache.put).toHaveBeenCalledWith('k', 'v', undefined)
+      expect(cache.get).not.toHaveBeenCalled()
+    })
+
+    it('putDurable writes through the durable L2 path and populates L1', async () => {
+      await tiered.putDurable('k', 'v', { expirationTtl: 60 })
+      const result = await tiered.get('k')
+
+      expect(result).toBe('v')
+      expect(cache.putDurable).toHaveBeenCalledWith('k', 'v', { expirationTtl: 60 })
+      expect(cache.put).not.toHaveBeenCalled()
       expect(cache.get).not.toHaveBeenCalled()
     })
 

@@ -1,5 +1,6 @@
-import type { DatabaseService } from '@stratal/framework/database'
 import { DI_TOKENS, inject, Request } from 'stratal/di'
+import { AUTH_SERVICE } from '../../auth/auth.tokens'
+import type { AuthService } from '../../auth/services/auth.service'
 import type { AuthContext } from '../../context/auth-context'
 import { AC_TOKENS } from '../tokens'
 import type { AccessControlOptions } from '../types'
@@ -41,8 +42,8 @@ export class AccessService {
   constructor(
     @inject(DI_TOKENS.AuthContext)
     private readonly authContext: AuthContext,
-    @inject(DI_TOKENS.Database)
-    private readonly db: DatabaseService,
+    @inject(AUTH_SERVICE)
+    private readonly authService: AuthService,
     @inject(AC_TOKENS.Options)
     private readonly options: AccessControlOptions
   ) { }
@@ -58,11 +59,9 @@ export class AccessService {
       const roles = this.authContext.getRoles()
       if (roles.length > 0) return roles
     }
-    const user = await (this.db).user.findUnique({
-      where: { id: userId },
-      select: { role: true },
-    })
-    return parseRoles(user?.role)
+    const ctx = await this.authService.auth.$context
+    const user = await ctx.internalAdapter.findUserById(userId)
+    return parseRoles((user as { role?: string | null } | null)?.role)
   }
 
   /**
@@ -72,10 +71,11 @@ export class AccessService {
    */
   async setUserRole(userId: string, role: string | string[]): Promise<void> {
     const roleStr = Array.isArray(role) ? role.join(',') : role
-    await this.db.user.update({
-      where: { id: userId },
-      data: { role: roleStr },
-    })
+    const ctx = await this.authService.auth.$context
+    await ctx.internalAdapter.updateUser(
+      userId,
+      { role: roleStr } as Parameters<typeof ctx.internalAdapter.updateUser>[1]
+    )
   }
 
   /**

@@ -1,28 +1,28 @@
+import { array, boolean, nullable, number, object, optional, record, string, unknown } from 'zod/mini'
 import type { RouteConfig } from 'stratal/router'
 import { Delete, Get, Patch, Post, Put, Route } from 'stratal/router'
-import { z } from 'stratal/validation'
 
 /**
  * Zod schema for the Inertia page JSON response (returned for X-Inertia XHR requests)
  */
-export const inertiaPageSchema = z.object({
-  component: z.string(),
-  props: z.record(z.string(), z.unknown()),
-  url: z.string(),
-  version: z.string().nullable(),
-  flash: z.record(z.string(), z.unknown()),
-  rememberedState: z.record(z.string(), z.unknown()),
-  mergeProps: z.array(z.string()).optional(),
-  prependProps: z.array(z.string()).optional(),
-  deepMergeProps: z.array(z.string()).optional(),
-  matchPropsOn: z.array(z.string()).optional(),
-  deferredProps: z.record(z.string(), z.array(z.string())).optional(),
-  initialDeferredProps: z.record(z.string(), z.array(z.string())).optional(),
-  onceProps: z.record(z.string(), z.object({ prop: z.string(), expiresAt: z.number().nullable().optional() })).optional(),
-  sharedProps: z.array(z.string()).optional(),
-  encryptHistory: z.boolean().optional(),
-  clearHistory: z.boolean().optional(),
-  preserveFragment: z.boolean().optional(),
+export const inertiaPageSchema = object({
+  component: string(),
+  props: record(string(), unknown()),
+  url: string(),
+  version: nullable(string()),
+  flash: record(string(), unknown()),
+  rememberedState: record(string(), unknown()),
+  mergeProps: optional(array(string())),
+  prependProps: optional(array(string())),
+  deepMergeProps: optional(array(string())),
+  matchPropsOn: optional(array(string())),
+  deferredProps: optional(record(string(), array(string()))),
+  initialDeferredProps: optional(record(string(), array(string()))),
+  onceProps: optional(record(string(), object({ prop: string(), expiresAt: optional(nullable(number())) }))),
+  sharedProps: optional(array(string())),
+  encryptHistory: optional(boolean()),
+  clearHistory: optional(boolean()),
+  preserveFragment: optional(boolean()),
 })
 
 export type InertiaRouteConfig = Omit<RouteConfig, 'response' | 'statusCode' | 'hideFromDocs'> & {

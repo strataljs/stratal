@@ -69,6 +69,7 @@ export function extractControllerPageTypes(
   pagesDir: string,
 ): PageTypeInfo[] {
   project.addSourceFilesAtPaths(join(srcDir, '**/*.ts'))
+  primeTranslationKeys(project)
 
   // Map from component name to all collected prop type strings (one per call site)
   const pages = new Map<string, string[]>()
@@ -142,6 +143,13 @@ export function extractControllerPageTypes(
 }
 
 function unwrapWrapperType(type: Type, tsObj: TsObj, fallbackLocation?: Node): string {
+  // Collapse a (possibly nullable) message-key union before the union branch below
+  // splits it into per-member calls, which would inline every key literal.
+  const keyMatch = matchTranslationKeyReference(type, fallbackLocation)
+  if (keyMatch) {
+    return emitTranslationKeyMatch(keyMatch, false)
+  }
+
   if (type.isUnion()) {
     const unionTypes = type.getUnionTypes()
     const unwrapped = unionTypes
@@ -207,7 +215,26 @@ function stripReadonly(type: Type, tsObj: TsObj, fallbackLocation?: Node): strin
   return typeToString(type, tsObj, fallbackLocation)
 }
 
-// --- Extract this.inertia.share() call types ---
+// --- Extract ctx.share() / this.inertia.share() call types ---
+
+/**
+ * Types whose `.share()` contributes a shared page prop. Matched on the
+ * receiver's resolved type rather than its source text, so `ctx.share()`,
+ * `this.inertia.share()`, and any aliasing are all recognised while an
+ * unrelated `.share()` that merely happens to sit on a variable named
+ * something inertia-ish is not.
+ */
+const SHARE_RECEIVER_TYPE_NAMES = new Set(['RouterContext', 'InertiaService'])
+
+function isShareReceiver(node: Node): boolean {
+  // Strip null/undefined first: an optionally-injected receiver typed
+  // `InertiaService | undefined` (e.g. `this.inertia?.share(...)`) is a union,
+  // and `getSymbol()` on a union type itself returns `undefined` — without this
+  // the receiver check would silently skip every optional receiver.
+  const type = node.getType().getNonNullableType()
+  const name = type.getSymbol()?.getName() ?? type.getAliasSymbol()?.getName()
+  return name !== undefined && SHARE_RECEIVER_TYPE_NAMES.has(name)
+}
 
 export function extractShareCallTypes(
   project: Project,
@@ -215,6 +242,7 @@ export function extractShareCallTypes(
   tsObj: TsObj,
   srcDir: string,
 ): Map<string, string> {
+  primeTranslationKeys(project)
   const shareTypes = new Map<string, string>()
 
   for (const sourceFile of project.getSourceFiles()) {
@@ -229,10 +257,7 @@ export function extractShareCallTypes(
       if (!expr.isKind(SK.PropertyAccessExpression)) continue
       if (expr.getName() !== 'share') continue
 
-      // Check that the object is inertia-related (this.inertia.share, inertia.share)
-      const objExpr = expr.getExpression()
-      const objText = objExpr.getText()
-      if (!objText.includes('inertia')) continue
+      if (!isShareReceiver(expr.getExpression())) continue
 
       const args = call.getArguments()
       if (args.length < 2) continue
@@ -243,7 +268,11 @@ export function extractShareCallTypes(
 
       if (shareTypes.has(key)) continue
 
-      const valueType = widenLiteralType(args[1].getType(), tsObj)
+      // Shared values go through the same wrapper unwrapping as page props —
+      // `ctx.share('x', ctx.always(() => v))` must type the prop as the value,
+      // not as InertiaAlwaysProp. Falls through to literal widening for plain
+      // values.
+      const valueType = unwrapWrapperType(args[1].getType(), tsObj, args[1])
       shareTypes.set(key, valueType)
     }
   }
@@ -616,6 +645,118 @@ export function extractFlashTypes(
   }
 }
 
+// --- Extract access control resources and roles ---
+
+export interface AccessControlTypeInfo {
+  /** Sorted permission strings: `resource`, `resource:*`, and `resource:action`. */
+  permissions: string[]
+  /** Sorted role names. */
+  roles: string[]
+}
+
+/**
+ * Resolves the app's access control definition into permission strings and role
+ * names, for the generated `AccessControlRegistry`.
+ *
+ * Reads the `accessControl:` property of the `AuthModule.forRootAsync(...)` call
+ * in the app module. That is single-valued by construction — no ambiguity about
+ * which of several `createAccessControl` calls is in effect — and it targets the
+ * definition that is actually wired up.
+ *
+ * Everything goes through the type checker rather than static evaluation of
+ * object literals, so an inline definition, a separate-file const, a workspace
+ * package, and an `extendRole()`-composed role all resolve identically.
+ *
+ * @throws when `accessControl` is present but its resources don't resolve to
+ * string literals — emitting a `string`-shaped union would type-check every
+ * permission and quietly defeat the point.
+ */
+export function extractAccessControlType(
+  project: Project,
+  SK: TsMorphModule['SyntaxKind'],
+  moduleFilePath: string,
+): AccessControlTypeInfo | null {
+  const sourceFile = project.getSourceFile(moduleFilePath)
+  if (!sourceFile) return null
+
+  for (const call of sourceFile.getDescendantsOfKind(SK.CallExpression)) {
+    const expr = call.getExpression()
+    if (!expr.isKind(SK.PropertyAccessExpression)) continue
+    if (expr.getName() !== 'forRootAsync') continue
+
+    const optionsArg = call.getArguments()[0]
+    if (!optionsArg?.isKind(SK.ObjectLiteralExpression)) continue
+
+    const property = optionsArg.getProperty('accessControl')
+    if (!property?.isKind(SK.PropertyAssignment)) continue
+
+    const initializer = property.getInitializer()
+    if (!initializer) continue
+
+    const acType = initializer.getType()
+
+    const statementsType = acType
+      .getProperty('ac')
+      ?.getTypeAtLocation(initializer)
+      .getProperty('statements')
+      ?.getTypeAtLocation(initializer)
+
+    if (!statementsType) continue
+
+    const permissions: string[] = []
+
+    for (const resourceSymbol of statementsType.getProperties()) {
+      const resource = resourceSymbol.getName()
+      const actions = resourceSymbol
+        .getTypeAtLocation(initializer)
+        .getTupleElements()
+        .map((element) => element.getLiteralValue())
+        .filter((value): value is string => typeof value === 'string')
+
+      if (actions.length === 0) {
+        throw new Error(
+          `@stratal/inertia: the \`accessControl\` resource "${resource}" in ${moduleFilePath} `
+          + 'has an action list that could not be resolved to string literals. Declare its '
+          + `actions as a literal array of strings (e.g. \`${resource}: ['read', 'update']\`) `
+          + 'so the generated AccessControlRegistry can check permission strings.',
+        )
+      }
+
+      permissions.push(resource, `${resource}:*`, ...actions.map((action) => `${resource}:${action}`))
+    }
+
+    if (permissions.length === 0) {
+      throw new Error(
+        `@stratal/inertia: the \`accessControl\` option in ${moduleFilePath} has no resources `
+        + 'that could be resolved to literal names. Declare `resources` as an object literal '
+        + "(e.g. `resources: { posts: ['read'] }`) so the generated AccessControlRegistry can "
+        + 'check permission strings.',
+      )
+    }
+
+    const roles = acType
+      .getProperty('roles')
+      ?.getTypeAtLocation(initializer)
+      .getProperties()
+      .map((symbol) => symbol.getName()) ?? []
+
+    if (roles.length === 0) {
+      throw new Error(
+        `@stratal/inertia: the \`accessControl\` option in ${moduleFilePath} has no roles that `
+        + 'could be resolved to literal names. Declare `roles` as an object literal (e.g. '
+        + '`roles: { admin: {...} }`) so the generated AccessControlRegistry can check role names.',
+      )
+    }
+
+    return {
+      permissions: permissions.sort((a, b) => a.localeCompare(b)),
+      roles: roles.sort((a, b) => a.localeCompare(b)),
+    }
+  }
+
+  return null
+}
+
 // --- Extract shared data from module config (existing, refactored) ---
 
 export function extractSharedDataType(
@@ -626,6 +767,7 @@ export function extractSharedDataType(
 ): SharedDataTypeInfo | null {
   const sourceFile = project.getSourceFile(moduleFilePath)
     ?? project.addSourceFileAtPath(moduleFilePath)
+  primeTranslationKeys(project)
 
   const callExpressions = sourceFile.getDescendantsOfKind(SK.CallExpression)
 
@@ -689,6 +831,7 @@ export interface GenerateTypesInput {
   shareCallTypes: Map<string, string>
   i18n: I18nDetectionResult
   flashTypes: FlashTypeInfo | null
+  accessControl: AccessControlTypeInfo | null
 }
 
 function componentNameToPropsTypeName(componentName: string, segmentCount = 2): string {
@@ -732,8 +875,47 @@ function resolvePagePropsTypeNames(pages: PageTypeInfo[]): Map<string, string> {
   return result
 }
 
+/**
+ * The `InertiaI18nConfig` narrowing this run emits — shared by the emitter and the
+ * in-program seed so both are byte-for-byte the same shape.
+ */
+function inertiaI18nAugmentationLines(only: readonly string[]): string[] {
+  const prefixUnion = only.map((p) => `'${p}'`).join(' | ')
+  return [
+    '  interface InertiaI18nConfig {',
+    `    translationKeys: import('stratal/i18n').FilterByPrefix<import('stratal/i18n').MessageKeys, ${prefixUnion}>`,
+    '  }',
+  ]
+}
+
+/**
+ * Register the `InertiaI18nConfig` narrowing this run is about to emit into the
+ * ts-morph program, so `InertiaTranslationKeys` resolves to the prefix-filtered
+ * union while page props are serialized — deterministically, whether or not a
+ * prior inertia.d.ts exists on disk. Written at `outputPath`, overwriting any stale
+ * augmentation the source glob loaded, so a clean regen and a seeded regen resolve
+ * identically. When i18n is off or no prefixes are configured, the file is emptied
+ * so a stale narrowing can't linger.
+ */
+export function seedInertiaI18nAugmentation(
+  project: Project,
+  outputPath: string,
+  i18n: I18nDetectionResult,
+): void {
+  const body = i18n.enabled && i18n.only.length > 0
+    ? [
+        "declare module '@stratal/inertia' {",
+        ...inertiaI18nAugmentationLines(i18n.only),
+        '}',
+        'export {}',
+        '',
+      ].join('\n')
+    : 'export {}\n'
+  project.createSourceFile(outputPath, body, { overwrite: true })
+}
+
 export function generateInertiaTypes(input: GenerateTypesInput): string {
-  const { pages, sharedData, shareCallTypes, i18n, flashTypes } = input
+  const { pages, sharedData, shareCallTypes, i18n, flashTypes, accessControl } = input
 
   // Compute type names with collision resolution
   const typeNames = resolvePagePropsTypeNames(pages)
@@ -762,9 +944,23 @@ export function generateInertiaTypes(input: GenerateTypesInput): string {
   }
   lines.push('  }')
   if (i18n.enabled && i18n.only.length > 0) {
-    const prefixUnion = i18n.only.map((p) => `'${p}'`).join(' | ')
-    lines.push('  interface InertiaI18nConfig {')
-    lines.push(`    translationKeys: import('stratal/i18n').FilterByPrefix<import('stratal/i18n').MessageKeys, ${prefixUnion}>`)
+    lines.push(...inertiaI18nAugmentationLines(i18n.only))
+  }
+  if (accessControl) {
+    // Defensive: the extractor throws on an empty resolution (see
+    // `extractAccessControlType`), so these should never actually be empty here.
+    // Emitting `never` rather than nothing keeps a future extractor change from
+    // silently regressing into the invalid-TypeScript bug that guard prevents —
+    // `roles: ` with no union at all.
+    const permissionsUnion = accessControl.permissions.length > 0
+      ? accessControl.permissions.map((p) => `'${p}'`).join(' | ')
+      : 'never'
+    const rolesUnion = accessControl.roles.length > 0
+      ? accessControl.roles.map((r) => `'${r}'`).join(' | ')
+      : 'never'
+    lines.push('  interface AccessControlRegistry {')
+    lines.push(`    permissions: ${permissionsUnion}`)
+    lines.push(`    roles: ${rolesUnion}`)
     lines.push('  }')
   }
   lines.push('}')
@@ -794,6 +990,11 @@ export function generateInertiaTypes(input: GenerateTypesInput): string {
   if (i18n.enabled) {
     sharedMembers.push('      locale: string')
     sharedMembers.push('      translations: Record<string, string>')
+  }
+
+  // From access control (non-optional — shared on every Inertia render)
+  if (accessControl) {
+    sharedMembers.push("      access: import('@stratal/inertia').SharedAccess")
   }
 
   // From .share() calls (optional — per-request)
@@ -832,10 +1033,217 @@ function widenLiteralType(type: Type, tsObj: TsObj, fallbackLocation?: Node): st
   return typeToString(type, tsObj, fallbackLocation)
 }
 
+const TRANSLATION_KEYS_REFERENCE = "import('@stratal/inertia').InertiaTranslationKeys"
+const MESSAGE_KEYS_REFERENCE_MODULE = "import('stratal/i18n')"
+const MESSAGE_KEYS_REFERENCE = `${MESSAGE_KEYS_REFERENCE_MODULE}.MessageKeys`
+
+/**
+ * The two canonical message-key sets a prop union can equal:
+ * - `filtered`: `InertiaTranslationKeys` — the prefix-filtered set exposed to the
+ *   frontend (equals `full` when no `i18n.only` prefixes are configured).
+ * - `full`: `MessageKeys` — every message key, including namespaces not shared.
+ * Either is `null` when its probe can't resolve to a pure string-literal union.
+ */
+interface TranslationKeySets {
+  filtered: Set<string> | null
+  full: Set<string> | null
+}
+
+/**
+ * Per-project cache of the resolved key sets, populated by
+ * {@link primeTranslationKeys} before a walk so {@link matchTranslationKeyReference}
+ * can match structurally.
+ */
+const translationKeysByProject = new WeakMap<Project, TranslationKeySets>()
+
+function stringLiteralUnionMembers(type: Type): Set<string> | null {
+  const parts = type.isUnion() ? type.getUnionTypes() : [type]
+  const members = new Set<string>()
+  for (const part of parts) {
+    if (!part.isStringLiteral()) return null
+    members.add(part.getLiteralValue() as string)
+  }
+  return members.size > 0 ? members : null
+}
+
+/**
+ * Resolve the project's key sets once, before walking any prop types. Resolving
+ * throwaway probe aliases forces each union to concrete string literals, so they
+ * match what prop types resolve to during the walk. Done up front — never mid-walk
+ * — so the probe file's add/remove can't invalidate the `Type` objects the
+ * recursion is holding.
+ *
+ * The probe file MUST live inside the source tree (`probeDir`): app message
+ * namespaces are registered via `declare module 'stratal/i18n'` augmentations in
+ * app source, which are only in scope for files under that tree. A probe at the
+ * project root sees only the framework's base `MessageKeys` (a few dozen keys), so
+ * every app key fails to match. Placed under `srcDir`, `MessageKeys` resolves to
+ * the app's full key set.
+ *
+ * The filtered probe is built from the detected `only` prefixes
+ * (`FilterByPrefix<MessageKeys, ...>`) rather than `InertiaTranslationKeys`: it does
+ * not depend on the consumer's `InertiaI18nConfig` augmentation being applied inside
+ * the probe, and matches what prefix-filtered props (the common case) resolve to
+ * during the walk. When no prefixes are configured the filtered set equals the full
+ * set, so fall back to `InertiaTranslationKeys` (which resolves to `MessageKeys`).
+ */
+export function primeTranslationKeys(project: Project, only?: readonly string[], probeDir = ''): void {
+  if (translationKeysByProject.has(project)) return
+  const filteredRef = only && only.length > 0
+    ? `${MESSAGE_KEYS_REFERENCE_MODULE}.FilterByPrefix<${MESSAGE_KEYS_REFERENCE}, ${only.map((p) => `'${p}'`).join(' | ')}>`
+    : TRANSLATION_KEYS_REFERENCE
+  const probe = project.createSourceFile(
+    join(probeDir, '__stratal_translation_keys_probe__.ts'),
+    `export type __ProbeFiltered = ${filteredRef}\n`
+    + `export type __ProbeFull = ${MESSAGE_KEYS_REFERENCE}\n`,
+    { overwrite: true },
+  )
+  try {
+    const filtered = stringLiteralUnionMembers(probe.getTypeAliasOrThrow('__ProbeFiltered').getType())
+    const full = stringLiteralUnionMembers(probe.getTypeAliasOrThrow('__ProbeFull').getType())
+    translationKeysByProject.set(project, { filtered, full })
+  } finally {
+    // The probe is an in-memory ts-morph node (never written to disk); drop it even
+    // if resolution throws so it can't linger in the project's source-file list.
+    project.removeSourceFile(probe)
+  }
+}
+
+function setsEqual(a: Set<string>, b: Set<string> | null): boolean {
+  if (!b || a.size !== b.size) return false
+  for (const value of a) {
+    if (!b.has(value)) return false
+  }
+  return true
+}
+
+function isSubset(a: Set<string>, b: Set<string> | null): boolean {
+  if (!b) return false
+  for (const value of a) {
+    if (!b.has(value)) return false
+  }
+  return true
+}
+
+/**
+ * A string-literal union is treated as the translation-key type resolved with an
+ * incomplete set of message-namespace augmentations in scope (see
+ * {@link matchTranslationKeyReference}) rather than a hand-picked subset only when
+ * it is BOTH:
+ * - a large fraction ({@link TRANSLATION_KEY_COVERAGE}) of the full key set, and
+ * - large in absolute terms ({@link TRANSLATION_KEY_MIN_MEMBERS}).
+ *
+ * The fraction alone is not enough: in a project with only a handful of keys, a
+ * deliberate two-value enum can already be half the set. The absolute floor keeps
+ * such narrow enums inlined regardless of how small the key set is — an
+ * under-resolved translation-key union spans dozens to thousands of keys, while a
+ * hand-picked enum spans a few.
+ */
+const TRANSLATION_KEY_COVERAGE = 0.5
+const TRANSLATION_KEY_MIN_MEMBERS = 24
+
+interface TranslationKeyMatch {
+  /** The type reference to emit in place of the inlined key union. */
+  ref: string
+  hasNull: boolean
+  hasUndefined: boolean
+}
+
+/**
+ * Detect whether `type` is (a nullable wrapper around) one of the message-key
+ * unions, and if so which reference to emit instead of inlining it. Inlining leaks
+ * the entire key union (hundreds of literals) into every prop that uses it.
+ *
+ * The alias survives on a directly-referenced type, but is dropped once the union
+ * is reached through nested object/array expansion — ts-morph then yields a bare
+ * string-literal union (optionally joined with `null`/`undefined`). So match the
+ * alias name when present (never gate on `isUnion()` — the `InertiaTranslationKeys`
+ * conditional alias can report `isUnion() === false`), and otherwise fall back to
+ * structural identity against the project's resolved key sets, ignoring `null` /
+ * `undefined` members (which the caller re-attaches). The filtered set is checked
+ * first so a prefix-filtered union stays `InertiaTranslationKeys`; a union equal to
+ * the full set references `MessageKeys` (widening it to the filtered alias would
+ * silently drop the unshared namespaces).
+ *
+ * Exact identity is not always reachable: app message namespaces are registered via
+ * `declare module 'stratal/i18n'` augmentations, and a prop declared in a file that
+ * doesn't transitively import every namespace resolves `InertiaTranslationKeys` to a
+ * strict *subset* of the primed set — with no alias to recover (the value flows in
+ * through an inferred property access). So collapse any union that is a subset of a
+ * key set and clears the {@link TRANSLATION_KEY_COVERAGE} /
+ * {@link TRANSLATION_KEY_MIN_MEMBERS} thresholds *measured against that same set* —
+ * the filtered set for an `InertiaTranslationKeys` union, the full set for a
+ * `MessageKeys` union — to the type the source actually declares. Measuring each
+ * against its own set keeps a narrow prefix filter from shrinking the fraction below
+ * the threshold, and stops a non-frontend subset from being widened through the
+ * small filtered denominator. Small hand-picked key enums fall below the thresholds
+ * and stay inlined.
+ */
+function matchTranslationKeyReference(type: Type, fallbackLocation?: Node): TranslationKeyMatch | null {
+  const alias = type.getAliasSymbol?.()?.getName()
+  if (alias === 'InertiaTranslationKeys') return { ref: TRANSLATION_KEYS_REFERENCE, hasNull: false, hasUndefined: false }
+  if (alias === 'MessageKeys') return { ref: MESSAGE_KEYS_REFERENCE, hasNull: false, hasUndefined: false }
+
+  if (!fallbackLocation) return null
+  const sets = translationKeysByProject.get(fallbackLocation.getProject())
+  if (!sets) return null
+
+  const parts = type.isUnion() ? type.getUnionTypes() : [type]
+  let hasNull = false
+  let hasUndefined = false
+  const members = new Set<string>()
+  for (const part of parts) {
+    if (part.isNull()) { hasNull = true; continue }
+    if (part.isUndefined()) { hasUndefined = true; continue }
+    if (!part.isStringLiteral()) return null
+    members.add(part.getLiteralValue() as string)
+  }
+  if (members.size === 0) return null
+
+  if (setsEqual(members, sets.filtered)) return { ref: TRANSLATION_KEYS_REFERENCE, hasNull, hasUndefined }
+  if (setsEqual(members, sets.full)) return { ref: MESSAGE_KEYS_REFERENCE, hasNull, hasUndefined }
+
+  // Under-resolved key space: a subset that is large both as a fraction of the set
+  // it belongs to and in absolute terms (see doc comment). Each candidate reference
+  // is judged against its own set — a prefix-filtered union against the filtered
+  // set, a full-key union against the full set — so a narrow prefix filter doesn't
+  // shrink the fraction below the threshold, and a non-frontend subset isn't widened
+  // through the small filtered denominator.
+  if (
+    sets.filtered
+    && isSubset(members, sets.filtered)
+    && members.size >= TRANSLATION_KEY_MIN_MEMBERS
+    && members.size >= TRANSLATION_KEY_COVERAGE * sets.filtered.size
+  ) {
+    return { ref: TRANSLATION_KEYS_REFERENCE, hasNull, hasUndefined }
+  }
+  if (
+    sets.full
+    && isSubset(members, sets.full)
+    && members.size >= TRANSLATION_KEY_MIN_MEMBERS
+    && members.size >= TRANSLATION_KEY_COVERAGE * sets.full.size
+  ) {
+    return { ref: MESSAGE_KEYS_REFERENCE, hasNull, hasUndefined }
+  }
+  return null
+}
+
+/**
+ * Render a key-union match, re-attaching `null` (and `undefined`, unless the `?`
+ * property marker already implies it) that {@link matchTranslationKeyReference}
+ * stripped for comparison.
+ */
+function emitTranslationKeyMatch(match: TranslationKeyMatch, undefinedImplied: boolean): string {
+  const prefixes: string[] = []
+  if (match.hasNull) prefixes.push('null')
+  if (match.hasUndefined && !undefinedImplied) prefixes.push('undefined')
+  return prefixes.length > 0 ? `${prefixes.join(' | ')} | ${match.ref}` : match.ref
+}
+
 function typeToString(type: Type, tsObj: TsObj, fallbackLocation?: Node): string {
-  // Preserve MessageKeys as InertiaTranslationKeys — narrows automatically via i18n.only augmentation
-  if (type.isUnion() && type.getAliasSymbol?.()?.getName() === 'MessageKeys') {
-    return "import('@stratal/inertia').InertiaTranslationKeys"
+  const keyMatch = matchTranslationKeyReference(type, fallbackLocation)
+  if (keyMatch) {
+    return emitTranslationKeyMatch(keyMatch, false)
   }
 
   // Always expand objects/unions/intersections so getText() can't leak inline
@@ -860,6 +1268,13 @@ function expandPropertyType(
   visiting: Set<Type>,
   isOptional: boolean,
 ): string {
+  // Collapse a (possibly nullable) message-key union before splitting it apart —
+  // the per-member expansion below would otherwise inline every key literal.
+  const keyMatch = matchTranslationKeyReference(type, fallbackLocation)
+  if (keyMatch) {
+    return emitTranslationKeyMatch(keyMatch, isOptional)
+  }
+
   // The `?` marker already implies `undefined`, so strip it from the union
   // to avoid `id?: undefined | string`.
   if (isOptional && type.isUnion()) {
@@ -882,6 +1297,11 @@ function expandTypeToInline(
   if (type.isBoolean()) return 'boolean'
   visiting.add(type)
   try {
+    const keyMatch = matchTranslationKeyReference(type, fallbackLocation)
+    if (keyMatch) {
+      return emitTranslationKeyMatch(keyMatch, false)
+    }
+
     if (type.isObject() && !type.isArray() && !type.isReadonlyArray()) {
       // Named global types (Date, RegExp, Map, Set, ...) — emit text as-is.
       // Expanding them iterates every method and produces garbage like
@@ -929,9 +1349,6 @@ function expandTypeToInline(
     }
 
     if (type.isUnion()) {
-      if (type.getAliasSymbol?.()?.getName() === 'MessageKeys') {
-        return "import('@stratal/inertia').InertiaTranslationKeys"
-      }
       return type.getUnionTypes().map((t) => expandTypeToInline(t, tsObj, fallbackLocation, visiting)).join(' | ')
     }
 
@@ -1000,6 +1417,16 @@ export async function runTypeGeneration(cwd: string): Promise<{ outputPath: stri
   // Single shared project for all extractors
   const { project, SyntaxKind, ts } = await createProject(tsConfigPath)
 
+  // Load all source files and detect i18n up front, so the message-key sets can be
+  // primed from the configured `only` prefixes before any prop type is walked.
+  project.addSourceFilesAtPaths(join(srcDir, '**/*.ts'))
+  const i18n = detectI18nConfig(project, SyntaxKind, srcDir)
+  // Deterministically seed the InertiaI18nConfig narrowing this run will emit, so
+  // InertiaTranslationKeys resolves to the prefix-filtered union during the prop
+  // walk — identical whether or not a prior inertia.d.ts was on disk.
+  seedInertiaI18nAugmentation(project, outputPath, i18n)
+  primeTranslationKeys(project, i18n.only, srcDir)
+
   // 1. Controller ctx.inertia() calls — sole source of truth for InertiaPageRegistry
   const pages = extractControllerPageTypes(project, SyntaxKind, ts, srcDir, pagesDir)
 
@@ -1008,14 +1435,16 @@ export async function runTypeGeneration(cwd: string): Promise<{ outputPath: stri
     ? extractSharedDataType(project, SyntaxKind, ts, moduleFilePath)
     : null
 
-  // 3. i18n detection (scans all source files for InertiaModule.forRoot*)
-  const i18n = detectI18nConfig(project, SyntaxKind, srcDir)
-
-  // 4. Per-request .share() calls
+  // 3. Per-request .share() calls
   const shareCallTypes = extractShareCallTypes(project, SyntaxKind, ts, srcDir)
 
-  // 5. Flash ctx.flash() calls
+  // 4. Flash ctx.flash() calls
   const flashTypes = extractFlashTypes(project, SyntaxKind, ts, srcDir)
+
+  // 5. Access control resources and roles
+  const accessControl = moduleFilePath
+    ? extractAccessControlType(project, SyntaxKind, moduleFilePath)
+    : null
 
   // 6. Generate
   const content = generateInertiaTypes({
@@ -1024,6 +1453,7 @@ export async function runTypeGeneration(cwd: string): Promise<{ outputPath: stri
     shareCallTypes,
     i18n,
     flashTypes,
+    accessControl,
   })
   writeInertiaTypes(outputPath, content)
 

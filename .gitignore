@@ -151,3 +151,14 @@ packages/framework/test/zenstack/
 
 # Wrangler generated types
 worker-configuration.d.ts
+
+perf-apps/
+coldstart.mjs
+
+.claude/worktrees/
+
+.wrangler/
+
+# Build artifacts from tsdown.base.ts — regenerated, never source
+tsdown.base.d.ts
+tsdown.base.d.ts.map

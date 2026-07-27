@@ -62,8 +62,6 @@ declare module 'stratal/router' {
      * by the runtime the `stratalInertia()` Vite plugin injects.
      */
     seo(data: SeoData): void
-    /** Disables server-side rendering for the current request. */
-    withoutSsr(): void
   }
 }
 
@@ -128,9 +126,5 @@ export function augmentRouterContext(resolveService: (ctx: RouterContext) => Ine
   RouterContext.macro('seo', function (this: RouterContext, data: SeoData) {
     const service = resolveService(this)
     service.seo(data)
-  })
-
-  RouterContext.macro('withoutSsr', function (this: RouterContext) {
-    this.c.set('withoutSsr', true)
   })
 }

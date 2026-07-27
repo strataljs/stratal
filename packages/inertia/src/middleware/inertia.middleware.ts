@@ -16,7 +16,6 @@ export class InertiaMiddleware implements Middleware {
     // Store Inertia state on context for services to access
     ctx.c.set('inertia', isInertia)
     ctx.c.set('inertiaPrefetch', isPrefetch)
-    ctx.c.set('withoutSsr', false)
 
     // Initialize flash buckets
     ctx.c.set('inertiaFlashOut', {})
@@ -65,8 +64,20 @@ export class InertiaMiddleware implements Middleware {
     const status = ctx.c.res?.status
     if (typeof status !== 'number' || status < 200 || status > 599) return
 
-    // Add Vary header to all responses
-    ctx.c.header('Vary', 'X-Inertia')
+    // Add Vary header to all responses — by *union*, never by replacement.
+    // This runs after `next()`, so the handler (and Stratal's
+    // `applyCacheDecision`, which stamps `@Cacheable`'s `vary: [...]` from
+    // inside the route handler) has already put its own names on the
+    // response. `c.header('Vary', 'X-Inertia')` is a set, not an append, so
+    // overwriting here would silently drop e.g. `Accept-Language` and collapse
+    // every language onto a single cache entry.
+    const declaredVary = (ctx.c.res.headers.get('Vary') ?? '')
+      .split(',')
+      .map((name) => name.trim())
+      .filter(Boolean)
+
+    const alreadyVaries = declaredVary.some((name) => name.toLowerCase() === 'x-inertia')
+    ctx.c.header('Vary', (alreadyVaries ? declaredVary : ['X-Inertia', ...declaredVary]).join(', '))
 
     // Convert 302 to 303 for non-GET/HEAD Inertia requests
     if (isInertia && status === 302) {

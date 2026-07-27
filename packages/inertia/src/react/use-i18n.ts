@@ -23,7 +23,7 @@ export function useI18n() {
     return (key: InertiaTranslationKeys, params?: MessageParams): string => {
       const msg = compiled.get(key)
       if (!msg) return key
-      return String(msg.format(params as Record<string, string | number | boolean>))
+      return String(msg.format(params))
     }
   }, [locale, translations])
 

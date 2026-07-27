@@ -8,12 +8,11 @@ const zenstackBin = resolve(import.meta.dirname, '../../../node_modules/.bin/zen
 const nodeBinDir = dirname(process.execPath)
 
 /**
- * In 'database' mode `connectionString` targets the template database; in
- * 'shared' mode it targets the base database. Either way, ZenStack reads the
- * datasource url from `DATABASE_URL`, so we push the schema against it.
+ * `connectionString` here always targets the template database. ZenStack
+ * reads the datasource url from `DATABASE_URL`, so we push the schema
+ * against it.
  */
 export default createTestDatabaseGlobalSetup({
-  isolation: 'database',
   // Fingerprint source: the template is rebuilt only when the schema changes.
   schema: schemaPath,
   migrate: (connectionString) => {

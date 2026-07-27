@@ -2,7 +2,7 @@ import type { Page } from '@inertiajs/core'
 import type { Application } from 'stratal'
 import { DI_TOKENS, Request, inject } from 'stratal/di'
 import { I18N_TOKENS, type MessageLoaderService } from 'stratal/i18n'
-import { ROUTER_TOKENS, resolveTrailingSlash, type CurrentRoute, type LocalePathService, type LocaleUrlConfig, type RegisteredRoute, type RouteRegistry, type RouterContext, type SerializedRoutes, type Uri } from 'stratal/router'
+import { ROUTER_CONTEXT_KEYS, ROUTER_TOKENS, resolveTrailingSlash, type CurrentRoute, type LocalePathService, type LocaleUrlConfig, type RegisteredRoute, type RouteRegistry, type RouterContext, type SerializedRoutes, type Uri } from 'stratal/router'
 import type { InertiaMergeOptions, InertiaOnceOptions } from '../augment/router-context'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { INERTIA_TOKENS } from '../inertia.tokens'
@@ -23,9 +23,9 @@ import {
   INERTIA_PROP_ONCE,
   INERTIA_PROP_OPTIONAL,
 } from '../types'
+import type { DocumentRendererService } from './document-renderer.service'
+import { buildInertiaCacheSignals } from './inertia-cache-signals'
 import type { SeoService } from './seo.service'
-import type { SsrRendererService } from './ssr-renderer.service'
-import type { TemplateService } from './template.service'
 
 @Request(INERTIA_TOKENS.InertiaService)
 export class InertiaService {
@@ -33,8 +33,7 @@ export class InertiaService {
 
   constructor(
     @inject(INERTIA_TOKENS.Options) private readonly options: InertiaModuleOptions,
-    @inject(INERTIA_TOKENS.TemplateService) private readonly template: TemplateService,
-    @inject(INERTIA_TOKENS.SsrRenderer) private readonly ssr: SsrRendererService,
+    @inject(INERTIA_TOKENS.DocumentRenderer) private readonly documentRenderer: DocumentRendererService,
     @inject(INERTIA_TOKENS.SeoService) private readonly seoService: SeoService,
   ) { }
 
@@ -91,8 +90,6 @@ export class InertiaService {
   ): Promise<Response> {
     const reqUrl = new URL(ctx.c.req.url)
     const url = reqUrl.search ? `${reqUrl.pathname}${reqUrl.search}` : reqUrl.pathname
-    // `ssr.disabled` globs match the path only — keep the query string out of it.
-    const pathname = reqUrl.pathname
     const isInertia = ctx.c.get('inertia')
 
     // Resolve shared data from module options
@@ -121,6 +118,19 @@ export class InertiaService {
     const errors = (flashErrors && typeof flashErrors === 'object' && !Array.isArray(flashErrors))
       ? flashErrors as Page['props']['errors']
       : {} as Page['props']['errors']
+
+    // Publish for `{data.*}` cache tags and the response-cache fail-closed
+    // checks. Core's `capturePayload` only parses JSON-family response
+    // bodies — an Inertia document response is HTML — so without this,
+    // `{data.*}` would never resolve on Inertia routes. Merges `errors` in
+    // the same way `page.props` below does, so a `{data.errors.*}` tag
+    // template sees exactly what the client receives.
+    ctx.c.set(ROUTER_CONTEXT_KEYS.RESPONSE_PAYLOAD, { ...result.resolvedProps, errors })
+    ctx.c.set('inertiaCacheSignals', buildInertiaCacheSignals({
+      flash: rawFlash,
+      isPartial: this.isPartialReload(ctx, component),
+      onceProps: result.onceProps,
+    }))
 
     const page: Page = {
       component,
@@ -156,27 +166,11 @@ export class InertiaService {
       })
     }
 
-    // Full page render — skip SSR if disabled for this route or not configured
+    // Full page render — delegate to the document renderer, which streams SSR or
+    // emits a client-only shell for SSR-unconfigured or build-time excluded
+    // components. SEO tags are appended to the head.
     const seoTags = this.seoService.tagsFor(resolvedSeo)
-    const ssrDisabled = ctx.c.get('withoutSsr') || this.isSsrDisabled(pathname) || !this.options.ssr
-
-    if (ssrDisabled) {
-      const html = this.template.renderClientOnly(page, seoTags)
-      return new Response(html, {
-        status,
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      })
-    }
-
-    // Streaming SSR: awaiting render resolves once the shell is ready (so the
-    // Inertia `<Head>` tags are known); the body then streams progressively.
-    const { head, stream } = await this.ssr.render(page)
-    const body = this.template.renderStream(page, [...head, ...seoTags], stream)
-
-    return new Response(body, {
-      status,
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    })
+    return this.documentRenderer.render(page, status, seoTags)
   }
 
   /**
@@ -402,16 +396,5 @@ export class InertiaService {
       }
     }
     return serialized
-  }
-
-  private isSsrDisabled(pathname: string): boolean {
-    const patterns = this.options.ssr?.disabled
-    if (!patterns || patterns.length === 0) return false
-
-    return patterns.some((pattern) => {
-      const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-      const regex = new RegExp(`^/${escaped.replace(/\*/g, '[^/]*')}$`)
-      return regex.test(pathname)
-    })
   }
 }

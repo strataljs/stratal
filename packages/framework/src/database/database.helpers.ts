@@ -1,31 +1,37 @@
 import { ZenStackClient, type AnyPlugin } from '@zenstackhq/orm';
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { array, custom, looseObject, minLength, object, optional, refine, string } from 'zod/mini';
 import { Transient } from 'stratal/di';
 import type { IEventRegistry } from 'stratal/events';
-import { withZodI18n, z } from 'stratal/validation';
+import type { LoggerService } from 'stratal/logger';
+import { withZodI18n } from 'stratal/validation';
 import type { DatabaseConnectionConfig } from './database.module';
 import { ErrorHandlerPlugin, EventEmitterPlugin } from './plugins';
 
-const databaseConnectionSchema = z.object({
-  name: z.string().min(1, withZodI18n('database.connectionNameRequired')),
-  schema: z.object({}).loose(),
-  dialect: z.function(),
-  plugins: z.array(z.object({}).loose()).optional(),
-  computedFields: z.object({}).loose().optional(),
+const databaseConnectionSchema = object({
+  name: string().check(minLength(1, withZodI18n('database.connectionNameRequired'))),
+  schema: looseObject({}),
+  dialect: custom((value) => typeof value === 'function'),
+  plugins: optional(array(looseObject({}))),
+  computedFields: optional(looseObject({})),
 })
 
-export const databaseModuleConfigSchema = z.object({
-  default: z.string().min(1, withZodI18n('database.defaultConnectionRequired')),
-  connections: z.array(databaseConnectionSchema).min(1, withZodI18n('database.connectionRequired')),
-}).refine(
-  (config) => {
-    const names = config.connections.map(c => c.name)
-    return new Set(names).size === names.length
-  },
-  withZodI18n('database.duplicateConnections')
-).refine(
-  (config) => config.connections.some(c => c.name === config.default),
-  withZodI18n('database.defaultConnectionNotFound')
+export const databaseModuleConfigSchema = object({
+  default: string().check(minLength(1, withZodI18n('database.defaultConnectionRequired'))),
+  connections: array(databaseConnectionSchema).check(minLength(1, withZodI18n('database.connectionRequired'))),
+}).check(
+  refine(
+    (config: { connections: { name: string }[] }) => {
+      const names = config.connections.map((c) => c.name)
+      return new Set(names).size === names.length
+    },
+    withZodI18n('database.duplicateConnections'),
+  ),
+  refine(
+    (config: { connections: { name: string }[]; default: string }) =>
+      config.connections.some((c) => c.name === config.default),
+    withZodI18n('database.defaultConnectionNotFound'),
+  ),
 )
 
 type ZenStackClientInstance = InstanceType<typeof ZenStackClient>
@@ -97,9 +103,11 @@ export interface DatabaseServiceClass {
   /**
    * Disconnects every still-live client created from this service class.
    * Called by `DatabaseModule.onShutdown` so pools/sockets are released when
-   * the Application is torn down (e.g. a Vite HMR reload).
+   * the Application is torn down (e.g. a Vite HMR reload). The module passes its
+   * {@link LoggerService} so disconnect failures are reported through the
+   * application logger rather than the bare console.
    */
-  disposeInstances(): Promise<void>
+  disposeInstances(logger: LoggerService): Promise<void>
 }
 
 export function createDatabaseService(
@@ -131,6 +139,24 @@ export function createDatabaseService(
   // is `@Transient`, so request-scoped resolutions must stay GC-able with
   // their request. Dead refs are pruned on each add; live ones are
   // disconnected by `disposeInstances()` on module shutdown.
+  //
+  // The dialect (and the pg pool it carries) is built FRESH per resolution —
+  // `conn.dialect()` in the constructor below. This is MANDATORY on the Workers
+  // runtime: a pool/socket opened inside one request's I/O context cannot be
+  // reused by a later request — workerd cancels the cross-request I/O and the
+  // request hangs forever ("the Worker's code had hung and would never generate
+  // a response"). Memoizing one shared dialect across requests therefore breaks
+  // every request after the first.
+  //
+  // Pool cleanup is at MODULE SHUTDOWN only: `disposeInstances()` disconnects the
+  // still-live clients tracked here. The framework does not dispose pools per
+  // request, so a pool whose transient client is GC'd before shutdown is NOT
+  // explicitly `$disconnect()`ed — its idle connections are reclaimed by `pg`'s
+  // own `idleTimeoutMillis` instead. On the primary target (Workers + Hyperdrive)
+  // Hyperdrive fronts these pools and multiplexes the real server connections, so
+  // they never accumulate. Consumers deploying against a DIRECT Postgres on a
+  // long-lived isolate should give `conn.dialect()` a pool with a short
+  // `idleTimeoutMillis` so any leaked-idle connection self-closes promptly.
   const instances = new Set<WeakRef<ZenStackClientInstance>>()
 
   @Transient()
@@ -157,7 +183,7 @@ export function createDatabaseService(
       return client
     }
 
-    static async disposeInstances(): Promise<void> {
+    static async disposeInstances(logger: LoggerService): Promise<void> {
       const live = [...instances]
       instances.clear()
       await Promise.all(live.map(async (ref) => {
@@ -166,7 +192,10 @@ export function createDatabaseService(
         try {
           await client.$disconnect()
         } catch (error) {
-          console.error(`[stratal] Failed to disconnect database client "${conn.name}":`, error)
+          logger.error(
+            `Failed to disconnect database client "${conn.name}"`,
+            error instanceof Error ? error : new Error(String(error)),
+          )
         }
       }))
     }

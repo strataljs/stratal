@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { z } from '../../i18n/validation/zod'
+import { object, string } from 'zod/mini'
 import type { Constructor } from '../../types'
 import type { Middleware } from '../middleware.interface'
 import { Router } from '../router'
@@ -27,10 +27,10 @@ describe('RouterResolver', () => {
       router.name('api.').middleware(asMiddleware(AuthMiddleware)).version('1')
 
       const resolver = new RouterResolver([
-        { router, controllers: [UsersController as Constructor, PostsController as Constructor] },
+        { router, controllers: [UsersController, PostsController] },
       ])
 
-      const config = resolver.resolveForController(UsersController as Constructor)
+      const config = resolver.resolveForController(UsersController)
       expect(config.name).toBe('api.')
       expect(config.middleware).toHaveLength(1)
       expect(config.version).toBe('1')
@@ -40,16 +40,16 @@ describe('RouterResolver', () => {
       const router = new Router()
       router.name('api.').middleware(asMiddleware(CorsMiddleware))
 
-      router.group([AdminController as Constructor], (admin) => {
+      router.group([AdminController], (admin) => {
         admin.name('admin.').middleware(asMiddleware(AdminMiddleware))
           .domain('admin.myapp.com').hideFromDocs()
       })
 
       const resolver = new RouterResolver([
-        { router, controllers: [UsersController as Constructor, AdminController as Constructor] },
+        { router, controllers: [UsersController, AdminController] },
       ])
 
-      const config = resolver.resolveForController(AdminController as Constructor)
+      const config = resolver.resolveForController(AdminController)
       // Name concatenated: parent + child
       expect(config.name).toBe('api.admin.')
       // Middleware concatenated: parent first, child second
@@ -64,16 +64,16 @@ describe('RouterResolver', () => {
       const router = new Router()
       router.middleware(asMiddleware(AuthMiddleware))
 
-      router.group([HealthController as Constructor], () => {
+      router.group([HealthController], () => {
         // No middleware — health is public
       })
 
       const resolver = new RouterResolver([
-        { router, controllers: [HealthController as Constructor, UsersController as Constructor] },
+        { router, controllers: [HealthController, UsersController] },
       ])
 
       // HealthController is in a sub-group — should NOT inherit parent middleware
-      const healthConfig = resolver.resolveForController(HealthController as Constructor)
+      const healthConfig = resolver.resolveForController(HealthController)
       expect(healthConfig.middleware).toHaveLength(1) // parent CorsMiddleware... wait
 
       // Actually per inheritance rules, parent middleware IS inherited (concatenated).
@@ -86,10 +86,10 @@ describe('RouterResolver', () => {
       router.name('api.')
 
       const resolver = new RouterResolver([
-        { router, controllers: [UsersController as Constructor] },
+        { router, controllers: [UsersController] },
       ])
 
-      const config = resolver.resolveForController(UnknownController as Constructor)
+      const config = resolver.resolveForController(UnknownController)
       expect(config.middleware).toEqual([])
       expect(config.name).toBeUndefined()
     })
@@ -98,15 +98,15 @@ describe('RouterResolver', () => {
       const router = new Router()
       router.prefix('/:companyId')
 
-      router.group([AdminController as Constructor], (admin) => {
+      router.group([AdminController], (admin) => {
         admin.prefix('/:teamId')
       })
 
       const resolver = new RouterResolver([
-        { router, controllers: [AdminController as Constructor] },
+        { router, controllers: [AdminController] },
       ])
 
-      const config = resolver.resolveForController(AdminController as Constructor)
+      const config = resolver.resolveForController(AdminController)
       expect(config.prefix).toBe('/:companyId/:teamId')
     })
 
@@ -114,15 +114,15 @@ describe('RouterResolver', () => {
       const router = new Router()
       router.version('1')
 
-      router.group([AdminController as Constructor], (admin) => {
+      router.group([AdminController], (admin) => {
         admin.version('2')
       })
 
       const resolver = new RouterResolver([
-        { router, controllers: [AdminController as Constructor] },
+        { router, controllers: [AdminController] },
       ])
 
-      const config = resolver.resolveForController(AdminController as Constructor)
+      const config = resolver.resolveForController(AdminController)
       expect(config.version).toBe('2')
     })
 
@@ -130,45 +130,45 @@ describe('RouterResolver', () => {
       const router = new Router()
       router.version('1')
 
-      router.group([AdminController as Constructor], () => { /**/ })
+      router.group([AdminController], () => { /**/ })
 
       const resolver = new RouterResolver([
-        { router, controllers: [AdminController as Constructor] },
+        { router, controllers: [AdminController] },
       ])
 
-      const config = resolver.resolveForController(AdminController as Constructor)
+      const config = resolver.resolveForController(AdminController)
       expect(config.version).toBe('1')
     })
 
     it('should resolve prefix params for controllers in default scope', () => {
-      const paramsSchema = z.object({ companyId: z.string() })
+      const paramsSchema = object({ companyId: string() })
       const router = new Router()
       router.prefix('/:companyId', paramsSchema)
 
       const resolver = new RouterResolver([
-        { router, controllers: [UsersController as Constructor] },
+        { router, controllers: [UsersController] },
       ])
 
-      const config = resolver.resolveForController(UsersController as Constructor)
+      const config = resolver.resolveForController(UsersController)
       expect(config.params).toBe(paramsSchema)
     })
 
     it('should merge parent and child prefix params', () => {
-      const parentParams = z.object({ companyId: z.string() })
-      const childParams = z.object({ teamId: z.string() })
+      const parentParams = object({ companyId: string() })
+      const childParams = object({ teamId: string() })
 
       const router = new Router()
       router.prefix('/:companyId', parentParams)
 
-      router.group([AdminController as Constructor], (admin) => {
+      router.group([AdminController], (admin) => {
         admin.prefix('/:teamId', childParams)
       })
 
       const resolver = new RouterResolver([
-        { router, controllers: [AdminController as Constructor] },
+        { router, controllers: [AdminController] },
       ])
 
-      const config = resolver.resolveForController(AdminController as Constructor)
+      const config = resolver.resolveForController(AdminController)
       expect(config.params).toBeDefined()
       // Merged schema should contain both keys
       const shape = config.params!.shape
@@ -177,38 +177,38 @@ describe('RouterResolver', () => {
     })
 
     it('should use only parent params when child has none', () => {
-      const parentParams = z.object({ companyId: z.string() })
+      const parentParams = object({ companyId: string() })
 
       const router = new Router()
       router.prefix('/:companyId', parentParams)
 
-      router.group([AdminController as Constructor], (admin) => {
+      router.group([AdminController], (admin) => {
         admin.prefix('/:teamId')
       })
 
       const resolver = new RouterResolver([
-        { router, controllers: [AdminController as Constructor] },
+        { router, controllers: [AdminController] },
       ])
 
-      const config = resolver.resolveForController(AdminController as Constructor)
+      const config = resolver.resolveForController(AdminController)
       expect(config.params).toBe(parentParams)
     })
 
     it('should use only child params when parent has none', () => {
-      const childParams = z.object({ teamId: z.string() })
+      const childParams = object({ teamId: string() })
 
       const router = new Router()
       router.prefix('/:companyId')
 
-      router.group([AdminController as Constructor], (admin) => {
+      router.group([AdminController], (admin) => {
         admin.prefix('/:teamId', childParams)
       })
 
       const resolver = new RouterResolver([
-        { router, controllers: [AdminController as Constructor] },
+        { router, controllers: [AdminController] },
       ])
 
-      const config = resolver.resolveForController(AdminController as Constructor)
+      const config = resolver.resolveForController(AdminController)
       expect(config.params).toBe(childParams)
     })
   })
@@ -234,7 +234,7 @@ describe('RouterResolver', () => {
       router.middleware(asMiddleware(CorsMiddleware)) // scoped, not global
 
       const resolver = new RouterResolver([
-        { router, controllers: [UsersController as Constructor] },
+        { router, controllers: [UsersController] },
       ])
 
       expect(resolver.getGlobalMiddleware()).toEqual([])
@@ -250,16 +250,16 @@ describe('RouterResolver', () => {
       tenantRouter.name('tenant.').domain('{tenant}.myapp.com')
 
       const resolver = new RouterResolver([
-        { router: apiRouter, controllers: [UsersController as Constructor] },
-        { router: tenantRouter, controllers: [PostsController as Constructor] },
+        { router: apiRouter, controllers: [UsersController] },
+        { router: tenantRouter, controllers: [PostsController] },
       ])
 
-      const usersConfig = resolver.resolveForController(UsersController as Constructor)
+      const usersConfig = resolver.resolveForController(UsersController)
       expect(usersConfig.name).toBe('api.')
       expect(usersConfig.version).toBe('1')
       expect(usersConfig.domain).toBeUndefined()
 
-      const postsConfig = resolver.resolveForController(PostsController as Constructor)
+      const postsConfig = resolver.resolveForController(PostsController)
       expect(postsConfig.name).toBe('tenant.')
       expect(postsConfig.domain).toBe('{tenant}.myapp.com')
       expect(postsConfig.version).toBeUndefined()

@@ -46,16 +46,10 @@ export function createDynamicCommands(
           if (value !== undefined) input[opt.name] = value
         }
 
+        // Output and errors stream live via the command's helpers
+        // (Command.emit/emitError) and via quarry.call on failure, so there is
+        // nothing to flush here — just return the exit code.
         const result = await app.handleCommand(entry.name, input)
-
-        for (const line of result.output) {
-          this.context.stdout.write(line + '\n')
-        }
-
-        for (const err of result.errors) {
-          this.context.stderr.write(err + '\n')
-        }
-
         return result.exitCode
       }
     }

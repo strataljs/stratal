@@ -42,6 +42,16 @@ export class LocaleUrlService {
     return stripLocalePrefix(pathname, known)
   }
 
+  /**
+   * Whether a pathname is path-localized — served with a `/:locale` segment.
+   * `false` for paths localized out-of-band (cookie strategy) or with detection
+   * disabled. Redirect middleware should skip non-localized paths so it never
+   * prepends a locale segment to a path that isn't path-localized.
+   */
+  isPathLocalized(pathname: string): boolean {
+    return this.localePath.isPathLocalized(pathname)
+  }
+
   private toUrlConfig(): LocaleUrlConfig | undefined {
     const config = this.localePath.localePathConfig
     if (!config) return undefined

@@ -83,7 +83,10 @@ export class RouterContext<T extends RouterEnv = RouterEnv> extends Macroable {
   }
 
   /**
-   * Set locale for the current request
+   * Override the locale for the current request (e.g. force a specific locale
+   * for this response). Request-scoped only — it does not persist. Persistence
+   * is the detection layer's job: cookie-strategy paths auto-persist the
+   * `locale` cookie (scoped via the config's `cookieOptions`).
    *
    * @param locale - Locale code (e.g., 'en', 'fr')
    */
@@ -97,8 +100,8 @@ export class RouterContext<T extends RouterEnv = RouterEnv> extends Macroable {
    * @returns Current locale code
    */
   getLocale(): string {
-    const locale = this.c.get(ROUTER_CONTEXT_KEYS.LOCALE)
-    return (locale as string) || 'en'
+    const locale: string | undefined = this.c.get(ROUTER_CONTEXT_KEYS.LOCALE)
+    return locale ?? 'en'
   }
 
   /**
@@ -143,7 +146,9 @@ export class RouterContext<T extends RouterEnv = RouterEnv> extends Macroable {
    * @param key - Query parameter name
    */
   query<R extends Record<string, unknown> | undefined = undefined, K extends string | undefined = undefined>(key?: K): ContextQueryResult<R, K> {
-    const validated = (this.c.req as unknown as { valid(target: 'query'): Record<string, unknown> }).valid('query')
+    // Routes without a declared query schema attach no validator, so
+    // `valid('query')` is unset — default to an empty record.
+    const validated = (this.c.req as unknown as { valid(target: 'query'): Record<string, unknown> | undefined }).valid('query') ?? {}
     return key ? validated[key] as ContextQueryResult<R, K> : validated as ContextQueryResult<R, K>
   }
 

@@ -1,5 +1,5 @@
 import type { Page } from '@inertiajs/core'
-import { INERTIA_TOKENS, type SsrRendererService, type TemplateService } from '@stratal/inertia'
+import { INERTIA_TOKENS, type DocumentRendererService } from '@stratal/inertia'
 import { Request as RequestScoped, inject } from 'stratal/di'
 import type { RouterContext } from 'stratal/router'
 import { ROUTER_TOKENS } from 'stratal/router'
@@ -30,8 +30,7 @@ interface FetchableApp {
 export class ModalService {
   constructor(
     @inject(ROUTER_TOKENS.HonoApp) private readonly app: FetchableApp,
-    @inject(INERTIA_TOKENS.SsrRenderer) private readonly ssr: SsrRendererService,
-    @inject(INERTIA_TOKENS.TemplateService) private readonly template: TemplateService,
+    @inject(INERTIA_TOKENS.DocumentRenderer) private readonly documentRenderer: DocumentRendererService,
   ) { }
 
   async render(
@@ -125,16 +124,14 @@ export class ModalService {
       })
     }
 
-    // Full-page (direct visit): run SSR with the combined page so that
+    // Full-page (direct visit): render the combined page as an HTML document so
     // page.url = modalURL in both the server-rendered HTML and the client
-    // hydration pass. The Modal component renders null during SSR (effects
-    // don't run server-side), so there is no hydration mismatch.
-    const { head, stream } = await this.ssr.render(combinedPage)
-    const body = this.template.renderStream(combinedPage, head, stream)
-    return new Response(body, {
-      status: 200,
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    })
+    // hydration pass. The Modal component renders null during SSR (effects don't
+    // run server-side), so there is no hydration mismatch. The document renderer
+    // streams SSR, or emits a client-only shell when the background page was
+    // build-time excluded from SSR (ssrExclude) — so a direct visit works under
+    // both SSR and CSR.
+    return this.documentRenderer.render(combinedPage)
   }
 
   private resolveRedirectURL(ctx: RouterContext, baseURL: string): string {

@@ -37,8 +37,9 @@ export class McpServeCommand extends Command {
       }
     }
 
+    // ensureHono() registers routes, populating the route metadata registry.
     const hono = await this.app.ensureHono()
-    const spec = this.openAPIService.getSpec(hono, this.app.container)
+    const spec = await this.openAPIService.getSpec(this.app.container)
 
     const dispatcher: Dispatcher = baseUrl
       ? async (method, url, opts) => {

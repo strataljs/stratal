@@ -8,6 +8,7 @@ import type { ExceptionHandler } from '../errors/exception-handler'
 import type { Constructor } from '../types'
 import { type Command } from './command'
 import { getCommandResult, setCommandInputs, setCommandQuarry } from './command-internals'
+import { writeStderr } from './output-stream'
 import { CommandNotFoundError } from './errors/command-not-found.error'
 import { CommandError } from './errors/command.error'
 import { parseSignature } from './signature-parser'
@@ -72,29 +73,24 @@ export class QuarryRegistry implements Quarry {
 
       return result
     } catch (error) {
-      if (error instanceof CommandError) {
-        if (command) {
-          const result = getCommandResult(command)
-          return {
-            exitCode: result.exitCode === 0 ? 1 : result.exitCode,
-            output: result.output,
-            errors: [...result.errors, error.message],
-          }
-        }
-        return { exitCode: 1, output: [], errors: [error.message] }
+      // CommandError carries a user-facing message; anything else goes through
+      // the exception handler (reporting) and yields a display message.
+      const message = error instanceof CommandError
+        ? error.message
+        : this.handleError(error, resolvedName)
+      // Stream the failure to stderr — dynamic-command no longer re-prints the
+      // result, and this message never went through error()/fail() (which stream
+      // themselves). No-op when there is no real stream (worker via quarry.call);
+      // programmatic callers still receive it in `errors`.
+      writeStderr(`${message}\n`)
+      const result = command
+        ? getCommandResult(command)
+        : { exitCode: 0, output: [] as string[], errors: [] as string[] }
+      return {
+        exitCode: result.exitCode === 0 ? 1 : result.exitCode,
+        output: result.output,
+        errors: [...result.errors, message],
       }
-
-      const errorMessage = this.handleError(error, resolvedName)
-
-      if (command) {
-        const result = getCommandResult(command)
-        return {
-          exitCode: result.exitCode === 0 ? 1 : result.exitCode,
-          output: result.output,
-          errors: [...result.errors, errorMessage],
-        }
-      }
-      return { exitCode: 1, output: [], errors: [errorMessage] }
     }
   }
 

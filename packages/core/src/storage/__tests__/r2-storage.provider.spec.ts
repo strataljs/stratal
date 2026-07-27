@@ -25,7 +25,7 @@ describe('R2StorageProvider', () => {
 
     bucket = createMock<R2Bucket>()
     env = { APP_SECRET: 'test-secret-key' } as unknown as DeepMocked<StratalEnv>
-    provider = new R2StorageProvider(config, bucket as unknown as R2Bucket, env as unknown as StratalEnv)
+    provider = new R2StorageProvider(config, bucket, env)
   })
 
   describe('upload', () => {
@@ -78,7 +78,7 @@ describe('R2StorageProvider', () => {
       })
       mockObj.text.mockResolvedValue('content')
       mockObj.bytes.mockResolvedValue(new Uint8Array([1, 2, 3]))
-      bucket.get.mockResolvedValue(mockObj as unknown as R2ObjectBody)
+      bucket.get.mockResolvedValue(mockObj)
 
       const result = await provider.download('files/doc.pdf')
 
@@ -89,7 +89,7 @@ describe('R2StorageProvider', () => {
     })
 
     it('should throw StorageError when object not found', async () => {
-      bucket.get.mockResolvedValue(null as unknown as R2ObjectBody)
+      bucket.get.mockResolvedValue(null)
 
       await expect(provider.download('missing.txt')).rejects.toThrow(StorageError)
     })
@@ -109,7 +109,7 @@ describe('R2StorageProvider', () => {
     })
 
     it('should return false when file does not exist', async () => {
-      bucket.head.mockResolvedValue(null as unknown as R2Object)
+      bucket.head.mockResolvedValue(null)
       expect(await provider.exists('missing.txt')).toBe(false)
     })
   })
@@ -127,7 +127,7 @@ describe('R2StorageProvider', () => {
     it('should throw StorageError when APP_SECRET is missing', async () => {
       const providerWithoutSecret = new R2StorageProvider(
         config,
-        bucket as unknown as R2Bucket,
+        bucket,
         {} as unknown as StratalEnv
       )
 
@@ -155,7 +155,7 @@ describe('R2StorageProvider', () => {
     })
 
     it('should return null when object does not exist', async () => {
-      bucket.head.mockResolvedValue(null as unknown as R2Object)
+      bucket.head.mockResolvedValue(null)
       expect(await provider.headObject('missing.txt')).toBeNull()
     })
   })
@@ -184,7 +184,7 @@ describe('R2StorageProvider', () => {
         uploadId: 'upload-123',
         key: 'large-file.zip',
       })
-      bucket.createMultipartUpload.mockResolvedValue(mockUpload as unknown as R2MultipartUpload)
+      bucket.createMultipartUpload.mockResolvedValue(mockUpload)
       bucket.put.mockResolvedValue(createMock<R2Object>())
 
       const result = await provider.createMultipartUpload('large-file.zip', {
@@ -209,7 +209,7 @@ describe('R2StorageProvider', () => {
     it('should upload a part with tracking object', async () => {
       const mockUpload = createMock<R2MultipartUpload>()
       mockUpload.uploadPart.mockResolvedValue({ partNumber: 1, etag: '"etag1"' })
-      bucket.resumeMultipartUpload.mockReturnValue(mockUpload as unknown as R2MultipartUpload)
+      bucket.resumeMultipartUpload.mockReturnValue(mockUpload)
       bucket.put.mockResolvedValue(createMock<R2Object>())
 
       const body = new Uint8Array([1, 2, 3])
@@ -229,7 +229,7 @@ describe('R2StorageProvider', () => {
     it('should complete a multipart upload and cleanup tracking', async () => {
       const mockUpload = createMock<R2MultipartUpload>()
       mockUpload.complete.mockResolvedValue(createMock<R2Object>({ key: 'file.zip' }))
-      bucket.resumeMultipartUpload.mockReturnValue(mockUpload as unknown as R2MultipartUpload)
+      bucket.resumeMultipartUpload.mockReturnValue(mockUpload)
       bucket.list.mockResolvedValue(createMock<R2Objects>({
         objects: [],
         truncated: false,
@@ -245,7 +245,7 @@ describe('R2StorageProvider', () => {
 
     it('should abort a multipart upload and cleanup tracking', async () => {
       const mockUpload = createMock<R2MultipartUpload>()
-      bucket.resumeMultipartUpload.mockReturnValue(mockUpload as unknown as R2MultipartUpload)
+      bucket.resumeMultipartUpload.mockReturnValue(mockUpload)
       bucket.list.mockResolvedValue(createMock<R2Objects>({
         objects: [createMock<R2Object>({ key: '__parts/upload-123/1' })],
         truncated: false,
@@ -276,8 +276,8 @@ describe('R2StorageProvider', () => {
         truncated: false,
       }))
       bucket.get
-        .mockResolvedValueOnce(partObj1 as unknown as R2ObjectBody)
-        .mockResolvedValueOnce(partObj2 as unknown as R2ObjectBody)
+        .mockResolvedValueOnce(partObj1)
+        .mockResolvedValueOnce(partObj2)
 
       const result = await provider.listParts('file.zip', 'upload-123')
 
@@ -301,7 +301,7 @@ describe('R2StorageProvider', () => {
         objects: [createMock<R2Object>({ key: '__multipart/upload-123.json' })],
         truncated: false,
       }))
-      bucket.get.mockResolvedValue(uploadObj as unknown as R2ObjectBody)
+      bucket.get.mockResolvedValue(uploadObj)
 
       const result = await provider.listMultipartUploads()
 

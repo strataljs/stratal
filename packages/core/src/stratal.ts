@@ -1,6 +1,7 @@
 import { Application, type ApplicationConfig } from './application'
 import type { StratalEnv } from './env'
 import { StratalNotInitializedError, StratalSupersededError } from './errors'
+import { markGatewayMode } from './response-cache/gateway-mode'
 import type { HonoApp } from './router/hono-app'
 
 /**
@@ -69,10 +70,21 @@ export class Stratal<Env extends StratalEnv = StratalEnv> {
     })
   }
 
+  /**
+   * The eyeball entrypoint — and, when `stratal/response-cache`'s gateway is
+   * configured, the **gateway**.
+   *
+   * The execution context is marked before it reaches Hono so the dispatch
+   * middleware can tell which of the two entrypoints it is running inside.
+   * `cachedEntrypoint` deliberately does not mark, which is what stops the
+   * cached entrypoint from dispatching back into itself. The mark lives in a
+   * module-private `WeakSet` keyed on this object, so nothing a client sends
+   * can set or clear it. It is a no-op for apps that configure no gateway.
+   */
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const app = await this.ensureReady()
     const hono = await app.ensureHono()
-    return hono.fetch(request, env, ctx)
+    return hono.fetch(request, env, markGatewayMode(ctx))
   }
 
   async queue(batch: MessageBatch): Promise<void> {
@@ -162,13 +174,39 @@ export class Stratal<Env extends StratalEnv = StratalEnv> {
       throw new StratalSupersededError(generation)
     }
 
-    const app = new Application({ ...config, env: env as Env, ctx: { waitUntil } })
+    const app = new Application({ ...config, env: env, ctx: { waitUntil } })
     await app.initialize()
 
     // Check again after initialization completes
     if (generation !== Stratal._generation) {
       await app.shutdown()
       throw new StratalSupersededError(generation)
+    }
+
+    // Pre-warm the HTTP routing stack as part of boot when the app serves HTTP,
+    // so the first request doesn't pay route registration. Queue/scheduled-only
+    // workers (no controllers) skip it and never build routes they won't use.
+    //
+    // Awaited, not fire-and-forget: Cloudflare Workers only progress async work
+    // while a request is being handled, so a detached `void ensureHono()` would
+    // either stall until the first request adopts it (no pre-warm) or, if it ran
+    // I/O outside a request context, reject — and `initializeRouting` memoizes
+    // that promise, so the first real request would await the poisoned promise
+    // and fail. Awaiting folds routing into the same init chain `fetch()` already
+    // awaits, running in the identical context as the proven `app.initialize()`.
+    //
+    // A routing failure is logged but not rethrown so it only breaks the HTTP
+    // path (the memoized rejection resurfaces per request, as in lazy routing)
+    // without taking down queue/scheduled handlers on a mixed worker.
+    if (app.hasHttpRoutes()) {
+      try {
+        await app.ensureHono()
+      } catch (error) {
+        app.logger.error(
+          '[stratal] Eager route registration failed',
+          error instanceof Error ? error : new Error(String(error)),
+        )
+      }
     }
 
     return app

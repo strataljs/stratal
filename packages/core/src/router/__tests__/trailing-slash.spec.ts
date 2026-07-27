@@ -2,7 +2,7 @@ import type { MiddlewareHandler } from 'hono'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Application, type ApplicationOptions } from '../../application'
 import type { StratalEnv } from '../../env'
-import { z } from '../../i18n/validation/zod'
+import { boolean, object, string } from 'zod/mini'
 import { LogLevel } from '../../logger'
 import { Module } from '../../module/module.decorator'
 import { Controller } from '../decorators/controller.decorator'
@@ -14,15 +14,15 @@ const handlerHits = { index: 0, create: 0 }
 
 @Controller('/users')
 class UsersController {
-  @Route({ response: z.object({ ok: z.boolean() }) })
+  @Route({ response: object({ ok: boolean() }) })
   index(ctx: RouterContext) {
     handlerHits.index += 1
     return ctx.json({ ok: true })
   }
 
   @Route({
-    body: z.object({ name: z.string() }),
-    response: z.object({ created: z.boolean() }),
+    body: object({ name: string() }),
+    response: object({ created: boolean() }),
   })
   create(ctx: RouterContext) {
     handlerHits.create += 1
@@ -32,7 +32,7 @@ class UsersController {
 
 @Controller('/callback')
 class CallbackController {
-  @Route({ response: z.object({ ok: z.boolean() }) })
+  @Route({ response: object({ ok: boolean() }) })
   index(ctx: RouterContext) {
     return ctx.json({ ok: true })
   }

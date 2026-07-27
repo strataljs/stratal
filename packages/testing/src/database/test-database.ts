@@ -1,41 +1,26 @@
 /**
  * Test database isolation helpers.
  *
- * Implements database-per-test-file isolation for parallel e2e runs against
+ * Implements database-per-worker isolation for parallel e2e runs against
  * Postgres. A migrated **template** database is built once in global setup;
- * each test file clones it instantly via `CREATE DATABASE ... TEMPLATE` and
- * drops it on teardown. See `@stratal/testing/database`.
+ * each worker clones it once into a per-worker database that is reused (and
+ * reset between tests, not dropped per file). See `@stratal/testing/database`.
  *
  * `pg` is imported dynamically so this module loads without it — consumers
  * that don't use a database never pay the dependency.
  */
 
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 
 import type pg from 'pg'
-
-/** Postgres isolation mode for tests. */
-export type DatabaseIsolation = 'shared' | 'database'
-
-/** Env var that selects the isolation mode (single source of truth). */
-export const ISOLATION_ENV_VAR = 'STRATAL_TEST_DB_ISOLATION'
 
 /** Env var carrying the name of the Hyperdrive binding to isolate. */
 export const BINDING_ENV_VAR = 'STRATAL_TEST_DB_BINDING'
 
 /** Default Hyperdrive binding name when none is configured. */
 export const DEFAULT_DB_BINDING = 'DB'
-
-/**
- * Normalize an isolation value (from an option or env var) to a mode.
- * Anything other than the literal `'database'` resolves to `'shared'` — the
- * default — so parallel isolation is strictly opt-in.
- */
-export function normalizeIsolation(value: string | undefined): DatabaseIsolation {
-  return value === 'database' ? 'database' : 'shared'
-}
 
 /**
  * Postgres' identifier length limit. Names longer than this are silently
@@ -112,20 +97,13 @@ export function buildConnectionString(base: string, dbName: string): string {
   return url.toString()
 }
 
-/** Length of the random token appended by {@link deriveDbName}. */
-const DB_NAME_TOKEN_LENGTH = 12
-
 /** The shared prefix for per-file databases, used as the leak-sweep key. */
 export function databasePrefix(base: string): string {
   const baseName = databaseNameOf(base).replace(/[^a-z0-9_]/gi, '_')
-  const prefix = `${baseName}_t_`
-  // The per-file name is `${prefix}${12-char token}`; assert the full budget so
-  // long base names fail loudly here instead of silently truncating + colliding.
-  assertIdentifierLength(`${prefix}${'x'.repeat(DB_NAME_TOKEN_LENGTH)}`, 'per-file database name')
-  return prefix
+  return `${baseName}_f_`
 }
 
-/** Name of the migrated template database cloned per file. */
+/** Name of the migrated template database cloned per worker. */
 export function deriveTemplateName(base: string): string {
   const name = `${databaseNameOf(base).replace(/[^a-z0-9_]/gi, '_')}_template`
   assertIdentifierLength(name, 'template database name')
@@ -133,13 +111,18 @@ export function deriveTemplateName(base: string): string {
 }
 
 /**
- * Generate a unique per-`compile()` database name. Random (not path-based) so
- * it is collision-free across concurrent isolates and multiple modules in the
- * same file, and stays well within Postgres' 63-char identifier limit.
+ * Name of the database owned by a single test FILE, keyed by a per-file `token`.
+ * Each test file clones the template into its OWN database — no two files ever
+ * share one — because `@cloudflare/vitest-pool-workers` isolates per file and can
+ * run a worker's files concurrently; per-file databases make cross-file
+ * contamination impossible by construction. Asserted against Postgres' 63-char
+ * identifier limit (keep the base name short so `_f_<token>` fits).
  */
-export function deriveDbName(base: string): string {
-  const token = randomUUID().replace(/-/g, '').slice(0, DB_NAME_TOKEN_LENGTH)
-  return `${databasePrefix(base)}${token}`
+export function deriveFileDbName(base: string, token: string): string {
+  const baseName = databaseNameOf(base).replace(/[^a-z0-9_]/gi, '_')
+  const name = `${baseName}_f_${token}`
+  assertIdentifierLength(name, 'per-file database name')
+  return name
 }
 
 async function withAdminClient<T>(adminConn: string, fn: (query: (sql: string) => Promise<unknown>) => Promise<T>): Promise<T> {
@@ -153,60 +136,80 @@ async function withAdminClient<T>(adminConn: string, fn: (query: (sql: string) =
   }
 }
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
-
-/** True for transient errors worth retrying a `CREATE DATABASE ... TEMPLATE`. */
-function isTemplateBusy(error: unknown): boolean {
-  const e = error as { code?: string; message?: string }
-  return e?.code === '55006' || /is being accessed by other users/i.test(e?.message ?? '')
+/** True when the error is Postgres' "duplicate database" (concurrent create). */
+function isDuplicateDatabase(error: unknown): boolean {
+  return (error as { code?: string })?.code === '42P04'
 }
 
 /**
- * Terminate every backend connected to `dbName` except the caller's own. Used
- * to evict lingering sessions on the template database so `CREATE DATABASE ...
- * TEMPLATE` (which requires the source to have no other connections) succeeds.
+ * True for SQLSTATE 55006 ("source database is being accessed by other users") —
+ * what `CREATE DATABASE ... TEMPLATE t` raises while another session is using the
+ * template (e.g. a concurrent clone of the same template).
  */
-async function terminateConnections(query: (sql: string) => Promise<unknown>, dbName: string): Promise<void> {
-  await query(
-    `SELECT pg_terminate_backend(pid) FROM pg_stat_activity ` +
-      `WHERE datname = ${quoteLiteral(dbName)} AND pid <> pg_backend_pid()`,
-  )
+function isTemplateInUse(error: unknown): boolean {
+  return (error as { code?: string })?.code === '55006'
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+/** True when a database with `dbName` already exists. */
+async function databaseExists(
+  query: (sql: string) => Promise<unknown>,
+  dbName: string,
+): Promise<boolean> {
+  const { rows } = (await query(
+    `SELECT 1 AS one FROM pg_database WHERE datname = ${quoteLiteral(dbName)}`,
+  )) as { rows: unknown[] }
+  return rows.length > 0
 }
 
 /**
- * Clone the template database into `dbName`. `CREATE DATABASE ... TEMPLATE`
- * fails (SQLSTATE 55006) if any session is connected to the template, so we
- * proactively terminate lingering template backends before each attempt and
- * retry with exponential backoff while a concurrent clone briefly locks it.
+ * Ensure worker database `dbName` exists, cloned from `template`. Idempotent and
+ * lock-frugal: it first checks `pg_database`, so the common "already exists" path
+ * (every file after a slot's first) never issues `CREATE DATABASE ... TEMPLATE`
+ * and never takes the clone lock.
+ *
+ * The clone is serialized across all workers and processes by one Postgres
+ * advisory lock keyed on the template. Postgres permits only one
+ * `CREATE DATABASE ... TEMPLATE t` at a time — a concurrent one fails with
+ * SQLSTATE 55006. On a fresh run every worker's first compile races to clone the
+ * same template, so without this they'd all fire `CREATE ... TEMPLATE` at once
+ * and all but one would fail their first file. The lock funnels them one-at-a-
+ * time, each blocking *in Postgres* (not busy-waiting) until its turn. A create
+ * that still hits a transient 55006 is retried with backoff; one that loses the
+ * race for the same name (SQLSTATE 42P04) is treated as success.
  */
-export async function createDatabaseFromTemplate(
+export async function ensureWorkerDatabase(
   adminConn: string,
   dbName: string,
   template: string,
-  attempts = 10,
 ): Promise<void> {
-  const sql = `CREATE DATABASE ${quoteIdent(dbName)} TEMPLATE ${quoteIdent(template)}`
-  for (let attempt = 0; attempt < attempts; attempt++) {
-    try {
-      await withAdminClient(adminConn, async (query) => {
-        // Evict any lingering sessions on the template; otherwise the clone
-        // below fails with 55006 ("source database is being accessed by other
-        // users"). Our own admin connection is excluded by pid.
-        await terminateConnections(query, template)
-        await query(sql)
-      })
-      return
-    } catch (error) {
-      if (!isTemplateBusy(error) || attempt === attempts - 1) throw error
-      const jitter = parseInt(randomUUID().slice(0, 2), 16)
-      await sleep(Math.min(50 * 2 ** attempt, 2000) + jitter)
-    }
-  }
-}
+  await withAdminClient(adminConn, async (query) => {
+    if (await databaseExists(query, dbName)) return
 
-/** Drop a database, terminating any lingering connections. */
-export async function dropDatabase(adminConn: string, dbName: string): Promise<void> {
-  await withAdminClient(adminConn, (query) => query(`DROP DATABASE IF EXISTS ${quoteIdent(dbName)} WITH (FORCE)`))
+    const lockKey = quoteLiteral(`stratal:worker-db-clone:${template}`)
+    await query(`SELECT pg_advisory_lock(hashtext(${lockKey}))`)
+    try {
+      // A sibling worker may have cloned it while we waited for the lock.
+      if (await databaseExists(query, dbName)) return
+      const create = `CREATE DATABASE ${quoteIdent(dbName)} TEMPLATE ${quoteIdent(template)}`
+      for (let attempt = 1; ; attempt++) {
+        try {
+          await query(create)
+          return
+        } catch (error) {
+          if (isDuplicateDatabase(error)) return
+          if (isTemplateInUse(error) && attempt < 5) {
+            await sleep(250 * attempt)
+            continue
+          }
+          throw error
+        }
+      }
+    } finally {
+      await query(`SELECT pg_advisory_unlock(hashtext(${lockKey}))`)
+    }
+  })
 }
 
 /**
@@ -309,14 +312,18 @@ function collectSchemaFiles(path: string): string[] {
 }
 
 /**
- * A content-derived fingerprint of the schema source(s) plus the migrate
- * routine. The template is reused across runs while this is unchanged; any edit
- * to a schema file — or to how migration runs — changes it and forces a rebuild.
- * Uses file basenames (not absolute paths) so it is stable across checkouts.
+ * A content-derived fingerprint of the schema source(s) plus the migrate and
+ * prepare routines. The template is reused across runs while this is
+ * unchanged; any edit to a schema file — or to how migration/preparation run
+ * — changes it and forces a rebuild. Uses file basenames (not absolute paths)
+ * so it is stable across checkouts.
+ *
+ * @internal exported for fingerprint unit tests
  */
-function computeSchemaFingerprint(
+export function computeSchemaFingerprint(
   schema: string | string[],
   migrate: TestDatabaseGlobalSetupOptions['migrate'],
+  prepare?: TestDatabaseGlobalSetupOptions['prepare'],
 ): string {
   const roots = Array.isArray(schema) ? schema : [schema]
   const files = roots.flatMap(collectSchemaFiles).sort()
@@ -333,6 +340,8 @@ function computeSchemaFingerprint(
     hash.update('\0')
   }
   hash.update(migrate.toString())
+  hash.update('\0')
+  hash.update(prepare ? prepare.toString() : '')
   return hash.digest('hex')
 }
 
@@ -355,26 +364,26 @@ async function readTemplateFingerprint(
 
 /** Options for {@link createTestDatabaseGlobalSetup}. */
 export interface TestDatabaseGlobalSetupOptions {
-  /**
-   * Run migrations against the given connection string. In `'database'` mode
-   * the string points at the template database; in `'shared'` mode at the base
-   * database. Framework consumers typically run `zenstack db push` here.
-   */
+  /** Run migrations against the template connection string. */
   migrate: (connectionString: string) => void | Promise<void>
   /**
-   * Schema source(s) — a file or directory path, or a list of them. Their
-   * contents (plus the `migrate` routine) are hashed into a fingerprint; the
-   * template is reused across runs while the fingerprint is unchanged and
-   * rebuilt + re-migrated when it changes, so only the first run after a schema
-   * edit pays the migration cost. **Required** for `'database'` isolation.
-   *
-   * For a ZenStack multi-file schema, pass the **root `.zmodel`** — its `import`
-   * graph is followed, so editing any imported file invalidates the fingerprint.
-   * A directory path hashes every `.zmodel`/`.prisma`/`.sql` file in its tree.
+   * Schema source(s) — file or directory path(s). Contents + `migrate` + `prepare`
+   * are hashed into the template fingerprint; the template is reused across runs
+   * while unchanged. For a ZenStack multi-file schema pass the root `.zmodel`.
    */
-  schema?: string | string[]
-  /** Isolation mode. Defaults to {@link ISOLATION_ENV_VAR} or `'shared'`. */
-  isolation?: DatabaseIsolation
+  schema: string | string[]
+  /**
+   * One-time preparation run against the template **after** migrations (before
+   * the fingerprint is stamped). Bake expensive baseline state here — seed data,
+   * a default tenant schema, reference rows — so every worker database inherits
+   * it via the clone instead of rebuilding it per test.
+   *
+   * The fingerprint hashes this hook's **source text only** — if `prepare` reads
+   * external data files (seed JSON/SQL) at runtime, changing only those files
+   * will NOT invalidate the template. Bump the hook's source (e.g. a version
+   * comment) or drop the template manually when seed data changes.
+   */
+  prepare?: (connectionString: string) => void | Promise<void>
   /** Base/admin connection string. Defaults to `process.env.DATABASE_URL`. */
   connectionString?: string
   /** Template database name. Defaults to `<baseDbName>_template`. */
@@ -384,24 +393,23 @@ export interface TestDatabaseGlobalSetupOptions {
 /**
  * Build a Vitest `globalSetup` default export that prepares the test database.
  *
- * - `'shared'` (default): migrates the base database in place (no isolation).
- * - `'database'`: under a Postgres advisory lock (so concurrent setups across
- *   CI shards / multiple e2e projects don't clobber each other), sweeps leaked
- *   per-file databases, then ensures a migrated template exists — ready to be
- *   cloned per test file.
+ * Under a Postgres advisory lock (so concurrent setups across CI shards /
+ * multiple e2e projects don't clobber each other), sweeps leaked per-worker
+ * databases, then ensures a migrated (and optionally prepared) template exists
+ * — ready to be cloned per worker.
  *
  * **Template reuse.** The template is fingerprinted from the `schema` source(s)
- * + the `migrate` routine and the fingerprint is stored as the template's
- * database COMMENT. On each run, a matching fingerprint means the schema is
- * unchanged and the existing template is reused as-is — `migrate` runs **only**
- * on the first run after a schema edit (or on a fresh database). The fingerprint
- * is stamped only after a successful migrate, so a match always implies a
- * complete template; there is no force/skip flag — reuse is purely fingerprint-
- * driven.
+ * + the `migrate` routine + the `prepare` routine, and the fingerprint is
+ * stored as the template's database COMMENT. On each run, a matching
+ * fingerprint means nothing has changed and the existing template is reused
+ * as-is — `migrate`/`prepare` run **only** on the first run after an edit (or on
+ * a fresh database). The fingerprint is stamped only after a successful
+ * migrate + prepare, so a match always implies a complete template; there is no
+ * force/skip flag — reuse is purely fingerprint-driven.
  *
  * **Concurrency model.** The reuse check + rebuild runs under
  * `pg_advisory_lock(hashtext(<template>))`, so only one process rebuilds the
- * template at a time. The stale-database sweep only drops per-file databases
+ * template at a time. The stale-database sweep only drops per-worker databases
  * with **no active connections**, leaving a sibling process's live databases
  * intact. Teardown deliberately does **not** sweep or drop the template: a
  * concurrent process may still be using both, and the next run's setup sweep is
@@ -421,7 +429,7 @@ export interface TestDatabaseGlobalSetupOptions {
  */
 export function createTestDatabaseGlobalSetup(
   opts: TestDatabaseGlobalSetupOptions,
-): () => Promise<void | (() => Promise<void>)> {
+): () => Promise<void> {
   return async () => {
     const base = opts.connectionString ?? process.env.DATABASE_URL
     if (!base) {
@@ -430,24 +438,10 @@ export function createTestDatabaseGlobalSetup(
       )
     }
 
-    const isolation = normalizeIsolation(opts.isolation ?? process.env[ISOLATION_ENV_VAR])
-    if (isolation === 'shared') {
-      await opts.migrate(base)
-      return
-    }
-
-    if (!opts.schema) {
-      throw new Error(
-        '[stratal-testing] `schema` is required for database isolation. Pass the schema ' +
-          'file(s) or directory so the migrated template can be reused across runs when ' +
-          'unchanged (and rebuilt when it changes).',
-      )
-    }
-
     const adminConn = deriveAdminConnectionString(base)
     const template = opts.templateName ?? deriveTemplateName(base)
     const prefix = databasePrefix(base)
-    const fingerprint = computeSchemaFingerprint(opts.schema, opts.migrate)
+    const fingerprint = computeSchemaFingerprint(opts.schema, opts.migrate, opts.prepare)
 
     // Serialize template rebuild across concurrent setups so they don't drop or
     // migrate the template out from under each other.
@@ -466,16 +460,19 @@ export function createTestDatabaseGlobalSetup(
         await query(`DROP DATABASE IF EXISTS ${quoteIdent(template)} WITH (FORCE)`)
         await query(`CREATE DATABASE ${quoteIdent(template)}`)
       })
-      await opts.migrate(buildConnectionString(base, template))
-      // Stamp the fingerprint only after a successful migrate, so a matching
-      // fingerprint always implies a complete, ready template. Database COMMENTs
-      // are not copied by CREATE DATABASE ... TEMPLATE, so clones stay clean.
+      const templateConn = buildConnectionString(base, template)
+      await opts.migrate(templateConn)
+      if (opts.prepare) await opts.prepare(templateConn)
+      // Stamp the fingerprint only after a successful migrate + prepare, so a
+      // matching fingerprint always implies a complete, ready template. Database
+      // COMMENTs are not copied by CREATE DATABASE ... TEMPLATE, so clones stay
+      // clean.
       await withAdminClient(adminConn, (query) =>
         query(`COMMENT ON DATABASE ${quoteIdent(template)} IS ${quoteLiteral(fingerprint)}`),
       )
     })
 
-    // No teardown hook: anything destructive here (sweeping per-file databases
+    // No teardown hook: anything destructive here (sweeping per-worker databases
     // or dropping the template) could clobber a concurrent process that is still
     // running. The next run's setup sweep (connection-guarded) reclaims leaks.
   }

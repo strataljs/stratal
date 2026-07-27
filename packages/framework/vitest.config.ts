@@ -1,6 +1,13 @@
 import { fixPgCjs, stratalTest } from '@stratal/testing/vitest-plugin';
 import { defineConfig } from 'vitest/config';
 
+// `cloudflare:workers` is a Workers runtime built-in with no Node resolution.
+// The node `unit` project imports modules that statically import it (e.g.
+// `stratal/cache`'s `waitUntil`), so it aliases to the shared stub from
+// @stratal/testing. The `e2e` project runs in miniflare with the real module
+// and must not alias it.
+const cloudflareWorkersStub = '@stratal/testing/mocks/cloudflare-workers'
+
 const DATABASE_URL = process.env.DATABASE_URL
 if (!DATABASE_URL) {
   throw new Error('DATABASE_URL is required to run framework e2e tests. Set it in packages/framework/.env (loaded via `npx dotenv`).')
@@ -24,6 +31,7 @@ export default defineConfig({
     projects: [
       {
         extends: true,
+        resolve: { alias: { 'cloudflare:workers': cloudflareWorkersStub } },
         test: {
           name: 'unit',
           environment: 'node',
@@ -45,9 +53,7 @@ export default defineConfig({
                 DB: DATABASE_URL,
               },
             },
-            // Each test file gets its own database cloned from the migrated
-            // template; enables file parallelism. Set to 'shared' to opt out.
-            database: { isolation: 'database' },
+            database: {},
           }),
         ],
         test: {

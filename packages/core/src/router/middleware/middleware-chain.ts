@@ -27,7 +27,7 @@ export function createMiddlewareChain(
     for (let i = classes.length - 1; i >= 0; i--) {
       const prevNext = current
       const middlewareClass = classes[i]
-      current = () => {
+      current = async () => {
         const middleware = requestContainer.resolve<Middleware>(middlewareClass)
         let called = false
         const guardedNext: Next = () => {
@@ -37,9 +37,26 @@ export function createMiddlewareChain(
             )
           }
           called = true
-          return prevNext() as Promise<void>
+          return prevNext()
         }
-        return middleware.handle(ctx, guardedNext) as Promise<void>
+
+        const result = await middleware.handle(ctx, guardedNext)
+
+        // A middleware that returns a Response is short-circuiting the request.
+        // Finalize it on the Hono context at this boundary so it survives even
+        // when an *outer* middleware forwards control with `await next()`
+        // instead of `return next()` and drops the returned value — which would
+        // otherwise leave the context unfinalized and make Hono throw
+        // "Context is not finalized". Outer middlewares that don't short-circuit
+        // return void, so `result instanceof Response` is false and they never
+        // reach this branch to override an inner middleware's already-set
+        // response. (A forwarding middleware that `return next()`s re-sets the
+        // very same Response object, which is harmless.)
+        if (result instanceof Response) {
+          c.res = result
+        }
+
+        return result
       }
     }
 

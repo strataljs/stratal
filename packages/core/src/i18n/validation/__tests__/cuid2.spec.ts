@@ -1,4 +1,4 @@
-import { z } from '@hono/zod-openapi'
+import { cuid2 as zodCuid2 } from 'zod/mini'
 import { describe, expect, it } from 'vitest'
 import { CUID2_REGEX, cuid2 } from '../cuid2'
 
@@ -13,7 +13,7 @@ describe('cuid2()', () => {
     // Zod 4.3.6's `z.cuid2()` accepts these (regex `/^[0-9a-z]+$/`).
     // The helper's added shape regex rejects them.
     for (const value of ['sw', 'a', '0', 'short']) {
-      expect((await z.cuid2().safeParseAsync(value)).success).toBe(true)
+      expect((await zodCuid2().safeParseAsync(value)).success).toBe(true)
       expect((await cuid2().safeParseAsync(value)).success).toBe(false)
     }
   })

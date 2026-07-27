@@ -78,13 +78,13 @@ export class ConfigService<T extends object = ModuleConfig> extends Macroable im
   all(): Readonly<T> {
     const base = this.store.all() as T
     if (this.overrides.size === 0) {
-      return base as Readonly<T>
+      return base
     }
     const merged = this.deepClone(base)
     for (const [path, value] of this.overrides) {
       this.writeByPath(merged, path, value)
     }
-    return merged as Readonly<T>
+    return merged
   }
 
   /**

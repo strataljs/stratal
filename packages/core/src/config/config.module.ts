@@ -1,12 +1,12 @@
-import { DI_TOKENS } from '../di/tokens'
-import type { z } from '../i18n/validation/zod'
-import { Module } from '../module'
-import type { DynamicModule, ModuleContext, OnInitialize, Provider } from '../module/types'
-import { CONFIG_TOKENS } from './config.tokens'
-import { ConfigValidationError, type ModuleConfig } from './config.types'
-import type { ConfigNamespace } from './register-as'
-import { ConfigService } from './services/config.service'
-import { ConfigStore } from './services/config.store'
+import { DI_TOKENS } from '../di/tokens';
+import type { ZodType } from '../i18n/validation/zod';
+import { Module } from '../module';
+import type { DynamicModule, ModuleContext, OnInitialize, Provider } from '../module/types';
+import { CONFIG_TOKENS } from './config.tokens';
+import { ConfigValidationError } from './config.types';
+import type { ConfigNamespace } from './register-as';
+import { ConfigService } from './services/config.service';
+import { ConfigStore } from './services/config.store';
 
 /**
  * Any config namespace - uses structural typing for flexibility
@@ -27,7 +27,7 @@ export interface ConfigModuleOptions {
    * Optional Zod schema for validating the merged config
    * Validates the entire config object after all namespaces are merged
    */
-  validateSchema?: z.ZodType<object>
+  validateSchema?: ZodType
 }
 
 // Store options for use in onInitialize
@@ -148,7 +148,7 @@ export class ConfigModule implements OnInitialize {
     }
 
     // Initialize the shared ConfigStore with merged config.
-    configStore.initialize(mergedConfig as ModuleConfig)
+    configStore.initialize(mergedConfig)
 
     context.logger.debug('ConfigModule initialized', {
       namespaces: moduleOptions.load.map((n) => n.namespace),

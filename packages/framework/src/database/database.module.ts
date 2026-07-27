@@ -105,7 +105,7 @@ export class DatabaseModule implements OnInitialize, OnShutdown {
   async onShutdown(context: ModuleContext): Promise<void> {
     // Disconnect every live client so pools/sockets don't outlive the
     // Application across dev-server hot reloads.
-    await Promise.all(this.services.map(service => service.disposeInstances()))
+    await Promise.all(this.services.map(service => service.disposeInstances(context.logger)))
     this.services.length = 0
     context.logger.info('DatabaseModule shutdown')
   }

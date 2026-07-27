@@ -283,7 +283,7 @@ export class PostsController {
   async create(ctx: RouterContext) { ... }
 
   // Public — no guard
-  @Route({ response: z.array(postSchema) })
+  @Route({ response: array(postSchema) })
   async index(ctx: RouterContext) { ... }
 }
 ```
@@ -347,6 +347,19 @@ export class PostsService {
 ```
 
 **Prefer `currentUserHasPermission()` over `hasPermission()` for the current user** — no DB hit, reads directly from the session.
+
+### Client-Side Checks (Inertia)
+
+Once `accessControl` is configured on `AuthModule.forRootAsync()`, roles and permissions are shared to every Inertia page automatically. Gate rendering with components or hooks from `@stratal/inertia/react/access`, using the same permission syntax as `AuthGuard`:
+
+```tsx
+import { Can, HasRole } from '@stratal/inertia/react/access'
+
+<Can do="posts:update"><EditButton /></Can>
+<HasRole is="admin"><AdminPanel /></HasRole>
+```
+
+See `references/inertia.md` for the full component API and hooks (`useCan`, `useRole`, `useAccess`).
 
 ## Auth Error Handling
 

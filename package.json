@@ -1,6 +1,6 @@
 {
   "name": "stratal-monorepo",
-  "packageManager": "yarn@4.12.0",
+  "packageManager": "yarn@4.17.1",
   "private": true,
   "description": "A modular Cloudflare Workers framework with dependency injection, queue-based events, and type-safe configuration",
   "license": "MIT",
@@ -50,21 +50,21 @@
     ]
   },
   "resolutions": {
-    "fast-xml-parser": ">=5.3.8",
-    "@paralleldrive/cuid2": "^3.3.0"
+    "@paralleldrive/cuid2": "^3.3.0",
+    "undici": "7.28.0"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",
-    "@changesets/cli": "^2.31.0",
+    "@changesets/cli": "2.31.1",
     "@opentelemetry/api": "^1.9.1",
-    "globals": "^17.6.0",
+    "globals": "^17.7.0",
     "husky": "^9.1.7",
     "jiti": "^2.7.0",
-    "lint-staged": "^17.0.7",
-    "oxlint": "^1.68.0",
-    "oxlint-tsgolint": "^0.23.0",
-    "tsdown": "^0.22.1",
-    "typedoc": "^0.28.19",
-    "typescript": "^6.0.3"
+    "lint-staged": "^17.0.8",
+    "oxlint": "^1.74.0",
+    "oxlint-tsgolint": "^0.24.0",
+    "tsdown": "^0.22.9",
+    "typedoc": "^0.28.20",
+    "typescript": "^7.0.2"
   }
 }

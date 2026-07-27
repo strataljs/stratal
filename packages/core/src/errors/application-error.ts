@@ -14,4 +14,17 @@ export class ApplicationError extends Error {
       Error.captureStackTrace(this, this.constructor)
     }
   }
+
+  /**
+   * Extra structured fields this error contributes to its log entry.
+   *
+   * Override in a subclass to surface error-specific detail (codes, identifiers,
+   * validation issues) to observability. Returns `undefined` by default. Reserved
+   * log keys (`message`, `name`, `stack`, `timestamp`, `cause`) cannot be
+   * overridden — `cause` is populated from the error's cause chain — and
+   * globally-registered context still takes precedence over these fields.
+   */
+  public reportContext(): Record<string, unknown> | undefined {
+    return undefined
+  }
 }

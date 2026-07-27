@@ -5,7 +5,8 @@ import { cloudflareTest } from '@cloudflare/vitest-pool-workers'
 import type { StratalEnv } from 'stratal'
 import type { Plugin, UserConfig } from 'vite'
 import type { TestUserConfig } from 'vitest/config'
-import { BINDING_ENV_VAR, DEFAULT_DB_BINDING, ISOLATION_ENV_VAR, normalizeIsolation, type DatabaseIsolation } from '../database'
+import { DB_SHARED_POOL_ENV } from '@stratal/framework/database'
+import { BINDING_ENV_VAR, DEFAULT_DB_BINDING } from '../database'
 
 const require = createRequire(import.meta.url)
 
@@ -24,23 +25,11 @@ type HyperdriveKeys = Extract<
  */
 type HyperdriveBindingName = [HyperdriveKeys] extends [never] ? string : HyperdriveKeys
 
-/** Stratal-specific test database configuration for {@link stratalTest}. */
+/** Stratal per-worker database configuration for {@link stratalTest}. */
 export interface StratalTestDatabaseOptions {
   /**
-   * Database isolation mode for parallel runs. Defaults to `'shared'`.
-   *
-   * - `'shared'` — all test files share one database (serial; today's behaviour).
-   * - `'database'` — each test file gets its own database cloned from a migrated
-   *   template (dropped on teardown), and file parallelism is enabled.
-   *
-   * Pair with `createTestDatabaseGlobalSetup({ isolation })` from
-   * `@stratal/testing/database` in your Vitest `globalSetup`.
-   */
-  isolation?: DatabaseIsolation
-  /**
-   * Name of the Hyperdrive binding to isolate per test file. Defaults to `'DB'`.
-   * Constrained to Hyperdrive binding names declared on `Cloudflare.Env` /
-   * `StratalEnv`.
+   * Name of the Hyperdrive binding to point at this worker's database.
+   * Defaults to `'DB'`. Constrained to declared Hyperdrive bindings.
    */
   binding?: HyperdriveBindingName
 }
@@ -155,7 +144,7 @@ export const fixNobleHashesCjs = (): Plugin => {
   }
 }
 
-const createStratalPlugin = (isolation: DatabaseIsolation): Plugin => ({
+const createStratalPlugin = (databaseEnabled: boolean): Plugin => ({
   name: 'stratal-test',
   config() {
     const config: UserConfig & { test?: TestUserConfig } = {
@@ -171,15 +160,17 @@ const createStratalPlugin = (isolation: DatabaseIsolation): Plugin => ({
         noExternal: ['@zenstackhq/better-auth'],
       },
     }
-
-    // In 'database' mode each test file owns its database, so enable file
-    // parallelism + isolation. In 'shared' mode leave these untouched so the
-    // project's own defaults stand (forcing them would alter maxWorkers and
-    // can collide with sibling projects' sequence.groupOrder).
-    if (isolation === 'database') {
-      config.test = { fileParallelism: true, isolate: true }
-    }
-
+    // Per-file DB isolation requires real file parallelism; each file gets its
+    // own database, cloned from the migrated template, and resets between
+    // tests. Setup hooks do real DB work (the clone itself — a
+    // `CREATE DATABASE ... TEMPLATE` serialized across concurrent files by a
+    // Postgres advisory lock — plus per-test tenant/seed provisioning in
+    // `beforeAll`) that routinely exceeds Vitest's 10s default hook timeout
+    // under a full worker slot — give a sensible floor. The advisory lock is
+    // exactly the contention this timeout has to absorb, not a queue that's
+    // been removed. Consumers with heavier setup override `hookTimeout` on
+    // their own project.
+    if (databaseEnabled) config.test = { fileParallelism: true, isolate: true, hookTimeout: 30_000 }
     return config
   },
 })
@@ -187,10 +178,10 @@ const createStratalPlugin = (isolation: DatabaseIsolation): Plugin => ({
 /**
  * Returns Vite plugins for Stratal tests running in the Cloudflare Workers (workerd) environment.
  *
- * Includes the cloudflare pool plugin and Stratal alias plugin. Pass
- * `database: { isolation: 'database' }` to give each test file its own
- * database (cloned from a migrated template, dropped on teardown) and enable
- * file parallelism. Use inside a project-level `plugins` array.
+ * Includes the cloudflare pool plugin and Stratal alias plugin. Pass a
+ * `database` option to give each worker its own database (cloned once from a
+ * migrated template, reset between tests) and enable file parallelism. Use
+ * inside a project-level `plugins` array.
  *
  * **Note:** `fixPgCjs()` must be registered separately at the root `defineConfig` level.
  *
@@ -199,22 +190,35 @@ const createStratalPlugin = (isolation: DatabaseIsolation): Plugin => ({
  */
 export function stratalTest(options: StratalTestOptions = {}): Plugin[] {
   const { database, ...cfOptions } = options
-  const isolation = normalizeIsolation(database?.isolation)
+  const databaseEnabled = database !== undefined
   const binding = database?.binding ?? DEFAULT_DB_BINDING
 
-  // Expose the mode + binding name to the worker as env vars so
-  // TestingModule.compile() can decide whether and what to provision.
+  // Inject the DB-isolation env ONLY when the consumer opted in via `database`.
+  // Its presence is how the testing-module builder tells "isolation requested"
+  // from "plain app" — so it can hard-error on `database: {}` with no connection
+  // string instead of silently running parallel files without isolation.
+  const dbEnv = databaseEnabled
+    ? {
+        [BINDING_ENV_VAR]: binding,
+        // Run the consuming app's DB connections on ONE shared pool per
+        // connection: the test runtime hits a direct Postgres with no Hyperdrive
+        // to multiplex, so a fresh pool per request resolution would exhaust
+        // `max_connections` across parallel files. The framework's
+        // `createPoolFactory(env, …)` reads this and memoizes the pool; in
+        // dev/staging/prod the flag is absent → fresh-per-resolution (Hyperdrive
+        // multiplexes). See `@stratal/framework/database`.
+        [DB_SHARED_POOL_ENV]: 'true',
+      }
+    : {}
   const merged = {
     ...cfOptions,
     miniflare: {
       ...cfOptions.miniflare,
       bindings: {
         ...(cfOptions.miniflare?.bindings as Record<string, unknown> | undefined),
-        [ISOLATION_ENV_VAR]: isolation,
-        [BINDING_ENV_VAR]: binding,
+        ...dbEnv,
       },
     },
   }
-
-  return [cloudflareTest(merged) as unknown as Plugin, createStratalPlugin(isolation)]
+  return [cloudflareTest(merged), createStratalPlugin(databaseEnabled)]
 }

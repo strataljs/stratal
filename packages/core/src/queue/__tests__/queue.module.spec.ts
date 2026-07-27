@@ -21,7 +21,7 @@ function makeContext(
     },
   } as unknown as Container
 
-  return { container, logger: createMock<LoggerService>() as unknown as LoggerService }
+  return { container, logger: createMock<LoggerService>() }
 }
 
 describe('QueueModule.onInitialize', () => {

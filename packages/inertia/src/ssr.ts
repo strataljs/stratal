@@ -63,7 +63,7 @@ type ResolverReturn<TProps> = [unknown] extends [TProps]
 /** Unwrap a module namespace's `default` export, leaving a bare component as-is. */
 function unwrapDefault(module: unknown): unknown {
   return typeof module === 'object' && module !== null && 'default' in module
-    ? (module as { default: unknown }).default
+    ? (module).default
     : module
 }
 

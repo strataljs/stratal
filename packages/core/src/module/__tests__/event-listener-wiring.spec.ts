@@ -17,7 +17,7 @@ describe('Event Listener Auto-Wiring (Application-level)', () => {
     vi.clearAllMocks()
     container = new Container()
     mockLogger = createMock<LoggerService>()
-    registry = new ModuleRegistry(container, mockLogger as unknown as LoggerService)
+    registry = new ModuleRegistry(container, mockLogger)
   })
 
   it('should wire listener handlers with EventRegistry', () => {

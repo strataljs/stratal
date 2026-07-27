@@ -12,16 +12,16 @@ const CONTROLLER_ROUTE_KEY = ROUTE_METADATA_KEYS.CONTROLLER_ROUTE
  * This is the core controller decorator that handles:
  * - Transient scope registration (request-scoped)
  * - Route metadata storage
- * - Controller options (tags, security schemes, hideFromDocs)
+ * - Controller options (tags, security schemes, groups, hideFromDocs)
  *
  * @param route - Base route for this controller (e.g., '/api/v1/users')
- * @param options - Optional configuration (tags, security schemes, hideFromDocs)
+ * @param options - Optional configuration (tags, security schemes, groups, hideFromDocs)
  *
  * @example
  * ```typescript
  * import { Controller } from 'stratal/router'
  *
- * @Controller('/api/v1/users', { tags: ['Users'] })
+ * @Controller('/api/v1/users', { tags: ['Users'], groups: ['admin'] })
  * export class UsersController implements IController {
  *   // All routes accessible
  * }
@@ -77,4 +77,15 @@ export function getControllerOptions(target: object): ControllerOptions | undefi
 export function getControllerVersion(target: object): ControllerOptions['version'] {
   const options = getControllerOptions(target)
   return options?.version
+}
+
+/**
+ * Get the visibility groups from controller class metadata
+ *
+ * @param target - Controller class or instance
+ * @returns The controller's `groups`, or undefined if none were declared
+ */
+export function getControllerGroups(target: object): ControllerOptions['groups'] {
+  const options = getControllerOptions(target)
+  return options?.groups
 }

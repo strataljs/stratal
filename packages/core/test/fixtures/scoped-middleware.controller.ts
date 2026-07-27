@@ -5,7 +5,7 @@ import { Get } from '../../src/router/decorators/http-method.decorator'
 import type { Middleware, Next } from '../../src/router/middleware.interface'
 import { type RouteConfigurable, type Router } from '../../src/router/router'
 import type { RouterContext } from '../../src/router/router-context'
-import { z } from '../../src/i18n/validation'
+import { object, string } from 'zod/mini'
 
 /**
  * Module-level scoped middleware that captures `ctx.param('organizationId')`
@@ -58,7 +58,7 @@ export class ScopedMiddlewareAppModule implements RouteConfigurable {
       [ScopedIndexController, ScopedSiblingController],
       (child) => {
         child
-          .prefix('/admin/:organizationId', z.object({ organizationId: z.string() }))
+          .prefix('/admin/:organizationId', object({ organizationId: string() }))
           .name('admin.')
           .middleware(ScopedTagMiddleware)
       },

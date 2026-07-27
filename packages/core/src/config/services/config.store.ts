@@ -58,7 +58,7 @@ export class ConfigStore<T extends object = ModuleConfig> {
    * object when the store has not been initialized.
    */
   all(): Readonly<T> {
-    return (this.data ?? ({} as T)) as Readonly<T>
+    return (this.data ?? ({} as T))
   }
 
   /**

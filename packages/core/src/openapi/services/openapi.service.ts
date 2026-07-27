@@ -2,72 +2,85 @@ import type { Container } from '../../di/container'
 import { Singleton } from '../../di/decorators'
 import { I18N_TOKENS } from '../../i18n/i18n.tokens'
 import type { II18nService } from '../../i18n/i18n.types'
-import type { OpenAPIHono, OpenAPIObject, PathItemObject } from '../../i18n/validation/zod'
+import type { OpenAPIObject, ZodType } from '../../i18n/validation/zod'
 import { ROUTER_CONTEXT_KEYS, SECURITY_SCHEMES } from '../../router/constants'
+import type { HonoApp } from '../../router/hono-app'
+import type { RouteMetadataRegistry, RouteResponseMeta, RouteSchemaMeta } from '../../router/route-metadata'
+import { ROUTER_TOKENS } from '../../router/router.tokens'
 import type { RouterEnv } from '../../router/types'
 import { OPENAPI_TOKENS } from '../openapi.tokens'
-import type { IOpenAPIConfigService, IOpenAPIConfigStore, OpenAPIEffectiveConfig } from '../types'
+import type { IOpenAPIConfigService, IOpenAPIConfigStore } from '../types'
 
 /**
  * OpenAPI Service
  *
- * Generates OpenAPI specifications with support for:
+ * Generates OpenAPI specifications lazily from the route metadata registry:
+ * - Built on demand (per request to the spec endpoint), never at startup
+ * - Schema → JSON Schema via zod v4's native `z.toJSONSchema()`
  * - Runtime configuration via OpenAPIConfigService
- * - Route filtering via custom routeFilter
- * - i18n support for titles and descriptions
- * - Security scheme definitions
+ * - Route visibility via a metadata predicate (`routeFilter`)
+ * - i18n support for titles, descriptions, and security schemes
  *
- * Hidden routes (hideFromDocs) are excluded at registration time via
- * @hono/zod-openapi's `hide` option and don't appear in the spec.
- *
- * Configuration is resolved per-request from OpenAPIConfigService,
- * allowing middleware to override config based on domain context.
+ * Hidden routes (hideFromDocs) are flagged in the metadata and excluded by the
+ * generator. The generator and the common error schemas are dynamically
+ * imported so `zod`/`common.schemas` never reach the routing path — they load
+ * only when the document is actually requested.
  */
 @Singleton(OPENAPI_TOKENS.OpenAPIService)
 export class OpenAPIService {
-
   /**
-   * Generate a filtered OpenAPI spec using the user's config.
+   * Generate a filtered OpenAPI document from collected route metadata.
    * Usable from both HTTP handlers and CLI commands.
    */
-  getSpec(app: OpenAPIHono<RouterEnv>, container: Container): OpenAPIObject {
+  async getSpec(container: Container): Promise<OpenAPIObject> {
     const configService = container.resolve<IOpenAPIConfigService>(OPENAPI_TOKENS.ConfigService)
     const i18n = container.resolve<II18nService>(I18N_TOKENS.I18nService)
+    const metadata = container.resolve<RouteMetadataRegistry>(ROUTER_TOKENS.RouteMetadataRegistry)
     const config = configService.getEffectiveConfig()
 
-    const fullSpec = app.getOpenAPIDocument({
-      openapi: '3.0.0',
+    const [{ generateOpenAPIDocument }, { commonErrorSchemas }] = await Promise.all([
+      import('../openapi-generator'),
+      import('../../router/schemas/common.schemas'),
+    ])
+
+    const routes = metadata.all().map((route) => this.withCommonErrors(route, commonErrorSchemas))
+
+    return generateOpenAPIDocument({
       info: {
-        version: config.info.version,
         title: config.info.title,
+        version: config.info.version,
         description: config.info.description,
       },
+      routes,
+      securitySchemes: this.getSecuritySchemeDefinitions(i18n),
+      filter: config.routeFilter,
     })
+  }
 
-    // Security schemes
-    fullSpec.components ??= {}
-    fullSpec.components.securitySchemes = this.getSecuritySchemeDefinitions(i18n)
-
-    // Apply custom routeFilter if provided
-    if (config.routeFilter) {
-      fullSpec.paths = this.filterRoutes(
-        fullSpec.paths as Record<string, PathItemObject>,
-        config,
-      )
+  /**
+   * Append the standard error responses (400/401/403/404/409/500) a route
+   * doesn't already declare. Done here, in the lazy doc path, so the error
+   * schemas never load at registration time.
+   */
+  private withCommonErrors(
+    route: RouteSchemaMeta,
+    common: Record<string, { schema: ZodType; description: string }>,
+  ): RouteSchemaMeta {
+    const present = new Set(route.responses.map((r) => r.status))
+    const extra: RouteResponseMeta[] = []
+    for (const [status, def] of Object.entries(common)) {
+      const code = Number(status)
+      if (!present.has(code)) {
+        extra.push({ status: code, schema: def.schema, contentType: 'application/json', description: def.description })
+      }
     }
-
-    // Filter unreferenced schemas
-    if (fullSpec.components.schemas) {
-      fullSpec.components.schemas = this.filterSchemas(fullSpec as unknown as Record<string, unknown>) as typeof fullSpec.components.schemas
-    }
-
-    return fullSpec
+    return extra.length ? { ...route, responses: [...route.responses, ...extra] } : route
   }
 
   /**
    * Setup OpenAPI documentation endpoints
    */
-  setupEndpoints(app: OpenAPIHono<RouterEnv>, container: Container): void {
+  setupEndpoints(app: HonoApp, container: Container): void {
     // Endpoints are mounted at bootstrap (no request scope), so read the static
     // mount paths from the singleton config store — request overrides (info /
     // routeFilter) never affect jsonPath/ui and are resolved per request inside
@@ -77,9 +90,9 @@ export class OpenAPIService {
     const ui = config.ui
 
     // OpenAPI JSON spec endpoint
-    app.get(jsonPath, (c) => {
+    app.get(jsonPath, async (c) => {
       const requestContainer = c.get(ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER)
-      const fullSpec = this.getSpec(app, requestContainer)
+      const fullSpec = await this.getSpec(requestContainer)
 
       // Add servers (HTTP-specific — needs request URL context)
       const url = new URL(c.req.raw.url)
@@ -117,7 +130,7 @@ export class OpenAPIService {
     }
   }
 
-  private nameLastHandler(app: OpenAPIHono<RouterEnv>, controller: string, method: string): void {
+  private nameLastHandler(app: HonoApp, controller: string, method: string): void {
     const last = app.routes[app.routes.length - 1]
     Object.defineProperty(last.handler, 'name', { value: `http:${controller}.${method}` })
   }
@@ -146,85 +159,5 @@ export class OpenAPIService {
         description: i18n.t('common.api.security.sessionCookie')
       }
     } as const
-  }
-
-  /**
-   * Filter OpenAPI paths using custom routeFilter
-   */
-  private filterRoutes(
-    paths: Record<string, PathItemObject>,
-    config: OpenAPIEffectiveConfig
-  ): Record<string, PathItemObject> {
-    const filteredPaths: Record<string, PathItemObject> = {}
-
-    for (const [path, pathItem] of Object.entries(paths)) {
-      if (config.routeFilter && !config.routeFilter(path, pathItem)) {
-        continue
-      }
-
-      filteredPaths[path] = pathItem
-    }
-
-    return filteredPaths
-  }
-
-  /**
-   * Filter unreferenced schemas from OpenAPI spec
-   */
-  private filterSchemas(spec: Record<string, unknown>): Record<string, unknown> {
-    const referencedSchemas = new Set<string>()
-
-    // Collect all schema references from paths
-    this.collectSchemaRefs(spec.paths, referencedSchemas)
-
-    // Filter schemas to only include referenced ones
-    const filteredSchemas: Record<string, unknown> = {}
-    const components = spec.components as Record<string, unknown> | undefined
-    if (components?.schemas) {
-      const allSchemas = components.schemas as Record<string, unknown>
-      let prevSize = 0
-      while (referencedSchemas.size > prevSize) {
-        prevSize = referencedSchemas.size
-        for (const [schemaName, schemaValue] of Object.entries(allSchemas)) {
-          if (referencedSchemas.has(schemaName) && !filteredSchemas[schemaName]) {
-            filteredSchemas[schemaName] = schemaValue
-            this.collectSchemaRefs(schemaValue, referencedSchemas)
-          }
-        }
-      }
-    }
-
-    return filteredSchemas
-  }
-
-  /**
-   * Recursively collect all schema references from an object
-   */
-  private collectSchemaRefs(obj: unknown, refs: Set<string>): void {
-    if (!obj || typeof obj !== 'object') {
-      return
-    }
-
-    const record = obj as Record<string, unknown>
-
-    // Check if this object has a $ref property
-    if (record.$ref && typeof record.$ref === 'string') {
-      // Extract schema name from $ref (format: #/components/schemas/SchemaName)
-      const match = /^#\/components\/schemas\/(.+)$/.exec(record.$ref)
-      if (match) {
-        refs.add(match[1])
-      }
-    }
-
-    // Recursively check all properties
-    if (Array.isArray(obj)) {
-      for (const item of obj) {
-        this.collectSchemaRefs(item, refs)
-      }
-    } else {
-      for (const value of Object.values(record)) {
-        this.collectSchemaRefs(value, refs)
-      }
-    }
   }
 }

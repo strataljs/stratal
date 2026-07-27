@@ -1,4 +1,4 @@
-import { z } from '../../src/i18n/validation'
+import { boolean, object } from 'zod/mini'
 import { Module } from '../../src/module/module.decorator'
 import { type ModuleClass, type ModuleContext, type OnInitialize } from '../../src/module/types'
 import { RateLimit } from '../../src/rate-limiter/decorators/rate-limit.decorator'
@@ -13,14 +13,14 @@ import { type RouterContext } from '../../src/router/router-context'
 
 @Controller('/throttled')
 export class ScopeThrottledController {
-  @Route({ summary: 'Throttled by router.throttle()', response: z.object({ ok: z.boolean() }) })
+  @Route({ summary: 'Throttled by router.throttle()', response: object({ ok: boolean() }) })
   index(ctx: RouterContext) { return ctx.json({ ok: true }) }
 }
 
 @Controller('/decorated')
 @RateLimit('test')
 export class DecoratorThrottledController {
-  @Route({ summary: 'Throttled by @RateLimit', response: z.object({ ok: z.boolean() }) })
+  @Route({ summary: 'Throttled by @RateLimit', response: object({ ok: boolean() }) })
   index(ctx: RouterContext) { return ctx.json({ ok: true }) }
 }
 

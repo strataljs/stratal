@@ -35,6 +35,16 @@ export type {
     ViteManifestEntry
 } from './types';
 
+// Access control
+export type {
+    AccessControlRegistry,
+    AccessControlRegistryNotGenerated,
+    Check,
+    Permission,
+    RoleName,
+    SharedAccess
+} from './access/types';
+
 // Flash
 export { CookieFlashStore } from './flash/cookie-flash-store';
 export type { FlashStore } from './flash/flash-store';
@@ -45,6 +55,7 @@ export { SeoService } from './services/seo.service';
 export { ManifestService } from './services/manifest.service';
 export { SsrRendererService } from './services/ssr-renderer.service';
 export { TemplateService } from './services/template.service';
+export { DocumentRendererService } from './services/document-renderer.service';
 
 // Decorators
 export { InertiaDelete, InertiaGet, InertiaPatch, InertiaPost, InertiaPut, InertiaRoute } from './decorators/inertia.decorators';

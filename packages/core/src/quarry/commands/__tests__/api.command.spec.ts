@@ -1,10 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { Container } from '../../../di/container'
-import { Transient } from '../../../di/decorators'
-import { DI_TOKENS } from '../../../di/tokens'
-import { getCommandResult, setCommandInputs, setCommandQuarry } from '../../command-internals'
-import type { QuarryRegistry } from '../../quarry-registry'
-import { ApiCommand } from '../api.command'
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Container } from '../../../di/container';
+import { Transient } from '../../../di/decorators';
+import { DI_TOKENS } from '../../../di/tokens';
+import { getCommandResult, setCommandInputs, setCommandQuarry } from '../../command-internals';
+import { ApiCommand } from '../api.command';
 
 let childContainer: Container
 
@@ -43,7 +42,7 @@ beforeEach(() => {
 
 function createCommand(input: Record<string, unknown> = {}): ApiCommand {
   const cmd = childContainer.resolve<ApiCommand>(ApiCommand)
-  setCommandQuarry(cmd, { call: vi.fn().mockReturnValue({ exitCode: 0, output: [], errors: [] }) } as unknown as QuarryRegistry)
+  setCommandQuarry(cmd, { call: vi.fn().mockReturnValue({ exitCode: 0, output: [], errors: [] }) })
   setCommandInputs(cmd, { route: '', method: '', data: '', header: [], query: [], ...input })
   return cmd
 }
@@ -52,7 +51,7 @@ describe('ApiCommand', () => {
   it('should delegate to route:list when no route argument provided', async () => {
     const mockCall = vi.fn().mockResolvedValue({ exitCode: 0, output: ['GET  /api/notes'], errors: [] })
     const cmd = createCommand()
-    setCommandQuarry(cmd, { call: mockCall } as unknown as QuarryRegistry)
+    setCommandQuarry(cmd, { call: mockCall })
 
     const exitCode = await cmd.handle()
 

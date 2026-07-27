@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { boolean, object } from 'zod/mini';
 import { Application, type ApplicationOptions } from '../application';
 import type { CronJob } from '../cron/cron-job';
 import { inject, Transient } from '../di/decorators';
@@ -6,7 +7,6 @@ import { DI_TOKENS } from '../di/tokens';
 import type { StratalEnv } from '../env';
 import type { EventContext, IEventRegistry } from '../events';
 import { Listener, On } from '../events';
-import { z } from '../i18n/validation/zod';
 import { LogLevel } from '../logger';
 import { Module } from '../module/module.decorator';
 import type { ModuleContext, OnInitialize, OnShutdown } from '../module/types';
@@ -16,7 +16,6 @@ import { Controller } from '../router/decorators/controller.decorator';
 import { Route } from '../router/decorators/route.decorator';
 import type { RouterContext } from '../router/router-context';
 import { RouterError } from '../router/router.error';
-import type { Constructor } from '../types';
 
 // Fixtures
 
@@ -33,7 +32,7 @@ class TestService {
 class TestController {
   @Route({
     summary: 'Test endpoint',
-    response: z.object({ ok: z.boolean() }),
+    response: object({ ok: boolean() }),
   })
   index(ctx: RouterContext) {
     return ctx.json({ ok: true })
@@ -170,6 +169,29 @@ describe('Application (eager bootstrap)', () => {
   })
 })
 
+@Module({})
+class HttplessModule { }
+
+describe('Application#hasHttpRoutes', () => {
+  it('reports true when the app registers controllers', async () => {
+    const httpApp = createTestApp()
+    await httpApp.initialize()
+
+    expect(httpApp.hasHttpRoutes()).toBe(true)
+
+    await httpApp.shutdown()
+  })
+
+  it('reports false for a queue/scheduled-only app with no controllers', async () => {
+    const httplessApp = createTestApp({ module: HttplessModule })
+    await httplessApp.initialize()
+
+    expect(httplessApp.hasHttpRoutes()).toBe(false)
+
+    await httplessApp.shutdown()
+  })
+})
+
 // ──────────────────────────────────────────────────────────────────
 // Cron job with request-scoped dependency
 // Regression: jobs must resolve from request-scoped container
@@ -205,7 +227,7 @@ class TestCronJob implements CronJob {
   providers: [
     { provide: REQUEST_SCOPED_TOKEN, useClass: RequestScopedService },
   ],
-  jobs: [TestCronJob as Constructor],
+  jobs: [TestCronJob],
 })
 class CronJobModule { }
 
@@ -288,7 +310,7 @@ class EmittingCronJob implements CronJob {
 
 @Module({
   providers: [ScheduledEventListener],
-  jobs: [EmittingCronJob as Constructor],
+  jobs: [EmittingCronJob],
 })
 class CronEventsModule { }
 
@@ -342,7 +364,7 @@ class InstanceScheduleJob implements CronJob {
 }
 
 @Module({
-  jobs: [InstanceScheduleJob as Constructor],
+  jobs: [InstanceScheduleJob],
 })
 class InstanceScheduleModule { }
 
@@ -568,7 +590,7 @@ class DispatchingCronJob implements CronJob {
     QueueModule.forRootAsync({ useFactory: () => ({ provider: 'sync' }) }),
     QueueModule.registerQueue('TEST_QUEUE'),
   ],
-  jobs: [DispatchingCronJob as Constructor],
+  jobs: [DispatchingCronJob],
   consumers: [ScheduledTriggeredConsumer],
 })
 class ScheduledQueueModule { }

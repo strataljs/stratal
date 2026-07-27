@@ -34,7 +34,7 @@ export function On<E extends EventName>(event: E, options?: EventOptions) {
 
     existingHandlers.push({
       methodName: propertyKey,
-      event: event as string,
+      event: event,
       options,
     })
 

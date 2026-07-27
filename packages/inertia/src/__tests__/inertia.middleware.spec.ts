@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Context } from 'hono'
+import { Hono, type Context } from 'hono'
 import { RouterContext } from 'stratal/router'
+import type { RouterEnv } from 'stratal/router'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { InertiaMiddleware } from '../middleware/inertia.middleware'
 
@@ -22,7 +23,9 @@ function createMockContext(overrides: {
     set: vi.fn(),
     header: vi.fn(),
     status: vi.fn(),
-    res: { status: overrides.resStatus ?? 200 },
+    // `headers` matters: the middleware now reads the response's existing
+    // `Vary` so it can union rather than clobber it.
+    res: { status: overrides.resStatus ?? 200, headers: new Headers() },
   }
 
   return { ctx: new RouterContext(c as unknown as Context), c }
@@ -48,7 +51,6 @@ describe('InertiaMiddleware', () => {
 
     expect(c.set).toHaveBeenCalledWith('inertia', true)
     expect(c.set).toHaveBeenCalledWith('inertiaPrefetch', true)
-    expect(c.set).toHaveBeenCalledWith('withoutSsr', false)
   })
 
   it('should set inertia to false for non-Inertia requests', async () => {
@@ -118,4 +120,68 @@ describe('InertiaMiddleware', () => {
     expect(c.status).not.toHaveBeenCalledWith(303)
   })
 
+  describe('Vary is unioned, never replaced', () => {
+    /**
+     * A real Hono pipeline, because the bug this covers only exists in the
+     * ordering: `applyCacheDecision` stamps `@Cacheable`'s `vary: [...]` from
+     * *inside* the route handler, and this middleware's outbound half runs
+     * after it. `c.header('Vary', 'X-Inertia')` is a set, not an append, so
+     * the previous implementation silently dropped the route's declared Vary
+     * names and collapsed every variant (every `Accept-Language`) onto a
+     * single cache entry.
+     */
+    function appVarying(...names: string[]) {
+      const app = new Hono<RouterEnv>()
+
+      app.use('*', async (c, next) => {
+        const inertia = new InertiaMiddleware(options)
+        await inertia.handle(new RouterContext(c), next)
+      })
+
+      app.get('/', (c) => {
+        // Stand-in for `applyCacheDecision` → `CacheabilityService.apply`.
+        if (names.length > 0) c.header('Vary', names.join(', '))
+        c.header('Cache-Control', 'public, max-age=300')
+        return c.json({ ok: true })
+      })
+
+      return app
+    }
+
+    it('keeps a Vary name the handler already stamped', async () => {
+      const res = await appVarying('Accept-Language').request('/')
+
+      const vary = (res.headers.get('Vary') ?? '').split(',').map((v) => v.trim())
+      expect(vary).toContain('X-Inertia')
+      expect(vary).toContain('Accept-Language')
+      // Documented in references/response-cache.md as exactly this value.
+      expect(res.headers.get('Vary')).toBe('X-Inertia, Accept-Language')
+      // The rest of the cache decision is untouched.
+      expect(res.headers.get('Cache-Control')).toBe('public, max-age=300')
+    })
+
+    it('keeps several handler-stamped Vary names', async () => {
+      const res = await appVarying('Accept-Language', 'Accept-Encoding').request('/')
+
+      expect(res.headers.get('Vary')).toBe('X-Inertia, Accept-Language, Accept-Encoding')
+    })
+
+    it('still emits X-Inertia when the handler stamped no Vary at all', async () => {
+      const res = await appVarying().request('/')
+
+      expect(res.headers.get('Vary')).toBe('X-Inertia')
+    })
+
+    it('does not duplicate X-Inertia when the route already declared it', async () => {
+      const res = await appVarying('X-Inertia', 'Accept-Language').request('/')
+
+      expect(res.headers.get('Vary')).toBe('X-Inertia, Accept-Language')
+    })
+
+    it('matches an existing X-Inertia case-insensitively', async () => {
+      const res = await appVarying('x-inertia').request('/')
+
+      expect(res.headers.get('Vary')).toBe('x-inertia')
+    })
+  })
 })

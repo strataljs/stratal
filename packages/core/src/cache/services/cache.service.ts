@@ -1,3 +1,4 @@
+import { waitUntil } from 'cloudflare:workers'
 import { inject } from '../../di'
 import { Singleton } from '../../di/decorators'
 import { DI_TOKENS } from '../../di/tokens'
@@ -184,26 +185,63 @@ export class CacheService {
   // ==================== PUT METHOD ====================
 
   /**
-   * Store a value in cache
+   * Store a value in cache, **without blocking the request**.
+   *
+   * KV writes commit to KV's central store — reads are edge-cached, but writes
+   * are not, so a `put` can add hundreds of ms on the critical path. A cache is
+   * best-effort and eventually consistent (a `get` can serve a stale value for
+   * ~60s after a write regardless), so the write is scheduled via the Workers
+   * runtime's `waitUntil` and settles after the response is sent. The returned
+   * promise resolves immediately — the write is enqueued, not awaited — and
+   * failures are logged, never thrown (no caller is left to catch them).
+   *
+   * Do **not** route durability-critical writes (locks, idempotency claims,
+   * system-of-record state) through the cache; use the raw KV binding for
+   * those. Invalidations stay durable — see {@link delete}.
    *
    * @param key - Cache key
    * @param value - Value to store (string, ArrayBuffer, ArrayBufferView, or ReadableStream)
    * @param options - Put options (expiration, expirationTtl, metadata)
-   * @throws {CacheError} If operation fails
    *
    * @example
    * ```typescript
-   * // Simple put
-   * await cache.put('key', 'value')
-   *
-   * // With TTL
-   * await cache.put('key', 'value', { expirationTtl: 3600 })
-   *
-   * // With metadata
-   * await cache.put('key', 'value', { metadata: { created: Date.now() } })
+   * cache.put('key', 'value', { expirationTtl: 3600 })
    * ```
    */
-  async put(
+  put(
+    key: string,
+    value: string | ArrayBuffer | ArrayBufferView | ReadableStream,
+    options?: KVNamespacePutOptions
+  ): Promise<void> {
+    // Deferred: schedule the durable write off the request path. `writeKv` logs
+    // on failure; the throw is swallowed here because nothing awaits this write.
+    waitUntil(
+      this.writeKv(key, value, options).catch(() => {
+        /* failure already logged in writeKv */
+      })
+    )
+    return Promise.resolve()
+  }
+
+  /**
+   * Store a value and **await the durable write**, throwing on failure — the
+   * pre-deferral `put` semantics. Use for the rare durability-critical write
+   * that goes through the cache and must not be lost or silently fail: a queue
+   * idempotency claim that gates message redelivery, or a failed-job record.
+   * Everything best-effort should use the deferred {@link put}.
+   *
+   * @throws {CacheError} If the write fails.
+   */
+  putDurable(
+    key: string,
+    value: string | ArrayBuffer | ArrayBufferView | ReadableStream,
+    options?: KVNamespacePutOptions
+  ): Promise<void> {
+    return this.writeKv(key, value, options)
+  }
+
+  /** Single KV write path with unified error handling: logs, then throws. */
+  private async writeKv(
     key: string,
     value: string | ArrayBuffer | ArrayBufferView | ReadableStream,
     options?: KVNamespacePutOptions

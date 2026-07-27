@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { z } from '../../i18n/validation/zod'
+import { object, string } from 'zod/mini'
 import type { Constructor } from '../../types'
 import { RouterError } from '../router.error'
 import type { Middleware } from '../middleware.interface'
@@ -29,7 +29,7 @@ describe('Router', () => {
 
     it('should set prefix with params schema', () => {
       const router = new Router()
-      const paramsSchema = z.object({ companyId: z.string() })
+      const paramsSchema = object({ companyId: string() })
       router.prefix('/:companyId', paramsSchema)
 
       const entry = router[internal.getDefaultEntry]()
@@ -132,7 +132,7 @@ describe('Router', () => {
 
     it('works inside group() callbacks', () => {
       const router = new Router()
-      router.group([UsersController as Constructor], (child) => {
+      router.group([UsersController], (child) => {
         child.throttle('api')
       })
 
@@ -159,7 +159,7 @@ describe('Router', () => {
     it('should throw RouterError when called inside group()', () => {
       const router = new Router()
       expect(() => {
-        router.group([UsersController as Constructor], (child) => {
+        router.group([UsersController], (child) => {
           (child as Router).use(AuthMiddleware as unknown as Constructor<Middleware>)
         })
       }).toThrow(RouterError)
@@ -169,7 +169,7 @@ describe('Router', () => {
   describe('group() — sub-groups', () => {
     it('should create a sub-group with controllers', () => {
       const router = new Router()
-      router.group([AdminController as Constructor], (admin) => {
+      router.group([AdminController], (admin) => {
         admin.middleware(AdminMiddleware as unknown as Constructor<Middleware>)
       })
 
@@ -181,7 +181,7 @@ describe('Router', () => {
 
     it('should allow configuration in callback', () => {
       const router = new Router()
-      router.group([AdminController as Constructor], (admin) => {
+      router.group([AdminController], (admin) => {
         admin
           .prefix('/:companyId')
           .domain('admin.myapp.com')
@@ -200,8 +200,8 @@ describe('Router', () => {
 
     it('should support multiple sub-groups', () => {
       const router = new Router()
-      router.group([HealthController as Constructor], () => { /**/ })
-      router.group([UsersController as Constructor, PostsController as Constructor], (auth) => {
+      router.group([HealthController], () => { /**/ })
+      router.group([UsersController, PostsController], (auth) => {
         auth.middleware(AuthMiddleware as unknown as Constructor<Middleware>)
       })
 
@@ -213,7 +213,7 @@ describe('Router', () => {
     it('should not affect the parent default entry', () => {
       const router = new Router()
       router.name('parent.')
-      router.group([AdminController as Constructor], (admin) => {
+      router.group([AdminController], (admin) => {
         admin.name('admin.')
       })
 

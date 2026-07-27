@@ -1,14 +1,15 @@
 import type { Container } from '../di'
 import { type StratalEnv } from '../env'
-import type { RouteConfig as OpenAPIRouteConfig, ZodObject, ZodPipe, ZodType } from '../i18n/validation/zod'
+import type { ZodObject, ZodType } from '../i18n/validation/zod'
+import type { InertiaCacheSignals } from '../response-cache/services/cacheability.service'
 import { type HTTP_METHODS, type ROUTER_CONTEXT_KEYS, type SECURITY_SCHEMES, type VERSION_NEUTRAL } from './constants'
 
 /**
- * Route parameter type for OpenAPI
- * ZodObject or ZodPipe (piped validation)
+ * Route parameter type — a Zod object schema (its `.shape` is composed with
+ * router-prefix params at registration).
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- ZodObject/ZodPipe generics require any for shape parameter
-type ZodObjectWithEffect = ZodObject<any> | ZodPipe<any, any>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- ZodObject generics require any for shape parameter
+type ZodObjectWithEffect = ZodObject<any>
 type RouteParameter = ZodObjectWithEffect | undefined
 
 /**
@@ -18,9 +19,28 @@ export interface RouterVariables {
   [ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER]: Container
   [ROUTER_CONTEXT_KEYS.LOCALE]?: string
   /**
-   * When set by middleware, the defaultHook returns this response after
-   * successful validation — skipping the controller handler entirely.
-   * Used by packages like `@stratal/inertia` for precognition support.
+   * The handler's captured JSON payload, set by `capturePayload()` so
+   * `{data.*}` response-cache tag templates can read values the request
+   * itself never carried. Only populated for routes that declared a tag
+   * needing it — see `needsPayloadCapture`.
+   */
+  [ROUTER_CONTEXT_KEYS.RESPONSE_PAYLOAD]?: unknown
+  /**
+   * Cache safety signals for the page rendered on this request, set by
+   * `@stratal/inertia`'s `InertiaService.render()`. Read by
+   * `RouteRegistrationService.applyCacheDecision()` and passed to
+   * `CacheabilityService.apply()` so a `@Cacheable` route serving an Inertia
+   * page with flash data, a partial reload, or once-props fails closed
+   * instead of caching and replaying it. Declared here (not imported from
+   * `@stratal/inertia`) so core never depends on that package — the key is
+   * only ever populated when `@stratal/inertia` is in use.
+   */
+  inertiaCacheSignals?: InertiaCacheSignals
+  /**
+   * When set by middleware, the route handler returns this response instead of
+   * invoking the controller — skipping the handler entirely once request
+   * validators have passed. Used by packages like `@stratal/inertia` for
+   * precognition support.
    */
   validationSuccessResponse?: Response
   /** Domain parameters set by the domain matching middleware (e.g., `domain:tenant`) */
@@ -57,11 +77,6 @@ export type HttpMethod = 'get' | 'post' | 'put' | 'delete' | 'patch' | 'head' | 
  * Maps scheme names to scopes (empty array for no scopes)
  */
 export type SecuritySchemeRecord = Record<SecurityScheme, string[]>
-
-/**
- * Re-export OpenAPI RouteConfig for internal use
- */
-export type { OpenAPIRouteConfig }
 
 /**
  * Object form for request body with optional content type
@@ -127,6 +142,12 @@ export interface RouteConfig {
    * Empty array = public route (no auth)
    */
   security?: SecurityScheme[]
+
+  /**
+   * Visibility group labels for this route.
+   * Appended to the controller-level groups.
+   */
+  groups?: string[]
 
   /**
    * Human-readable description for OpenAPI docs
@@ -205,6 +226,12 @@ export interface ControllerOptions {
    * Routes can add more schemes or override with empty array
    */
   security?: SecurityScheme[]
+
+  /**
+   * Default visibility group labels applied to every route in this controller.
+   * Routes append more via the route-level `groups`.
+   */
+  groups?: string[]
 
   /**
    * Hide all routes in this controller from OpenAPI documentation

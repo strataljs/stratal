@@ -22,7 +22,7 @@ export class EventRegistry implements IEventRegistry {
 
   on<E extends EventName>(event: E, handler: EventHandler<E>, options?: EventOptions): void {
     const registered: RegisteredHandler = {
-      handler: handler as EventHandler,
+      handler: handler,
       priority: options?.priority ?? 0,
       blocking: options?.blocking
     }
@@ -169,7 +169,7 @@ export class EventRegistry implements IEventRegistry {
     event: string
   ): Promise<void> {
     try {
-      await handler(context as EventContext)
+      await handler(context)
     } catch (error) {
       this.logger.error('Event handler error', {
         event,

@@ -3,6 +3,7 @@
   "version": "0.0.27",
   "description": "A modular Cloudflare Workers framework with dependency injection, queue-based events, and type-safe configuration",
   "type": "module",
+  "sideEffects": false,
   "license": "MIT",
   "author": "Temitayo Fadojutimi",
   "homepage": "https://stratal.dev",
@@ -122,6 +123,10 @@
       "types": "./dist/rate-limiter/index.d.mts",
       "import": "./dist/rate-limiter/index.mjs"
     },
+    "./response-cache": {
+      "types": "./dist/response-cache/index.d.mts",
+      "import": "./dist/response-cache/index.mjs"
+    },
     "./router": {
       "types": "./dist/router/index.d.mts",
       "import": "./dist/router/index.mjs"
@@ -168,14 +173,14 @@
   },
   "dependencies": {
     "@hono/swagger-ui": "^0.6.1",
-    "@hono/zod-openapi": "^1.4.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@swc-node/register": "^1.11.1",
-    "@swc/core": "^1.15.40",
+    "@swc-node/register": "^1.12.0",
+    "@swc/core": "^1.15.43",
     "@swc/helpers": "^0.5.23",
     "clipanion": "^4.0.0-rc.4",
-    "hono": "^4.12.23",
-    "intl-messageformat": "^11.2.7",
+    "hono": "^4.12.30",
+    "intl-messageformat": "^11.2.12",
+    "openapi3-ts": "^4.6.0",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
@@ -195,21 +200,21 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.16.12",
-    "@cloudflare/workers-types": "4.20260603.1",
-    "@react-email/render": "^2.0.8",
+    "@cloudflare/vitest-pool-workers": "^0.18.5",
+    "@cloudflare/workers-types": "5.20260716.1",
+    "@react-email/render": "^2.1.0",
     "@stratal/testing": "workspace:*",
-    "@types/node": "^25.9.1",
-    "@types/react": "^19.2.16",
+    "@types/node": "^26.1.1",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@vitest/coverage-v8": "^4.1.8",
-    "@vitest/runner": "~4.1.8",
-    "@vitest/snapshot": "~4.1.8",
+    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/runner": "~4.1.10",
+    "@vitest/snapshot": "~4.1.10",
     "jsonc-parser": "^3.3.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "tsdown": "^0.22.1",
-    "typescript": "^6.0.3",
-    "vitest": "~4.1.8"
+    "tsdown": "^0.22.9",
+    "typescript": "^7.0.2",
+    "vitest": "~4.1.10"
   }
 }

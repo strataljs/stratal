@@ -1,4 +1,4 @@
-import { z } from 'stratal/validation'
+import { object, string } from 'zod/mini'
 import { Controller } from 'stratal/router'
 import { Route } from 'stratal/router'
 import type { RouterContext } from 'stratal/router'
@@ -7,7 +7,7 @@ import type { RouterContext } from 'stratal/router'
 export class PublicController {
   @Route({
     summary: 'Public index',
-    response: z.object({ message: z.string() }),
+    response: object({ message: string() }),
   })
   index(ctx: RouterContext) {
     return ctx.json({ message: 'public' })
@@ -15,8 +15,8 @@ export class PublicController {
 
   @Route({
     summary: 'Public show',
-    params: z.object({ id: z.string() }),
-    response: z.object({ id: z.string() }),
+    params: object({ id: string() }),
+    response: object({ id: string() }),
   })
   show(ctx: RouterContext) {
     const id = ctx.param('id')

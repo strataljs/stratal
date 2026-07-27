@@ -1,4 +1,5 @@
-import { z } from '../../i18n/validation'
+import { maxLength, minLength, number, object, optional, positive, string, union } from 'zod/mini'
+import type { infer as Infer } from 'zod/mini'
 
 /**
  * Inline Email Attachment Schema
@@ -6,26 +7,26 @@ import { z } from '../../i18n/validation'
  * Attachment with content embedded as base64 string.
  * Use for small files that can fit in queue message.
  */
-export const inlineEmailAttachmentSchema = z.object({
+export const inlineEmailAttachmentSchema = object({
   /**
    * Filename to display for the attachment
    */
-  filename: z.string().min(1).max(255),
+  filename: string().check(minLength(1), maxLength(255)),
 
   /**
    * Base64 encoded content of the attachment
    */
-  content: z.string(),
+  content: string(),
 
   /**
    * MIME type of the attachment (e.g., 'application/pdf', 'image/png')
    */
-  contentType: z.string(),
+  contentType: string(),
 
   /**
    * Optional size of the attachment in bytes
    */
-  size: z.number().positive().optional(),
+  size: optional(number().check(positive())),
 })
 
 /**
@@ -35,21 +36,21 @@ export const inlineEmailAttachmentSchema = z.object({
  * Content type and size are derived from storage metadata.
  * Use for large files to avoid queue message size limits.
  */
-export const storageEmailAttachmentSchema = z.object({
+export const storageEmailAttachmentSchema = object({
   /**
    * Filename to display for the attachment
    */
-  filename: z.string().min(1).max(255),
+  filename: string().check(minLength(1), maxLength(255)),
 
   /**
    * Path to the file in storage
    */
-  storageKey: z.string(),
+  storageKey: string(),
 
   /**
    * Optional storage disk name (uses default if not provided)
    */
-  disk: z.string().optional(),
+  disk: optional(string()),
 })
 
 /**
@@ -59,7 +60,7 @@ export const storageEmailAttachmentSchema = z.object({
  * - If `content` is present: inline attachment
  * - If `storageKey` is present: storage-based attachment
  */
-export const emailAttachmentSchema = z.union([
+export const emailAttachmentSchema = union([
   inlineEmailAttachmentSchema,
   storageEmailAttachmentSchema,
 ])
@@ -67,9 +68,9 @@ export const emailAttachmentSchema = z.union([
 /**
  * Type definitions
  */
-export type InlineEmailAttachment = z.infer<typeof inlineEmailAttachmentSchema>
-export type StorageEmailAttachment = z.infer<typeof storageEmailAttachmentSchema>
-export type EmailAttachment = z.infer<typeof emailAttachmentSchema>
+export type InlineEmailAttachment = Infer<typeof inlineEmailAttachmentSchema>
+export type StorageEmailAttachment = Infer<typeof storageEmailAttachmentSchema>
+export type EmailAttachment = Infer<typeof emailAttachmentSchema>
 
 /**
  * Resolved Email Attachment

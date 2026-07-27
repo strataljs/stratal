@@ -50,4 +50,12 @@ export const ROUTER_TOKENS = {
    * URL generation service — route URLs, signed URLs, current/previous URL access
    */
   Uri: Symbol.for('stratal:router:uri'),
+
+  /**
+   * Token for RouteMetadataRegistry (singleton)
+   * Holds per-route schema metadata collected at registration so the OpenAPI
+   * document can be generated lazily (on request) without coupling routing to
+   * `@hono/zod-openapi`.
+   */
+  RouteMetadataRegistry: Symbol.for('stratal:router:route-metadata-registry'),
 } as const

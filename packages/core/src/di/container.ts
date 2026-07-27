@@ -98,7 +98,7 @@ export class Container {
       token = tokenOrClass
       impl = serviceClassOrLazy
     } else {
-      token = tokenOrClass as Constructor<T>
+      token = tokenOrClass
       impl = tokenOrClass as Constructor<T>
     }
 
@@ -119,7 +119,7 @@ export class Container {
     const meta = getClassMetadata(impl)
     const token = serviceClass !== undefined
       ? tokenOrClass
-      : (meta?.token ?? tokenOrClass as Constructor<T>)
+      : (meta?.token ?? tokenOrClass)
     this.registrations.set(token, { kind: 'class', useClass: impl, scope: Scope.Singleton })
   }
 
@@ -323,7 +323,7 @@ export class Container {
       return undefined
     }
     // A bare constructor token that is auto-resolvable (carries DI metadata).
-    if (typeof token === 'function' && getClassMetadata(token as Constructor)) {
+    if (typeof token === 'function' && getClassMetadata(token)) {
       return token as unknown as Constructor
     }
     return undefined
@@ -344,7 +344,7 @@ export class Container {
       return undefined
     }
     if (typeof token === 'function') {
-      return getClassMetadata(token as Constructor)?.scope
+      return getClassMetadata(token)?.scope
     }
     return undefined
   }

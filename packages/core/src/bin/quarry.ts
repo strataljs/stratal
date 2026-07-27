@@ -8,6 +8,7 @@ import { type Application } from '../application';
 import { extractEnvFlag } from './argv';
 import { createDynamicCommands } from './commands/dynamic-command';
 import { resolveDevRegistryPath } from './registry';
+import { stripWorkflowBindings } from './workflow-bindings';
 
 interface WranglerConfig {
   name?: string
@@ -147,6 +148,13 @@ async function main(): Promise<void> {
     remoteProxyConnectionString: remoteProxy?.session.remoteProxyConnectionString,
   })
 
+  // Always source `process.env` into the worker vars/secrets — quarry is a CLI/CI tool, so config passed
+  // through the environment must resolve like any other binding. `getVarsForDev` (and the vite build
+  // quarry spawns for `inertia:build`, which inherits this process env) only merges `process.env` when
+  // `CLOUDFLARE_INCLUDE_PROCESS_ENV` is set, and it defaults OFF — and only when no `.dev.vars` shadows
+  // it, so local runs (which have a `.dev.vars`) are unchanged while CI runs (no `.dev.vars`) resolve
+  // env-provided config instead of failing validation on a missing binding.
+  process.env.CLOUDFLARE_INCLUDE_PROCESS_ENV = 'true'
   const vars = getVarsForDev(configPath, undefined, config.vars, environment)
   const varsRecord: Record<string, string> = {}
   for (const [key, binding] of Object.entries(vars)) {
@@ -158,6 +166,18 @@ async function main(): Promise<void> {
     ...existingBindings,
     ...varsRecord,
     QUEUE_PROVIDER: 'sync',
+  }
+
+  // The quarry worker runs an empty script (`script: ''` below), so it can't own
+  // a Workflow entrypoint, and a sourceless CLI host can't reach a Workflow
+  // defined in another worker either (it boots before that worker exists, and
+  // Workflows can't be remote bindings). Drop the Workflow bindings so Miniflare
+  // doesn't stand up an engine demanding an entrypoint this host can't provide —
+  // see stripWorkflowBindings. Surfaced (not silent) so a command that expects
+  // one sees why it's absent; triggering must happen from the defining worker.
+  const strippedWorkflows = stripWorkflowBindings(workerOptions)
+  if (strippedWorkflows.length > 0) {
+    console.log(`Workflow binding(s) unavailable to CLI commands (defined on the worker, not this host): ${strippedWorkflows.join(', ')}`)
   }
 
   // Rename so quarry doesn't overwrite a running `wrangler dev` session's

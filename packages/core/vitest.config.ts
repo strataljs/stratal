@@ -1,6 +1,15 @@
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      // `cloudflare:workers` is a Workers runtime built-in with no Node
+      // resolution. Point it at the shared stub from @stratal/testing so modules
+      // importing it (e.g. CacheService's `waitUntil`) load under the node test
+      // environment. Specs that mock it with vi.mock/vi.doMock still take precedence.
+      'cloudflare:workers': '@stratal/testing/mocks/cloudflare-workers',
+    },
+  },
   test: {
     coverage: {
       provider: 'v8',

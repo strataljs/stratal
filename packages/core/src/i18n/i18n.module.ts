@@ -1,12 +1,12 @@
 import { Module } from '../module'
-import type { DynamicModule, ModuleContext, OnInitialize } from '../module/types'
+import type { AsyncModuleOptions, DynamicModule, ModuleContext, OnInitialize } from '../module/types'
 import type { I18nModuleOptions } from './i18n.options'
 import { I18N_TOKENS } from './i18n.tokens'
 import { I18nService } from './services/i18n.service'
 import { MessageLoaderService } from './services/message-loader.service'
 import { MessageRegistry } from './services/message-registry'
+import { config } from 'zod/mini'
 import { zodErrorMap } from './validation/validation.context'
-import { z } from './validation/zod'
 
 @Module({
   providers: [
@@ -17,7 +17,7 @@ import { z } from './validation/zod'
 })
 export class I18nModule implements OnInitialize {
   onInitialize(_context: ModuleContext): void {
-    z.config({ customError: zodErrorMap })
+    config({ customError: zodErrorMap })
   }
 
   static forRoot(options: I18nModuleOptions = {}): DynamicModule {
@@ -25,6 +25,24 @@ export class I18nModule implements OnInitialize {
       module: I18nModule,
       providers: [
         { provide: I18N_TOKENS.Options, useValue: options },
+      ],
+    }
+  }
+
+  /**
+   * Configure i18n with options resolved asynchronously from injected
+   * dependencies (e.g. a config service). Useful when `detection` is a per-path
+   * resolver built from runtime config.
+   */
+  static forRootAsync(options: AsyncModuleOptions<I18nModuleOptions>): DynamicModule {
+    return {
+      module: I18nModule,
+      providers: [
+        {
+          provide: I18N_TOKENS.Options,
+          useFactory: options.useFactory,
+          inject: options.inject,
+        },
       ],
     }
   }

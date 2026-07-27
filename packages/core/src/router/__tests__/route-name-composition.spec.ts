@@ -1,11 +1,12 @@
 import { createMock } from '@stratal/testing/mocks'
-import { OpenAPIHono } from '@hono/zod-openapi'
+import { Hono } from 'hono'
 import { describe, expect, it } from 'vitest'
 import type { LoggerService } from '../../logger/services/logger.service'
 import type { ModuleRegistry } from '../../module/module-registry'
 import { Controller } from '../decorators/controller.decorator'
 import { Get } from '../decorators/http-method.decorator'
 import type { HonoApp } from '../hono-app'
+import { RouteMetadataRegistry } from '../route-metadata'
 import { RouteRegistry, type RegisteredRoute } from '../route-registry'
 import { Router } from '../router'
 import { RouterResolver } from '../router-resolver'
@@ -45,15 +46,16 @@ function registerController(
 ): RouteRegistry {
   const registry = new RouteRegistry(mockVersioningService, mockLocalePathService)
   const resolver = new RouterResolver([{ router, controllers: [ControllerClass] }])
-  const mockApp = new OpenAPIHono<RouterEnv>() as unknown as HonoApp
+  const mockApp = new Hono<RouterEnv>() as unknown as HonoApp
   const mockModuleRegistry = { getAllControllers: () => [ControllerClass] } as unknown as ModuleRegistry
   const service = new RouteRegistrationService(
-    mockLogger as unknown as LoggerService,
+    mockLogger,
     registry,
     resolver,
     mockLocalePathService,
     mockApp,
     mockModuleRegistry,
+    new RouteMetadataRegistry(),
   ) as unknown as CollectRoutesPrivate
   service.collectRoutes(ControllerClass, new WeakMap())
   return registry

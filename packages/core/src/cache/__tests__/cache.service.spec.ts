@@ -18,7 +18,7 @@ describe('CacheService', () => {
     mockLogger = createMock<LoggerService>()
     mockEnv = { CACHE: mockKv } as unknown as DeepMocked<StratalEnv>
 
-    service = new CacheService(mockEnv as unknown as StratalEnv, mockLogger as unknown as LoggerService)
+    service = new CacheService(mockEnv, mockLogger)
   })
 
   // Narrowed mock references for overloaded KVNamespace methods.
@@ -88,10 +88,36 @@ describe('CacheService', () => {
       expect(mockKv.put).toHaveBeenCalledWith('key', 'value', { expirationTtl: 3600 })
     })
 
-    it('should throw CacheError on failure', async () => {
+    it('does not reject the caller on KV failure — defers the write and logs it', async () => {
       mockKv.put.mockRejectedValue(new Error('KV put error'))
 
-      await expect(service.put('key', 'value')).rejects.toThrow(CacheError)
+      // The write is deferred via waitUntil, so put() resolves immediately and
+      // a failed KV write never rejects the request that scheduled it.
+      await expect(service.put('key', 'value')).resolves.toBeUndefined()
+
+      // The failure surfaces in the logs from the background write, not as a throw.
+      await vi.waitFor(() => {
+        expect(mockLogger.error).toHaveBeenCalledWith(
+          'Cache put operation failed',
+          expect.objectContaining({ key: 'key' })
+        )
+      })
+    })
+  })
+
+  describe('putDurable()', () => {
+    it('awaits the KV write and forwards options', async () => {
+      mockKv.put.mockResolvedValue(undefined)
+
+      await service.putDurable('key', 'value', { expirationTtl: 60 })
+
+      expect(mockKv.put).toHaveBeenCalledWith('key', 'value', { expirationTtl: 60 })
+    })
+
+    it('throws CacheError and logs when the KV write fails', async () => {
+      mockKv.put.mockRejectedValue(new Error('KV put error'))
+
+      await expect(service.putDurable('key', 'value')).rejects.toThrow(CacheError)
       expect(mockLogger.error).toHaveBeenCalledWith(
         'Cache put operation failed',
         expect.objectContaining({ key: 'key' })
@@ -153,7 +179,7 @@ describe('CacheService', () => {
   describe('getWithMetadata()', () => {
     it('should return value and metadata result', async () => {
       const result = { value: 'data', metadata: { created: 123 }, cacheStatus: null }
-      mockGetWithMetadata().mockResolvedValue(result as unknown as KVNamespaceGetWithMetadataResult<string, unknown>)
+      mockGetWithMetadata().mockResolvedValue(result)
 
       const actual = await service.getWithMetadata('key')
 

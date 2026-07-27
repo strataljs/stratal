@@ -52,7 +52,7 @@ export { createMiddlewareChain } from './middleware/middleware-chain'
 
 // Decorators
 export {
-  Controller, getControllerOptions, getControllerRoute, getControllerVersion
+  Controller, getControllerGroups, getControllerOptions, getControllerRoute, getControllerVersion
 } from './decorators/controller.decorator'
 export { All, Delete, Get, Patch, Post, Put } from './decorators/http-method.decorator'
 export { getRouteDecoratedMethods, getRouteMetadata, Route } from './decorators/route.decorator'

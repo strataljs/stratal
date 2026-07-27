@@ -1,5 +1,5 @@
+import type { $ZodError, $ZodIssue } from 'zod/v4/core';
 import { HttpException } from '../../errors';
-import type { z, ZodError } from '../../i18n/validation/zod';
 
 /**
  * Error thrown when a signed URL has an invalid or expired signature.
@@ -22,9 +22,9 @@ export class InvalidSignatureError extends HttpException {
 export class ResponseValidationError extends HttpException {
   public readonly issues: { path: string; message: string; code: string }[]
 
-  constructor(zodError: ZodError) {
+  constructor(zodError: $ZodError) {
     super(500, 'Response validation failed')
-    this.issues = zodError.issues.map((err: z.core.$ZodIssue) => ({
+    this.issues = zodError.issues.map((err: $ZodIssue) => ({
       path: err.path.join('.'),
       message: err.message,
       code: err.code,

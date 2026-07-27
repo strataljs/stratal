@@ -5,15 +5,16 @@
  * Only internal modules (RouterResolver) import them, keeping the Router's
  * public API clean — users never see these methods.
  *
- * Declared as individual unique symbols so TypeScript can distinguish
- * their return types in computed property access.
+ * Registered via `Symbol.for` so that a duplicate evaluation of this module
+ * (e.g. under a bundler or SSR module runner) resolves to the same symbol,
+ * keeping symbol-keyed dispatch between `Router` and `RouterResolver` stable.
  *
  * @internal
  */
 
 /** @internal */
-export const getDefaultEntry: unique symbol = Symbol('Router.getDefaultEntry')
+export const getDefaultEntry: unique symbol = Symbol.for('stratal:router:getDefaultEntry')
 /** @internal */
-export const getGroups: unique symbol = Symbol('Router.getGroups')
+export const getGroups: unique symbol = Symbol.for('stratal:router:getGroups')
 /** @internal */
-export const getGlobalMiddleware: unique symbol = Symbol('Router.getGlobalMiddleware')
+export const getGlobalMiddleware: unique symbol = Symbol.for('stratal:router:getGlobalMiddleware')

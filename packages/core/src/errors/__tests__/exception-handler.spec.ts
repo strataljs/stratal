@@ -110,7 +110,7 @@ describe('ExceptionHandler', () => {
 
     it('should use HttpException httpStatus for status code', async () => {
       const handler = createHandler()
-      const error = new HttpException(418 as never, 'Teapot')
+      const error = new HttpException(418, 'Teapot')
       const response = await handler.handle(error, cliCtx)
 
       expect(response.status).toBe(418)
@@ -325,6 +325,77 @@ describe('ExceptionHandler', () => {
       await mockWaitUntil.mock.calls[0][0]
       const logCall = mockLogger.error.mock.calls[0]
       expect(logCall[1]).toMatchObject({ appVersion: '1.0.0' })
+    })
+  })
+
+  // ── reportContext() ───────────────────────────────────────────
+
+  describe('reportContext', () => {
+    class ErrorWithContext extends ApplicationError {
+      constructor() {
+        super('error with context')
+      }
+
+      override reportContext(): Record<string, unknown> {
+        return { detail: 'extra', count: 3 }
+      }
+    }
+
+    it('should merge an error\'s reportContext into its log entry', async () => {
+      const handler = createHandler()
+      await handler.handle(new ErrorWithContext(), cliCtx)
+
+      await mockWaitUntil.mock.calls[0][0]
+      const logCall = mockLogger.error.mock.calls[0]
+      expect(logCall[1]).toMatchObject({ detail: 'extra', count: 3 })
+    })
+
+    it('should not add extra keys when reportContext returns undefined', async () => {
+      const handler = createHandler()
+      await handler.handle(new TestError(), cliCtx)
+
+      await mockWaitUntil.mock.calls[0][0]
+      const logData = mockLogger.error.mock.calls[0][1] as Record<string, unknown>
+      expect(Object.keys(logData).sort()).toEqual(['message', 'name', 'stack', 'timestamp'])
+    })
+
+    it('should not let reportContext overwrite reserved log keys', async () => {
+      class ReservedClobberError extends ApplicationError {
+        constructor() {
+          super('real message')
+        }
+
+        override reportContext(): Record<string, unknown> {
+          return { message: 'hijacked', name: 'Hijacked', stack: 'fake', timestamp: 'fake' }
+        }
+      }
+
+      const handler = createHandler()
+      const error = new ReservedClobberError()
+      await handler.handle(error, cliCtx)
+
+      await mockWaitUntil.mock.calls[0][0]
+      const logData = mockLogger.error.mock.calls[0][1] as Record<string, unknown>
+      expect(logData.message).toBe('real message')
+      expect(logData.name).toBe('ReservedClobberError')
+      expect(logData.stack).toBe(error.stack)
+      expect(logData.timestamp).toBe(error.timestamp)
+    })
+
+    it('should let global context take precedence over reportContext', async () => {
+      class ContextHandler extends ExceptionHandler {
+        register(): void {
+          this.context(() => ({ detail: 'global-wins' }))
+        }
+      }
+
+      const handler = createHandler(ContextHandler)
+      await handler.handle(new ErrorWithContext(), cliCtx)
+
+      await mockWaitUntil.mock.calls[0][0]
+      const logData = mockLogger.error.mock.calls[0][1] as Record<string, unknown>
+      expect(logData.detail).toBe('global-wins')
+      expect(logData.count).toBe(3)
     })
   })
 
@@ -835,7 +906,7 @@ describe('ExceptionHandler', () => {
       let node: { cause?: unknown } | undefined = logData.cause as { cause?: unknown }
       while (node && node.cause) {
         depth++
-        node = node.cause as { cause?: unknown }
+        node = node.cause
         if (depth > 20) throw new Error('cause walk did not terminate')
       }
       expect(depth).toBeLessThanOrEqual(6)

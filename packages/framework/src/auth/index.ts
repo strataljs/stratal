@@ -1,4 +1,5 @@
 export * from './auth.module'
+export * from './auth.primers'
 export * from './auth.tokens'
 export * from './errors'
 export * from './middleware'

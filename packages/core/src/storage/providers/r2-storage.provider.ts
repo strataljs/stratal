@@ -169,7 +169,7 @@ export class R2StorageProvider implements IMultipartProvider {
         }
       } else if (body !== null && body !== undefined) {
         // Non-stream body: upload as single part
-        const part = await multipartUpload.uploadPart(1, body as ArrayBuffer | ArrayBufferView | string | Blob)
+        const part = await multipartUpload.uploadPart(1, body)
         parts.push(part)
       }
 

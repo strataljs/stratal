@@ -109,3 +109,17 @@ If you need to register a config namespace as a provider directly (without Confi
 })
 export class DatabaseModule {}
 ```
+
+## Wrangler: Workers Caching
+
+Required only when the app uses `@Cacheable` / `@PurgesCache` from `stratal/response-cache`:
+
+```jsonc
+// wrangler.jsonc
+{
+  "compatibility_date": "2026-07-06",  // or later
+  "cache": { "enabled": true }
+}
+```
+
+Also requires Wrangler `>= 4.69.0`. Without this block, an app with cache decorators fails on its **first request** with `ResponseCacheConfigError`. Add it to every environment — a `@PurgesCache` route without the binding turns every successful mutation into a `500`. See `references/response-cache.md`.

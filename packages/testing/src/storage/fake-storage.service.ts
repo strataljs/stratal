@@ -166,7 +166,10 @@ export class FakeStorageService extends StorageService {
     const content = await this.bodyToUint8Array(body)
     const size = options.size ?? content.length
 
-    return this.upload(body, path, { ...options, size }, disk)
+    // Reuse the already-materialized bytes rather than `body`: a `ReadableStream`
+    // is single-use, so reading it here and again inside `upload` would throw
+    // "ReadableStream is disturbed". `content` is a Uint8Array and safe to re-read.
+    return this.upload(content, path, { ...options, size }, disk)
   }
 
   // ─────────────────────────────────────────────────────────────────────────

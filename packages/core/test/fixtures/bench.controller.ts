@@ -1,4 +1,4 @@
-import { z } from '../../src/i18n/validation'
+import { boolean, minLength, object, string } from 'zod/mini'
 import { Controller } from '../../src/router/decorators/controller.decorator'
 import { Route } from '../../src/router/decorators/route.decorator'
 import type { RouterContext } from '../../src/router/router-context'
@@ -7,7 +7,7 @@ import type { RouterContext } from '../../src/router/router-context'
 export class BenchController {
   @Route({
     summary: 'Simple benchmark endpoint',
-    response: z.object({ ok: z.boolean() }),
+    response: object({ ok: boolean() }),
   })
   index(ctx: RouterContext) {
     return ctx.json({ ok: true })
@@ -18,8 +18,8 @@ export class BenchController {
 export class BenchItemsController {
   @Route({
     summary: 'Get item by ID',
-    params: z.object({ id: z.string() }),
-    response: z.object({ id: z.string(), name: z.string() }),
+    params: object({ id: string() }),
+    response: object({ id: string(), name: string() }),
   })
   show(ctx: RouterContext) {
     const id = ctx.param('id')
@@ -28,8 +28,8 @@ export class BenchItemsController {
 
   @Route({
     summary: 'Create item',
-    body: z.object({ name: z.string().min(1) }),
-    response: z.object({ id: z.string(), name: z.string() }),
+    body: object({ name: string().check(minLength(1)) }),
+    response: object({ id: string(), name: string() }),
   })
   create(ctx: RouterContext) {
     return ctx.json({ id: 'new-1', name: 'bench-item' }, 201)

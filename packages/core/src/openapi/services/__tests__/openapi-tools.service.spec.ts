@@ -364,7 +364,7 @@ describe('OpenApiToolsService', () => {
     })
 
     it('should throw when tool not found', async () => {
-      const service = new OpenApiToolsService({ openapi: '3.0.0', info: { title: 'Test', version: '1.0.0' }, paths: {} } as unknown as OpenAPIObject, { dispatcher: vi.fn() })
+      const service = new OpenApiToolsService({ openapi: '3.0.0', info: { title: 'Test', version: '1.0.0' }, paths: {} }, { dispatcher: vi.fn() })
       await expect(service.executeTool('missing', {})).rejects.toThrow('Tool not found: missing')
     })
 

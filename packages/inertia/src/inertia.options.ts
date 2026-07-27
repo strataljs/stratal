@@ -6,11 +6,6 @@ import type { InertiaSsrBundle } from './types'
 
 export interface InertiaSsrOptions {
   bundle: () => Promise<InertiaSsrBundle | { default: InertiaSsrBundle }>
-  /**
-   * Route patterns where SSR is disabled (e.g., `"admin/*"`).
-   * Uses simple glob matching against the request pathname.
-   */
-  disabled?: string[]
 }
 
 /**

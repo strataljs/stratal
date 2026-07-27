@@ -203,6 +203,7 @@ export abstract class ExceptionHandler {
     const globalContext = this.gatherContext()
 
     const logData: Record<string, unknown> = {
+      ...error.reportContext(),
       message: error.message,
       timestamp: error.timestamp,
       name: error.name,

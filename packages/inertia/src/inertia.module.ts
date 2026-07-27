@@ -1,17 +1,18 @@
-import { ApplicationError, type ApplicationErrorConstructor, type ExceptionHandler, type HttpExceptionContext } from 'stratal/errors'
-import type { AsyncModuleOptions, DynamicModule, OnException, OnInitialize } from 'stratal/module'
-import { Module } from 'stratal/module'
-import { SchemaValidationError, type RouteConfigurable, type Router } from 'stratal/router'
-import { augmentRouterContext } from './augment/router-context'
-import type { InertiaModuleOptions } from './inertia.options'
-import { INERTIA_TOKENS } from './inertia.tokens'
-import { InertiaMiddleware } from './middleware/inertia.middleware'
-import { HreflangService } from './services/hreflang.service'
-import { InertiaService } from './services/inertia.service'
-import { ManifestService } from './services/manifest.service'
-import { SeoService } from './services/seo.service'
-import { SsrRendererService } from './services/ssr-renderer.service'
-import { TemplateService } from './services/template.service'
+import { ApplicationError, type ExceptionHandler, type HttpExceptionContext } from 'stratal/errors';
+import type { AsyncModuleOptions, DynamicModule, OnException, OnInitialize } from 'stratal/module';
+import { Module } from 'stratal/module';
+import { SchemaValidationError, type RouteConfigurable, type Router } from 'stratal/router';
+import { augmentRouterContext } from './augment/router-context';
+import type { InertiaModuleOptions } from './inertia.options';
+import { INERTIA_TOKENS } from './inertia.tokens';
+import { InertiaMiddleware } from './middleware/inertia.middleware';
+import { DocumentRendererService } from './services/document-renderer.service';
+import { HreflangService } from './services/hreflang.service';
+import { InertiaService } from './services/inertia.service';
+import { ManifestService } from './services/manifest.service';
+import { SeoService } from './services/seo.service';
+import { SsrRendererService } from './services/ssr-renderer.service';
+import { TemplateService } from './services/template.service';
 
 @Module({
   providers: [
@@ -19,6 +20,7 @@ import { TemplateService } from './services/template.service'
     { provide: INERTIA_TOKENS.TemplateService, useClass: TemplateService },
     { provide: INERTIA_TOKENS.ManifestService, useClass: ManifestService },
     { provide: INERTIA_TOKENS.SsrRenderer, useClass: SsrRendererService },
+    { provide: INERTIA_TOKENS.DocumentRenderer, useClass: DocumentRendererService },
     { provide: INERTIA_TOKENS.HreflangService, useClass: HreflangService },
     { provide: INERTIA_TOKENS.SeoService, useClass: SeoService },
   ],
@@ -77,7 +79,7 @@ export class InertiaModule implements RouteConfigurable, OnInitialize, OnExcepti
     })
 
     // Convert business ApplicationErrors to Inertia form-level errors
-    handler.renderable(ApplicationError as unknown as ApplicationErrorConstructor, (error, context) => {
+    handler.renderable(ApplicationError, (error, context) => {
       if (context.type !== 'http') return undefined
 
       const message = error.message

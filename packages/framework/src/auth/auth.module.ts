@@ -52,6 +52,7 @@ import { Module } from 'stratal/module'
 import type { IRateLimiterStore, RateLimiterRegistry } from 'stratal/rate-limiter'
 import { RATE_LIMITER_TOKENS } from 'stratal/rate-limiter'
 import type { RouteConfigurable, Router } from 'stratal/router'
+import { AccessShareMiddleware } from '../access-control/access-share.middleware'
 import { createStratalAcPlugin } from '../access-control/plugin'
 import { AccessService } from '../access-control/services/access.service'
 import { AC_TOKENS } from '../access-control/tokens'
@@ -89,9 +90,14 @@ export class AuthModule implements RouteConfigurable {
    *
    * SessionVerificationMiddleware verifies the session and populates the
    * request-scoped AuthContext with the authenticated user.
+   *
+   * AccessShareMiddleware then shares the resulting roles and permissions to
+   * Inertia. Order matters: it reads what session verification wrote. Both
+   * no-op when their dependencies are absent.
    */
   configureRoutes(router: Router): void {
     router.use(SessionVerificationMiddleware)
+    router.use(AccessShareMiddleware)
   }
 
   /**

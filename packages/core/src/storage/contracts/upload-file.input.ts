@@ -1,4 +1,5 @@
-import { z } from '../../i18n/validation'
+import { date, number, object, string } from 'zod/mini'
+import type { infer as Infer } from 'zod/mini'
 
 /**
  * Upload options for streaming uploads
@@ -24,13 +25,13 @@ export interface UploadOptions {
   tagging?: string
 }
 
-export const uploadResultSchema = z.object({
-  path: z.string(),
-  disk: z.string(),
-  fullPath: z.string(),
-  size: z.number(),
-  mimeType: z.string(),
-  uploadedAt: z.date(),
+export const uploadResultSchema = object({
+  path: string(),
+  disk: string(),
+  fullPath: string(),
+  size: number(),
+  mimeType: string(),
+  uploadedAt: date(),
 })
 
-export type UploadResult = z.infer<typeof uploadResultSchema>
+export type UploadResult = Infer<typeof uploadResultSchema>

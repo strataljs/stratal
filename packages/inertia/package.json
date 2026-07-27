@@ -48,6 +48,10 @@
       "types": "./dist/react.d.mts",
       "import": "./dist/react.mjs"
     },
+    "./react/access": {
+      "types": "./dist/react/access.d.mts",
+      "import": "./dist/react/access.mjs"
+    },
     "./seo-runtime": {
       "types": "./dist/seo-runtime.d.mts",
       "import": "./dist/seo-runtime.mjs"
@@ -75,7 +79,7 @@
     "lint:fix": "npx oxlint --fix ."
   },
   "dependencies": {
-    "intl-messageformat": "^11.2.7",
+    "intl-messageformat": "^11.2.12",
     "ts-morph": "^28.0.0"
   },
   "peerDependencies": {
@@ -118,25 +122,25 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.39.2",
-    "@cloudflare/workers-types": "4.20260603.1",
-    "@inertiajs/core": "^3.3.0",
-    "@inertiajs/react": "^3.3.0",
-    "@inertiajs/vite": "^3.3.0",
+    "@cloudflare/vite-plugin": "^1.45.0",
+    "@cloudflare/workers-types": "5.20260716.1",
+    "@inertiajs/core": "^3.6.1",
+    "@inertiajs/react": "^3.6.1",
+    "@inertiajs/vite": "^3.6.1",
     "@stratal/testing": "workspace:*",
-    "@types/node": "^25.9.1",
-    "@types/react": "^19.2.16",
+    "@types/node": "^26.1.1",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@vitest/runner": "~4.1.8",
-    "@vitest/snapshot": "~4.1.8",
-    "hono": "^4.12.23",
+    "@vitest/runner": "~4.1.10",
+    "@vitest/snapshot": "~4.1.10",
+    "hono": "^4.12.30",
     "jsdom": "^29.1.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "stratal": "workspace:*",
-    "tsdown": "^0.22.1",
-    "typescript": "^6.0.3",
-    "vite": "^8.0.16",
-    "vitest": "~4.1.8"
+    "tsdown": "^0.22.9",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.5",
+    "vitest": "~4.1.10"
   }
 }

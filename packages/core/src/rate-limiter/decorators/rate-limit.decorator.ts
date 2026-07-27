@@ -35,8 +35,8 @@ export function RateLimit(name: string): ClassDecorator & MethodDecorator {
       const existing = getMetadata<string[]>(KEY, target) ?? []
       defineMetadata(KEY, [...existing, name], target)
     } else {
-      const existing = getMetadata<string[]>(KEY, target, propertyKey as string) ?? []
-      defineMetadata(KEY, [...existing, name], target, propertyKey as string)
+      const existing = getMetadata<string[]>(KEY, target, propertyKey) ?? []
+      defineMetadata(KEY, [...existing, name], target, propertyKey)
     }
   }
 }

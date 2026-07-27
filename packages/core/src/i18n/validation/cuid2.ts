@@ -1,5 +1,5 @@
-import { z } from '@hono/zod-openapi';
 import { type $ZodRawIssue } from 'zod/v4/core';
+import { cuid2 as zodCuid2 } from 'zod/mini';
 
 /**
  * Default cuid2 shape: 24-32 lowercase-alphanumeric chars, starting with a
@@ -49,7 +49,7 @@ export const CUID2_REGEX = /^[a-z][0-9a-z]{23,31}$/
  */
 export function cuid2(options?: { pattern?: RegExp; error?: string | ((_issue: $ZodRawIssue) => string) }) {
   const pattern = options?.pattern ?? CUID2_REGEX
-  return z.cuid2({
+  return zodCuid2({
     pattern: pattern,
     error: typeof options?.error === 'string' ? options?.error : undefined,
     ...(typeof options?.error === 'function' ? { error: options?.error } : {})

@@ -89,9 +89,25 @@ export class Application {
     return this._container
   }
 
+  /** The application's logger (the singleton {@link LoggerService}). */
+  get logger(): LoggerService {
+    return this._container.resolve<LoggerService>(LOGGER_TOKENS.LoggerService)
+  }
+
   async ensureHono(): Promise<HonoApp> {
     await this.initializeRouting()
     return this.honoApp
+  }
+
+  /**
+   * Whether the app registers any HTTP controllers. Cheap (reads the already-
+   * populated registry; no routing built) and only meaningful after
+   * {@link initialize}. The worker entry uses it to decide whether to pre-warm
+   * the routing stack at boot — queue/scheduled-only apps return false and never
+   * build routes they won't serve.
+   */
+  hasHttpRoutes(): boolean {
+    return this.moduleRegistry.getAllControllers().length > 0
   }
 
   get config(): ApplicationConfig {
@@ -177,6 +193,7 @@ export class Application {
       { LocaleUrlService },
       { RouteRegistrationService },
       { Uri },
+      { RouteMetadataRegistry },
     ] = await Promise.all([
       import('./router/hono-app'),
       import('./router/route-registry'),
@@ -186,8 +203,10 @@ export class Application {
       import('./router/services/locale-url.service'),
       import('./router/services/route-registration.service'),
       import('./router/uri'),
+      import('./router/route-metadata'),
     ])
 
+    this._container.register(ROUTER_TOKENS.RouteMetadataRegistry, RouteMetadataRegistry)
     this._container.register(ROUTER_TOKENS.VersioningService, VersioningService)
     this._container.register(ROUTER_TOKENS.HonoApp, HonoApp)
     this._container.register(ROUTER_TOKENS.LocalePathService, LocalePathService)

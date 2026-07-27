@@ -235,13 +235,13 @@ describe('ConfigService', () => {
     it('get() throws ConfigError for any key when the store was never initialized', () => {
       const uninitializedStore = new ConfigStore<TestConfig>()
       const uninitialized = new ConfigService<TestConfig>(uninitializedStore)
-      expect(() => uninitialized.get('appName' as ConfigPath<TestConfig>)).toThrow(ConfigError)
+      expect(() => uninitialized.get('appName')).toThrow(ConfigError)
     })
 
     it('has() returns false on an uninitialized store (no throw)', () => {
       const uninitializedStore = new ConfigStore<TestConfig>()
       const uninitialized = new ConfigService<TestConfig>(uninitializedStore)
-      expect(uninitialized.has('appName' as ConfigPath<TestConfig>)).toBe(false)
+      expect(uninitialized.has('appName')).toBe(false)
     })
 
     it('all() returns an empty object on an uninitialized store (no throw)', () => {
@@ -253,15 +253,15 @@ describe('ConfigService', () => {
     it('set() is allowed on an uninitialized store and is readable via the override layer', () => {
       const uninitializedStore = new ConfigStore<TestConfig>()
       const uninitialized = new ConfigService<TestConfig>(uninitializedStore)
-      expect(() => uninitialized.set('appName' as ConfigPath<TestConfig>, 'Override')).not.toThrow()
-      expect(uninitialized.get('appName' as ConfigPath<TestConfig>)).toBe('Override')
-      expect(uninitialized.has('appName' as ConfigPath<TestConfig>)).toBe(true)
+      expect(() => uninitialized.set('appName', 'Override')).not.toThrow()
+      expect(uninitialized.get('appName')).toBe('Override')
+      expect(uninitialized.has('appName')).toBe(true)
     })
 
     it('all() merges request overrides into the empty base when uninitialized', () => {
       const uninitializedStore = new ConfigStore<TestConfig>()
       const uninitialized = new ConfigService<TestConfig>(uninitializedStore)
-      uninitialized.set('appName' as ConfigPath<TestConfig>, 'Override')
+      uninitialized.set('appName', 'Override')
       expect(uninitialized.all()).toEqual({ appName: 'Override' })
     })
   })

@@ -1,5 +1,5 @@
+import { array, boolean, minLength, nullable, object, optional, string } from 'zod/mini'
 import { inject } from 'stratal/di'
-import { z } from 'stratal/validation'
 import { DI_TOKENS } from 'stratal/di'
 import { Controller, Route } from 'stratal/router'
 import type { RouterContext } from 'stratal/router'
@@ -18,10 +18,10 @@ export class PostsController {
 
   @Route({
     summary: 'List published posts',
-    response: z.array(z.object({
-      id: z.string(),
-      title: z.string(),
-      published: z.boolean(),
+    response: array(object({
+      id: string(),
+      title: string(),
+      published: boolean(),
     })),
   })
   async index(ctx: RouterContext) {
@@ -34,17 +34,17 @@ export class PostsController {
 
   @Route({
     summary: 'Create post',
-    body: z.object({
-      title: z.string().min(1),
-      content: z.string().optional(),
-      published: z.boolean().optional(),
+    body: object({
+      title: string().check(minLength(1)),
+      content: optional(string()),
+      published: optional(boolean()),
     }),
-    response: z.object({
-      id: z.string(),
-      title: z.string(),
-      content: z.string().nullable(),
-      published: z.boolean(),
-      authorId: z.string(),
+    response: object({
+      id: string(),
+      title: string(),
+      content: nullable(string()),
+      published: boolean(),
+      authorId: string(),
     }),
   })
   @UseGuards(AuthGuard())
@@ -64,13 +64,13 @@ export class PostsController {
 
   @Route({
     summary: 'Show post',
-    params: z.object({ id: z.string() }),
-    response: z.object({
-      id: z.string(),
-      title: z.string(),
-      content: z.string().nullable(),
-      published: z.boolean(),
-      authorId: z.string(),
+    params: object({ id: string() }),
+    response: object({
+      id: string(),
+      title: string(),
+      content: nullable(string()),
+      published: boolean(),
+      authorId: string(),
     }),
   })
   async show(ctx: RouterContext) {
@@ -81,18 +81,18 @@ export class PostsController {
 
   @Route({
     summary: 'Update post',
-    params: z.object({ id: z.string() }),
-    body: z.object({
-      title: z.string().optional(),
-      content: z.string().optional(),
-      published: z.boolean().optional(),
+    params: object({ id: string() }),
+    body: object({
+      title: optional(string()),
+      content: optional(string()),
+      published: optional(boolean()),
     }),
-    response: z.object({
-      id: z.string(),
-      title: z.string(),
-      content: z.string().nullable(),
-      published: z.boolean(),
-      authorId: z.string(),
+    response: object({
+      id: string(),
+      title: string(),
+      content: nullable(string()),
+      published: boolean(),
+      authorId: string(),
     }),
   })
   @UseGuards(AuthGuard({ permissions: 'posts:update' }))
@@ -108,8 +108,8 @@ export class PostsController {
 
   @Route({
     summary: 'Delete post',
-    params: z.object({ id: z.string() }),
-    response: z.object({ deleted: z.boolean() }),
+    params: object({ id: string() }),
+    response: object({ deleted: boolean() }),
   })
   @UseGuards(AuthGuard({ permissions: 'posts:delete' }))
   async destroy(ctx: RouterContext) {

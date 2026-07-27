@@ -1,6 +1,6 @@
 import { Transient } from '../../src/di/decorators'
 import { I18nModule } from '../../src/i18n/i18n.module'
-import { z } from '../../src/i18n/validation'
+import { email, literal, minLength, object, string } from 'zod/mini'
 import { Module } from '../../src/module/module.decorator'
 import { Controller } from '../../src/router/decorators/controller.decorator'
 import { Post } from '../../src/router/decorators/http-method.decorator'
@@ -30,16 +30,16 @@ class TestPrecognitionMiddleware implements Middleware {
   }
 }
 
-const onboardBodySchema = z.object({
-  name: z.string().min(1),
-  email: z.email(),
+const onboardBodySchema = object({
+  name: string().check(minLength(1)),
+  email: email(),
 })
 
 @Controller('/onboard')
 export class PrecognitionOnboardController {
   @Post('/', {
     body: onboardBodySchema,
-    response: z.object({ ok: z.literal(true) }),
+    response: object({ ok: literal(true) }),
   })
   store(ctx: RouterContext) {
     return ctx.json({ ok: true as const })

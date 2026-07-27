@@ -34,11 +34,11 @@ Use `ctx.inertiaModal(component, props, { baseURL })` in any controller. `baseUR
 ```typescript
 // src/domain/notes/notes.controller.ts
 import { Controller, Get } from 'stratal/router'
-import { z } from 'stratal/validation'
+import { object, string } from 'zod/mini'
 
 @Controller('/notes')
 export class NotesController {
-  @Get('/:id/edit', { params: z.object({ id: z.string() }) })
+  @Get('/:id/edit', { params: object({ id: string() }) })
   async edit(ctx: RouterContext) {
     const note = await this.service.find(ctx.param('id'))
     return ctx.inertiaModal('notes/Edit', { note }, { baseURL: '/notes' })

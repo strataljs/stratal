@@ -1,5 +1,6 @@
 import { type ConventionRouteMetadata, type ExplicitRouteMetadata, getRouteDecoratedMethods, getRouteMetadata } from 'stratal/router'
-import { z } from 'stratal/validation'
+import { object, optional, string } from 'zod/mini'
+import type { ZodMiniType as ZodType } from 'zod/mini'
 import { describe, expect, it } from 'vitest'
 import { InertiaDelete, InertiaGet, InertiaPatch, InertiaPost, InertiaPut, InertiaRoute } from '../decorators/inertia.decorators'
 
@@ -9,7 +10,7 @@ class ConventionTestController {
     //
   }
 
-  @InertiaRoute({ query: z.object({ page: z.string().optional() }) })
+  @InertiaRoute({ query: object({ page: optional(string()) }) })
   list() {
     //
   }
@@ -20,8 +21,8 @@ class ConventionTestController {
   }
 
   @InertiaRoute({
-    params: z.object({ id: z.string() }),
-    body: z.object({ title: z.string() }),
+    params: object({ id: string() }),
+    body: object({ title: string() }),
     tags: ['Notes'],
     summary: 'Show note',
     description: 'Shows a note',
@@ -37,27 +38,27 @@ class ExplicitTestController {
     //
   }
 
-  @InertiaGet('/:id', { params: z.object({ id: z.string() }) })
+  @InertiaGet('/:id', { params: object({ id: string() }) })
   show() {
     //
   }
 
-  @InertiaPost('/', { body: z.object({ title: z.string() }) })
+  @InertiaPost('/', { body: object({ title: string() }) })
   create() {
     //
   }
 
-  @InertiaPut('/:id', { params: z.object({ id: z.string() }), body: z.object({ title: z.string() }) })
+  @InertiaPut('/:id', { params: object({ id: string() }), body: object({ title: string() }) })
   update() {
     //
   }
 
-  @InertiaPatch('/:id', { params: z.object({ id: z.string() }) })
+  @InertiaPatch('/:id', { params: object({ id: string() }) })
   patch() {
     //
   }
 
-  @InertiaDelete('/:id', { params: z.object({ id: z.string() }) })
+  @InertiaDelete('/:id', { params: object({ id: string() }) })
   destroy() {
     //
   }
@@ -88,7 +89,7 @@ describe('InertiaRoute decorator (convention)', () => {
 
   it('should auto-set response schema matching InertiaPage shape', () => {
     const meta = getRouteMetadata(prototype, 'index') as ConventionRouteMetadata
-    const response = meta.config.response as { schema: z.ZodType; description: string; contentType: string }
+    const response = meta.config.response as { schema: ZodType; description: string; contentType: string }
 
     expect(response.description).toBe('Inertia page response')
     expect(response.contentType).toBe('text/html')
@@ -110,7 +111,7 @@ describe('InertiaRoute decorator (convention)', () => {
 
     expect(meta.config.query).toBeDefined()
 
-    const result = (meta.config.query as z.ZodType).safeParse({ page: '2' })
+    const result = (meta.config.query as ZodType).safeParse({ page: '2' })
     expect(result.success).toBe(true)
   })
 
@@ -165,7 +166,7 @@ describe('Inertia HTTP method decorators (explicit)', () => {
   it('should auto-set inertia response schema on all methods', () => {
     for (const methodName of ['index', 'show', 'create', 'update', 'patch', 'destroy']) {
       const meta = getRouteMetadata(prototype, methodName) as ExplicitRouteMetadata
-      const response = meta.config.response as { schema: z.ZodType; description: string; contentType: string }
+      const response = meta.config.response as { schema: ZodType; description: string; contentType: string }
 
       expect(response.description).toBe('Inertia page response')
       expect(response.contentType).toBe('text/html')
@@ -196,7 +197,7 @@ describe('Inertia HTTP method decorators (explicit)', () => {
   })
 
   it('should track all methods in DECORATED_METHODS', () => {
-    const methods = getRouteDecoratedMethods(ExplicitTestController as unknown as new (...args: unknown[]) => object)
+    const methods = getRouteDecoratedMethods(ExplicitTestController)
     expect(methods).toContain('index')
     expect(methods).toContain('show')
     expect(methods).toContain('create')

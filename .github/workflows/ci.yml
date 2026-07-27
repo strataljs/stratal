@@ -45,6 +45,48 @@ jobs:
           path: packages/*/dist/
           retention-days: 1
 
+  versioning:
+    name: Versioning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@58077d3c7e43986b6b15fba718e8ea69e387dfcc # v2.15.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: ./.github/actions/setup
+
+      # Every `@stratal/*` package peers on `stratal`, and changesets majors a
+      # dependent whenever the package it peers on is bumped. The
+      # `onlyUpdatePeerDependentsWhenOutOfRange` option in .changeset/config.json
+      # suppresses that — but the packages which actually read it,
+      # @changesets/config and @changesets/assemble-release-plan, are transitive
+      # and can move even though @changesets/cli itself is pinned. An option
+      # shape they no longer recognize is ignored silently: no error, no
+      # warning, just a release that quietly becomes a major. Catch it here
+      # rather than on npm, where it cannot be taken back.
+      #
+      # `changeset status` diffs against config.baseBranch (`dev`), which exists
+      # only on the Forgejo origin; without it the command fails before printing
+      # a plan. Pointing `dev` at HEAD makes that diff a no-op — the release plan
+      # is read from `.changeset/`, not from the diff, so the verdict is the same.
+      - name: Guard against an unintended major release
+        env:
+          PLAN: ${{ runner.temp }}/release-plan.json
+        run: |
+          git rev-parse --verify --quiet dev >/dev/null || git branch dev HEAD
+          yarn changeset status --output="$PLAN"
+
+          jq -r '.releases[] | "  \(.name): \(.oldVersion) -> \(.newVersion) (\(.type))"' "$PLAN"
+
+          majors=$(jq -r '[.releases[] | select(.type == "major" and (.oldVersion | startswith("0.")))] | length' "$PLAN")
+          if [ "$majors" -gt 0 ]; then
+            echo "::error::A major bump is planned while these packages are still below 1.0.0. If that is deliberate, update this guard. Otherwise the peer-dependent escalation is back: check that .changeset/config.json still declares ___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH.onlyUpdatePeerDependentsWhenOutOfRange, that every peer range on 'stratal' admits the new version, and that @changesets/config and @changesets/assemble-release-plan have not moved."
+            exit 1
+          fi
+
   lint:
     name: Lint & Typecheck
     needs: build

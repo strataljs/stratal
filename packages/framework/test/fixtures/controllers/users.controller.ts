@@ -1,4 +1,4 @@
-import { z } from 'stratal/validation'
+import { array, object, string } from 'zod/mini'
 import { Controller, Route } from 'stratal/router'
 import type { RouterContext } from 'stratal/router'
 import { UseGuards } from 'stratal/guards'
@@ -15,11 +15,11 @@ export class UsersController {
 
   @Route({
     summary: 'List users',
-    response: z.array(z.object({
-      id: z.string(),
-      email: z.string(),
-      name: z.string(),
-      role: z.string(),
+    response: array(object({
+      id: string(),
+      email: string(),
+      name: string(),
+      role: string(),
     })),
   })
   async index(ctx: RouterContext) {
@@ -31,12 +31,12 @@ export class UsersController {
 
   @Route({
     summary: 'Show user',
-    params: z.object({ id: z.string() }),
-    response: z.object({
-      id: z.string(),
-      email: z.string(),
-      name: z.string(),
-      role: z.string(),
+    params: object({ id: string() }),
+    response: object({
+      id: string(),
+      email: string(),
+      name: string(),
+      role: string(),
     }),
   })
   async show(ctx: RouterContext) {

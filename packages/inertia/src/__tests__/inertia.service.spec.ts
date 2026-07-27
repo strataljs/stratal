@@ -5,8 +5,10 @@ import { DI_TOKENS } from 'stratal/di'
 import { ROUTER_CONTEXT_KEYS, ROUTER_TOKENS, RouterContext, type RegisteredRoute, type RouteRegistry, type TrailingSlashConfig } from 'stratal/router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { InertiaModuleOptions } from '../inertia.options'
+import { DocumentRendererService } from '../services/document-renderer.service'
 import { InertiaService } from '../services/inertia.service'
 import type { SeoService } from '../services/seo.service'
+import { resetSsrExcludeMatchers } from '../services/ssr-exclusion'
 import type { SsrRendererService } from '../services/ssr-renderer.service'
 import type { TemplateService } from '../services/template.service'
 
@@ -18,7 +20,6 @@ function createMockContext(overrides: {
   url?: string
   headers?: Record<string, string>
   isInertia?: boolean
-  withoutSsr?: boolean
   routes?: RegisteredRoute[]
   trailingSlash?: TrailingSlashConfig
   routePath?: string
@@ -63,7 +64,6 @@ function createMockContext(overrides: {
 
   const variables: Record<string, unknown> = {
     inertia: overrides.isInertia ?? false,
-    withoutSsr: overrides.withoutSsr ?? false,
     inertiaFlash: {},
     inertiaFlashOut: {},
     [ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER]: mockContainer,
@@ -105,6 +105,12 @@ describe('InertiaService', () => {
     return new ReadableStream<Uint8Array>({ start(controller) { controller.close() } })
   }
 
+  // Wire InertiaService over a real DocumentRendererService backed by the mock
+  // ssr/template, so render assertions exercise the actual SSR/client-only branch.
+  function makeService(opts: InertiaModuleOptions = options): InertiaService {
+    return new InertiaService(opts, new DocumentRendererService(opts, mockSsr, mockTemplate), mockSeo)
+  }
+
   beforeEach(() => {
     mockTemplate = {
       renderStream: vi.fn().mockReturnValue(emptyStream()),
@@ -120,7 +126,7 @@ describe('InertiaService', () => {
       tagsFor: vi.fn().mockReturnValue([]),
     } as unknown as SeoService
 
-    service = new InertiaService(options, mockTemplate, mockSsr, mockSeo)
+    service = makeService()
   })
 
   describe('render()', () => {
@@ -231,12 +237,7 @@ describe('InertiaService', () => {
     })
 
     it('should set version to null when not configured', async () => {
-      const noVersionService = new InertiaService(
-        { rootView: '<html>@inertia</html>' },
-        mockTemplate,
-        mockSsr,
-        mockSeo,
-      )
+      const noVersionService = makeService({ rootView: '<html>@inertia</html>' })
       const ctx = createMockContext({ isInertia: true })
 
       const response = await noVersionService.render(ctx, 'Home', {})
@@ -252,6 +253,98 @@ describe('InertiaService', () => {
       const response = await service.render(ctx, 'Home', {})
       const body = await parsePageJson(response)
       expect(body.flash).toEqual({ success: 'Created!' })
+    })
+  })
+
+  describe('response-cache signals', () => {
+    it('publishes the resolved props as responsePayload, matching page.props exactly', async () => {
+      const ctx = createMockContext({ isInertia: true })
+
+      const response = await service.render(ctx, 'Home', { message: 'Hello' })
+      const body = await parsePageJson(response)
+
+      // Same object the client receives — including the merged `errors` key —
+      // so a `{data.errors.*}` cache tag template sees what the page sees.
+      expect(ctx.c.get('responsePayload')).toEqual(body.props)
+      expect(ctx.c.get('responsePayload')).toEqual({ message: 'Hello', seo: {}, errors: {} })
+    })
+
+    it('includes flash-sourced validation errors in responsePayload', async () => {
+      const ctx = createMockContext({ isInertia: true })
+      ctx.c.set('inertiaFlash', { errors: { email: 'is invalid' } })
+
+      await service.render(ctx, 'Home', {})
+
+      expect(ctx.c.get('responsePayload')).toMatchObject({ errors: { email: 'is invalid' } })
+    })
+
+    it('publishes clean-page signals (no flash, not partial, no once props)', async () => {
+      const ctx = createMockContext({ isInertia: true })
+
+      await service.render(ctx, 'Home', { message: 'Hello' })
+
+      expect(ctx.c.get('inertiaCacheSignals')).toEqual({
+        hasFlash: false,
+        isPartial: false,
+        hasOnceProps: false,
+      })
+    })
+
+    it('flags hasOnceProps when a page uses once() — driven through the real processProps path, not a hand-built input', async () => {
+      const ctx = createMockContext({ isInertia: true })
+
+      await service.render(ctx, 'Home', {
+        categories: service.once(() => ['a', 'b']),
+      })
+
+      expect(ctx.c.get('inertiaCacheSignals')).toMatchObject({ hasOnceProps: true })
+    })
+
+    it('does not flag hasOnceProps when a requested once() prop is resolved on partial reload', async () => {
+      // On a partial reload that explicitly requests the once prop, `processProps`
+      // resolves its value but does NOT add it to `onceProps` (see the `else if
+      // (!isPartialReload)` branch) — the once-contract only applies to the
+      // initial load, so the signal must not fire here either.
+      const ctx = createMockContext({
+        isInertia: true,
+        headers: {
+          'x-inertia-partial-component': 'Home',
+          'x-inertia-partial-data': 'categories',
+        },
+      })
+
+      await service.render(ctx, 'Home', {
+        categories: service.once(() => ['a', 'b']),
+      })
+
+      expect(ctx.c.get('inertiaCacheSignals')).toMatchObject({ hasOnceProps: false, isPartial: true })
+    })
+
+    it('flags hasFlash when flash data is present on the context', async () => {
+      const ctx = createMockContext({ isInertia: true })
+      ctx.c.set('inertiaFlash', { success: 'Created!' })
+
+      await service.render(ctx, 'Home', {})
+
+      expect(ctx.c.get('inertiaCacheSignals')).toMatchObject({ hasFlash: true })
+    })
+
+    it('flags isPartial only when the partial-reload component matches the rendered component', async () => {
+      // A stale/mismatched `x-inertia-partial-component` header must not be
+      // treated as a partial reload — this mirrors `isPartialReload()`'s own
+      // component check, which is stricter than merely checking for the
+      // presence of the `x-inertia-partial-data` header.
+      const ctx = createMockContext({
+        isInertia: true,
+        headers: {
+          'x-inertia-partial-component': 'SomeOtherComponent',
+          'x-inertia-partial-data': 'message',
+        },
+      })
+
+      await service.render(ctx, 'Home', { message: 'Hello' })
+
+      expect(ctx.c.get('inertiaCacheSignals')).toMatchObject({ isPartial: false })
     })
   })
 
@@ -480,70 +573,61 @@ describe('InertiaService', () => {
     })
   })
 
-  describe('per-route SSR control', () => {
-    it('should skip SSR when withoutSsr context flag is set', async () => {
-      const ctx = createMockContext({ withoutSsr: true })
+  describe('SSR exclusion', () => {
+    const SSR_EXCLUDE_GLOBAL = '__STRATAL_INERTIA_SSR_EXCLUDE__'
 
-      await service.render(ctx, 'Home', { message: 'Hello' })
+    // The exclusion matchers are memoized per isolate from the global the Vite
+    // plugin defines, so set the global and reset the memo *before* constructing.
+    function serviceWithExclude(patterns: string[]): InertiaService {
+      ;(globalThis as Record<string, unknown>)[SSR_EXCLUDE_GLOBAL] = patterns
+      resetSsrExcludeMatchers()
+      try {
+        return makeService()
+      } finally {
+        ;(globalThis as Record<string, unknown>)[SSR_EXCLUDE_GLOBAL] = undefined
+        resetSsrExcludeMatchers()
+      }
+    }
+
+    it('renders an excluded component client-only', async () => {
+      const excluded = serviceWithExclude(['Admin/**'])
+      const ctx = createMockContext()
+
+      await excluded.render(ctx, 'Admin/Dashboard', {})
 
       expect(mockSsr.render).not.toHaveBeenCalled()
       expect(mockTemplate.renderClientOnly).toHaveBeenCalled()
     })
 
-    it('should skip SSR when URL matches ssr.disabled pattern', async () => {
-      const ssrOptions: InertiaModuleOptions = {
-        rootView: '<html>@inertia</html>',
-        version: '1.0',
-        ssr: {
-          bundle: vi.fn() as unknown as InertiaModuleOptions['ssr'] extends { bundle: infer B } ? B : never,
-          disabled: ['admin/*'],
-        },
-      }
+    it('server-renders a component that does not match any exclusion', async () => {
+      const excluded = serviceWithExclude(['Admin/**'])
+      const ctx = createMockContext()
 
-      const ssrService = new InertiaService(ssrOptions, mockTemplate, mockSsr, mockSeo)
-      const ctx = createMockContext({ url: 'http://localhost/admin/dashboard' })
+      await excluded.render(ctx, 'Home', {})
 
-      await ssrService.render(ctx, 'AdminDashboard', {})
-
-      expect(mockSsr.render).not.toHaveBeenCalled()
-      expect(mockTemplate.renderClientOnly).toHaveBeenCalled()
+      expect(mockSsr.render).toHaveBeenCalled()
+      expect(mockTemplate.renderClientOnly).not.toHaveBeenCalled()
     })
 
-    it('should perform SSR for non-matching URL patterns', async () => {
-      const ssrOptions: InertiaModuleOptions = {
-        rootView: '<html>@inertia</html>',
-        version: '1.0',
-        ssr: {
-          bundle: vi.fn() as unknown as InertiaModuleOptions['ssr'] extends { bundle: infer B } ? B : never,
-          disabled: ['admin/*'],
-        },
-      }
+    it('treats `*` as a single segment that does not cross `/`', async () => {
+      const excluded = serviceWithExclude(['Reports/*'])
 
-      const ssrService = new InertiaService(ssrOptions, mockTemplate, mockSsr, mockSeo)
-      const ctx = createMockContext({ url: 'http://localhost/home' })
+      await excluded.render(createMockContext(), 'Reports/Daily', {})
+      expect(mockTemplate.renderClientOnly).toHaveBeenCalled()
 
-      await ssrService.render(ctx, 'Home', {})
+      vi.clearAllMocks()
 
+      // `Reports/Heavy/Chart` has an extra segment, so `Reports/*` must not match.
+      await excluded.render(createMockContext(), 'Reports/Heavy/Chart', {})
       expect(mockSsr.render).toHaveBeenCalled()
     })
 
-    it('matches ssr.disabled against the pathname even with a query string', async () => {
-      const ssrOptions: InertiaModuleOptions = {
-        rootView: '<html>@inertia</html>',
-        version: '1.0',
-        ssr: {
-          bundle: vi.fn() as unknown as InertiaModuleOptions['ssr'] extends { bundle: infer B } ? B : never,
-          disabled: ['admin/*'],
-        },
-      }
+    it('server-renders every component when no exclusions are configured', async () => {
+      const ctx = createMockContext()
 
-      const ssrService = new InertiaService(ssrOptions, mockTemplate, mockSsr, mockSeo)
-      const ctx = createMockContext({ url: 'http://localhost/admin/dashboard?tab=users' })
+      await service.render(ctx, 'Admin/Dashboard', {})
 
-      await ssrService.render(ctx, 'AdminDashboard', {})
-
-      expect(mockSsr.render).not.toHaveBeenCalled()
-      expect(mockTemplate.renderClientOnly).toHaveBeenCalled()
+      expect(mockSsr.render).toHaveBeenCalled()
     })
   })
 
@@ -627,7 +711,7 @@ describe('InertiaService', () => {
         version: '1.0',
         routes: true,
       }
-      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockSeo)
+      const routesService = makeService(routesOptions)
       const ctx = createMockContext({ isInertia: true, routes: [sampleRoute] })
 
       const response = await routesService.render(ctx, 'Home', {})
@@ -645,7 +729,7 @@ describe('InertiaService', () => {
         version: '1.0',
         routes: true,
       }
-      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockSeo)
+      const routesService = makeService(routesOptions)
       const ctx = createMockContext({
         isInertia: true,
         routes: [sampleRoute],
@@ -664,7 +748,7 @@ describe('InertiaService', () => {
         version: '1.0',
         routes: true,
       }
-      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockSeo)
+      const routesService = makeService(routesOptions)
       const ctx = createMockContext({
         isInertia: true,
         routes: [sampleRoute],
@@ -684,7 +768,7 @@ describe('InertiaService', () => {
         version: '1.0',
         routes: true,
       }
-      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockSeo)
+      const routesService = makeService(routesOptions)
       const tenantRoute: RegisteredRoute = {
         name: 'dashboard.index',
         method: 'get',
@@ -719,7 +803,7 @@ describe('InertiaService', () => {
         version: '1.0',
         routes: true,
       }
-      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockSeo)
+      const routesService = makeService(routesOptions)
       const ctx = createMockContext({
         isInertia: true,
         routes: [sampleRoute],
@@ -738,7 +822,7 @@ describe('InertiaService', () => {
         version: '1.0',
         routes: true,
       }
-      const routesService = new InertiaService(routesOptions, mockTemplate, mockSsr, mockSeo)
+      const routesService = makeService(routesOptions)
       const ctx = createMockContext({
         isInertia: true,
         routes: [sampleRoute],

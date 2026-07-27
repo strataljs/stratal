@@ -4,7 +4,8 @@
  */
 export const ROUTER_CONTEXT_KEYS = {
   REQUEST_CONTAINER: 'requestContainer',
-  LOCALE: 'locale'
+  LOCALE: 'locale',
+  RESPONSE_PAYLOAD: 'responsePayload',
 } as const satisfies Record<string, string>
 
 /**
@@ -23,6 +24,8 @@ export const ROUTE_METADATA_KEYS = {
   WS_ON_CLOSE: Symbol.for('stratal:ws:on-close'),
   WS_ON_ERROR: Symbol.for('stratal:ws:on-error'),
   RATE_LIMIT: Symbol.for('stratal:route:rate-limit'),
+  CACHEABLE: Symbol.for('stratal:route:cacheable'),
+  PURGES_CACHE: Symbol.for('stratal:route:purges-cache'),
 } as const
 
 /**

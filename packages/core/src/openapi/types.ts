@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from 'hono/types'
-import type { PathItemObject } from '../i18n/validation/zod'
+import type { RouteSchemaMeta } from '../router/route-metadata'
 import type { RouterEnv } from '../router/types'
 
 /**
@@ -53,10 +53,11 @@ export interface OpenAPIModuleOptions {
 }
 
 /**
- * Route filter function type
- * Returns true to include route, false to exclude
+ * Route visibility predicate for the OpenAPI document.
+ * Receives the route's schema metadata (path, method, tags, security, groups,
+ * meta) and returns true to include the route, false to exclude it.
  */
-export type RouteFilterFn = (path: string, pathItem: PathItemObject) => boolean
+export type RouteFilterFn = (route: RouteSchemaMeta) => boolean
 
 /**
  * Runtime configuration override (set via middleware)

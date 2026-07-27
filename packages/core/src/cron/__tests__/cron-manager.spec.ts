@@ -39,7 +39,7 @@ describe('CronManager', () => {
   }
 
   const createController = (cron: string): DeepMocked<ScheduledController> => {
-    return { cron, scheduledTime: Date.now(), noRetry: vi.fn() } as unknown as DeepMocked<ScheduledController>
+    return { cron, scheduledTime: Date.now(), noRetry: vi.fn() }
   }
 
   describe('registerJob()', () => {

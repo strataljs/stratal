@@ -14,7 +14,7 @@ import type { AccessControlOptions, RolePermissions } from './types'
  *   resources: {
  *     posts: ['create', 'read', 'update', 'delete'],
  *     admin: ['access'],
- *   } as const,
+ *   },
  *   roles: {
  *     admin: { posts: ['create', 'read', 'update', 'delete'], admin: ['access'] },
  *     user:  { posts: ['create', 'read'] },
@@ -29,8 +29,8 @@ import type { AccessControlOptions, RolePermissions } from './types'
  * ```
  */
 export function createAccessControl<
-  TResources extends Statements,
-  TRoles extends Record<string, RolePermissions<TResources>>,
+  const TResources extends Statements,
+  const TRoles extends Record<string, RolePermissions<TResources>>,
 >(config: {
   resources: TResources
   roles: TRoles

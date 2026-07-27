@@ -1,5 +1,5 @@
+import { object, string } from 'zod/mini'
 import { inject } from '../../di'
-import { z } from '../../i18n/validation'
 import { Controller } from '../../router/decorators/controller.decorator'
 import { Delete, Get, Put } from '../../router/decorators/http-method.decorator'
 import { type RouterContext } from '../../router/router-context'
@@ -7,9 +7,44 @@ import { FileNotFoundError } from '../errors/file-not-found.error'
 import type { StorageService } from '../services/storage.service'
 import { STORAGE_TOKENS } from '../storage.tokens'
 
-const diskParam = z.object({
-  disk: z.string(),
+const diskParam = object({
+  disk: string(),
 })
+
+/**
+ * Content types rendered inline by {@link StorageController.download}.
+ *
+ * Stored objects are served from the same origin as the application, so any response the browser
+ * treats as a document runs in that origin's security context. Echoing an object's stored content
+ * type back with `Content-Disposition: inline` therefore turns a bucket into a script-injection
+ * vector: an object stored as `text/html` — or `image/svg+xml`, which is scriptable and is
+ * deliberately absent below — executes against whatever session fetched it.
+ *
+ * The allowlist is deliberately the safe set rather than a blocklist of dangerous types, so a
+ * format nobody anticipated downloads instead of rendering.
+ */
+const DEFAULT_INLINE_CONTENT_TYPES: ReadonlySet<string> = new Set([
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+])
+
+/**
+ * Strips characters that cannot legally appear in the quoted `filename="…"` parameter.
+ *
+ * Beyond the quote and backslash that would break out of the quoting, RFC 7230 §3.2 limits a header
+ * field value to visible ASCII, space, horizontal tab and obs-text — so every C0 control and DEL is
+ * removed too, not just CR and LF. A key holding one of those would otherwise emit a malformed
+ * header that a strict parser or intermediary may reject or interpret differently. Bytes 0x80–0xFF
+ * are obs-text and stay, so non-ASCII filenames survive intact.
+ */
+function contentDispositionFilename(path: string): string {
+  const base = path.split('/').pop() ?? 'download'
+  // eslint-disable-next-line no-control-regex -- the control range is the point: these bytes are illegal in a header value.
+  return base.replace(/["\\\x00-\x1f\x7f]/g, '') || 'download'
+}
 
 /**
  * Storage Controller
@@ -41,11 +76,25 @@ export class StorageController {
       throw new FileNotFoundError(path)
     }
 
+    const renderInline = DEFAULT_INLINE_CONTENT_TYPES.has(
+      result.contentType.split(';')[0].trim().toLowerCase()
+    )
+
     return new Response(stream, {
       headers: {
-        'Content-Type': result.contentType,
+        // A type outside the allowlist is handed back as an opaque blob, so the browser has no
+        // reason to parse it as markup even when the stored content type claims otherwise.
+        'Content-Type': renderInline ? result.contentType : 'application/octet-stream',
         'Content-Length': String(result.size),
-        'Content-Disposition': 'inline',
+        'Content-Disposition': renderInline
+          ? 'inline'
+          : `attachment; filename="${contentDispositionFilename(path)}"`,
+        // Prevents the browser sniffing past the content type above and rendering a disguised
+        // payload anyway.
+        'X-Content-Type-Options': 'nosniff',
+        // Defence in depth for the inline case: a viewer or decoder handling a malformed file gets
+        // an opaque origin with no scripting, so it cannot reach the session it was served to.
+        'Content-Security-Policy': "sandbox; default-src 'none'",
       },
     })
   }
@@ -89,5 +138,16 @@ function extractWildcardPath(ctx: RouterContext): string {
   // Remove /storage/:disk/ prefix to get the file path
   const parts = fullPath.split('/')
   // ['', 'storage', 'disk', ...rest]
-  return parts.slice(3).join('/')
+  const encoded = parts.slice(3).join('/')
+
+  // `url.pathname` is percent-encoded, but object keys are stored raw — so a key holding a space,
+  // a non-ASCII character, `#` or `?` would be looked up as `%20`/`%C3%A9`/… and miss. Keys are
+  // opaque strings that may themselves contain `/`, so the remainder is decoded whole rather than
+  // per segment. A malformed escape cannot be decoded and is left as-is; the lookup then fails as
+  // a normal missing object instead of throwing a URIError out of the handler.
+  try {
+    return decodeURIComponent(encoded)
+  } catch {
+    return encoded
+  }
 }

@@ -384,14 +384,14 @@ export class ModuleRegistry {
 
     if (typeof provider === 'function') {
       this.container.register(provider as Constructor)
-      this.collectIfListener(provider as Constructor)
-      this.collectIfCommand(provider as Constructor)
-      this.collectIfSeeder(provider as Constructor)
+      this.collectIfListener(provider)
+      this.collectIfCommand(provider)
+      this.collectIfSeeder(provider)
     } else if ('useClass' in provider) {
       this.container.register(provider.provide, provider.useClass as Constructor)
-      this.collectIfListener(provider.useClass as Constructor)
-      this.collectIfCommand(provider.useClass as Constructor)
-      this.collectIfSeeder(provider.useClass as Constructor)
+      this.collectIfListener(provider.useClass)
+      this.collectIfCommand(provider.useClass)
+      this.collectIfSeeder(provider.useClass)
     } else if ('useValue' in provider) {
       this.container.registerValue(provider.provide, provider.useValue)
     } else if ('useFactory' in provider) {
@@ -407,7 +407,7 @@ export class ModuleRegistry {
 
   /** The DI token a provider binds, for collision detection. */
   private providerToken(provider: Provider): InjectionToken | null {
-    if (typeof provider === 'function') return provider as Constructor
+    if (typeof provider === 'function') return provider
     if ('provide' in provider) return provider.provide
     return null
   }

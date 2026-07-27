@@ -1,3 +1,4 @@
+export { cachedEntrypoint, type CachedEntrypoint, type CachedEntrypointClass } from './cached-entrypoint'
 export { runInScope } from './run-in-scope'
 export { StratalDurableObject } from './stratal-durable-object'
 export { StratalWorkerEntrypoint } from './stratal-worker-entrypoint'

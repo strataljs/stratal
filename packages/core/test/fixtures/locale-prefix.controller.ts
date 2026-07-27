@@ -1,5 +1,6 @@
 import { I18nModule } from '../../src/i18n/i18n.module'
-import { cuid2, z } from '../../src/i18n/validation'
+import { cuid2 as cuid2Builtin, object } from 'zod/mini'
+import { cuid2 } from '../../src/i18n/validation'
 import { Module } from '../../src/module/module.decorator'
 import { Controller } from '../../src/router/decorators/controller.decorator'
 import { Get } from '../../src/router/decorators/http-method.decorator'
@@ -35,7 +36,7 @@ export class LocalePrefixSettingsController {
 export class LocalePrefixAppModule implements RouteConfigurable {
   configureRoutes(router: Router): void {
     router
-      .prefix('/:tenantId', z.object({ tenantId: z.cuid2() }))
+      .prefix('/:tenantId', object({ tenantId: cuid2Builtin() }))
   }
 }
 
@@ -62,6 +63,6 @@ export class LocalePrefixAppModule implements RouteConfigurable {
 export class LocalePrefixStrictAppModule implements RouteConfigurable {
   configureRoutes(router: Router): void {
     router
-      .prefix('/:tenantId', z.object({ tenantId: cuid2() }))
+      .prefix('/:tenantId', object({ tenantId: cuid2() }))
   }
 }

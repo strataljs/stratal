@@ -120,7 +120,7 @@ describe('buildRouteUrl', () => {
     const route = createRoute({
       path: '/users/:id',
       paramNames: ['id'],
-      localePaths: ['/:locale{en|fr}/users/:id'],
+      localePaths: ['/:locale{(?:en|fr)}/users/:id'],
     })
     expect(buildRouteUrl(route, 'users.show', { id: '1', locale: 'fr' })).toBe('/fr/users/1')
   })
@@ -128,7 +128,7 @@ describe('buildRouteUrl', () => {
   it('should use primary path when no locale param provided', () => {
     const route = createRoute({
       path: '/users',
-      localePaths: ['/:locale{en|fr}/users'],
+      localePaths: ['/:locale{(?:en|fr)}/users'],
     })
     expect(buildRouteUrl(route, 'users.index')).toBe('/users')
   })
@@ -136,7 +136,7 @@ describe('buildRouteUrl', () => {
   it('should handle locale with root path', () => {
     const route = createRoute({
       path: '/',
-      localePaths: ['/:locale{en|fr}'],
+      localePaths: ['/:locale{(?:en|fr)}'],
     })
     expect(buildRouteUrl(route, 'home', { locale: 'en' })).toBe('/en')
   })
@@ -144,7 +144,7 @@ describe('buildRouteUrl', () => {
   it('should consume locale from params, not append as query string', () => {
     const route = createRoute({
       path: '/users',
-      localePaths: ['/:locale{en|fr}/users'],
+      localePaths: ['/:locale{(?:en|fr)}/users'],
     })
     expect(buildRouteUrl(route, 'users.index', { locale: 'fr', page: '2' })).toBe('/fr/users?page=2')
   })
@@ -157,7 +157,7 @@ describe('buildRouteUrl', () => {
   it('should prepend locale with domain route', () => {
     const route = createRoute({
       path: '/dashboard',
-      localePaths: ['/:locale{en|fr}/dashboard'],
+      localePaths: ['/:locale{(?:en|fr)}/dashboard'],
       domain: '{tenant}.myapp.com',
       domainParamNames: ['tenant'],
     })
@@ -168,7 +168,7 @@ describe('buildRouteUrl', () => {
   it('should skip locale prefix for default locale when prefixDefaultLocale is false', () => {
     const route = createRoute({
       path: '/posts',
-      localePaths: ['/:locale{en|fr}/posts'],
+      localePaths: ['/:locale{(?:en|fr)}/posts'],
     })
     const config = { defaultLocale: 'en', prefixDefaultLocale: false as const }
     expect(buildRouteUrl(route, 'posts.index', { locale: 'en' }, config)).toBe('/posts')
@@ -178,7 +178,7 @@ describe('buildRouteUrl', () => {
   it('should skip locale prefix for default locale when prefixDefaultLocale is redirect', () => {
     const route = createRoute({
       path: '/posts',
-      localePaths: ['/:locale{en|fr}/posts'],
+      localePaths: ['/:locale{(?:en|fr)}/posts'],
     })
     const config = { defaultLocale: 'en', prefixDefaultLocale: 'redirect' as const }
     expect(buildRouteUrl(route, 'posts.index', { locale: 'en' }, config)).toBe('/posts')
@@ -188,7 +188,7 @@ describe('buildRouteUrl', () => {
   it('should prefix all locales when prefixDefaultLocale is true', () => {
     const route = createRoute({
       path: '/posts',
-      localePaths: ['/:locale{en|fr}/posts'],
+      localePaths: ['/:locale{(?:en|fr)}/posts'],
     })
     const config = { defaultLocale: null, prefixDefaultLocale: true as const }
     expect(buildRouteUrl(route, 'posts.index', { locale: 'en' }, config)).toBe('/en/posts')
@@ -198,7 +198,7 @@ describe('buildRouteUrl', () => {
   it('should consume default locale from params even when not prefixed', () => {
     const route = createRoute({
       path: '/posts',
-      localePaths: ['/:locale{en|fr}/posts'],
+      localePaths: ['/:locale{(?:en|fr)}/posts'],
     })
     const config = { defaultLocale: 'en', prefixDefaultLocale: false as const }
     expect(buildRouteUrl(route, 'posts.index', { locale: 'en', page: '2' }, config)).toBe('/posts?page=2')
@@ -479,7 +479,7 @@ describe('Uri', () => {
       setupUri({
         'posts.index': createRoute({
           path: '/posts',
-          localePaths: ['/:locale{en|fr}/posts'],
+          localePaths: ['/:locale{(?:en|fr)}/posts'],
         })
       }, {}, undefined, {
         localePathConfig: { allLocales: ['en', 'fr'], prefixedLocales: ['en', 'fr'], defaultLocale: null },
@@ -493,7 +493,7 @@ describe('Uri', () => {
       setupUri({
         'posts.index': createRoute({
           path: '/posts',
-          localePaths: ['/:locale{en|fr}/posts'],
+          localePaths: ['/:locale{(?:en|fr)}/posts'],
         })
       }, {}, undefined, {
         localePathConfig: { allLocales: ['en', 'fr'], prefixedLocales: ['fr'], defaultLocale: 'en' },
@@ -507,7 +507,7 @@ describe('Uri', () => {
       setupUri({
         'posts.index': createRoute({
           path: '/posts',
-          localePaths: ['/:locale{en|fr}/posts'],
+          localePaths: ['/:locale{(?:en|fr)}/posts'],
         })
       }, {}, undefined, {
         localePathConfig: { allLocales: ['en', 'fr'], prefixedLocales: ['fr'], defaultLocale: 'en' },

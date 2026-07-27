@@ -3,6 +3,17 @@ import type { HttpMethod } from '../../router/types'
 
 type JsonSchema = Record<string, unknown>
 
+/**
+ * Serialize a path/query parameter value for use in a URL.
+ * Objects/arrays are JSON-encoded; primitives are coerced to string.
+ */
+function stringifyParamValue(value: unknown): string {
+  if (value != null && typeof value === 'object') {
+    return JSON.stringify(value)
+  }
+  return String(value)
+}
+
 export interface ToolDefinition {
   name: string
   description: string
@@ -112,7 +123,7 @@ export class OpenApiToolsService {
       if (value === undefined) {
         throw new Error(`Missing required path parameter: ${param}`)
       }
-      url = url.replace(`{${param}}`, encodeURIComponent(value != null && typeof value === 'object' ? JSON.stringify(value) : String(value as string | number | boolean)))
+      url = url.replace(`{${param}}`, encodeURIComponent(stringifyParamValue(value)))
     }
 
     // Collect query params
@@ -121,7 +132,7 @@ export class OpenApiToolsService {
       if (key.startsWith('query_')) {
         const paramName = key.slice(6)
         const value = args[key]
-        queryParts.push(`${encodeURIComponent(paramName)}=${encodeURIComponent(value != null && typeof value === 'object' ? JSON.stringify(value) : String(value as string | number | boolean))}`)
+        queryParts.push(`${encodeURIComponent(paramName)}=${encodeURIComponent(stringifyParamValue(value))}`)
       }
     }
     if (queryParts.length > 0) {

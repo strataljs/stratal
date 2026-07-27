@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { bold, cyan, dim, green, red, yellow } from '../colors'
 import { Command } from '../command'
 import { getCommandResult, resetCommandState, setCommandInputs, setCommandQuarry } from '../command-internals'
@@ -171,6 +171,35 @@ describe('Command', () => {
       const result = getCommandResult(cmd)
       expect(result.errors).toEqual([`${red(bold('✖'))} ${red('fatal error')}`])
       expect(result.exitCode).toBe(2)
+    })
+
+    // Output must stream to the terminal immediately (not buffer until handle()
+    // returns) — long-running commands like `inertia:dev` resolve only when the
+    // dev server stops, so buffered output would never appear during a session.
+    it('streams output to stdout immediately, in addition to buffering', () => {
+      const cmd = new TestCommand()
+      const spy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+      try {
+        cmd.info('live message')
+        expect(spy).toHaveBeenCalledWith(`${cyan('live message')}\n`)
+      } finally {
+        spy.mockRestore()
+      }
+      // Still recorded for getCommandResult()/tests/this.call().
+      expect(getCommandResult(cmd).output).toEqual([cyan('live message')])
+    })
+
+    it('streams errors to stderr immediately', () => {
+      const cmd = new TestCommand()
+      const spy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+      try {
+        cmd.error('boom')
+        cmd.fail('fatal', 1)
+        expect(spy).toHaveBeenCalledWith(`${red('boom')}\n`)
+        expect(spy).toHaveBeenCalledWith(`${red(bold('✖'))} ${red('fatal')}\n`)
+      } finally {
+        spy.mockRestore()
+      }
     })
   })
 

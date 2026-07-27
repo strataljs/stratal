@@ -1,3 +1,4 @@
+import { object } from 'zod/mini'
 import type { ZodObject } from '../i18n/validation/zod'
 import type { Constructor } from '../types'
 import type { Middleware } from './middleware.interface'
@@ -119,7 +120,7 @@ export class RouterResolver {
     if (!parent) return child
     if (!child) return parent
     // oxlint-disable-next-line typescript/no-explicit-any
-    return parent.extend(child.shape) as ZodObject<any>
+    return object({ ...parent.shape, ...child.shape }) as ZodObject<any>
   }
 
   private concatPrefixes(parent?: string, child?: string): string | undefined {

@@ -34,11 +34,11 @@ Best suited for REST resource controllers. Method names auto-map to HTTP method 
 
 ```typescript
 import { Route } from 'stratal/router'
-import { z } from 'stratal/validation'
+import { object, string } from 'zod/mini'
 
 @Route({
   body: createNoteSchema,               // Request body (POST/PUT/PATCH)
-  params: z.object({ id: z.string() }), // URL parameters
+  params: object({ id: string() }),     // URL parameters
   query: paginationSchema,              // Query parameters
   response: noteSchema,                 // Response schema (required)
   tags: ['Extra Tag'],                  // Merged with controller tags
@@ -58,31 +58,32 @@ Use when convention names don't fit. Cannot mix with `@Route()` in the same cont
 ```typescript
 import { Get, Post, Put, Patch, Delete, All } from 'stratal/router'
 import { inject } from 'stratal/di'
+import { array, object, uuid } from 'zod/mini'
 
 @Controller('/api/v1/notes')
 export class NotesController {
-  @Get('/', { response: z.array(noteSchema), summary: 'List notes', name: 'notes.list' })
+  @Get('/', { response: array(noteSchema), summary: 'List notes', name: 'notes.list' })
   async list(ctx: RouterContext) { ... }
 
   @Post('/', { body: createNoteSchema, response: noteSchema, statusCode: 201 })
   async createNote(ctx: RouterContext) { ... }
 
   @Get('/:id', {
-    params: z.object({ id: z.string().uuid() }),
+    params: object({ id: uuid() }),
     response: noteSchema,
   })
   async getNote(ctx: RouterContext) { ... }
 
   @Put('/:id', {
-    params: z.object({ id: z.string().uuid() }),
+    params: object({ id: uuid() }),
     body: updateNoteSchema,
     response: noteSchema,
   })
   async updateNote(ctx: RouterContext) { ... }
 
   @Delete('/:id', {
-    params: z.object({ id: z.string().uuid() }),
-    response: z.object({}),
+    params: object({ id: uuid() }),
+    response: object({}),
   })
   async deleteNote(ctx: RouterContext) { ... }
 }
@@ -146,9 +147,11 @@ Routes can be named for URL generation. Convention-based routes auto-generate na
 When using `@Route()`, names are derived from the controller base path + method:
 
 ```typescript
+import { array } from 'zod/mini'
+
 @Controller('/api/v1/notes')
 export class NotesController {
-  @Route({ response: z.array(noteSchema) })
+  @Route({ response: array(noteSchema) })
   async index(ctx: RouterContext) { ... }   // name: "notes.index"
 
   @Route({ response: noteSchema })
@@ -462,22 +465,23 @@ configureRoutes(router: Router): void {
 
 ## Schemas with Zod
 
-Always import `z` from `stratal/validation`. Use `.openapi('SchemaName')` to name schemas in the OpenAPI spec:
+Build schemas with named builders from `zod/mini`. Apply constraints with `.check(...)` using check functions from `zod/mini`. Name a schema for the OpenAPI spec by wrapping it in `named(schema, 'SchemaName')` from `stratal/validation`:
 
 ```typescript
-import { z } from 'stratal/validation'
+import { object, string, optional, uuid, nullable, iso, minLength, maxLength } from 'zod/mini'
+import { named } from 'stratal/validation'
 
-export const createNoteSchema = z.object({
-  title: z.string().min(1).max(255),
-  content: z.string().optional(),
-}).openapi('CreateNote')
+export const createNoteSchema = named(object({
+  title: string().check(minLength(1), maxLength(255)),
+  content: optional(string()),
+}), 'CreateNote')
 
-export const noteSchema = z.object({
-  id: z.string().uuid(),
-  title: z.string(),
-  content: z.string().nullable(),
-  createdAt: z.string().datetime(),
-}).openapi('Note')
+export const noteSchema = named(object({
+  id: uuid(),
+  title: string(),
+  content: nullable(string()),
+  createdAt: iso.datetime(),
+}), 'Note')
 ```
 
 ### i18n Validation Messages
@@ -485,14 +489,16 @@ export const noteSchema = z.object({
 Use `withZodI18n()` for translatable validation messages:
 
 ```typescript
-import { z, withZodI18n } from 'stratal/validation'
+import { object, string, optional, minLength, maxLength } from 'zod/mini'
+import { named, withZodI18n } from 'stratal/validation'
 
-export const createNoteSchema = z.object({
-  title: z.string()
-    .min(1, withZodI18n('validation.notes.title.required'))
-    .max(255, withZodI18n('validation.notes.title.max', { max: 255 })),
-  content: z.string().optional(),
-}).openapi('CreateNote')
+export const createNoteSchema = named(object({
+  title: string().check(
+    minLength(1, withZodI18n('validation.notes.title.required')),
+    maxLength(255, withZodI18n('validation.notes.title.max', { max: 255 })),
+  ),
+  content: optional(string()),
+}), 'CreateNote')
 ```
 
 ## API Versioning

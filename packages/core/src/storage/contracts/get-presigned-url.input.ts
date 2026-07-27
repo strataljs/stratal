@@ -1,19 +1,23 @@
-import { z, withZodI18n } from '../../i18n/validation'
+import { date, enum as enum_, int, maximum, minimum, minLength, number, object, optional, string, url, _default } from 'zod/mini'
+import type { infer as Infer } from 'zod/mini'
+import { withZodI18n } from '../../i18n/validation'
 
-export const getPresignedUrlInputSchema = z.object({
-  path: z.string().min(1, withZodI18n('zodI18n.errors.custom.filePathRequired')),
-  method: z.enum(['GET', 'PUT', 'DELETE', 'HEAD']).default('GET'),
-  expiresIn: z.number().int().min(1).max(604800).optional(),
-  disk: z.string().optional(),
+const httpMethod = enum_(['GET', 'PUT', 'DELETE', 'HEAD'])
+
+export const getPresignedUrlInputSchema = object({
+  path: string().check(minLength(1, withZodI18n('zodI18n.errors.custom.filePathRequired'))),
+  method: _default(httpMethod, 'GET'),
+  expiresIn: optional(number().check(int(), minimum(1), maximum(604800))),
+  disk: optional(string()),
 })
 
-export type GetPresignedUrlInput = z.infer<typeof getPresignedUrlInputSchema>
+export type GetPresignedUrlInput = Infer<typeof getPresignedUrlInputSchema>
 
-export const presignedUrlResultSchema = z.object({
-  url: z.string().url(),
-  expiresIn: z.number(),
-  expiresAt: z.date(),
-  method: z.enum(['GET', 'PUT', 'DELETE', 'HEAD']),
+export const presignedUrlResultSchema = object({
+  url: url(),
+  expiresIn: number(),
+  expiresAt: date(),
+  method: httpMethod,
 })
 
-export type PresignedUrlResult = z.infer<typeof presignedUrlResultSchema>
+export type PresignedUrlResult = Infer<typeof presignedUrlResultSchema>

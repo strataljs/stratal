@@ -1,3 +1,5 @@
 export * from './zod'
+export { describe, named } from './metadata'
+export type { SchemaMeta, SchemaMetaInput } from './metadata'
 export { withZodI18n } from './with-zod-i18n'
 export { zodErrorMap } from './validation.context'

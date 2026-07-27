@@ -20,6 +20,28 @@ export function toOpenAPIPath(path: string): string {
 }
 
 /**
+ * Extract the Hono-style `:param` names declared in a route path, in order.
+ *
+ * Used at registration time to validate `{param.*}` cache tags against the
+ * route's own path — see `bindRouteCache`'s `assertParamTagsResolvable`. The
+ * route's path is fixed once registered, so which `:param` names it can ever
+ * populate is knowable right now, before any request arrives.
+ *
+ * @example
+ * extractPathParams('/users/:id')                // ['id']
+ * extractPathParams('/:companyId/users/:userId')  // ['companyId', 'userId']
+ * extractPathParams('/:locale{en|fr}/users')      // ['locale']
+ * extractPathParams('/health')                    // []
+ */
+export function extractPathParams(path: string): string[] {
+  const params: string[] = []
+  for (const match of path.matchAll(/:([a-zA-Z_][a-zA-Z0-9_]*)(?:\{[^}]*\})?/g)) {
+    params.push(match[1])
+  }
+  return params
+}
+
+/**
  * Convert Hono-style `:param` path segments to OpenAPI-style `{param}`,
  * preserving regex constraints.
  *

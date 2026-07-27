@@ -21,8 +21,9 @@ export class McpToolsCommand extends Command {
     const tags = this.array('tag')
     const pathPrefix = this.string('path')
 
-    const hono = await this.app.ensureHono()
-    const spec = this.openAPIService.getSpec(hono, this.app.container)
+    // ensureHono() registers routes, populating the route metadata registry.
+    await this.app.ensureHono()
+    const spec = await this.openAPIService.getSpec(this.app.container)
 
     const service = new OpenApiToolsService(spec)
     const filter = {

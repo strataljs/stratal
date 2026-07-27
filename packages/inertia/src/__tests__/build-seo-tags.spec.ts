@@ -78,7 +78,7 @@ describe('descriptorToHtml', () => {
 
 describe('buildSeoTags — custom link attribute hardening', () => {
   it('drops unsafe attribute names from custom link entries', () => {
-    const tags = buildSeoTags({ link: [{ 'rel': 'amphtml', 'href': '/amp', 'x onerror=alert(1)': 'boom' } as never] })
+    const tags = buildSeoTags({ link: [{ 'rel': 'amphtml', 'href': '/amp', 'x onerror=alert(1)': 'boom' }] })
     const link = tags.find((t) => t.tag === 'link')!
     expect(link.attrs).toHaveProperty('rel', 'amphtml')
     expect(link.attrs).toHaveProperty('href', '/amp')

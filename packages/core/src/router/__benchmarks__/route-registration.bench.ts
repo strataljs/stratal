@@ -1,7 +1,7 @@
-import { OpenAPIHono } from '@hono/zod-openapi'
+import { Hono } from 'hono'
 import { bench, describe } from 'vitest'
 import { Transient } from '../../di/decorators'
-import { z } from '../../i18n/validation'
+import { array, boolean, object, string } from 'zod/mini'
 import type { LoggerService } from '../../logger'
 import type { ModuleRegistry } from '../../module/module-registry'
 import type { Constructor } from '../../types'
@@ -9,6 +9,7 @@ import { Controller } from '../decorators/controller.decorator'
 import { Route } from '../decorators/route.decorator'
 import type { HonoApp } from '../hono-app'
 import type { RegisteredRoute } from '../route-registry'
+import { RouteMetadataRegistry } from '../route-metadata'
 import { RouteRegistry } from '../route-registry'
 import type { RouterContext } from '../router-context'
 import type { LocalePathService } from '../services/locale-path.service'
@@ -44,7 +45,7 @@ const mockLocalePathService = {
 class ItemsController {
   @Route({
     summary: 'List items',
-    response: z.object({ items: z.array(z.object({ id: z.string(), name: z.string() })) }),
+    response: object({ items: array(object({ id: string(), name: string() })) }),
   })
   index(_ctx: RouterContext) {
     return new Response(JSON.stringify({ items: [] }))
@@ -52,8 +53,8 @@ class ItemsController {
 
   @Route({
     summary: 'Get item',
-    params: z.object({ id: z.string() }),
-    response: z.object({ id: z.string(), name: z.string() }),
+    params: object({ id: string() }),
+    response: object({ id: string(), name: string() }),
   })
   show(_ctx: RouterContext) {
     return new Response(JSON.stringify({ id: '1', name: 'test' }))
@@ -61,8 +62,8 @@ class ItemsController {
 
   @Route({
     summary: 'Create item',
-    body: z.object({ name: z.string() }),
-    response: z.object({ id: z.string(), name: z.string() }),
+    body: object({ name: string() }),
+    response: object({ id: string(), name: string() }),
   })
   create(_ctx: RouterContext) {
     return new Response(JSON.stringify({ id: '1', name: 'test' }), { status: 201 })
@@ -70,9 +71,9 @@ class ItemsController {
 
   @Route({
     summary: 'Update item',
-    params: z.object({ id: z.string() }),
-    body: z.object({ name: z.string() }),
-    response: z.object({ id: z.string(), name: z.string() }),
+    params: object({ id: string() }),
+    body: object({ name: string() }),
+    response: object({ id: string(), name: string() }),
   })
   update(_ctx: RouterContext) {
     return new Response(JSON.stringify({ id: '1', name: 'updated' }))
@@ -80,8 +81,8 @@ class ItemsController {
 
   @Route({
     summary: 'Delete item',
-    params: z.object({ id: z.string() }),
-    response: z.object({ success: z.boolean() }),
+    params: object({ id: string() }),
+    response: object({ success: boolean() }),
   })
   destroy(_ctx: RouterContext) {
     return new Response(JSON.stringify({ success: true }))
@@ -93,7 +94,7 @@ class ItemsController {
 class SimpleController {
   @Route({
     summary: 'Simple endpoint',
-    response: z.object({ ok: z.boolean() }),
+    response: object({ ok: boolean() }),
   })
   index(_ctx: RouterContext) {
     return new Response(JSON.stringify({ ok: true }))
@@ -106,7 +107,7 @@ const createMockModuleRegistry = (controllers: Constructor[]): ModuleRegistry =>
 
 describe('RouteRegistration - Configure', () => {
   bench('register controller with 5 OpenAPI routes', async () => {
-    const app = new OpenAPIHono<RouterEnv>() as unknown as HonoApp
+    const app = new Hono<RouterEnv>() as unknown as HonoApp
     const controllers = [ItemsController as unknown as Constructor]
     const service = new RouteRegistrationService(
       noopLogger,
@@ -115,12 +116,13 @@ describe('RouteRegistration - Configure', () => {
       mockLocalePathService,
       app,
       createMockModuleRegistry(controllers),
+      new RouteMetadataRegistry(),
     )
     await service.configure()
   })
 
   bench('register single-route controller', async () => {
-    const app = new OpenAPIHono<RouterEnv>() as unknown as HonoApp
+    const app = new Hono<RouterEnv>() as unknown as HonoApp
     const controllers = [SimpleController as unknown as Constructor]
     const service = new RouteRegistrationService(
       noopLogger,
@@ -129,12 +131,13 @@ describe('RouteRegistration - Configure', () => {
       mockLocalePathService,
       app,
       createMockModuleRegistry(controllers),
+      new RouteMetadataRegistry(),
     )
     await service.configure()
   })
 
   bench('register multiple controllers', async () => {
-    const app = new OpenAPIHono<RouterEnv>() as unknown as HonoApp
+    const app = new Hono<RouterEnv>() as unknown as HonoApp
     const controllers = [
       ItemsController as unknown as Constructor,
       SimpleController as unknown as Constructor,
@@ -146,6 +149,7 @@ describe('RouteRegistration - Configure', () => {
       mockLocalePathService,
       app,
       createMockModuleRegistry(controllers),
+      new RouteMetadataRegistry(),
     )
     await service.configure()
   })

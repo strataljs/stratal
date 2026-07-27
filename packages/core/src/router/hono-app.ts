@@ -1,3 +1,4 @@
+import { Hono } from 'hono'
 import type { Context, MiddlewareHandler } from 'hono'
 import { inject } from '../di'
 import type { Application } from '../application'
@@ -7,14 +8,13 @@ import { Singleton } from '../di/decorators'
 import { CONTAINER_TOKEN, DI_TOKENS } from '../di/tokens'
 import { createHttpExceptionContext } from '../errors/exception-context'
 import type { ExceptionHandler } from '../errors/exception-handler'
-import { OpenAPIHono } from '../i18n/validation/zod'
 import { LOGGER_TOKENS, type LoggerService } from '../logger'
 import { OPENAPI_TOKENS, type OpenAPIService } from '../openapi'
 import type { Constructor } from '../types'
 import { ROUTER_CONTEXT_KEYS } from './constants'
-import { RouteNotFoundError, SchemaValidationError } from './errors'
+import { RouteNotFoundError } from './errors'
 import { RouterError } from './router.error'
-import { createLoggerMiddleware, createMiddlewareChain, createTrailingSlashRedirect } from './middleware'
+import { createGatewayDispatchMiddleware, createLoggerMiddleware, createMiddlewareChain, createNoStoreFallbackMiddleware, createTrailingSlashRedirect } from './middleware'
 import type { Middleware } from './middleware.interface'
 import { RouterContext } from './router-context'
 import { ROUTER_TOKENS } from './router.tokens'
@@ -28,16 +28,19 @@ const isMiddlewareClass = (arg: unknown): arg is Constructor<Middleware> =>
 
 
 /**
- * HonoApp — extends OpenAPIHono with Stratal-specific setup
+ * HonoApp — extends plain Hono with Stratal-specific setup
  *
  * - Request scope middleware (child container per request)
  * - Global middleware (CORS, logging, error handling)
- * - defaultHook for validation errors
  * - `use()` overload for Stratal middleware classes
  * - `configure()` for OpenAPI, routes, and 404
+ *
+ * Request validation is attached per-route via `hono/validator` middleware (see
+ * route-registration), not a base-class hook, so schema-less routes pull in no
+ * validation/zod code.
  */
 @Singleton()
-export class HonoApp extends OpenAPIHono<RouterEnv> {
+export class HonoApp extends Hono<RouterEnv> {
   private configured = false
   private readonly _container: Container
   private readonly _logger: LoggerService
@@ -61,11 +64,6 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
       // For the redirect modes, the trailing-slash middleware runs first and
       // canonicalises via 308 before matching reaches the registered route.
       strict: false,
-      defaultHook: (result) => {
-        if (!result.success) {
-          throw new SchemaValidationError(result.error)
-        }
-      },
     })
 
     this._container = container
@@ -89,9 +87,18 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
       return (this.nativeUse as (...a: unknown[]) => unknown)(...args)
     }) as typeof this.use
 
-    // Trailing-slash redirect runs first so redirected requests skip request-scope
-    // and logger overhead. Locales are read lazily — the i18n module (and thus
-    // LocalePathService) initialises after HonoApp is constructed.
+    // Registered before anything else — including the trailing-slash
+    // redirect — so it wraps every other middleware, every route, and every
+    // error path. See its own docstring for why registration order matters
+    // here: it relies on Hono's compose() resolving thrown errors and
+    // short-circuits into `context.res` before unwinding back through
+    // earlier middleware, so it only needs to run once, after `next()`.
+    this.nativeUse('*', createNoStoreFallbackMiddleware())
+
+    // Trailing-slash redirect runs first (of the request-handling middleware)
+    // so redirected requests skip request-scope and logger overhead. Locales
+    // are read lazily — the i18n module (and thus LocalePathService)
+    // initialises after HonoApp is constructed.
     const trailingSlashRedirect = createTrailingSlashRedirect(trailingSlash, () =>
       this._container.tryResolve<LocalePathService>(ROUTER_TOKENS.LocalePathService)?.localePathConfig?.allLocales)
     if (trailingSlashRedirect) {
@@ -109,6 +116,15 @@ export class HonoApp extends OpenAPIHono<RouterEnv> {
    */
   private applyGlobalMiddleware(): void {
     this.nativeUse('*', createLoggerMiddleware(this._logger) as MiddlewareHandler<RouterEnv>)
+
+    // Last of the framework's own middleware, and therefore the innermost
+    // layer that still sits *outside* every application middleware: on a cache
+    // hit the app never runs, so the gateway must not run anything the hit
+    // would skip. It is inside request-scope (partition resolvers need the
+    // request container) and inside the logger (the gateway is the only place
+    // that observes a request served from cache). See the factory's docstring.
+    this.nativeUse('*', createGatewayDispatchMiddleware(this._container))
+
     this.onError((err, c) => this.handleException(c, err))
   }
 

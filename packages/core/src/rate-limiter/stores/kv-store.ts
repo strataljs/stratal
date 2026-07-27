@@ -22,6 +22,8 @@ export class KvRateLimiterStore implements IRateLimiterStore {
 
   async set<T>(key: string, value: T, ttlSeconds: number): Promise<void> {
     const ttl = Math.max(60, Math.ceil(ttlSeconds))
+    // `CacheService.put` defers the KV write via `waitUntil`, so this no longer
+    // blocks the request on KV's central-store write latency.
     await this.cache.put(key, JSON.stringify(value), { expirationTtl: ttl })
   }
 

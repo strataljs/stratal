@@ -2,7 +2,7 @@ import { Transient } from '../di'
 import { bench, describe } from 'vitest'
 import { Application, type ApplicationConfig } from '../application'
 import type { StratalEnv } from '../env'
-import { z } from '../i18n/validation'
+import { array, object, string } from 'zod/mini'
 import { LogLevel } from '../logger'
 import { Module } from '../module/module.decorator'
 import { Controller } from '../router/decorators/controller.decorator'
@@ -24,7 +24,7 @@ class AppBenchService {
 class BenchController {
   @Route({
     summary: 'Benchmark endpoint',
-    response: z.object({ message: z.string() }),
+    response: object({ message: string() }),
   })
   index(ctx: RouterContext) {
     return ctx.json({ message: 'ok' })
@@ -34,37 +34,37 @@ class BenchController {
 @Controller('/api/bench/users')
 @Transient()
 class BenchUsersController {
-  @Route({ summary: 'List users', response: z.object({ users: z.array(z.string()) }) })
+  @Route({ summary: 'List users', response: object({ users: array(string()) }) })
   index(ctx: RouterContext) { return ctx.json({ users: [] }) }
 
-  @Route({ summary: 'Get user', params: z.object({ id: z.string() }), response: z.object({ id: z.string() }) })
+  @Route({ summary: 'Get user', params: object({ id: string() }), response: object({ id: string() }) })
   show(ctx: RouterContext) { return ctx.json({ id: '1' }) }
 
-  @Route({ summary: 'Create user', body: z.object({ name: z.string() }), response: z.object({ id: z.string() }) })
+  @Route({ summary: 'Create user', body: object({ name: string() }), response: object({ id: string() }) })
   create(ctx: RouterContext) { return ctx.json({ id: '1' }) }
 }
 
 @Controller('/api/bench/posts')
 @Transient()
 class BenchPostsController {
-  @Route({ summary: 'List posts', response: z.object({ posts: z.array(z.string()) }) })
+  @Route({ summary: 'List posts', response: object({ posts: array(string()) }) })
   index(ctx: RouterContext) { return ctx.json({ posts: [] }) }
 
-  @Route({ summary: 'Get post', params: z.object({ id: z.string() }), response: z.object({ id: z.string() }) })
+  @Route({ summary: 'Get post', params: object({ id: string() }), response: object({ id: string() }) })
   show(ctx: RouterContext) { return ctx.json({ id: '1' }) }
 }
 
 @Controller('/api/bench/comments')
 @Transient()
 class BenchCommentsController {
-  @Route({ summary: 'List comments', response: z.object({ comments: z.array(z.string()) }) })
+  @Route({ summary: 'List comments', response: object({ comments: array(string()) }) })
   index(ctx: RouterContext) { return ctx.json({ comments: [] }) }
 }
 
 @Controller('/api/bench/tags')
 @Transient()
 class BenchTagsController {
-  @Route({ summary: 'List tags', response: z.object({ tags: z.array(z.string()) }) })
+  @Route({ summary: 'List tags', response: object({ tags: array(string()) }) })
   index(ctx: RouterContext) { return ctx.json({ tags: [] }) }
 }
 

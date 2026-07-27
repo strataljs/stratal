@@ -113,7 +113,7 @@ describe('ExistingProvider', () => {
       })
       class TestModule { }
 
-      const registry = new ModuleRegistry(container, mockLogger as unknown as LoggerService)
+      const registry = new ModuleRegistry(container, mockLogger)
       registry.register(TestModule)
 
       // Resolve both tokens
@@ -138,7 +138,7 @@ describe('ExistingProvider', () => {
         }
       }
 
-      const registry = new ModuleRegistry(container, mockLogger as unknown as LoggerService)
+      const registry = new ModuleRegistry(container, mockLogger)
       registry.register(BaseModule.forRoot())
 
       // Resolve both tokens

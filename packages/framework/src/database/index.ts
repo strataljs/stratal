@@ -1,6 +1,7 @@
 export * from './database.module'
 export * from './database.service'
 export * from './database.tokens'
+export * from './pool'
 export * from './decorators/inject-db.decorator'
 export * from './errors'
 export * from './event-types'

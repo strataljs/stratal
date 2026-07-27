@@ -16,7 +16,7 @@ describe('LoggerService', () => {
 
     service = new LoggerService(
       LogLevel.DEBUG,
-      mockFormatter as unknown as ILogFormatter,
+      mockFormatter,
     )
   })
 
@@ -142,7 +142,7 @@ describe('LoggerService', () => {
       const spy = vi.spyOn(console, 'debug').mockImplementation(() => { /* noop */ })
       const infoService = new LoggerService(
         LogLevel.INFO,
-        mockFormatter as unknown as ILogFormatter,
+        mockFormatter,
       )
 
       infoService.debug('suppressed message')
@@ -157,7 +157,7 @@ describe('LoggerService', () => {
       const spy = vi.spyOn(console, 'error').mockImplementation(() => { /* noop */ })
       const infoService = new LoggerService(
         LogLevel.INFO,
-        mockFormatter as unknown as ILogFormatter,
+        mockFormatter,
       )
 
       infoService.error('error message')
@@ -172,7 +172,7 @@ describe('LoggerService', () => {
       const spy = vi.spyOn(console, 'warn').mockImplementation(() => { /* noop */ })
       const errorService = new LoggerService(
         LogLevel.ERROR,
-        mockFormatter as unknown as ILogFormatter,
+        mockFormatter,
       )
 
       errorService.warn('suppressed')

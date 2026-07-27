@@ -158,8 +158,35 @@ export class TieredCacheService {
     options?: KVNamespacePutOptions
   ): Promise<void> {
     await this.cache.put(key, value, options)
-    // Write-through: cache strings in L1; invalidate for binary values, which
-    // L1 does not hold.
+    this.writeThroughL1(key, value, options)
+  }
+
+  /**
+   * Write-through put that **awaits the durable L2 write** (throwing on
+   * failure) while keeping the isolate-local L1 in lock-step. Use for set-once
+   * values whose loss would be a correctness bug — queue idempotency claims,
+   * failed-job records. The deferred {@link put} is for best-effort caching.
+   *
+   * @throws {CacheError} If the KV write fails.
+   */
+  async putDurable(
+    key: string,
+    value: string | ArrayBuffer | ArrayBufferView | ReadableStream,
+    options?: KVNamespacePutOptions
+  ): Promise<void> {
+    await this.cache.putDurable(key, value, options)
+    this.writeThroughL1(key, value, options)
+  }
+
+  /**
+   * Mirror a write into the isolate-local L1: cache string values; drop the
+   * entry for binary values, which L1 does not hold.
+   */
+  private writeThroughL1(
+    key: string,
+    value: string | ArrayBuffer | ArrayBufferView | ReadableStream,
+    options?: KVNamespacePutOptions
+  ): void {
     if (typeof value === 'string') {
       this.l1Write(key, value, this.l1ExpiresAt(options))
     } else {

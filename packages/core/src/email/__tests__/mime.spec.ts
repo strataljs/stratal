@@ -249,7 +249,7 @@ describe('buildMimeMessage', () => {
         to: 'user@example.com',
         subject: 'Test',
         html: '<p>Hi</p>',
-        attachments: [{ filename: 'stream.txt', content: stream as unknown as ReadableStream, contentType: 'text/plain' }],
+        attachments: [{ filename: 'stream.txt', content: stream, contentType: 'text/plain' }],
       }
       const result = await buildMimeMessage(message, defaultFrom)
 

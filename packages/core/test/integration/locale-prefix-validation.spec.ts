@@ -136,8 +136,8 @@ describe('Prefix `params` validation under locale-path detection', () => {
 
   describe('Zod 4.3.6 cuid2 behaviour', () => {
     it('accepts ANY non-empty lowercase-alphanumeric string', async () => {
-      const { z } = await import('../../src/i18n/validation')
-      const cuid2 = z.cuid2()
+      const { cuid2: cuid2Builtin } = await import('zod/mini')
+      const cuid2 = cuid2Builtin()
 
       expect((await cuid2.safeParseAsync('sw')).success).toBe(true)
       expect((await cuid2.safeParseAsync('a')).success).toBe(true)
@@ -150,8 +150,8 @@ describe('Prefix `params` validation under locale-path detection', () => {
     })
 
     it('a strict shape regex enforces real cuid2 length', async () => {
-      const { z } = await import('../../src/i18n/validation')
-      const strict = z.string().regex(/^[a-z][0-9a-z]{23,31}$/)
+      const { regex, string } = await import('zod/mini')
+      const strict = string().check(regex(/^[a-z][0-9a-z]{23,31}$/))
 
       expect((await strict.safeParseAsync('sw')).success).toBe(false)
       expect((await strict.safeParseAsync(VALID_CUID2)).success).toBe(true)

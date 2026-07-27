@@ -1,4 +1,4 @@
-import { z } from 'stratal/validation'
+import { object, string } from 'zod/mini'
 import { Controller, Route } from 'stratal/router'
 import type { RouterContext } from 'stratal/router'
 import { UseGuards } from 'stratal/guards'
@@ -9,7 +9,7 @@ import { AuthGuard } from '../../../src/guards/auth.guard'
 export class AdminController {
   @Route({
     summary: 'Admin dashboard',
-    response: z.object({ access: z.string() }),
+    response: object({ access: string() }),
   })
   index(ctx: RouterContext) {
     return ctx.json({ access: 'admin' })

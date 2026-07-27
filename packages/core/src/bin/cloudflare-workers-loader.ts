@@ -151,7 +151,7 @@ export function connect(address, options) {
 
   const closedPromise = new Promise((resolve) => currentSocket.on('close', resolve));
 
-  return {
+  const socket = {
     readable,
     writable,
     startTls() {
@@ -163,10 +163,23 @@ export function connect(address, options) {
       tlsSocket.on('data', dataHandler);
       tlsSocket.on('end', endHandler);
       tlsSocket.on('error', errorHandler);
+      // CF's Socket.startTls() returns a brand-new Socket. The same readable/writable
+      // stay valid because they read from / write to the reassigned currentSocket, so
+      // returning this object preserves the caller's re-derived reader/writer.
+      return socket;
     },
-    close() { currentSocket.destroy(); },
+    // CF's Socket.close() returns Promise<void>. Resolve once the socket is closed
+    // (or immediately if already destroyed) so callers can await socket.close().
+    close() {
+      return new Promise((resolve) => {
+        if (currentSocket.destroyed) { resolve(); return; }
+        currentSocket.once('close', () => resolve());
+        currentSocket.destroy();
+      });
+    },
     closed: closedPromise,
   };
+  return socket;
 }
 `,
     }

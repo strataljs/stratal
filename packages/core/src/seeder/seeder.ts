@@ -1,7 +1,7 @@
 import type { Container } from '../di/container'
 import type { Constructor } from '../types'
 
-export const SEEDER_INTERNALS = Symbol('seeder:internals')
+export const SEEDER_INTERNALS = Symbol.for('stratal:seeder:internals')
 
 export interface SeederContext {
   run(SeederClass: Constructor<Seeder>): Promise<void>

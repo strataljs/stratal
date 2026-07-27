@@ -36,7 +36,7 @@ describe('Lazy module loading', () => {
     vi.clearAllMocks()
     container = new Container()
     mockLogger = createMock<LoggerService>()
-    registry = new ModuleRegistry(container, mockLogger as unknown as LoggerService)
+    registry = new ModuleRegistry(container, mockLogger)
   })
 
   describe('ModuleRegistry.registerLazy()', () => {
@@ -189,7 +189,7 @@ describe('Lazy module loading', () => {
       loader = new LazyModuleLoader(
         registry,
         container,
-        mockLogger as unknown as LoggerService,
+        mockLogger,
       )
     })
 
@@ -234,7 +234,7 @@ describe('Lazy module loading', () => {
       const scopedLoader = new LazyModuleLoader(
         registry,
         child,
-        mockLogger as unknown as LoggerService,
+        mockLogger,
       )
 
       const ref = await scopedLoader.load(() => Promise.resolve(ScopedModule as unknown as ModuleClass))

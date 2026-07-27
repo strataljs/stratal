@@ -7,10 +7,13 @@ import { type InjectionToken } from 'stratal/module'
 import { SEEDER_TOKENS, SeederError, type Seeder, type SeederRegistry } from 'stratal/seeder'
 import { STORAGE_TOKENS } from 'stratal/storage'
 import { expect } from 'vitest'
-import { dropDatabase } from '../database'
+import { buildTableDiscoverySql, buildTruncateSql, type ResetOptions } from '../database'
 import { FEATURE_FLAG_SERVICE_TOKEN, type FakeFeatureFlagService } from '../feature-flags'
 import type { FakeStorageService } from '../storage'
+import { TestSetupError } from '../errors'
 import type { TestEmailProvider } from '../mocks/test-email-provider'
+import type { TestWorkerExports } from '../mocks/test-worker-exports'
+import type { TestWorkersCache } from '../mocks/test-workers-cache'
 import { TestHttpClient } from './http/test-http-client'
 import { TestCommandRequest } from './quarry/test-command-request'
 import { TestSseRequest } from './sse/test-sse-request'
@@ -45,17 +48,6 @@ import { TestWsRequest } from './ws/test-ws-request'
  * await module.close()
  * ```
  */
-/**
- * Identifies a per-file database created for test isolation, so it can be
- * dropped on teardown. Produced by the testing module builder.
- */
-export interface IsolatedDatabase {
-  /** Name of the cloned database. */
-  name: string
-  /** Admin (maintenance-database) connection string used to drop it. */
-  adminConnectionString: string
-}
-
 export class TestingModule {
   private _http: TestHttpClient | null = null
   private readonly _requestContainer: Container
@@ -64,8 +56,10 @@ export class TestingModule {
     private readonly app: Application,
     private readonly env: StratalEnv,
     private readonly ctx: StratalExecutionContext,
-    private readonly isolatedDatabase: IsolatedDatabase | null = null,
     private readonly testEmailProvider: TestEmailProvider | null = null,
+    private readonly pendingTasks: Promise<unknown>[] = [],
+    private readonly testWorkersCache: TestWorkersCache | undefined = undefined,
+    private readonly testWorkerExports: TestWorkerExports | undefined = undefined,
   ) {
     const mockContext = this.app.createMockRouterContext()
     this._requestContainer = this.app.container.createRequestScope(mockContext)
@@ -118,6 +112,48 @@ export class TestingModule {
   }
 
   /**
+   * The default `ctx.cache` stub — present unless this module was compiled
+   * with `cache: false`. Assert `@PurgesCache` routes purged what they should
+   * via `module.cache.purges`, in call order.
+   *
+   * @throws {TestSetupError} This module was compiled with `cache: false`,
+   *   so there is no stub to inspect.
+   */
+  get cache(): TestWorkersCache {
+    if (!this.testWorkersCache) {
+      throw new TestSetupError(
+        'module.cache is unavailable because this module was compiled with `cache: false`. ' +
+          'Remove that option to use the default ctx.cache stub.',
+      )
+    }
+    return this.testWorkersCache
+  }
+
+  /**
+   * The default `ctx.exports` stub — present unless this module was compiled
+   * with `cache: false`.
+   *
+   * Assert which requests the response-cache gateway forwarded to the cached
+   * entrypoint, and with which resolved partitions, via
+   * `module.gateway.loopbacks` — in call order, mirroring
+   * `module.cache.purges`. An empty `loopbacks` is the assertion for every
+   * fail-closed case: an unresolved partition, a non-GET, or a `@Cacheable`
+   * route with no `partitionBy` all run inline and never appear here.
+   *
+   * @throws {TestSetupError} This module was compiled with `cache: false`,
+   *   so there is no stub to inspect.
+   */
+  get gateway(): TestWorkerExports {
+    if (!this.testWorkerExports) {
+      throw new TestSetupError(
+        'module.gateway is unavailable because this module was compiled with `cache: false`. ' +
+          'Remove that option to use the default ctx.exports stub.',
+      )
+    }
+    return this.testWorkerExports
+  }
+
+  /**
    * Create a WebSocket test request builder for the given path
    */
   ws(path: string): TestWsRequest {
@@ -157,7 +193,26 @@ export class TestingModule {
    */
   async fetch(request: Request): Promise<Response> {
     const hono = await this.app.ensureHono()
-    return hono.fetch(request, this.env, this.ctx as ExecutionContext)
+    const response = await hono.fetch(request, this.env, this.ctx as ExecutionContext)
+    // The Workers runtime keeps a request alive until its `ctx.waitUntil` promises settle. Mirror that
+    // here: await the work THIS request deferred (e.g. a non-blocking event listener's DB write
+    // dispatched via waitUntil) before returning. Otherwise it stays in flight past the response and
+    // can still be running against a shared resource (e.g. a connection pool) at the next request or at
+    // `close()`, where disposing that resource could hang.
+    await this.flushDeferredWork()
+    return response
+  }
+
+  /**
+   * Drain background work the most recent request(s) deferred via `ctx.waitUntil`, including any
+   * follow-up tasks those tasks enqueue. Settles each (errors are surfaced by the work itself, not
+   * here) so deferred side-effects don't outlive the request that triggered them.
+   */
+  private async flushDeferredWork(): Promise<void> {
+    while (this.pendingTasks.length > 0) {
+      const batch = this.pendingTasks.splice(0)
+      await Promise.allSettled(batch)
+    }
   }
 
   /**
@@ -179,18 +234,16 @@ export class TestingModule {
   }
 
   /**
-   * Truncate all non-prisma tables in the database
+   * Truncate mutable tables in the connection's schema(s), honoring a preserve-list.
+   * Migration bookkeeping (`_prisma%`) is always preserved.
    */
-  async truncateDb(name?: ConnectionName): Promise<void> {
+  async truncateDb(name?: ConnectionName, opts: ResetOptions = {}): Promise<void> {
     const db = this.getDb(name!)
-    const tables = await db.$queryRaw<{ tablename: string }[]>`
-      SELECT tablename::text as tablename FROM pg_tables
-      WHERE schemaname = current_schema()
-      AND tablename NOT LIKE '_prisma%'
-    `
-    if (tables.length === 0) return
-    const tableList = tables.map((t) => `"${t.tablename}"`).join(', ')
-    await db.$executeRawUnsafe(`TRUNCATE ${tableList} RESTART IDENTITY CASCADE`)
+    const rows = await db.$queryRawUnsafe<{ schemaname: string; tablename: string }[]>(
+      buildTableDiscoverySql(opts.schemas ?? [], opts.preserve ?? []),
+    )
+    const sql = buildTruncateSql(rows.map((t) => ({ schema: t.schemaname, table: t.tablename })))
+    if (sql) await db.$executeRawUnsafe(sql)
   }
 
   /**
@@ -240,30 +293,13 @@ export class TestingModule {
    * Cleanup - call in afterAll
    */
   async close(): Promise<void> {
+    // Drain work deferred via `ctx.waitUntil` BEFORE tearing anything down. `fetch()` already drains
+    // per call, but the non-HTTP helpers (`ws`/`sse`/`quarry`) share the same `pendingTasks`, so a
+    // suite that exclusively uses those can reach `close()` with DB writes still in flight. Disposing
+    // the pool under them races teardown — a write hits an already-`end()`ed pool, or hangs holding a
+    // connection. HTTP suites are unaffected; this only matters for deferred work outside a `fetch()`.
+    await this.flushDeferredWork()
     await this._requestContainer.dispose()
-    try {
-      await this.app.shutdown()
-    }
-    finally {
-      // Drop the per-file database AFTER shutdown so the app's pool connection is
-      // released; `WITH (FORCE)` evicts any that lingers. Runs even if shutdown
-      // throws, otherwise a failed shutdown would leak the database until the
-      // next run's stale-database sweep.
-      //
-      // A drop failure here is non-fatal: the next run's connection-guarded sweep
-      // reclaims the database. Swallow it (warn only) so a passing suite isn't
-      // marked failed by a teardown hiccup.
-      if (this.isolatedDatabase) {
-        try {
-          await dropDatabase(this.isolatedDatabase.adminConnectionString, this.isolatedDatabase.name)
-        } catch (error) {
-          console.warn(
-            `[stratal-testing] Failed to drop isolated test database "${this.isolatedDatabase.name}"; ` +
-              'it will be reclaimed by the next run\'s stale-database sweep.',
-            error,
-          )
-        }
-      }
-    }
+    await this.app.shutdown()
   }
 }

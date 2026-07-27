@@ -24,12 +24,12 @@ describe('GuardExecutionService', () => {
       req: { path: '/test', method: 'GET' },
     }
 
-    service = new GuardExecutionService(mockLogger as unknown as LoggerService)
+    service = new GuardExecutionService(mockLogger)
   })
 
   describe('executeGuards()', () => {
     it('should return true for empty guards array', async () => {
-      const result = await service.executeGuards([], mockContext as unknown as RouterContext, mockContainer as unknown as Container)
+      const result = await service.executeGuards([], mockContext, mockContainer)
       expect(result).toBe(true)
     })
 
@@ -37,9 +37,9 @@ describe('GuardExecutionService', () => {
       const guard: CanActivate = { canActivate: vi.fn().mockResolvedValue(true) }
 
       const result = await service.executeGuards(
-        [guard as Guard],
-        mockContext as unknown as RouterContext,
-        mockContainer as unknown as Container
+        [guard],
+        mockContext,
+        mockContainer
       )
 
       expect(result).toBe(true)
@@ -49,9 +49,9 @@ describe('GuardExecutionService', () => {
       const guard: CanActivate = { canActivate: vi.fn().mockResolvedValue(false) }
 
       const result = await service.executeGuards(
-        [guard as Guard],
-        mockContext as unknown as RouterContext,
-        mockContainer as unknown as Container
+        [guard],
+        mockContext,
+        mockContainer
       )
 
       expect(result).toBe(false)
@@ -63,8 +63,8 @@ describe('GuardExecutionService', () => {
 
       const result = await service.executeGuards(
         [guard1, guard2] as Guard[],
-        mockContext as unknown as RouterContext,
-        mockContainer as unknown as Container
+        mockContext,
+        mockContainer
       )
 
       expect(result).toBe(true)
@@ -78,8 +78,8 @@ describe('GuardExecutionService', () => {
 
       const result = await service.executeGuards(
         [guard1, guard2] as Guard[],
-        mockContext as unknown as RouterContext,
-        mockContainer as unknown as Container
+        mockContext,
+        mockContainer
       )
 
       expect(result).toBe(false)
@@ -90,7 +90,7 @@ describe('GuardExecutionService', () => {
     it('should use guard instance directly if it has canActivate method', async () => {
       const guard: CanActivate = { canActivate: vi.fn().mockResolvedValue(true) }
 
-      await service.executeGuards([guard as Guard], mockContext as unknown as RouterContext, mockContainer as unknown as Container)
+      await service.executeGuards([guard], mockContext, mockContainer)
 
       expect(guard.canActivate).toHaveBeenCalledWith(mockContext)
       expect(mockContainer.resolve).not.toHaveBeenCalled()
@@ -105,9 +105,9 @@ describe('GuardExecutionService', () => {
       mockContainer.resolve.mockReturnValue(guardInstance)
 
       await service.executeGuards(
-        [TestGuard as unknown as Guard],
-        mockContext as unknown as RouterContext,
-        mockContainer as unknown as Container
+        [TestGuard],
+        mockContext,
+        mockContainer
       )
 
       expect(mockContainer.resolve).toHaveBeenCalledWith(TestGuard)
@@ -120,8 +120,8 @@ describe('GuardExecutionService', () => {
 
       await service.executeGuards(
         [null as any],
-        mockContext as unknown as RouterContext,
-        mockContainer as unknown as Container
+        mockContext,
+        mockContainer
       )
 
       // null should be resolved via container, not treated as an instance
@@ -135,8 +135,8 @@ describe('GuardExecutionService', () => {
 
       await service.executeGuards(
         [guard as unknown as Guard],
-        mockContext as unknown as RouterContext,
-        mockContainer as unknown as Container
+        mockContext,
+        mockContainer
       )
 
       expect(mockLogger.debug).toHaveBeenCalledWith(
@@ -163,8 +163,8 @@ describe('GuardExecutionService', () => {
 
       await service.executeGuards(
         [guard1, guard2] as Guard[],
-        mockContext as unknown as RouterContext,
-        mockContainer as unknown as Container
+        mockContext,
+        mockContainer
       )
 
       expect(order).toEqual([1, 2])

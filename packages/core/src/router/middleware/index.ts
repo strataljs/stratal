@@ -1,4 +1,6 @@
 export { createLoggerMiddleware } from './logger.middleware'
 export { createDomainMiddleware, parseDomainPattern } from './domain.middleware'
+export { createGatewayDispatchMiddleware } from './gateway-dispatch.middleware'
 export { createMiddlewareChain } from './middleware-chain'
+export { createNoStoreFallbackMiddleware } from './no-store-fallback.middleware'
 export { createTrailingSlashRedirect } from './trailing-slash-redirect'

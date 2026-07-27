@@ -27,9 +27,9 @@ describe('EmailConsumer', () => {
     mockProviderFactory.create.mockReturnValue(mockProvider as unknown as IEmailProvider)
 
     consumer = new EmailConsumer(
-      mockLogger as unknown as LoggerService,
-      mockProviderFactory as unknown as EmailProviderFactory,
-      mockStorage as unknown as StorageService
+      mockLogger,
+      mockProviderFactory,
+      mockStorage
     )
   })
 
@@ -42,7 +42,7 @@ describe('EmailConsumer', () => {
       to: 'user@example.com',
       subject: 'Test',
       html: '<h1>Hello</h1>',
-    } as SendEmailInput,
+    },
     ...overrides,
   })
 
@@ -81,7 +81,7 @@ describe('EmailConsumer', () => {
               contentType: 'application/pdf',
             },
           ],
-        } as SendEmailInput,
+        },
       })
 
       await consumer.handle(message)
@@ -113,7 +113,7 @@ describe('EmailConsumer', () => {
               contentType: 'application/pdf',
             },
           ],
-        } as SendEmailInput,
+        },
       })
 
       await expect(consumer.handle(message)).rejects.toThrow(/invalid base64/i)
@@ -138,7 +138,7 @@ describe('EmailConsumer', () => {
               disk: 'default',
             },
           ],
-        } as SendEmailInput,
+        },
       })
 
       await consumer.handle(message)

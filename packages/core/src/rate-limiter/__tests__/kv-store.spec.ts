@@ -11,7 +11,7 @@ describe('KvRateLimiterStore', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
     cache = createMock<CacheService>()
-    store = new KvRateLimiterStore(cache as unknown as CacheService)
+    store = new KvRateLimiterStore(cache)
   })
 
   afterEach(() => {

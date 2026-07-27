@@ -47,7 +47,10 @@ export class QueueStore {
   }
 
   async markProcessed(key: string): Promise<void> {
-    await this.cache.put(`${IDEM_PREFIX}${key}`, '1', {
+    // Durable, awaited write: the idempotency claim gates message redelivery, so
+    // it must be committed (or fail loudly so the handler retries) before the
+    // consumer acks — never deferred. See TieredCacheService.putDurable.
+    await this.cache.putDurable(`${IDEM_PREFIX}${key}`, '1', {
       expirationTtl: this.idempotencyTtl,
     })
   }
@@ -62,7 +65,10 @@ export class QueueStore {
       failedAt: job.failedAt,
     }
 
-    await this.cache.put(`${FAILED_PREFIX}${job.id}`, JSON.stringify(job), {
+    // Durable, awaited write: a failed-job record that only lands in L1 is
+    // invisible to listFailedJobs (KV-direct) and lost on any other isolate, so
+    // it must be committed or fail loudly — never deferred.
+    await this.cache.putDurable(`${FAILED_PREFIX}${job.id}`, JSON.stringify(job), {
       metadata,
     })
   }

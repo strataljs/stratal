@@ -1,6 +1,6 @@
 import type { Application } from 'stratal'
 import { CONTAINER_TOKEN, type Container, DI_TOKENS, Singleton, inject } from 'stratal/di'
-import { I18N_TOKENS } from 'stratal/i18n'
+import { I18N_TOKENS, resolveDetectionForPath } from 'stratal/i18n'
 import type { I18nModuleOptions } from 'stratal/i18n'
 import { ROUTER_TOKENS, applyTrailingSlash, type LocaleUrlService, type TrailingSlashConfig } from 'stratal/router'
 import type { SeoLinkTag } from '../seo/types'
@@ -42,12 +42,14 @@ export class HreflangService {
     const trailingSlash: TrailingSlashConfig = app.config.trailingSlash ?? 'ignore'
 
     const localeUrl = this.container.resolve<LocaleUrlService>(ROUTER_TOKENS.LocaleUrlService)
-    if (localeUrl.pathEnabled) {
+    // Resolve detection for this specific URL — a per-path resolver may localize
+    // different areas differently (e.g. path-localized site, cookie-localized panel).
+    if (localeUrl.isPathLocalized(currentUrl.pathname)) {
       return this.buildPathLinks(currentUrl, locales, defaultLocale, localeUrl, trailingSlash)
     }
 
-    const strategy = (i18n.detection && 'strategy' in i18n.detection) ? i18n.detection.strategy : undefined
-    if (strategy === 'querystring') {
+    const detection = resolveDetectionForPath(i18n.detection, currentUrl.pathname)
+    if (detection.enabled && detection.strategy === 'querystring') {
       return this.buildQuerystringLinks(currentUrl, locales, defaultLocale, trailingSlash)
     }
 

@@ -8,16 +8,20 @@ export default defineConfig({
     'src/index.ts',
     'src/vite.ts',
     'src/react.ts',
+    'src/react/access.ts',
     'src/ssr.ts',
     'src/seo-runtime.ts',
     'src/testing.ts',
     'src/quarry.ts',
     'src/generator/type-generator.worker.ts',
+    'src/react-dom-server-legacy-stub.ts',
   ],
   tsconfig: './tsconfig.build.json',
   exports: {
     customExports: (exports) => {
       delete exports['./generator/type-generator.worker']
+      // Internal build-time alias target (see vite.ts) — not a public entry.
+      delete exports['./react-dom-server-legacy-stub']
       return withTypesExports(exports)
     },
   },

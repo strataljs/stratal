@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Application, type ApplicationConfig } from '../application';
 import type { StratalEnv } from '../env';
 import { StratalNotInitializedError, StratalSupersededError } from '../errors';
-import { z } from '../i18n/validation/zod';
+import { boolean, object } from 'zod/mini';
 import { LogLevel } from '../logger';
 import { Module } from '../module/module.decorator';
 import { Controller } from '../router/decorators/controller.decorator';
@@ -21,7 +21,7 @@ vi.mock('cloudflare:workers', () => ({
 class PingController {
   @Route({
     summary: 'Ping',
-    response: z.object({ ok: z.boolean() }),
+    response: object({ ok: boolean() }),
   })
   index(ctx: RouterContext) {
     return ctx.json({ ok: true })

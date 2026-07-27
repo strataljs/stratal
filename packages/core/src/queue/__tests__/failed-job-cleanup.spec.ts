@@ -18,7 +18,7 @@ describe('FailedJobCleanupJob', () => {
   })
 
   const options = (failedJobs?: QueueModuleOptions['failedJobs']): QueueModuleOptions =>
-    ({ provider: 'cloudflare', failedJobs }) as QueueModuleOptions
+    ({ provider: 'cloudflare', failedJobs })
 
   it('purges failed jobs older than the configured retention', async () => {
     const job = new FailedJobCleanupJob(store, options({ retention: 1209600 }), logger)
@@ -68,7 +68,7 @@ describe('QueueStore.purgeFailedJobsOlderThan', () => {
 
     const store = new QueueStore(
       cache as unknown as TieredCacheService,
-      { provider: 'cloudflare' } as QueueModuleOptions,
+      { provider: 'cloudflare' },
     )
 
     // Retain 7 days: the 10-day-old job is removed, the 1-day-old job is kept.

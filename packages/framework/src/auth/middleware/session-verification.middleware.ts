@@ -24,7 +24,7 @@ export class SessionVerificationMiddleware implements Middleware {
     @inject(LOGGER_TOKENS.LoggerService) private logger: LoggerService
   ) { }
 
-  async handle(ctx: RouterContext, next: Next): Promise<void> {
+  async handle(ctx: RouterContext, next: Next): Promise<Response | void> {
     try {
       const result = await this.authService.auth.api.getSession({
         headers: ctx.c.req.raw.headers

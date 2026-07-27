@@ -26,7 +26,6 @@ import { InertiaModule, CookieFlashStore } from '@stratal/inertia'
       i18n: { only: ['common', 'nav'] },         // Share translations with frontend
       ssr: {
         bundle: () => import('./inertia/ssr'),     // SSR bundle (async import)
-        disabled: ['admin/*'],                    // Glob patterns to skip SSR
       },
     }),
   ],
@@ -50,7 +49,7 @@ InertiaModule.forRootAsync({
 
 - `rootView` (required) — Root HTML template name
 - `version?` — Asset version for cache busting (nullable)
-- `ssr?` — `{ bundle: () => Promise<SsrModule>, disabled?: string[] }`
+- `ssr?` — `{ bundle: () => Promise<SsrModule> }` (exclude pages from SSR via the Vite plugin's `ssrExclude`, see [SSR](#ssr))
 - `sharedData?` — Static values or `(ctx: RouterContext) => any` resolver functions
 - `flash?` — `{ store: FlashStore }` — flash message storage (use `CookieFlashStore`)
 - `i18n?` — `{ only?: string[] }` — share backend translations with frontend
@@ -63,6 +62,8 @@ InertiaModule.forRootAsync({
 Use `ctx.inertia()` in controller methods to render Inertia pages:
 
 ```typescript
+import { object, string, uuid } from 'zod/mini'
+
 @Controller('/notes')
 export class NotesController {
   constructor(@inject(NotesService) private service: NotesService) {}
@@ -73,7 +74,7 @@ export class NotesController {
     return ctx.inertia('notes/Index', { notes })
   }
 
-  @InertiaGet('/:id', { params: z.object({ id: z.string().uuid() }) })
+  @InertiaGet('/:id', { params: object({ id: uuid() }) })
   async show(ctx: RouterContext): Promise<Response> {
     const note = await this.service.findById(ctx.param('id'))
     return ctx.inertia('notes/Show', { note })
@@ -85,7 +86,7 @@ export class NotesController {
     return ctx.redirect('/notes')
   }
 
-  @InertiaDelete('/:id', { params: z.object({ id: z.string() }) })
+  @InertiaDelete('/:id', { params: object({ id: string() }) })
   async destroy(ctx: RouterContext): Promise<Response> {
     await this.service.delete(ctx.param('id'))
     return ctx.redirect('/notes')
@@ -168,13 +169,14 @@ Works like core's `@Route()` — method names map to HTTP methods automatically:
 
 ```typescript
 import { InertiaRoute } from '@stratal/inertia'
+import { object, string } from 'zod/mini'
 
 @Controller('/notes')
 export class NotesController {
   @InertiaRoute()
   async index(ctx: RouterContext) { return ctx.inertia('notes/Index', { notes }) }
 
-  @InertiaRoute({ params: z.object({ id: z.string() }) })
+  @InertiaRoute({ params: object({ id: string() }) })
   async show(ctx: RouterContext) { return ctx.inertia('notes/Show', { note }) }
 
   @InertiaRoute({ body: createNoteSchema })
@@ -292,6 +294,68 @@ From middleware or a controller, add a shared prop for the current request with 
 ```typescript
 ctx.share('featureFlags', { 'new-checkout': true })
 ```
+
+## Access Control
+
+Gate rendering on the current user's roles and permissions. Requires `accessControl` configured on `AuthModule.forRootAsync()` (see `references/auth-and-rbac.md`) — nothing else to register.
+
+### Components
+
+```tsx
+import { Can, Cannot, HasRole, HasNoRole } from '@stratal/inertia/react/access'
+
+<Can do="posts:update"><EditButton /></Can>
+<Can any={['posts:update', 'posts:delete']}><Toolbar /></Can>
+<Can all={['posts:read', 'admin:access']}><AuditLog /></Can>
+<Cannot do="posts:update"><UpgradePrompt /></Cannot>
+
+<HasRole is="admin"><AdminPanel /></HasRole>
+<HasRole any={['editor', 'reviewer']}><ReviewQueue /></HasRole>
+<HasRole all={['editor', 'reviewer']}><Publish /></HasRole>
+<HasNoRole is="admin"><RequestAccess /></HasNoRole>
+```
+
+Use exactly one of `do` / `any` / `all` (or `is` / `any` / `all`).
+
+An empty `all={[]}` renders — an empty list is vacuously satisfied. `Cannot`/`HasNoRole` invert the same check: `<Cannot any={[...]}>` renders when the user holds **none** of the listed permissions, not when they fail to hold all of them.
+
+### Hooks
+
+```tsx
+import { useAccess, useCan, useRole } from '@stratal/inertia/react/access'
+
+const canEdit   = useCan('posts:update')
+const canEither = useCan({ any: ['posts:update', 'posts:delete'] })
+const canBoth   = useCan({ all: ['posts:read', 'admin:access'] })
+const isAdmin   = useRole('admin')
+const { roles, permissions } = useAccess()
+
+<button disabled={!canEdit}>Edit</button>
+```
+
+### Permission Strings
+
+| Form | Matches |
+|------|---------|
+| `posts:update` | That action on that resource |
+| `posts` | Any action on the resource |
+| `posts:*` | Any action on the resource |
+
+Same syntax as `AuthGuard`, and single-permission and wildcard checks behave the same — but `all` does not: it's evaluated against your merged permissions across every role you hold, so a user whose *combined* roles satisfy the list passes here even if no single role would satisfy `AuthGuard`'s check on the server.
+
+### Types Are Generated
+
+Permission strings and role names are type-checked against your `accessControl` definition. `quarry inertia:types` (and the Vite plugin) regenerate `src/inertia/inertia.d.ts` — never write the types by hand.
+
+```tsx
+<Can do="posts:updat">…</Can>  // Type error: not a valid permission
+```
+
+Gates control rendering only — keep the matching `AuthGuard` on the server route.
+
+### Response Caching
+
+Every page carries a per-user `access` prop. If a route is marked `@Cacheable` (see `references/response-cache.md`), it must set `partitionBy` — otherwise the first requester's roles and permissions are cached and served to every later visitor.
 
 ## Flash Messages
 
@@ -557,12 +621,13 @@ SEO + Vite CSS) flushes immediately and the app body streams progressively, lowe
 TTFB. There is **no client-side fallback** — if the SSR bundle fails to load or render,
 the error surfaces (500) rather than silently degrading.
 
+To skip the render entirely for public pages, add `@Cacheable({ ttl })` from `stratal/response-cache` — on a cache hit the Worker never executes, so no SSR and no CPU is billed. `Vary: X-Inertia` is already set (document and JSON page cache as separate variants) and a deploy invalidates automatically. Pages with flash data, partial reloads, and `once()` props are never cached, and guarded routes cannot be cached at all. See `references/response-cache.md`.
+
 ### Configuration
 
 ```typescript
 ssr: {
   bundle: () => import('./inertia/ssr'),   // Dynamic import of the streaming SSR bundle
-  disabled: ['admin/*', 'settings/*'],     // Glob patterns to skip SSR (buffered client-only render)
 }
 ```
 
@@ -591,14 +656,31 @@ export const { render } = createInertiaSsrApp({
 > inside a *suspended* boundary won't reach `<head>` — use server-side `ctx.seo()` for
 > document metadata (the blessed path), which is resolved before render regardless.
 
-### Per-Route SSR Opt-Out
+### Excluding pages from SSR (`ssrExclude`)
 
-```typescript
-async show(ctx: RouterContext): Promise<Response> {
-  ctx.withoutSsr()  // Skip SSR for this render (buffered client-only response)
-  return ctx.inertia('notes/Show', { note })
-}
+Some pages should never server-render — they depend on browser-only APIs, or pull
+in heavy client-only libraries you don't want inflating the worker's cold start.
+Exclude them at build time via the `stratalInertia()` Vite plugin's `ssrExclude`,
+a list of component-name globs:
+
+```ts
+import { stratalInertia } from '@stratal/inertia/vite'
+
+export default defineConfig({
+  plugins: [stratalInertia({ ssrExclude: ['Admin/**', 'Reports/Heavy'] })],
+})
 ```
+
+Pattern syntax (matched against the Inertia component name — the
+`./pages/<name>.tsx` glob key minus the `./pages/` prefix and `.tsx` suffix):
+
+- `*` — a single path segment (does not cross `/`)
+- `**` — any number of segments
+
+Excluded pages are **dropped from the worker bundle entirely** (smaller cold start)
+and rendered client-only at runtime; the browser bundle still includes them so they
+hydrate normally. `ssrExclude` is the only way to opt a page out of SSR. Requires the
+conventional `import.meta.glob('./pages/**/*.tsx')` resolver in your SSR entry.
 
 ## Type Safety
 

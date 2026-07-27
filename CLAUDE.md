@@ -29,7 +29,8 @@ Per-package contributor rules: `packages/<name>/CLAUDE.md` — auto-load when wo
 ## Versioning & release
 
 - Changesets with **fixed** versioning across all packages: `yarn changeset` before committing version-worthy changes. One bump bumps all packages together, so changes here are coupled.
-- Release runs on tag push via `.github/workflows/publish.yml`.
+- Release runs from `.github/workflows/publish.yml`, which fires on CI completing for `main`. Its `publish` job runs `changesets/action`, which opens a `chore: version packages` PR; merging that PR is what publishes `latest`. Its `canary` job has no gate — every successful CI run on `main` with a pending changeset publishes `0.0.0-canary-<sha>` under the `canary` dist-tag.
+- `@changesets/cli` is pinned to an exact version (`2.31.1`, not `^2.31.1`) in the root `package.json`. `.changeset/config.json` relies on the nested `___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH.onlyUpdatePeerDependentsWhenOutOfRange` flag to stop every `@stratal/*` package (each peers on `stratal`) from escalating to a major bump whenever `stratal` itself releases. That option's own name advertises an unstable shape, and an unrecognized shape is silently ignored — no parse error, no warning. Don't unpin the CLI without re-verifying the flag still has an effect, or the next release can silently become a major instead of the intended minor/patch.
 
 ## CI
 

@@ -15,7 +15,7 @@ describe('QueueSender', () => {
     mockProvider.send.mockResolvedValue(undefined)
     mockI18n = createMock<II18nService>()
     mockI18n.getLocale.mockReturnValue('')
-    sender = new QueueSender('TEST_QUEUE', mockProvider as unknown as IQueueProvider, mockI18n as unknown as II18nService)
+    sender = new QueueSender('TEST_QUEUE', mockProvider, mockI18n)
   })
 
   describe('dispatch', () => {

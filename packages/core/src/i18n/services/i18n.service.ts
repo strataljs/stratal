@@ -14,7 +14,7 @@ export class I18nService implements II18nService {
   }
 
   t(key: MessageKeys, params?: MessageParams): string {
-    return this.loader.translate(this.getLocale(), key, params as Record<string, unknown>)
+    return this.loader.translate(this.getLocale(), key, params)
   }
 
   getLocale(): string {

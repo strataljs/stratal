@@ -145,7 +145,7 @@ describe('AuthModule.forRootAsync — rate-limit auto-wiring', () => {
       secret: 'x',
       baseURL: 'http://localhost',
       meta: dep.value,
-    } as BetterAuthOptions & { meta: string }))
+    }))
 
     const dynamic = AuthModule.forRootAsync({
       inject: [userToken],

@@ -16,7 +16,7 @@ describe('ModuleRegistry - Listener Detection', () => {
     vi.clearAllMocks()
     container = new Container()
     mockLogger = createMock<LoggerService>()
-    registry = new ModuleRegistry(container, mockLogger as unknown as LoggerService)
+    registry = new ModuleRegistry(container, mockLogger)
   })
 
   it('should collect bare class listeners from providers', () => {

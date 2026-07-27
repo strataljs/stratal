@@ -21,11 +21,11 @@ beforeEach(() => {
   container.registerValue(LOGGER_TOKENS.LoggerService, logger)
   container.registerValue(DI_TOKENS.ExceptionHandler, { handle: (e: unknown) => ({ message: String(e) }) })
 
-  const registry = new ModuleRegistry(container, logger as unknown as LoggerService)
+  const registry = new ModuleRegistry(container, logger)
   container.registerValue(DI_TOKENS.ModuleRegistry, registry)
   container.registerValue(DI_TOKENS.Quarry, new QuarryRegistry(container))
 
-  loader = new LazyModuleLoader(registry, container, logger as unknown as LoggerService)
+  loader = new LazyModuleLoader(registry, container, logger)
   container.registerValue(DI_TOKENS.LazyModuleLoader, loader)
 
   Transient()(ScheduleListCommand)

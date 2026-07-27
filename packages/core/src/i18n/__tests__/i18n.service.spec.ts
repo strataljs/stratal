@@ -29,7 +29,7 @@ describe('I18nService', () => {
 
   describe('t()', () => {
     it('should return translated string from loader', () => {
-      service = new I18nService(mockLoader as unknown as MessageLoaderService, mockRouterContext as unknown as RouterContext)
+      service = new I18nService(mockLoader, mockRouterContext)
 
       const result = service.t('common.welcome' as MessageKeys)
 
@@ -38,7 +38,7 @@ describe('I18nService', () => {
     })
 
     it('should pass params to loader', () => {
-      service = new I18nService(mockLoader as unknown as MessageLoaderService, mockRouterContext as unknown as RouterContext)
+      service = new I18nService(mockLoader, mockRouterContext)
 
       const result = service.t('common.greeting' as MessageKeys, { name: 'John' })
 
@@ -47,7 +47,7 @@ describe('I18nService', () => {
     })
 
     it('should return the key itself for nonexistent key', () => {
-      service = new I18nService(mockLoader as unknown as MessageLoaderService, mockRouterContext as unknown as RouterContext)
+      service = new I18nService(mockLoader, mockRouterContext)
 
       const result = service.t('nonexistent.key' as MessageKeys)
 
@@ -58,13 +58,13 @@ describe('I18nService', () => {
   describe('getLocale()', () => {
     it('should return locale from RouterContext', () => {
       mockRouterContext.getLocale.mockReturnValue('fr')
-      service = new I18nService(mockLoader as unknown as MessageLoaderService, mockRouterContext as unknown as RouterContext)
+      service = new I18nService(mockLoader, mockRouterContext)
 
       expect(service.getLocale()).toBe('fr')
     })
 
     it('should return "en" when no RouterContext', () => {
-      service = new I18nService(mockLoader as unknown as MessageLoaderService, undefined)
+      service = new I18nService(mockLoader, undefined)
 
       expect(service.getLocale()).toBe('en')
     })

@@ -13,13 +13,13 @@ export default defineConfig({
 })
 ```
 
-`stratalTest()` wraps `@cloudflare/vitest-pool-workers` with Stratal defaults (tslib alias, ZenStack mocks, SSR externals).
+`stratalTest()` wraps `@cloudflare/vitest-pool-workers` with Stratal defaults (tslib alias, ZenStack mocks, SSR externals). It needs no database — `Test.createTestingModule()` and unit tests run with no DB wiring at all. A database is opt-in via the `database` option (below).
 
 Add `fixPgCjs()` and `fixNobleHashesCjs()` when the project uses `@stratal/framework` (ZenStack). Both are no-ops if the relevant packages aren't installed.
 
-### Parallel tests with an isolated database per file
+### Parallel tests with a database per test file
 
-By default tests share one database and run serially (`isolation: 'shared'`). Pass `database: { isolation: 'database' }` to give **each test file its own database**, cloned from a migrated template and dropped on teardown — this enables file parallelism automatically.
+Opt in by passing a `database` option to `stratalTest()`, which gives **each test file its own database**, cloned from a migrated template. This automatically enables file parallelism and raises the setup hook timeout to 30s. An empty object is enough; within a file, reset state between tests via `truncateDb()`. Per-**file** (not per-worker) is deliberate — `@cloudflare/vitest-pool-workers` isolates per file and can run a worker's files concurrently, so a shared database would corrupt under load. Omit `database` entirely for suites that don't touch Postgres.
 
 ```typescript
 // vitest.config.ts
@@ -38,7 +38,7 @@ export default defineConfig({
           stratalTest({
             wrangler: { configPath: './test/wrangler.jsonc' },
             miniflare: { hyperdrives: { DB: DATABASE_URL } },
-            database: { isolation: 'database' }, // 'shared' (default) | 'database'
+            database: {}, // opt in to per-file database isolation
           }),
         ],
         test: {
@@ -52,7 +52,7 @@ export default defineConfig({
 })
 ```
 
-Wire `globalSetup` to build the template (database mode) or migrate the base database (shared mode) with `createTestDatabaseGlobalSetup` from `@stratal/testing/database`. It reads `DATABASE_URL` and calls your `migrate` callback against the connection string to migrate:
+Wire `globalSetup` to build the migrated template with `createTestDatabaseGlobalSetup` from `@stratal/testing/database`. It reads `DATABASE_URL` and calls your `migrate` callback against the template's connection string:
 
 ```typescript
 // test/global-setup.ts
@@ -64,8 +64,7 @@ const schemaPath = resolve(import.meta.dirname, 'schema.zmodel')
 const zenstackBin = resolve(import.meta.dirname, '../../../node_modules/.bin/zenstack')
 
 export default createTestDatabaseGlobalSetup({
-  isolation: 'database',
-  schema: schemaPath, // required in database mode — file or directory
+  schema: schemaPath, // required — file or directory; fingerprints the template
   migrate: (connectionString) => {
     execFileSync(zenstackBin, ['db', 'push', '--force-reset', `--schema=${schemaPath}`, '--accept-data-loss'], {
       stdio: 'inherit',
@@ -75,13 +74,28 @@ export default createTestDatabaseGlobalSetup({
 })
 ```
 
+Bake expensive baseline state (seed data, reference rows, a default tenant schema) into the template with the optional `prepare` hook — it runs once, after `migrate`, so every worker database inherits it via the clone instead of rebuilding it per test:
+
+```typescript
+export default createTestDatabaseGlobalSetup({
+  schema: schemaPath,
+  migrate: (connectionString) => { /* ...as above... */ },
+  prepare: async (connectionString) => {
+    // v1 — bump this comment when seed data changes (see note below)
+    await seedReferenceData(connectionString)
+  },
+})
+```
+
 Notes:
 - Run tests with `npx dotenv -- vitest run` so `.env`'s `DATABASE_URL` reaches `vitest.config.ts` and `globalSetup`.
-- **`schema` is required in `database` mode** (a file or directory path, or a list). Its contents plus the `migrate` routine are hashed into a fingerprint stored as the template database's COMMENT. The template is **reused across runs while the fingerprint is unchanged** and rebuilt + re-migrated only when it changes — so `migrate` runs only on the first run after a schema edit (or against a fresh database). Reuse is purely fingerprint-driven; there is no force/skip flag. For a ZenStack **multi-file schema, pass the root `.zmodel`** — its `import` graph is followed, so editing any imported file forces a rebuild (a directory path hashes every schema file in its tree).
-- The isolated binding defaults to `DB`. For a differently-named Hyperdrive binding, set `database: { isolation: 'database', binding: 'MY_DB' }` (typed to your declared Hyperdrive bindings).
-- Requires Postgres and the `pg` package (an optional peer of `@stratal/testing`). If isolation is enabled without `pg` installed, setup throws an actionable "install pg" error.
-- **Concurrency-safe.** The fingerprint check + template rebuild runs under a Postgres advisory lock, so multiple concurrent setups (CI sharding, several e2e projects) don't clobber each other. The setup-time stale-database sweep only drops per-file databases with **no active connections**, so a sibling process's live databases survive. Teardown is intentionally non-destructive (it neither sweeps nor drops the template); the next run's sweep reclaims any leak.
-- The base database name must be short enough that the per-file suffix (`<base>_t_<12-char token>`) and the template name (`<base>_template`) fit within Postgres' 63-character identifier limit. Setup throws a clear error if it doesn't, rather than silently truncating and colliding names.
+- **`schema` is required** (a file or directory path, or a list). Its contents plus the `migrate` and `prepare` routines are hashed into a fingerprint stored as the template database's COMMENT. The template is **reused across runs while the fingerprint is unchanged** and rebuilt only when it changes — so `migrate`/`prepare` run only on the first run after an edit (or against a fresh database). Reuse is purely fingerprint-driven; there is no force/skip flag. For a ZenStack **multi-file schema, pass the root `.zmodel`** — its `import` graph is followed, so editing any imported file forces a rebuild (a directory path hashes every schema file in its tree).
+- **`prepare` fingerprints its source text only.** If it reads external seed files (JSON/SQL) at runtime, changing only those files will NOT invalidate the template — bump the hook's source (e.g. a version comment) or drop the template manually.
+- The binding defaults to `DB`. For a differently-named Hyperdrive binding, set `database: { binding: 'MY_DB' }` (typed to your declared Hyperdrive bindings).
+- Requires Postgres and the `pg` package (an optional peer of `@stratal/testing`). If the `database` option is set without `pg` installed, setup throws an actionable "install pg" error.
+- **Concurrency-safe.** The fingerprint check + template rebuild runs under a Postgres advisory lock, so multiple concurrent setups (CI sharding, several e2e projects) don't clobber each other. Per-file database clones are likewise serialized by an advisory lock (only one `CREATE DATABASE ... TEMPLATE` at a time). The setup-time stale-database sweep only drops per-file databases with **no active connections**, so a sibling process's live databases survive. Teardown is intentionally non-destructive (it neither sweeps nor drops the template); the next run's sweep reclaims any leak.
+- The base database name must be short enough that the per-file suffix (`<base>_f_<token>`) and the template name (`<base>_template`) fit within Postgres' 63-character identifier limit. Setup throws a clear error if it doesn't, rather than silently truncating and colliding names.
+- Heavier per-file setup (e.g. provisioning a tenant schema in `beforeAll`) can exceed the 30s hook-timeout floor — raise it per project with `test: { hookTimeout: 60000 }`.
 
 ### Setup File
 
@@ -132,6 +146,7 @@ Test.createTestingModule({
     level: LogLevel.ERROR,
     formatter: 'json',
   },
+  cache: false,      // Opt out of the default ctx.cache stub (see Response Cache below)
 })
 ```
 
@@ -288,8 +303,14 @@ const service = module.get<NotesService>(NOTES_TOKENS.NotesService)
 ## Database Utilities
 
 ```typescript
-// Truncate all tables
+// Truncate mutable tables in the current schema (migration bookkeeping is always kept)
 await module.truncateDb()
+
+// Truncate across extra schemas and preserve reference/seed tables
+await module.truncateDb('DB', {
+  schemas: ['analytics'],           // beyond current_schema()
+  preserve: ['countries', 'roles'], // table names or LIKE patterns to keep
+})
 
 // Run a seeder
 await module.seed(NotesSeeder)
@@ -301,7 +322,7 @@ await module.assertDatabaseHas('note', { title: 'Test' })
 await module.assertDatabaseMissing('note', { title: 'Deleted' })
 ```
 
-With `database` isolation (see Setup), each test **file** gets its own database cloned from the migrated template, and it is dropped automatically on `module.close()`. `truncateDb()` still resets rows between tests **within** a file.
+With per-file `database` isolation (see Setup), each test file owns its own database cloned from the migrated template. Call `truncateDb()` in a `beforeEach`/`afterEach` to reset rows between tests within the file. Anything baked into the template via `prepare` should be listed in `preserve` so a reset keeps it.
 
 ## MockFetch (MSW)
 
@@ -388,6 +409,21 @@ expect(storage.files).toContainEqual(
   expect.objectContaining({ key: 'uploads/file.txt' })
 )
 ```
+
+## Response Cache
+
+A `ctx.cache` stub is installed by default, so `@Cacheable`/`@PurgesCache` routes are testable with no configuration — neither Miniflare nor workerd populates `ExecutionContext.cache` on its own, and without the stub any app with a cache-decorated route would 500 on its first request.
+
+```typescript
+const response = await module.http.get('/blog/hello-world').send()
+response.assertOk()
+response.assertHeader('Cache-Control', 'public, max-age=300')
+
+await module.http.post('/posts/hello-world/publish').send()
+expect(module.cache.purges).toEqual([{ tags: ['post:hello-world'] }])
+```
+
+Pass `cache: false` to `Test.createTestingModule()` to reproduce a runtime where Workers Caching is genuinely unconfigured (e.g. to test the `ResponseCacheConfigError` boot guard). See `references/response-cache.md` for the full testing story.
 
 ## Command Testing
 

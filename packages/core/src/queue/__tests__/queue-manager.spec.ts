@@ -38,8 +38,8 @@ describe('QueueManager', () => {
     } as unknown as Container
     queueManager = new QueueManager(
       consumerRegistry,
-      mockLogger as unknown as LoggerService,
-      mockStore as unknown as QueueStore,
+      mockLogger,
+      mockStore,
       mockOptions,
     )
   })

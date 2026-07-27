@@ -21,7 +21,7 @@ describe('EmailService', () => {
     mockQueue = createMock<IQueueSender>()
     mockQueue.dispatch.mockResolvedValue(undefined)
 
-    service = new EmailService(mockQueue as unknown as IQueueSender)
+    service = new EmailService(mockQueue)
   })
 
   describe('send()', () => {

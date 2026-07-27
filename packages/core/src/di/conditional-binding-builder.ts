@@ -73,11 +73,11 @@ class ConditionalBindingUseImpl<T extends object> implements ConditionalBindingU
       }
 
       if (result) {
-        return c.resolve(trueImpl as unknown as InjectionToken<T>)
+        return c.resolve(trueImpl)
       }
 
       if (falseImpl) {
-        return c.resolve(falseImpl as unknown as InjectionToken<T>)
+        return c.resolve(falseImpl)
       }
 
       const tokenStr = typeof token === 'symbol'

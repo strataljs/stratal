@@ -19,11 +19,11 @@ function buildFactory(options?: RateLimiterModuleOptions, env?: Partial<StratalE
 } {
   const cache = createMock<CacheService>()
   const container = createMock<Container>()
-  const fullEnv = { ENVIRONMENT: 'test', CACHE: createMock<KVNamespace>(), ...(env ?? {}) } as unknown as StratalEnv
+  const fullEnv = { ENVIRONMENT: 'test', CACHE: createMock<KVNamespace>(), ...(env ?? {}) }
   const factory = new RateLimiterStoreFactory(
     fullEnv,
-    cache as unknown as CacheService,
-    container as unknown as Container,
+    cache,
+    container,
     options,
   )
   return { factory, container, cache }

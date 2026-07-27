@@ -8,7 +8,7 @@ export interface LazyToken<T = unknown> {
 }
 
 export function lazy<T>(factory: () => Constructor<T>): LazyToken<T> {
-  return { [LAZY_MARKER]: true, factory } as LazyToken<T>
+  return { [LAZY_MARKER]: true, factory }
 }
 
 export function isLazyToken(value: unknown): value is LazyToken {

@@ -132,7 +132,7 @@ export class NotesController {
   async create(ctx: RouterContext) { ... }
 
   // No guard — public
-  @Route({ response: z.array(noteSchema) })
+  @Route({ response: array(noteSchema) })
   async index(ctx: RouterContext) { ... }
 }
 ```

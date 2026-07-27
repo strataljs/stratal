@@ -1,7 +1,15 @@
-import { type Next as HonoNext } from 'hono';
 import type { RouterContext } from './router-context';
 
-export type Next = HonoNext;
+/**
+ * The continuation passed to a {@link Middleware}. Calling it runs the rest of
+ * the chain (the next middleware, then the route handler).
+ *
+ * It resolves to a short-circuit `Response` when a downstream middleware
+ * returns one, or `void` otherwise — wider than Hono's own `Next` (which is
+ * typed `Promise<void>`) so a forwarding middleware can `return next()` to
+ * propagate a downstream short-circuit without an unsafe cast.
+ */
+export type Next = () => Promise<Response | void>;
 
 /**
  * Middleware interface for request processing
@@ -13,7 +21,7 @@ export type Next = HonoNext;
  * ```typescript
  * @Transient()
  * export class LoggingMiddleware implements Middleware {
- *   async handle(ctx: RouterContext, next: () => Promise<void>): Promise<void> {
+ *   async handle(ctx: RouterContext, next: Next): Promise<void> {
  *     const start = Date.now()
  *     await next()
  *     console.log(`Request took ${Date.now() - start}ms`)

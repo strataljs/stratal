@@ -61,6 +61,17 @@ class ResponseMiddleware implements Middleware {
   }
 }
 
+/**
+ * Forwards control with `await next()` but does NOT return next()'s value — the
+ * common, easy-to-write pattern. An inner middleware's short-circuit Response
+ * must not be silently dropped by an outer middleware shaped like this.
+ */
+class ForwardingMiddleware implements Middleware {
+  async handle(_ctx: RouterContext, next: Next) {
+    await next()
+  }
+}
+
 describe('createMiddlewareChain', () => {
   it('should call middlewares in registration order and then Hono next', async () => {
     const order: string[] = []
@@ -82,8 +93,8 @@ describe('createMiddlewareChain', () => {
     }
 
     const chain = createMiddlewareChain([
-      FirstMiddleware as Constructor<Middleware>,
-      SecondMiddleware as Constructor<Middleware>,
+      FirstMiddleware,
+      SecondMiddleware,
     ])
 
     const honoNext = vi.fn(async () => {
@@ -98,7 +109,7 @@ describe('createMiddlewareChain', () => {
 
   it('should return a Response when a middleware short-circuits', async () => {
     const chain = createMiddlewareChain([
-      ResponseMiddleware as Constructor<Middleware>,
+      ResponseMiddleware,
     ])
 
     const honoNext = vi.fn(async () => { /**/ })
@@ -110,7 +121,7 @@ describe('createMiddlewareChain', () => {
 
   it('should throw RouterError when next() is called twice', async () => {
     const chain = createMiddlewareChain([
-      DoubleNextMiddleware as Constructor<Middleware>,
+      DoubleNextMiddleware,
     ])
 
     const honoNext = vi.fn(async () => { /**/ })
@@ -133,8 +144,8 @@ describe('createMiddlewareChain', () => {
     }
 
     const chain = createMiddlewareChain([
-      DoubleNextInCatchMiddleware as Constructor<Middleware>,
-      DownstreamErrorMiddleware as Constructor<Middleware>,
+      DoubleNextInCatchMiddleware,
+      DownstreamErrorMiddleware,
     ])
 
     const honoNext = vi.fn(async () => { /**/ })
@@ -161,7 +172,7 @@ describe('createMiddlewareChain', () => {
     }
 
     const chain = createMiddlewareChain([
-      ErrorMiddleware as Constructor<Middleware>,
+      ErrorMiddleware,
     ])
 
     const honoNext = vi.fn(() => {
@@ -169,5 +180,44 @@ describe('createMiddlewareChain', () => {
     })
 
     await expect(chain(createContextStub(), honoNext)).rejects.toThrow('handler error')
+  })
+
+  it('finalizes c.res when an inner middleware returns a Response and an outer middleware forwards with `await next()`', async () => {
+    // An outer middleware that does `await next()` (rather than `return next()`)
+    // drops the inner middleware's returned Response. Without finalizing the
+    // Response on the context, Hono is left with an unfinalized context and
+    // throws "Context is not finalized". The chain must set `c.res` so the
+    // short-circuit survives regardless of how outer middlewares forward.
+    const c = createContextStub()
+    const chain = createMiddlewareChain([
+      ForwardingMiddleware,
+      ResponseMiddleware,
+    ])
+
+    const honoNext = vi.fn(async () => { /**/ })
+    await chain(c, honoNext)
+
+    expect(c.res).toBeInstanceOf(Response)
+    expect(c.res.status).toBe(200)
+    // The inner middleware short-circuited, so the terminal Hono handler never ran.
+    expect(honoNext).not.toHaveBeenCalled()
+  })
+
+  it('finalizes c.res across separately-composed chains (outer chain forwards with `await next()`)', async () => {
+    // Mirrors the real failure: a global `router.use` chain whose middlewares
+    // forward with `await next()` wraps a *second* `router.use` chain that
+    // short-circuits. The inner chain must finalize its Response so the outer
+    // chain's bare `await next()` can't strand it.
+    const c = createContextStub()
+    const innerChain = createMiddlewareChain([ResponseMiddleware])
+    const outerChain = createMiddlewareChain([ForwardingMiddleware])
+
+    // Hono runs the outer chain first; its `next` advances into the inner chain.
+    await outerChain(c, async () => {
+      await innerChain(c, async () => { /**/ })
+    })
+
+    expect(c.res).toBeInstanceOf(Response)
+    expect(c.res.status).toBe(200)
   })
 })
