@@ -108,7 +108,7 @@
   },
   "devDependencies": {
     "@better-auth/core": "^1.6.23",
-    "@cloudflare/workers-types": "5.20260716.1",
+    "@cloudflare/workers-types": "5.20260727.1",
     "@stratal/framework": "workspace:*",
     "@types/node": "^26.1.1",
     "@types/pg": "^8.20.0",
