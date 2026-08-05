@@ -178,7 +178,7 @@
     "@swc/core": "^1.15.43",
     "@swc/helpers": "^0.5.23",
     "clipanion": "^4.0.0-rc.4",
-    "hono": "^4.12.30",
+    "hono": "^4.12.34",
     "intl-messageformat": "^11.2.12",
     "openapi3-ts": "^4.6.0",
     "zod": "^4.4.3"
