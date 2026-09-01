@@ -54,15 +54,15 @@
     "undici": "7.28.0"
   },
   "devDependencies": {
-    "@changesets/changelog-github": "^0.7.0",
-    "@changesets/cli": "2.31.1",
+    "@changesets/changelog-github": "^1.0.0",
+    "@changesets/cli": "3.0.1",
     "@opentelemetry/api": "^1.9.1",
     "globals": "^17.7.0",
     "husky": "^9.1.7",
     "jiti": "^2.7.0",
     "lint-staged": "^17.0.8",
     "oxlint": "^1.74.0",
-    "oxlint-tsgolint": "^0.24.0",
+    "oxlint-tsgolint": "^7.0.2001",
     "tsdown": "^0.22.9",
     "typedoc": "^0.28.20",
     "typescript": "^7.0.2"

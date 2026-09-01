@@ -134,7 +134,7 @@
     "@vitest/runner": "~4.1.10",
     "@vitest/snapshot": "~4.1.10",
     "hono": "^4.12.30",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.0.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "stratal": "workspace:*",
