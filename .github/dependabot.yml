@@ -20,6 +20,16 @@ updates:
       include: "scope"
     labels:
       - "dependencies"
+    # @cloudflare/vitest-plugin peers on `vitest ^4.1.0` and has no v5-capable
+    # release yet, so every Vitest 5 PR fails the framework e2e suite in workerd.
+    # Vitest 5 also rewrote the benchmark API (`bench` is now a test-context
+    # fixture, not a top-level import), which breaks the five *.bench.ts files.
+    # Drop these entries once the Cloudflare plugin ships vitest ^5 support.
+    ignore:
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitest/*"
+        update-types: ["version-update:semver-major"]
     groups:
       all-non-major:
         patterns: ["*"]
