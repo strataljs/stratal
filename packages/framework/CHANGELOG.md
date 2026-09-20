@@ -1,5 +1,64 @@
 # @stratal/framework
 
+## 0.1.0
+
+### Minor Changes
+
+- a753e55: Add cursor pagination, share permissions with the client for Inertia access control, and add a Workers-safe database pool factory.
+
+  ### Cursor pagination
+
+  Add `db.$cursor` for reading a list one page at a time, positioned by an opaque cursor rather than an offset.
+
+  ```typescript
+  const page = await db.$cursor.thread.findMany({
+    cursor: ctx.query("cursor"),
+    take: 20,
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    where: { userId },
+  });
+  // → { data, perPage, cursorName, cursor, nextCursor, prevCursor }
+  ```
+
+  - Rows added, removed or updated around the reader do not shift the page, so walking a list neither skips a row nor repeats one.
+  - `orderBy` is required and must end in a unique column, so tied rows do not share a position. `where`, `select`, `include` and `omit` work as on the model's own `findMany`, and `select` narrows the result type.
+  - Pass the result to `@stratal/inertia`'s `ctx.scroll()` as it is, or return it from a JSON route. Cursors are opaque — pass back the one a result gave you.
+  - A transaction client carries the same reader, and `db.$cursor.$from({ findMany }, …)` pages a `UNION` or a raw statement.
+  - Distinct from ZenStack's own `cursor` argument, which is offset-based and correct only while the list is unchanged.
+
+  ### Access control and auth
+  - Share the current user's permissions and roles automatically once `accessControl` is configured, so the client can gate on them. This backs the `<Can>`, `<Cannot>`, `<HasRole>` and `<HasNoRole>` components and the `useCan`, `useRole` and `useAccess` hooks in `@stratal/inertia`, with permission strings and role names type-checked against a generated registry.
+  - Add `AUTH_GATEWAY_PRIMERS`, exported from `@stratal/framework/auth`, so guarded and per-tenant routes can use `@Cacheable({ partitionBy: [...] })`. The response-cache gateway resolves partitions outside the app's middleware chain, so a resolver calling `ctx.user()` would otherwise throw on every request:
+
+    ```typescript
+    ResponseCacheModule.forRoot({
+      gateway: { entrypoint: "Cached" },
+      primers: AUTH_GATEWAY_PRIMERS,
+      partitions: { user: (ctx) => ctx.user().id },
+    });
+    ```
+
+  - Carry the cookies a session read issues through to the response. The `Set-Cookie` Better Auth writes while reading a session was previously discarded, so under `session.cookieCache` the cached-session cookie was minted on every request and reached the browser on none, and a session passing `session.updateAge` never delivered its extended expiry — a browser's copy expired on the schedule it was first given rather than sliding. Cookie names the handler has already written are left alone, so sign-out still clears them.
+  - Fix role reads and writes failing for any app whose ZenStack user model is not named exactly `User`. Setting a user's role, reading another user's roles, checking a permission and listing a user's permissions all threw when the model resolved to a different accessor, such as a pluralized `Users`. Changing a role now also refreshes that user's sessions, so it takes effect immediately.
+  - Adapt the Better Auth rate-limit bridge to the new atomic `consume` storage. `createBetterAuthRateLimitStorage()` now returns `{ consume }`, and records expire after the rule's own window instead of a fixed day, so stale counters no longer linger in KV. Accuracy follows the configured store, exactly as Stratal's own throttling does: exact in memory, best-effort on KV, where concurrent writes from different edge locations may undercount. **If you pass your own `rateLimit.customStorage`, it must now implement `consume`** — Better Auth no longer accepts `get`/`set`.
+
+  ### Database
+  - Add `createPoolFactory(env, makePool)` to `@stratal/framework/database`, which chooses connection topology from the environment instead of hard-coding it. Write `const pool = createPoolFactory(env, () => new Pool(config))`, then `dialect: () => new PostgresDialect({ pool })`. By default it returns a fresh pool per resolution, which is mandatory on the Workers runtime, where a pool opened in one request's I/O context cannot be reused by a later one without the runtime cancelling the cross-request I/O and hanging the request. The pool is created lazily on first query, so nothing opens a socket at module scope. In production Hyperdrive fronts these pools, so they never accumulate.
+  - Resolve a connection's database client once per request instead of once per injection. The client was transient, so a request resolving a controller, a guard and four services built six clients over six pools for work that shares a single I/O context. Every entrypoint already runs inside a request scope, so no caller changes. Sharing one client also makes the reentrant-`$transaction` guard effective across services, where separate clients could previously deadlock on a small pool.
+  - Await the configuration factory in `DatabaseModule.forRootAsync`. A factory that actually returned a promise handed initialization a `Promise` and it walked `undefined` connections. An asynchronous factory now works as documented, which is what lets a consumer put a generated schema behind an `import()` rather than evaluating a large schema module while the isolate starts.
+  - Make disposing a shared test-harness database connection idempotent, so shutdown no longer logs "Called end on pool more than once". Fresh-per-resolution pools used in dev, staging and production are unchanged.
+
+  ### Breaking Changes
+  - **The validation API is `zod/mini`.** The `z` re-export is gone from the validation surface this package re-exports. Import schema builders directly from `zod/mini` using named imports and replace classic chaining with the functional API: `z.string().min(1).optional()` becomes `optional(string().check(minLength(1)))`. Use `describe()` and `named()` from `stratal/validation` for descriptions and OpenAPI component ids.
+  - **OpenAPI documents are generated lazily**, on the first request to the docs endpoint. `OpenAPIService.getSpec()` becomes `getSpec(container)` and is async, and `routeFilter` is now a metadata predicate `(route: RouteSchemaMeta) => boolean` instead of `(path, pathItem)`.
+  - **Guards now deny when `canActivate` returns `false`**, with `GuardRejectedError` (403), instead of the return value being ignored. Audit your `canActivate` implementations before upgrading — requests that previously reached the handler now 403. `GuardRejectedError` is re-exported from `@stratal/framework/guards`, so apps that standardise on that path can `instanceof` it without a second import.
+  - **A custom Better Auth `rateLimit.customStorage` must implement `consume`**, replacing the previous `get`/`set` pair.
+
+### Patch Changes
+
+- Updated dependencies [a753e55]
+  - stratal@0.1.0
+
 ## 0.0.27
 
 ### Patch Changes
@@ -14,7 +73,6 @@
 - ab95f52: Close database connections on application shutdown
 
   ### Details
-
   - Database clients now disconnect their underlying pools when the application shuts down (including dev-server hot reloads), instead of leaking connections until the process exits
   - Database clients also implement the async-disposal contract (`Symbol.asyncDispose`), so they participate in container disposal
 
@@ -29,7 +87,6 @@
 - e93db60: Emit entity mutation events with full entity snapshots from the database layer
 
   ### Details
-
   - New typed events: `entity.{Model}.created` (`{ after }`), `entity.{Model}.updated` (`{ before, after }`), and `entity.{Model}.deleted` (`{ before }`), plus wildcard subscriptions (`entity.{Model}`, `entity.{verb}`, `entity`).
   - Unlike the existing `before.*`/`after.*` events (raw query args/result), entity events carry full entity snapshots, with the pre-mutation snapshot loaded inside the mutation's transaction.
   - Listener-driven cost: snapshots are only loaded when a matching subscription exists, so models nobody observes pay nothing. A global `entity` wildcard makes every model pay the pre-read — subscribe per model when cost matters.
@@ -48,7 +105,6 @@
 ### Patch Changes
 
 - 13b0e8d: Add `@stratal/feature-flags` — Cloudflare Flagship feature flags via the native Worker binding API.
-
   - `FeatureFlagModule.forRoot({ apps: [{ binding, flags }], default, context })` with a declare-once flag manifest, manifest defaults, a per-request evaluation-context resolver, and multi-app support via `FeatureFlagService.use(binding)`.
   - `FeatureFlagShareMiddleware` shares evaluated flags to Inertia pages as the `featureFlags` prop; register it yourself (scoped to page controllers via `router.middleware(...)` or app-wide via `router.use(...)`) so a stalled Flagship binding can't block unrelated routes. Typed `useFlag` / `useFeatureFlags` hooks on `@stratal/feature-flags/react`. No runtime dependency on `@stratal/inertia`.
   - `@stratal/inertia`: expose a generic `ctx.share(key, value)` macro on `RouterContext` so middleware and packages can contribute per-request shared props.
@@ -57,7 +113,6 @@
 - 13b0e8d: Fix correctness and security issues found in review.
 
   Queue:
-
   - Retry the correct binding: dispatch stamps the producer binding into message metadata and failed jobs record it, so `queue:retry` re-enqueues through the Cloudflare binding instead of the queue name (which is not a valid binding key and broke retry whenever the two differed). A message with no binding metadata is logged and acked rather than stored as an unretryable job.
   - Honor the documented retry budget: `maxRetries` now counts retries correctly against Cloudflare's 1-based `message.attempts` (previously gave one fewer retry than configured).
   - Derive idempotency keys from an order-stable serialization of `type` + `payload`, so payloads that differ only in key order dedupe correctly.
@@ -65,7 +120,6 @@
   - Documented that delivery is at-least-once with best-effort de-duplication (not exactly-once), since the processed marker is written only after a handler succeeds and KV is eventually consistent — handlers must be idempotent.
 
   Email (SMTP):
-
   - Upgrade STARTTLS onto the socket `startTls()` returns: the original socket is closed by the runtime, so the post-upgrade reader/writer are re-derived from the new secure socket and any pre-handshake bytes are discarded (fixes a broken `smtp://` STARTTLS path on real Workers and closes the STARTTLS plaintext-injection vector).
   - Refuse to send credentials over an unencrypted connection: an `smtp://` server that doesn't offer STARTTLS now fails loudly instead of leaking the password (blocks STARTTLS-stripping downgrades). Credential-free connections (e.g. local Mailpit) are unaffected.
   - AUTH is gated on the server's advertised mechanisms and supports both `PLAIN` and `LOGIN`; usernames are percent-decoded like passwords.
@@ -73,41 +127,33 @@
   - MIME builder strips CR/LF from headers, escapes/RFC 2231-encodes attachment filenames (prevents header injection), base64-encodes message bodies (fixes long-line corruption), and rejects envelope addresses containing whitespace or angle brackets (prevents `MAIL FROM`/`RCPT TO` desync).
 
   Inertia SEO:
-
   - `titleTemplate` substitutes every `%s` and treats `$`-sequences in the title literally.
   - Inject head/body content via function replacements, so SEO/page content containing `$`-sequences (`$$`, `$&`, `` $` ``, `$'`) is no longer corrupted or able to splice a template placeholder back into the output.
   - Drop unsafe attribute names — including inline event handlers (`on*`) — from custom `meta`/`link` entries (prevents tag breakout server-side, `setAttribute` errors during client head-sync, and developer-supplied event-handler attributes).
 
   Feature flags:
-
   - `FeatureFlagService.use()` binds the target app exactly once.
 
   Database (framework):
-
   - The reentrant `$transaction` proxy forwards the receiver for non-transaction property access.
 
   Testing:
-
   - `TestingModule.close()` drops the isolated per-file database even if shutdown throws; the stale-database sweep escapes LIKE metacharacters so a prefix containing `_` can't over-match.
 
   DI:
-
   - Construct singletons against the root container so they can never capture a request-scoped dependency (which would leak one request's state across every later request); an illegal singleton→request dependency now throws loudly.
   - Detect circular dependencies and throw a clear error naming the cycle instead of overflowing the stack.
   - `tryResolve` only swallows "no provider"; a registered provider that throws while constructing now surfaces the real error instead of injecting `undefined`.
   - Request-cache invalidation tracks transitive constructor dependencies, so re-registering a value rebuilds cached services that depend on it through a transient intermediary.
 
   Quarry dev runtime:
-
   - Persist every durable plugin (KV, D1, R2, Durable Objects, cache) under `.wrangler/state/v3`, matching `wrangler dev` (previously only R2 was persisted); load `.env.local` / `.env.<env>.local` into `process.env` for full parity.
   - The `cloudflare:sockets` STARTTLS shim re-attaches the stream error handler to the upgraded socket, so post-upgrade connection errors still surface.
 
 - 13b0e8d: Make database transactions reentrant and remove `AuthContextMiddleware`
-
   - Nested `$transaction` calls now reuse the active transaction instead of acquiring a second connection, fixing deadlocks on single-connection pools (e.g. Hyperdrive with `max: 1`) when libraries such as Better Auth run nested transactions.
 
   ### Breaking Changes
-
   - **`AuthContextMiddleware` is removed.** Auth context is now registered automatically per request. If you registered this middleware explicitly, remove the registration — `SessionVerificationMiddleware` is sufficient.
 
 - Updated dependencies [13b0e8d]
@@ -129,13 +175,11 @@
 - 1658945: Migrate all error classes to `HttpException`, move heavy dependencies to peer dependencies
 
   ### Breaking Changes
-
   - **Error classes migrated** — All framework error classes (`InsufficientPermissionsError`, auth errors, database errors, context errors) now extend `HttpException` instead of `ApplicationError`. Constructor signatures are simplified — remove `i18nKey` and `code` arguments.
   - **`@better-auth/core`, `@zenstackhq/orm`, `@zenstackhq/schema`, and `better-auth` moved to peer dependencies** — Install them directly in your application if not already present.
   - **Database error mapping simplified** — `fromZenStackError()` no longer maps to typed error code objects. It returns plain `HttpException` instances with descriptive messages.
 
 - 4b273ea: Adapt to the new built-in DI container from `stratal`, removing all `tsyringe` and `reflect-metadata` usage
-
   - All request-scoped services now use the `@Request` decorator instead of `@Transient`.
   - `DatabaseModule` uses `lazy()` for dynamic connection registration instead of tsyringe's `delay()`.
   - `reflect-metadata` is no longer required as a peer dependency.
@@ -163,7 +207,6 @@
 - f8c61e1: Auto-wire Better Auth's rate limiting through Stratal's `RateLimiterModule`
 
   When `RateLimiterModule` is imported alongside `AuthModule`, Better Auth's `rateLimit` block is configured automatically:
-
   - `customStorage` is backed by Stratal's shared `IRateLimiterStore`, so HTTP throttling and Better Auth share one store.
   - `customRules` is populated from a new `RateLimiterRegistry.forPath(path, resolver)` API, letting apps declare path-keyed limits (e.g. `/sign-in/email`, `/two-factor/*`) using the same `Limit` builder used elsewhere.
   - User-supplied `rateLimit.customStorage` and `rateLimit.customRules` keys take precedence on a per-key basis.
@@ -180,13 +223,11 @@
   `AuthContext` now holds the full user record returned by Better Auth's `getSession()` instead of just `userId`/`role`, so controllers and services can read profile fields without re-querying the database.
 
   ### Breaking Changes
-
   - `AuthInfo` shape changed from `{ userId?, role? }` to `{ user: AuthUser }`. `setAuthContext({ userId, role })` callers must pass `setAuthContext({ user })` instead.
   - `getAuthContext()` was renamed to `getAuthInfo()` and now returns `{ user }`.
   - `AuthContext.getRole()` reads from `user.role`. Apps that use roles should augment the new `AuthUser` interface with `role: string` (or your app's role field) so it stays typed.
 
   ### New API
-
   - `AuthUser` interface (extends Better Auth's `BaseUser` with optional `name`) is augmentable via `declare module '@stratal/framework/context'` for app-specific fields.
   - `AuthContext.getUser()` returns the user or `undefined`.
   - `AuthContext.requireUser()` returns the user or throws `UserNotAuthenticatedError`.
@@ -228,19 +269,16 @@
 - 3b16f5b: Replace Casbin-based RBAC module with Better Auth access control module
 
   ### Breaking Changes
-
   - The `RbacModule`, `CasbinService`, `CasbinEnforcerService`, and all Casbin-related exports under `@stratal/framework/rbac` have been removed.
   - Use the new `@stratal/framework/access-control` module instead, which integrates with Better Auth's built-in access control system.
   - `AuthGuard` now uses `AccessService` instead of `CasbinService` for permission checks.
 
   ### Migration
-
   1. Replace `RbacModule` imports with the new access control setup via `createAccessControl()`.
   2. Define resources and roles using `createAccessControl({ resources, roles })` and pass the result to `AuthModule.forRootAsync()`.
   3. Replace `CasbinService` usage with `AccessService` from `@stratal/framework/access-control`.
 
 - 3b16f5b: Add organization-related error handling and internationalization support for auth module
-
   - Add structured error codes and i18n messages for organization operations (not found, member not found, invitation errors, limit reached).
   - Enhance Better Auth error handler to map organization-specific errors to appropriate HTTP responses.
 
@@ -249,7 +287,6 @@
   **Why:** Multiple modules augmenting `AppMessages` with a shared top-level parent (e.g., `errors.auth`, `errors.uploads`, `errors.branding`) collided with TypeScript error **TS2717** ("Subsequent property declarations must have the same type"). Interface merging adds new properties across declarations but requires same-named properties to have structurally identical types — it does not deep-merge nested shapes.
 
   **What changed:**
-
   - Replaced the single augmentable `AppMessages` interface with an `AppMessageNamespaces` keyed registry. Each module declares its own distinct top-level key (Laravel-style package namespacing). Because each declaration adds a different property, interface merging accepts them all.
   - `AppMessages` is now derived: `{ [K in keyof AppMessageNamespaces]: AppMessageNamespaces[K] }`.
   - Access keys are unchanged dot-notation — `i18n.t('auth.errors.invalidCredentials')` — so no custom resolver is needed.
@@ -277,7 +314,6 @@
   ```
 
   **Framework package moves:**
-
   - All `errors.auth.*` keys (previously split between `stratal` core and `@stratal/framework`) now live in the auth module as `auth.errors.*`. `errors.auth.org.*` → `auth.org.*`. The `errors.auth.*` namespace has been removed from `stratal`'s core messages.
   - `@stratal/framework`'s `DatabaseModule` now registers its `database.*` validation messages via `I18nModule.registerMessages` (previously the messages file existed but was never wired up).
   - `@stratal/inertia-modal`'s `errors.modal.*` key moved to `modal.errors.*`.
@@ -312,7 +348,6 @@
 - c9176ea: Migrate auth middleware to router-scoped configuration and improve error resilience
 
   ### Details
-
   - Migrate `AuthModule` from `MiddlewareConfigurable` to `RouteConfigurable` interface
   - Add graceful error handling in session verification to prevent invalidated sessions from blocking requests
   - Expand Better Auth error mapping for token expiry, signup, and session creation failures
@@ -331,7 +366,6 @@
 - [`cbfce8b`](https://github.com/strataljs/stratal/commit/cbfce8b3a3517b60d94f500c5dc1ef68d8ee76f4) Thanks [@adesege](https://github.com/adesege)! - Export database CLI commands from `@stratal/framework/database`
 
   ### Details
-
   - Export `ZenStackCommand`, `DbGenerateCommand`, `DbPullCommand`, `DbPushCommand`, `MigrateDeployCommand`, `MigrateDevCommand`, `MigrateResetCommand`, and `MigrateStatusCommand`
 
 - [#147](https://github.com/strataljs/stratal/pull/147) [`7f2772b`](https://github.com/strataljs/stratal/commit/7f2772ba90a9b6a91603f79293d384e972864125) Thanks [@adesege](https://github.com/adesege)! - Fix database event types to correctly resolve models and operation args across multiple schema connections using distributive conditional types
@@ -346,7 +380,6 @@
 - [#142](https://github.com/strataljs/stratal/pull/142) [`4b958e2`](https://github.com/strataljs/stratal/commit/4b958e250c99681a99a34a398fbf706546f556cc) Thanks [@adesege](https://github.com/adesege)! - Move auth, database, RBAC, and factory dependencies from optional peer dependencies to hard dependencies
 
   ### Details
-
   - `@better-auth/core`, `better-auth`, `@faker-js/faker`, `@zenstackhq/cli`, `@zenstackhq/orm`, and `casbin` are now direct dependencies
   - Remove `peerDependenciesMeta` optional markers for these packages
 
@@ -385,9 +418,7 @@
 - [#97](https://github.com/strataljs/stratal/pull/97) [`d58b878`](https://github.com/strataljs/stratal/commit/d58b8782848562a50b79cd558eaf01978aa77f26) Thanks [@adesege](https://github.com/adesege)! - Add `stratalTest()` vitest plugin and migrate fetch mocking from Cloudflare's undici-based `fetchMock` to MSW
 
   ### Details
-
   - **@stratal/testing**
-
     - Add `@stratal/testing/vitest-plugin` sub-export with `stratalTest()` — wraps `cloudflareTest` with Stratal defaults (tslib alias, ZenStack mocks, SSR externals)
     - Replace `FetchMock`/`createFetchMock` with `MockFetch`/`createMockFetch` backed by MSW (`setupServer`)
     - Re-export `http` and `HttpResponse` from `msw` for convenience
@@ -395,7 +426,6 @@
     - Bump vitest peer dependency from `^3.2.0` to `^4.1.0`
 
   - **stratal**
-
     - Update test mocks to use class syntax for Vitest 4 compatibility
     - Bump dependencies: `@intlify/*`, `@scalar/hono-api-reference`, `hono`, `@aws-sdk/*`, `vitest`
 
@@ -404,7 +434,6 @@
     - Bump dependencies: `better-auth`, `@zenstackhq/*`, `wrangler`, `vitest`
 
   ### Breaking Changes
-
   - **@stratal/testing**: `FetchMock` and `createFetchMock` are removed. Use `MockFetch`/`createMockFetch` instead. The new API uses MSW lifecycle methods (`listen`/`reset`/`close`) instead of `activate`/`disableNetConnect`/`deactivate`.
   - **@stratal/testing**: Vitest peer dependency is now `^4.1.0` (was `^3.2.0`).
 
@@ -420,7 +449,6 @@
   ### Breaking Changes
 
   **@stratal/framework**
-
   - `DatabaseModuleConfig` no longer accepts a top-level `schema` property. Each connection in `connections` now requires its own `schema` property.
   - `DatabaseConnectionConfig` no longer accepts `slicing`. Each connection defines its own schema, making slicing unnecessary.
   - `StratalDatabase` augmentation interface changed: replace `schema` and `slicing` with `schemas` (a map of connection name to schema type).
@@ -477,7 +505,6 @@
 - [#84](https://github.com/strataljs/stratal/pull/84) [`3b38b81`](https://github.com/strataljs/stratal/commit/3b38b8184428dc0f79ffbe9dc55ba782d46dea03) Thanks [@adesege](https://github.com/adesege)! - Rename `AuthModule.withRootAsync` to `AuthModule.forRootAsync` for consistency with core framework naming conventions
 
   ### Breaking Changes
-
   - **@stratal/framework**: `AuthModule.withRootAsync()` has been renamed to `AuthModule.forRootAsync()`. Update all usages:
     ```diff
     - AuthModule.withRootAsync({ ... })
@@ -496,7 +523,6 @@
   ### Breaking Changes
 
   **`stratal` (core)**
-
   - **Removed `RequestContextStore`** — The `AsyncLocalStorage`-based request context propagation is eliminated. This removes the dependency on the `nodejs_als` compatibility flag in Cloudflare Workers.
   - **Removed `RouterService` and `RequestScopeService`** — Replaced by `HonoApp`, a subclass of `OpenAPIHono` that directly integrates request scoping, middleware class support, and global error handling.
   - **Removed `RouterAlreadyConfiguredError` and `RouterNotConfiguredError`** — Replaced by `HonoAppAlreadyConfiguredError`.
@@ -508,12 +534,10 @@
   - **New `HonoApp` class** — Extends `OpenAPIHono` with Stratal concerns; supports `Constructor<Middleware>` in `use()` via module augmentation.
 
   **`@stratal/framework`**
-
   - **`DatabaseConnectionConfig.dialect` changed from `Dialect` to `() => Dialect`** — Database connections now take a factory function for lazy dialect/pool creation.
   - **Caching strategy changed from `instancePerContainerCachingFactory` to `instanceCachingFactory`**.
 
   **`@stratal/testing`**
-
   - **`TestingModule.runInRequestScope()` callback now receives a `container` parameter** — Update all callbacks to use the passed container for service resolution.
   - **`TestingModule.fetch()` now routes through `HonoApp`** instead of `RouterService`.
   - **`TestingModuleBuilder.compile()` now applies overrides before `initialize()`** — Fixes issue where overrides were applied after initialization.
@@ -521,7 +545,6 @@
   ### Minor Changes
 
   **`@stratal/seeders`**
-
   - Updated `executeSeeder()` to use the explicit `requestContainer` parameter from `runInRequestScope()`.
 
 - [#83](https://github.com/strataljs/stratal/pull/83) [`bcb3556`](https://github.com/strataljs/stratal/commit/bcb3556a6e1f185e088286f202c605c73799e63f) Thanks [@adesege](https://github.com/adesege)! - Introduce @stratal/zenstack-plugin and rearchitect database module to use shared schema with per-connection slicing
@@ -529,7 +552,6 @@
   ### New Package
 
   **`@stratal/zenstack-plugin`**
-
   - ZenStack plugin for multi-connection database support with schema slicing
   - Generates connection-specific schema types and `StratalDatabase` augmentation
   - CLI commands: `stratal-db migrate` and `stratal-db push` for per-connection database management
@@ -538,11 +560,9 @@
   ### Breaking Changes
 
   **`stratal` (core)**
-
   - Re-exports `delay` from tsyringe via `stratal/di`
 
   **`@stratal/framework`**
-
   - **Replaced `DatabaseSchemaRegistry` and `DefaultDatabaseConnection` with unified `StratalDatabase` interface** — Consumers must update their type augmentations to use the new single interface with `schema`, `defaultConnection`, and `slicing` properties.
   - **`schema` moved from `DatabaseConnectionConfig` to `DatabaseModuleConfig`** — All connections now share a single schema; per-connection schema is no longer supported.
   - **Added `slicing` option to `DatabaseConnectionConfig`** — Connections can narrow available models via ZenStack slicing options.
@@ -552,7 +572,6 @@
   - **Removed `InferConnectionSchema` type** — Replaced by `InferDatabaseSchema` (shared) and `InferConnectionSlicing` (per-connection slicing).
 
   **`@stratal/testing`**
-
   - **`TestingModule.getDb()` is now synchronous** — Returns `DatabaseService` directly instead of `Promise<DatabaseService>`.
   - **`TestingModule` creates a single request-scoped container at construction** — `container` property now returns the request-scoped container. The `runInRequestScope` pattern is removed.
   - **`TestingModule.close()` now disposes the request container** before shutting down the application.

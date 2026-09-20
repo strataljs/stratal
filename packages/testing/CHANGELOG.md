@@ -1,5 +1,46 @@
 # @stratal/testing
 
+## 0.1.0
+
+### Minor Changes
+
+- a753e55: Give each test file its own leased database, drain deferred work before a test finishes, and supply the cache and gateway bindings the runtime never populates.
+
+  ### Database isolation
+  - Give every test **file** its own database, leased from a fixed pool of worker slots rather than created per file. Each file takes the lowest free slot, `<base>_w_<slot>`, and gets a fresh clone of the migrated template in it; the slot frees when the pool disposes the file's isolate. A run therefore holds at most as many databases as it runs files at once, so a long suite no longer piles up one database per file until Postgres runs out of disk mid-run.
+  - Per-file isolation is deliberate: the Workers test pool isolates storage per file and can run a worker's files concurrently, so any database shared across files corrupts under CI latency. Within a file, tests reset state through `truncateDb` or the reset engine.
+  - `createTestDatabaseGlobalSetup` accepts a one-time `prepare` hook to bake expensive baseline state — seed data, a default tenant schema — into the template once, so every file's database inherits it through the clone instead of rebuilding it per test.
+  - `createTestDatabaseGlobalSetup` now returns a teardown, so a run reclaims what it created instead of leaving the leftovers for the next run's setup to find. Consumers pass it to `globalSetup` exactly as before and need no change. The sweep is connection-guarded and skips a slot that is currently leased, so a database cloned but not yet connected to is never dropped by a concurrent process.
+  - `truncateDb(name?, opts?)` accepts a `ResetOptions` preserve-list; migration tables matching `_prisma%` are always preserved.
+  - Default database-isolation projects to a 30 second hook timeout, since cloning a template under a full worker slot routinely exceeds Vitest's 10 second default and fails with "Hook timed out in 10000ms". This is a floor, not a ceiling: an explicit `hookTimeout`, `fileParallelism` or `isolate` on the consuming project is now respected instead of being overwritten.
+  - Share one database pool per connection in the harness and tear it down exactly once. The harness runs against a direct Postgres with no Hyperdrive to multiplex, so a fresh pool per resolution accumulated until parallel files exhausted the server's connection limit with "sorry, too many clients already". Disposing a connection no longer logs "Called end on pool more than once".
+
+  ### Bindings and lifecycle
+  - Supply the `ctx.cache` binding so cache-decorated routes are testable with no configuration. Neither Miniflare nor workerd populates it, so without this a single `@Cacheable` or `@PurgesCache` route would fail an app's entire suite on the first request. `Test.createTestingModule()` installs a stub by default: `@Cacheable` routes return real `Cache-Control` and `Cache-Tag` headers, and purges succeed, recording each `PurgeSpec` in call order on `module.cache.purges`. Pass `cache: false` to opt back into the unconfigured runtime.
+  - Supply a `ctx.exports` stub by default so adopting the response-cache gateway does not break existing suites. Assert forwarded requests and their resolved partitions through `module.gateway.loopbacks`. The stub answers to any export name, so a passing suite is not what proves your configured entrypoint is correct — the type check against your Worker's exports is.
+  - Drain work a request defers through `ctx.waitUntil` before `fetch()` resolves, mirroring the Workers runtime. A non-blocking listener's deferred database write previously stayed in flight past the response and could still be running at the next request or at teardown, where disposing that resource hung the suite past the hook timeout.
+  - Drain deferred work in `close()` before tearing the app down. `fetch()` already drained per call, but the websocket, SSE and Quarry helpers share the same queue, so a suite using only those could reach teardown with writes still in flight and race the connection pool's disposal.
+
+  ### Testing surface
+  - `Test.createTestingModule()` accepts `trailingSlash` and `versioning` and passes both to the `Application` it builds, taking the same shapes as on the `Stratal` constructor. A testing module never runs the app's entry file, so an app configuring either there previously had it in production only — its suite asserted URL shapes that configuration would never emit. Both stay unset by default.
+  - Support `head()`, `list()` and `deleteMany()` in fake storage, so the new storage methods are exercisable without R2. `list()` returns **one object per page** unless a `limit` is passed, so a caller that ignores `cursor` fails in tests instead of undercounting against a real bucket, and `contentType` and `metadata` are omitted unless `includeMetadata: true`, matching what R2 returns.
+  - Stop `module.inertia` sending a hard-coded `X-Inertia-Version`. It sent `'1'`, so any app configuring a real asset version had every request read as a stale client and answered with a 409 — an entire Inertia suite failing on a value the tests never chose. A test that wants the mismatch path can ask for it with `module.inertia.withHeaders({ 'X-Inertia-Version': 'stale' })`.
+  - Fix chunked uploads to the fake storage service failing with `ReadableStream is disturbed` when the body is a single-use stream, which is the shape a chunked upload delivers.
+  - Keep `stratalTest()` typed against a single Vite instance. Vitest and `@stratal/inertia` resolved two different copies, which surfaced as a `Plugin` that would not assign to `Plugin`, an "excessive stack depth" comparison, and a missing `test` key on `UserConfig`.
+
+  ### Breaking Changes
+  - **There is now a single database isolation model.** The `shared` and `database` isolation toggle is gone, along with the `isolation` option on both `stratalTest({ database })` and `createTestDatabaseGlobalSetup`. Pass `stratalTest({ database: {} })` to enable isolation and delete any `isolation:` option.
+  - **`stratalTest({ database })` now requires `isolate: true`** and throws on `isolate: false`.
+  - **`createTestDatabaseGlobalSetup` now requires `schema`.** Add it if you were relying on the previous default.
+  - **`@cloudflare/vitest-pool-workers` is now `@cloudflare/vitest-plugin`.** Update the dependency, any direct import of it, and the `types` entry in your test `tsconfig.json`. `npx @cloudflare/codemods vitest:pool-workers-to-vitest-plugin` does all three. A config that only calls `stratalTest()` needs no change beyond the dependency. `stratalTest()` and its options are unchanged, and the integration supports Vitest 4.1 and later.
+
+### Patch Changes
+
+- Updated dependencies [a753e55]
+- Updated dependencies [a753e55]
+  - stratal@0.1.0
+  - @stratal/framework@0.1.0
+
 ## 0.0.27
 
 ### Patch Changes
@@ -15,7 +56,6 @@
 - ab95f52: Safer-by-default test harness: rate limiting off, in-memory email, eager routing
 
   ### Details
-
   - Rate limiting is now disabled by default (`NoopRateLimiterStore`) — suites fire many requests from one "IP" in seconds and tripped production limiter budgets (including Better Auth's built-in per-path limits). Suites testing limiter behavior must override `RATE_LIMITER_TOKENS.Store` back to a real store (e.g. `InMemoryRateLimiterStore`)
   - A `TestEmailProvider` is installed by default so the sync queue provider's inline `EmailConsumer` no longer opens real SMTP connections from the test worker; assert on sent messages via `module.sentEmails`
   - Routing is initialized eagerly during `compile()` — configuration errors (e.g. mixing `@Route()` with HTTP method decorators) now surface as a `compile()` rejection instead of on the first request, and request-scoped router services resolve regardless of test ordering
@@ -51,7 +91,6 @@
 - 13b0e8d: Add opt-in database isolation for parallel test execution
 
   Run test files in parallel against PostgreSQL without lock or data collisions: each file gets its own database cloned from a migrated template and dropped on teardown.
-
   - Enable per-file isolation by passing `database: { isolation: 'database' }` to the Vitest plugin (and optionally `binding` to target a specific Hyperdrive binding, defaulting to `DB`).
   - New `@stratal/testing/database` entry point exposing helpers to wire up the template-database lifecycle in a Vitest `globalSetup`.
   - The migrated template is **reused across runs**: `createTestDatabaseGlobalSetup` fingerprints the `schema` source(s) + the `migrate` routine and stores it as the template's database COMMENT, so `migrate` runs only on the first run after a schema change (or against a fresh database) — subsequent runs clone the existing template directly. `schema` (a file or directory path, or a list) is now **required** in `database` mode. Reuse is purely fingerprint-driven — there is no force/skip flag.
@@ -60,7 +99,6 @@
 - 13b0e8d: Fix correctness and security issues found in review.
 
   Queue:
-
   - Retry the correct binding: dispatch stamps the producer binding into message metadata and failed jobs record it, so `queue:retry` re-enqueues through the Cloudflare binding instead of the queue name (which is not a valid binding key and broke retry whenever the two differed). A message with no binding metadata is logged and acked rather than stored as an unretryable job.
   - Honor the documented retry budget: `maxRetries` now counts retries correctly against Cloudflare's 1-based `message.attempts` (previously gave one fewer retry than configured).
   - Derive idempotency keys from an order-stable serialization of `type` + `payload`, so payloads that differ only in key order dedupe correctly.
@@ -68,7 +106,6 @@
   - Documented that delivery is at-least-once with best-effort de-duplication (not exactly-once), since the processed marker is written only after a handler succeeds and KV is eventually consistent — handlers must be idempotent.
 
   Email (SMTP):
-
   - Upgrade STARTTLS onto the socket `startTls()` returns: the original socket is closed by the runtime, so the post-upgrade reader/writer are re-derived from the new secure socket and any pre-handshake bytes are discarded (fixes a broken `smtp://` STARTTLS path on real Workers and closes the STARTTLS plaintext-injection vector).
   - Refuse to send credentials over an unencrypted connection: an `smtp://` server that doesn't offer STARTTLS now fails loudly instead of leaking the password (blocks STARTTLS-stripping downgrades). Credential-free connections (e.g. local Mailpit) are unaffected.
   - AUTH is gated on the server's advertised mechanisms and supports both `PLAIN` and `LOGIN`; usernames are percent-decoded like passwords.
@@ -76,32 +113,26 @@
   - MIME builder strips CR/LF from headers, escapes/RFC 2231-encodes attachment filenames (prevents header injection), base64-encodes message bodies (fixes long-line corruption), and rejects envelope addresses containing whitespace or angle brackets (prevents `MAIL FROM`/`RCPT TO` desync).
 
   Inertia SEO:
-
   - `titleTemplate` substitutes every `%s` and treats `$`-sequences in the title literally.
   - Inject head/body content via function replacements, so SEO/page content containing `$`-sequences (`$$`, `$&`, `` $` ``, `$'`) is no longer corrupted or able to splice a template placeholder back into the output.
   - Drop unsafe attribute names — including inline event handlers (`on*`) — from custom `meta`/`link` entries (prevents tag breakout server-side, `setAttribute` errors during client head-sync, and developer-supplied event-handler attributes).
 
   Feature flags:
-
   - `FeatureFlagService.use()` binds the target app exactly once.
 
   Database (framework):
-
   - The reentrant `$transaction` proxy forwards the receiver for non-transaction property access.
 
   Testing:
-
   - `TestingModule.close()` drops the isolated per-file database even if shutdown throws; the stale-database sweep escapes LIKE metacharacters so a prefix containing `_` can't over-match.
 
   DI:
-
   - Construct singletons against the root container so they can never capture a request-scoped dependency (which would leak one request's state across every later request); an illegal singleton→request dependency now throws loudly.
   - Detect circular dependencies and throw a clear error naming the cycle instead of overflowing the stack.
   - `tryResolve` only swallows "no provider"; a registered provider that throws while constructing now surfaces the real error instead of injecting `undefined`.
   - Request-cache invalidation tracks transitive constructor dependencies, so re-registering a value rebuilds cached services that depend on it through a transient intermediary.
 
   Quarry dev runtime:
-
   - Persist every durable plugin (KV, D1, R2, Durable Objects, cache) under `.wrangler/state/v3`, matching `wrangler dev` (previously only R2 was persisted); load `.env.local` / `.env.<env>.local` into `process.env` for full parity.
   - The `cloudflare:sockets` STARTTLS shim re-attaches the stream error handler to the upgraded socket, so post-upgrade connection errors still surface.
 
@@ -169,7 +200,6 @@
 ### Patch Changes
 
 - 3b16f5b: Make `TestHttpClient` immutable and extend test classes with `Macroable`
-
   - `TestHttpClient.forHost()`, `withHeaders()`, and `withLocale()` now return new instances instead of mutating `this`, preventing shared state between tests.
   - `TestHttpRequest` and `TestResponse` now extend `Macroable`, allowing apps to register custom assertion methods and helpers at runtime.
   - Add `TestingModule.inertia` getter for convenient Inertia request testing.
@@ -193,7 +223,6 @@
 - c9176ea: Add locale support to test HTTP client, SSE, and WebSocket requests
 
   ### Details
-
   - Add `withLocale()` method to `TestHttpClient`, `TestHttpRequest`, `TestSseRequest`, and `TestWsRequest`
   - Automatically resolves locale detection strategy from the module's I18n configuration
   - Export `getValueAtPath` and `hasValueAtPath` path utility functions
@@ -221,7 +250,6 @@
 - [#142](https://github.com/strataljs/stratal/pull/142) [`4b958e2`](https://github.com/strataljs/stratal/commit/4b958e250c99681a99a34a398fbf706546f556cc) Thanks [@adesege](https://github.com/adesege)! - Add dedicated `@stratal/testing/storage` sub-path export and add `reflect-metadata` as peer dependency
 
   ### Details
-
   - `FakeStorageService` and `StoredFile` are no longer exported from the main entry point — import from `@stratal/testing/storage` instead
   - Add `reflect-metadata` as a peer dependency
 
@@ -236,7 +264,6 @@
 - [#125](https://github.com/strataljs/stratal/pull/125) [`0731e99`](https://github.com/strataljs/stratal/commit/0731e99c3e0c96f988387611f0ef8559b63d7bd8) Thanks [@adesege](https://github.com/adesege)! - Add test utilities for Quarry command framework
 
   ### Details
-
   - Add `TestCommandRequest` fluent builder for constructing command inputs in tests
   - Add `TestCommandResult` assertion wrapper for command output, exit codes, and errors
   - Add `quarry(name)` method to `TestingModule` for convenient command testing
@@ -253,7 +280,6 @@
 - [#124](https://github.com/strataljs/stratal/pull/124) [`59251d3`](https://github.com/strataljs/stratal/commit/59251d32743cbd461f952985f192a68cb7ccdb91) Thanks [@adesege](https://github.com/adesege)! - Add `fixPgCjs()` Vite plugin for CJS resolution of pg sub-dependencies in workerd
 
   ### Details
-
   - Replace the `@cloudflare/vitest-pool-workers` yarn patch with a dedicated `fixPgCjs()` Vite plugin
   - `fixPgCjs()` must be applied at the root `defineConfig` level for the module fallback resolver to work correctly
   - `stratalTest()` does NOT automatically apply `fixPgCjs()` — it must be registered separately at the root level
@@ -272,7 +298,6 @@
 - [#120](https://github.com/strataljs/stratal/pull/120) [`8d0df50`](https://github.com/strataljs/stratal/commit/8d0df506411bc725ef4e4eaf4efdb314b3384d98) Thanks [@adesege](https://github.com/adesege)! - Add SSE testing utilities with `TestSseRequest` and `TestSseConnection`
 
   ### Details
-
   - `TestingModule.sse(path)` creates an SSE test request builder
   - `TestSseRequest` supports custom headers, authentication via `actingAs()`, and automatic `Accept: text/event-stream` header
   - `TestSseConnection` wraps a live SSE stream with assertion helpers: `assertEvent()`, `assertEventData()`, `assertJsonEventData()`, `waitForEvent()`, `waitForEnd()`, `collectEvents()`
@@ -281,7 +306,6 @@
 - [#120](https://github.com/strataljs/stratal/pull/120) [`8d0df50`](https://github.com/strataljs/stratal/commit/8d0df506411bc725ef4e4eaf4efdb314b3384d98) Thanks [@adesege](https://github.com/adesege)! - Add WebSocket testing utilities with `TestWsRequest` and `TestWsConnection`
 
   ### Details
-
   - `TestingModule.ws(path)` creates a WebSocket test request builder
   - `TestWsRequest` supports custom headers, authentication via `actingAs()`, and WebSocket upgrade handshake
   - `TestWsConnection` wraps a live WebSocket with assertion helpers: `assertMessage()`, `assertClosed()`, `waitForMessage()`, `waitForClose()`
@@ -297,9 +321,7 @@
 - [#97](https://github.com/strataljs/stratal/pull/97) [`d58b878`](https://github.com/strataljs/stratal/commit/d58b8782848562a50b79cd558eaf01978aa77f26) Thanks [@adesege](https://github.com/adesege)! - Add `stratalTest()` vitest plugin and migrate fetch mocking from Cloudflare's undici-based `fetchMock` to MSW
 
   ### Details
-
   - **@stratal/testing**
-
     - Add `@stratal/testing/vitest-plugin` sub-export with `stratalTest()` — wraps `cloudflareTest` with Stratal defaults (tslib alias, ZenStack mocks, SSR externals)
     - Replace `FetchMock`/`createFetchMock` with `MockFetch`/`createMockFetch` backed by MSW (`setupServer`)
     - Re-export `http` and `HttpResponse` from `msw` for convenience
@@ -307,7 +329,6 @@
     - Bump vitest peer dependency from `^3.2.0` to `^4.1.0`
 
   - **stratal**
-
     - Update test mocks to use class syntax for Vitest 4 compatibility
     - Bump dependencies: `@intlify/*`, `@scalar/hono-api-reference`, `hono`, `@aws-sdk/*`, `vitest`
 
@@ -316,7 +337,6 @@
     - Bump dependencies: `better-auth`, `@zenstackhq/*`, `wrangler`, `vitest`
 
   ### Breaking Changes
-
   - **@stratal/testing**: `FetchMock` and `createFetchMock` are removed. Use `MockFetch`/`createMockFetch` instead. The new API uses MSW lifecycle methods (`listen`/`reset`/`close`) instead of `activate`/`disableNetConnect`/`deactivate`.
   - **@stratal/testing**: Vitest peer dependency is now `^4.1.0` (was `^3.2.0`).
 
@@ -365,7 +385,6 @@
   ### Breaking Changes
 
   **`stratal` (core)**
-
   - **Removed `RequestContextStore`** — The `AsyncLocalStorage`-based request context propagation is eliminated. This removes the dependency on the `nodejs_als` compatibility flag in Cloudflare Workers.
   - **Removed `RouterService` and `RequestScopeService`** — Replaced by `HonoApp`, a subclass of `OpenAPIHono` that directly integrates request scoping, middleware class support, and global error handling.
   - **Removed `RouterAlreadyConfiguredError` and `RouterNotConfiguredError`** — Replaced by `HonoAppAlreadyConfiguredError`.
@@ -377,12 +396,10 @@
   - **New `HonoApp` class** — Extends `OpenAPIHono` with Stratal concerns; supports `Constructor<Middleware>` in `use()` via module augmentation.
 
   **`@stratal/framework`**
-
   - **`DatabaseConnectionConfig.dialect` changed from `Dialect` to `() => Dialect`** — Database connections now take a factory function for lazy dialect/pool creation.
   - **Caching strategy changed from `instancePerContainerCachingFactory` to `instanceCachingFactory`**.
 
   **`@stratal/testing`**
-
   - **`TestingModule.runInRequestScope()` callback now receives a `container` parameter** — Update all callbacks to use the passed container for service resolution.
   - **`TestingModule.fetch()` now routes through `HonoApp`** instead of `RouterService`.
   - **`TestingModuleBuilder.compile()` now applies overrides before `initialize()`** — Fixes issue where overrides were applied after initialization.
@@ -390,7 +407,6 @@
   ### Minor Changes
 
   **`@stratal/seeders`**
-
   - Updated `executeSeeder()` to use the explicit `requestContainer` parameter from `runInRequestScope()`.
 
 - [#83](https://github.com/strataljs/stratal/pull/83) [`bcb3556`](https://github.com/strataljs/stratal/commit/bcb3556a6e1f185e088286f202c605c73799e63f) Thanks [@adesege](https://github.com/adesege)! - Introduce @stratal/zenstack-plugin and rearchitect database module to use shared schema with per-connection slicing
@@ -398,7 +414,6 @@
   ### New Package
 
   **`@stratal/zenstack-plugin`**
-
   - ZenStack plugin for multi-connection database support with schema slicing
   - Generates connection-specific schema types and `StratalDatabase` augmentation
   - CLI commands: `stratal-db migrate` and `stratal-db push` for per-connection database management
@@ -407,11 +422,9 @@
   ### Breaking Changes
 
   **`stratal` (core)**
-
   - Re-exports `delay` from tsyringe via `stratal/di`
 
   **`@stratal/framework`**
-
   - **Replaced `DatabaseSchemaRegistry` and `DefaultDatabaseConnection` with unified `StratalDatabase` interface** — Consumers must update their type augmentations to use the new single interface with `schema`, `defaultConnection`, and `slicing` properties.
   - **`schema` moved from `DatabaseConnectionConfig` to `DatabaseModuleConfig`** — All connections now share a single schema; per-connection schema is no longer supported.
   - **Added `slicing` option to `DatabaseConnectionConfig`** — Connections can narrow available models via ZenStack slicing options.
@@ -421,7 +434,6 @@
   - **Removed `InferConnectionSchema` type** — Replaced by `InferDatabaseSchema` (shared) and `InferConnectionSlicing` (per-connection slicing).
 
   **`@stratal/testing`**
-
   - **`TestingModule.getDb()` is now synchronous** — Returns `DatabaseService` directly instead of `Promise<DatabaseService>`.
   - **`TestingModule` creates a single request-scoped container at construction** — `container` property now returns the request-scoped container. The `runInRequestScope` pattern is removed.
   - **`TestingModule.close()` now disposes the request container** before shutting down the application.
@@ -511,24 +523,20 @@
 - Initial release of the Stratal framework — a modular Cloudflare Workers framework built on Hono and tsyringe.
 
   **Core Infrastructure**
-
   - NestJS-style module system with `@Module()` decorator, dynamic modules (`forRoot`, `forRootAsync`), and lifecycle hooks (`OnInitialize`, `OnShutdown`)
   - Two-tier dependency injection container (global singletons + request-scoped) powered by tsyringe with conditional registration and service decoration
   - `StratalWorker` entry point extending Cloudflare's `WorkerEntrypoint` for HTTP fetch, queue batches, and scheduled cron triggers
 
   **Routing & API**
-
   - Hono-based routing with `@Controller()` and `@Route()` decorators, automatic controller discovery, and route guards via `@UseGuards()`
   - OpenAPI schema generation with `@hono/zod-openapi` and Scalar API reference integration
   - NestJS-like middleware configuration with route-specific application and exclusion
 
   **Background Processing**
-
   - Queue consumerfor Cloudflare Queues with `@Consumer()` and `@QueueJob()` decorators and batch processing
   - Cron job scheduling via `CronManager` integrated with Cloudflare's scheduled events
 
   **Services & Integrations**
-
   - Email module with pluggable providers (Nodemailer, Resend) and queue-based sending
   - Storage module with AWS S3 / Cloudflare R2 support, multipart uploads, presigned URLs, and TUS resumable uploads
   - Internationalization (i18n) module with locale detection, message compilation, and request-scoped translations
@@ -537,7 +545,6 @@
   - Structured logging with JSON and pretty formatters
 
   **Developer Experience**
-
   - Zod-powered request/response validation with type inference
   - Custom `ApplicationError` class with HTTP status mapping
   - ESM-only with full TypeScript decorator support (`emitDecoratorMetadata`)

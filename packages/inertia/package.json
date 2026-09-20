@@ -1,6 +1,6 @@
 {
   "name": "@stratal/inertia",
-  "version": "0.0.27",
+  "version": "0.1.0",
   "description": "Inertia.js v3 server adapter for Stratal framework — server-driven React SPAs",
   "type": "module",
   "license": "MIT",
@@ -94,11 +94,11 @@
     "@inertiajs/core": ">=3",
     "@inertiajs/react": ">=3",
     "@inertiajs/vite": ">=3",
-    "@stratal/testing": ">=0.0.27",
+    "@stratal/testing": ">=0.1.0",
     "hono": ">=4",
     "react": ">=19",
     "react-dom": ">=19",
-    "stratal": ">=0.0.27",
+    "stratal": ">=0.1.0",
     "vite": ">=8",
     "vitest": ">=4"
   },

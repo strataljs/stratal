@@ -1,5 +1,65 @@
 # stratal
 
+## 0.1.0
+
+### Minor Changes
+
+- a753e55: Move routing onto plain Hono with lazy OpenAPI generation, add declarative response caching on Cloudflare Workers Caching, and add per-path locale detection.
+
+  ### Routing and validation
+  - Build the router on plain Hono with per-route validation and lazy OpenAPI generation. Validation is attached only to routes that declare `params`, `query` or `body`, so a schema-less route pulls in none of it: a hello-world worker drops from 944 KB to 504 KB raw. `ctx.param()`, `ctx.query()` and `ctx.body()` are unchanged.
+  - Validate request and response schemas asynchronously, so a schema may carry a refinement that reaches a database, a cache or a service binding to decide whether a value is acceptable. Such a refinement runs inside the request's DI scope, so it needs no context threaded into the schema, and a failure now surfaces as a 400 carrying the refinement's message rather than a 500 with no field detail. Fully synchronous schemas are unaffected.
+  - Accept full schema metadata in `describe()` and `named()`, not just a description string — `example`, `examples`, `title` and `deprecated` all flow through to the generated OpenAPI document.
+  - Add route visibility `groups`. `@Controller` and route options take a `groups: string[]` label list, exposed on each route's schema metadata, so the OpenAPI `routeFilter` can scope a document by group instead of by path string.
+
+  ### Response caching
+
+  Add declarative HTTP response caching through the new `stratal/response-cache` entry. On a cache hit the Worker never runs, so no CPU is billed.
+  - `@Cacheable({ ttl, browserTtl, swr, tags, vary })` on `GET` and `HEAD` routes emits `CDN-Cache-Control` and `Cache-Control` alongside `Cache-Tag`. `browserTtl` defaults to `ttl`, which is what makes a repeat visit free rather than a round trip; set `browserTtl: 0` where retraction has to be reliable, since tags and `ctx.cache.purge()` reach the shared cache and nothing else.
+  - `@PurgesCache({ tags, pathPrefixes, purgeEverything })` purges after a `2xx` or `3xx`. The purge is awaited and a failure is rethrown as `CachePurgeError`, rather than leaving the cache silently inconsistent with the database.
+  - `ResponseCacheModule.forRoot({ defaults })` supplies `ttl`, `swr` and `vary` for every `@Cacheable` route. Defaults never make a route cacheable on their own — `@Cacheable` stays mandatory.
+  - Interpolate `{param.*}`, `{query.*}`, `{data.*}` and `{partition.*}` into cache tags, with a `.*` suffix fanning an array out to one tag per element. A rendered tag must be printable ASCII with no space, comma or double quote and at most 1024 bytes, or it throws `InvalidCacheTagError` — slugify any request-derived value before interpolating it.
+  - Cache guarded and per-tenant routes with `@Cacheable({ partitionBy: [...] })`. Export `cachedEntrypoint(stratal)` from `stratal/workers` alongside your default export, then configure `gateway: { entrypoint: 'Cached' }` with `partitions` and `primers`. Partitioned reads are forwarded to that entrypoint, which places the resolved partitions in the part of the cache key that cannot be bypassed. `gateway.entrypoint` is type-checked against your Worker's real exports once you have run `wrangler types`. A guarded route is only ever cacheable with a non-empty `partitionBy`, and a partition that fails to resolve runs inline and is stamped `private, no-store` rather than being cached publicly.
+  - Put a response's representation in the cache key with `gateway: { keyBy: [...] }`, so one URL answered two ways is two entries rather than one entry with two variants. **An Inertia app behind a gateway should set `keyBy: INERTIA_VARY_HEADERS`, exported from `@stratal/inertia`; without it those pages stop caching.**
+  - Strip `X-RateLimit-*` from a response a shared cache may store. They describe one caller's budget, so on a shared response they are replayed to every other caller, and a cache hit never runs the throttle to count them down. The limit is still consumed and enforced; only the reporting is withheld. Adds `isSharedCacheable` and `PER_CALLER_RATE_LIMIT_HEADERS`.
+  - Requires `"cache": { "enabled": true }` in `wrangler.jsonc`, Wrangler 4.69.0 or newer, and a `compatibility_date` of `2026-07-06` or later. Without those a `@Cacheable` route is served uncached and stamped `private, no-store`, and the reason is logged once per entrypoint.
+  - New errors: `ResponseCacheConfigError`, `CachePurgeError`, `InvalidCacheTagError`.
+
+  ### Storage
+  - Add `head()`, `list()` and `deleteMany()` to `StorageService`. `head(path, disk?)` reads an object's size, content type, etag, upload time and custom metadata without transferring its body, or `null` when nothing is stored there. `list(options?, disk?)` pages objects under a disk-relative `prefix` and carries `truncated` and `cursor`, so loop while `truncated` is true to cover a whole prefix. `deleteMany(paths, disk?)` deletes in bulk instead of one call per file.
+  - Stop serving arbitrary stored content types inline from downloads. An object stored as `text/html`, or as a scriptable `image/svg+xml`, previously executed against whatever session fetched it, since objects are served from the application's own origin. Only `application/pdf`, `image/png`, `image/jpeg`, `image/gif` and `image/webp` now render inline; everything else returns as an attachment. Every download also carries `X-Content-Type-Options: nosniff` and a sandboxing `Content-Security-Policy`.
+  - Fix downloads of keys containing a space, a non-ASCII character, `#` or `?` — most user-supplied filenames — being reported as missing, and stop a key containing a control character producing a malformed header. Non-ASCII filenames are preserved.
+
+  ### Internationalisation
+  - Add per-path locale detection: `detection` accepts a `(path) => options` resolver, alongside `I18nModule.forRootAsync` and a strategy-aware `ctx.setLocale`. Different areas can now use different strategies — a path-localized public site with a cookie-localized `/admin` panel, say — which is necessary when an area's session cookie is path-scoped. Only routes whose path resolves to `strategy: 'path'` get a `/:locale` variant; everything else is served at its bare path with no change to URL builders. The resolver must be a pure function of the path, since it is consulted both at boot and per request.
+  - The cookie strategy scopes the `locale` cookie by the resolved `cookieOptions`, so a per-path cookie area writes `{ path: '/admin' }`. Plain `strategy: 'cookie'` behaviour is unchanged.
+  - Fix localized multi-segment URLs matching the wrong route when two or more locales are path-prefixed, which could produce a redirect loop on a homepage that redirects elsewhere.
+
+  ### Quarry CLI
+  - Run the Quarry host on Miniflare 5. **Quarry now requires Wrangler 4.124 or newer.** Local state still lands in `.wrangler/state/v3/<plugin>`, so existing KV, D1, R2, Durable Object and cache state carries over and is still shared with a running `wrangler dev`.
+  - Stream command output to the terminal as it is produced rather than only after the command finishes, so long-running commands show progress live.
+  - Source `process.env` into worker vars and secrets, so CI and scripted runs that pass config through the environment no longer fail validation on a missing binding. Local runs with a `.dev.vars` are unchanged.
+  - Stop failing with `The Workers runtime failed to start` on a worker that declares a Cloudflare Workflow. Workflow bindings are stripped from the host and logged — trigger workflows from the worker that defines them.
+  - Fix `mcp:serve` and `mcp:tools` failing to start: both built the OpenAPI document from the root container, but commands run in a request scope and the document needs the request-scoped OpenAPI config service.
+  - Match the Workers socket contract in the Node polyfill, so closing a socket resolves once it is closed and a TLS upgrade returns the upgraded socket. Sending mail through the CLI was the common path affected.
+
+  ### Other fixes
+  - `Limit.distinctBy(value)` counts distinct values in the window instead of requests, for caps like "ten different courses a day".
+  - Honour a `Response` returned by a short-circuiting middleware even when an outer middleware forwards control with `await next()` and discards the result. An early `ctx.redirect(...)` was previously dropped, leaving the request unfinalized and throwing "Context is not finalized". `Next` is widened to `() => Promise<Response | void>` so a forwarding middleware can `return next()` without a cast.
+  - Let errors contribute structured fields to their own log entry through an overridable `reportContext()` hook on `ApplicationError`. A failed validation now logs which field failed and why, where it previously logged only a generic line.
+  - Stop `/openapi.json` failing when a route schema contains a type with no JSON Schema representation, such as `z.custom`, `z.date` or `z.set`. Those emit an empty schema instead of throwing, so one unrepresentable field no longer takes down the whole document.
+  - Fix route registration failing when the router module is evaluated more than once, for example under a bundler or an SSR module runner.
+  - Declare `openapi3-ts` as a direct dependency, which a clean install such as CI could not otherwise resolve.
+
+  ### Breaking Changes
+  - **The validation API is `zod/mini`.** The `z` re-export from `stratal/validation` is removed. Import schema builders directly from `zod/mini` using named imports and replace classic chaining with the functional API: `z.string().min(1).optional()` becomes `optional(string().check(minLength(1)))`. `stratal/validation` still exports `cuid2` and `withZodI18n`, plus `describe()` and `named()` for descriptions and OpenAPI component ids, since `zod/mini` has no `.describe()` or `.meta()`.
+  - **OpenAPI documents are generated lazily**, on the first request to the docs endpoint. `OpenAPIService.getSpec()` becomes `getSpec(container)` and is async — update any direct call. `routeFilter` is now a metadata predicate `(route: RouteSchemaMeta) => boolean` instead of `(path, pathItem)`; filter on `route.groups` or `route.meta` rather than on the path string.
+  - **Every response now carries an explicit `Cache-Control` header.** Routes without `@Cacheable` are stamped `private, no-store`. This affects every app, not only those adopting caching: Cloudflare applies heuristic freshness to a response carrying no `Cache-Control` at all, caching a `200` for two hours, so the explicit header is what keeps an uncacheable route uncached. Routes that set their own `Cache-Control` are left alone — if you relied on a response having none, set one explicitly.
+  - **`CacheService.put` is now fire-and-forget and can no longer report failure.** It schedules the write, resolves immediately and logs a rejection instead of throwing, so `try { await cache.put(...) } catch { … }` now sees success even when the value was never stored. A cache is best-effort, and a KV write can add hundreds of milliseconds to a request, so this is the right default — but move any write that must not be silently lost to `CacheService.putDurable` / `TieredCacheService.putDurable`, which await the write and throw on failure. `delete` is unchanged and remains durable and awaited.
+  - **Storage downloads no longer render arbitrary content types inline.** Only `application/pdf`, `image/png`, `image/jpeg`, `image/gif` and `image/webp` render inline; everything else downloads as an attachment. If you relied on another type rendering in the browser, serve that content from a separate origin, where a compromise cannot reach the application's session.
+  - **Guards now deny when `canActivate` returns `false`**, with `GuardRejectedError` (403), instead of the return value being ignored. Audit your `canActivate` implementations before upgrading — requests that previously reached the handler now 403. `GuardRejectedError` is also re-exported from `@stratal/framework/guards`.
+  - **Quarry requires Miniflare 5**, which comes in with Wrangler 4.124 or newer. Apps on an older Wrangler must upgrade before `npx quarry` will start.
+
 ## 0.0.27
 
 ### Patch Changes
@@ -15,7 +75,6 @@
 - ab95f52: Fix memory leaks that crashed the dev server (OOM) after repeated hot reloads
 
   ### Details
-
   - Hot reloads now fully tear down the previous application before the new one boots — old and new dependency graphs no longer coexist, so memory stays flat across reloads
   - Instances superseded mid-boot by a newer reload now reject with `StratalSupersededError` instead of hanging forever; in-flight requests during a reload are transparently served by the replacing instance
   - `Container.dispose()` is now async and invokes `Symbol.asyncDispose`, `Symbol.dispose`, or `dispose()` on container-created instances, letting services release timers, sockets, and pools on shutdown — `await` it if you call it directly
@@ -24,7 +83,6 @@
 - bb6d3b9: Trailing-slash exclusions: `trailingSlash` accepts `{ mode, exclude }`
 
   ### Details
-
   - `trailingSlash` application config now accepts `{ mode, exclude }` alongside a bare mode. Excluded paths are never redirected (308) and never rewritten by URL generation — for routes whose canonical form is owned externally (e.g. OAuth redirect URIs matched byte-for-byte).
   - String patterns are segment-aware prefixes; RegExp patterns match both slash forms of the pathname regardless of anchoring.
   - Exclusions match in route space: with path-based locale detection, a leading locale segment is stripped before matching, so `'/callback'` also exempts `/fr/callback` — in the redirect middleware, `Uri` helpers, and hreflang link generation.
@@ -50,7 +108,6 @@
   The event, cron, quarry, and seeder registries — previously registered imperatively in `Application` — are now declared as ordinary `@Module`s (`EventsModule`, `CronModule`, `QuarryModule`, `SeederModule`), consistent with every other subsystem. The `Application` constructor now only sets up the bootstrap kernel (`ExceptionHandler`, `LazyModuleLoader`, logging); all module registration happens during initialization. `application.ts` has no static subsystem imports — every built-in module is loaded via dynamic `import()`.
 
   ### Breaking Changes
-
   - **`EventRegistry`, `QuarryRegistry`, `CronManager`, `SeederRegistry` are now `@Singleton`** (they were `@Transient` but always force-registered as singletons). This aligns the class decorator with their actual lifecycle; their canonical DI tokens are declared on the decorator.
   - **`SeederRegistry` now injects the `Application`** (`@inject(DI_TOKENS.Application)`) instead of being constructed manually.
   - **`@stratal/framework` `DatabaseModule.onInitialize` is now `async`** and loads `EventsModule` on demand via `LazyModuleLoader` (the event registry is no longer eagerly registered). No change is required for apps that use `DatabaseModule` normally.
@@ -58,12 +115,10 @@
   - The `schedule:list` command now lazy-loads `CronModule` via `LazyModuleLoader` rather than injecting `DI_TOKENS.Cron`; with no jobs registered it prints "No cron jobs found" instead of failing to resolve.
 
 - 13b0e8d: Replace the email provider layer with a built-in Cloudflare Workers-compatible SMTP client and defer React Email rendering
-
   - Email is now sent through a built-in SMTP client and MIME builder, removing the runtime dependency on `nodemailer`.
   - `@react-email/render` is loaded on demand only when sending a React template, reducing cold-start overhead for requests that don't send email.
 
   ### Breaking Changes
-
   - **Resend provider removed.** Switch to SMTP. Remove the `provider` and `apiKey` options from your email configuration and remove `resend` from your dependencies.
   - **SMTP configuration uses a connection URL.** Replace individual `host`/`port`/`secure`/`username`/`password` fields with a single `url`:
 
@@ -84,7 +139,7 @@
 
   ```ts
   const ref = await loader.load(() =>
-    import("./reports.module").then((m) => m.ReportsModule)
+    import("./reports.module").then((m) => m.ReportsModule),
   );
   ref.get(ReportService);
   ```
@@ -94,13 +149,11 @@
   If a lazy module provides a token that another module has already bound on the global container, the existing binding is kept and the colliding lazy provider is ignored (with a warning) — a lazy module cannot silently clobber an already-registered token.
 
   ### Breaking Changes
-
   - **Built-in subsystems are no longer registered eagerly at boot.** `I18nModule`, `QueueModule`, `CacheModule`, `OpenAPIModule`, the cron manager, and router services are now loaded via dynamic `import()` at their trigger points (i18n/routing on the first HTTP request, queue on the first batch, cron on the first scheduled invocation or when the app declares jobs). HTTP-only apps no longer evaluate queue/cron code at cold start.
   - **`CacheService` is no longer globally available unless `CacheModule` is loaded.** `RateLimiterModule` now imports `CacheModule` itself; apps that relied on the implicit global `CacheService` must import `CacheModule` (or use `LazyModuleLoader`).
   - **`Application.initializeHandlers()` is removed.** Non-HTTP entrypoints (Durable Objects, Workflows, WorkerEntrypoints) now use `Application.ensureScopedHandlers()` via the internal `runInScope` helper — no action required for typical apps.
 
 - 13b0e8d: Add locale-aware URL generation for path-prefixed and querystring localized routing
-
   - Route URL generation now applies the active locale automatically — e.g. `uri.route('posts.show', { locale: 'es' })` produces `/es/posts/...` when locale prefixing is enabled.
   - New `LocaleUrlConfig` and a locale-aware URL service for producing locale variants of any URL (used for hreflang alternates, canonical URLs, sitemaps, and redirects).
   - Configurable trailing-slash handling for consistent URL formatting.
@@ -108,7 +161,6 @@
 - 13b0e8d: Fix correctness and security issues found in review.
 
   Queue:
-
   - Retry the correct binding: dispatch stamps the producer binding into message metadata and failed jobs record it, so `queue:retry` re-enqueues through the Cloudflare binding instead of the queue name (which is not a valid binding key and broke retry whenever the two differed). A message with no binding metadata is logged and acked rather than stored as an unretryable job.
   - Honor the documented retry budget: `maxRetries` now counts retries correctly against Cloudflare's 1-based `message.attempts` (previously gave one fewer retry than configured).
   - Derive idempotency keys from an order-stable serialization of `type` + `payload`, so payloads that differ only in key order dedupe correctly.
@@ -116,7 +168,6 @@
   - Documented that delivery is at-least-once with best-effort de-duplication (not exactly-once), since the processed marker is written only after a handler succeeds and KV is eventually consistent — handlers must be idempotent.
 
   Email (SMTP):
-
   - Upgrade STARTTLS onto the socket `startTls()` returns: the original socket is closed by the runtime, so the post-upgrade reader/writer are re-derived from the new secure socket and any pre-handshake bytes are discarded (fixes a broken `smtp://` STARTTLS path on real Workers and closes the STARTTLS plaintext-injection vector).
   - Refuse to send credentials over an unencrypted connection: an `smtp://` server that doesn't offer STARTTLS now fails loudly instead of leaking the password (blocks STARTTLS-stripping downgrades). Credential-free connections (e.g. local Mailpit) are unaffected.
   - AUTH is gated on the server's advertised mechanisms and supports both `PLAIN` and `LOGIN`; usernames are percent-decoded like passwords.
@@ -124,46 +175,38 @@
   - MIME builder strips CR/LF from headers, escapes/RFC 2231-encodes attachment filenames (prevents header injection), base64-encodes message bodies (fixes long-line corruption), and rejects envelope addresses containing whitespace or angle brackets (prevents `MAIL FROM`/`RCPT TO` desync).
 
   Inertia SEO:
-
   - `titleTemplate` substitutes every `%s` and treats `$`-sequences in the title literally.
   - Inject head/body content via function replacements, so SEO/page content containing `$`-sequences (`$$`, `$&`, `` $` ``, `$'`) is no longer corrupted or able to splice a template placeholder back into the output.
   - Drop unsafe attribute names — including inline event handlers (`on*`) — from custom `meta`/`link` entries (prevents tag breakout server-side, `setAttribute` errors during client head-sync, and developer-supplied event-handler attributes).
 
   Feature flags:
-
   - `FeatureFlagService.use()` binds the target app exactly once.
 
   Database (framework):
-
   - The reentrant `$transaction` proxy forwards the receiver for non-transaction property access.
 
   Testing:
-
   - `TestingModule.close()` drops the isolated per-file database even if shutdown throws; the stale-database sweep escapes LIKE metacharacters so a prefix containing `_` can't over-match.
 
   DI:
-
   - Construct singletons against the root container so they can never capture a request-scoped dependency (which would leak one request's state across every later request); an illegal singleton→request dependency now throws loudly.
   - Detect circular dependencies and throw a clear error naming the cycle instead of overflowing the stack.
   - `tryResolve` only swallows "no provider"; a registered provider that throws while constructing now surfaces the real error instead of injecting `undefined`.
   - Request-cache invalidation tracks transitive constructor dependencies, so re-registering a value rebuilds cached services that depend on it through a transient intermediary.
 
   Quarry dev runtime:
-
   - Persist every durable plugin (KV, D1, R2, Durable Objects, cache) under `.wrangler/state/v3`, matching `wrangler dev` (previously only R2 was persisted); load `.env.local` / `.env.<env>.local` into `process.env` for full parity.
   - The `cloudflare:sockets` STARTTLS shim re-attaches the stream error handler to the upgraded socket, so post-upgrade connection errors still surface.
 
 - 13b0e8d: Align the Quarry CLI dev runtime with `wrangler dev`
 
   The Quarry CLI now builds its local environment directly from your Wrangler config via Miniflare, so bindings, `vars`, and `.dev.vars` / `.env` files resolve exactly as they do under `wrangler dev` (including environment-specific `.env.<environment>` files loaded by `--env`).
-
   - **Shared R2 state** — R2 buckets now persist to `.wrangler/state/v3/r2`, so data written by Quarry commands and `wrangler dev` is shared.
   - **Parallel dev environments** — set `WRANGLER_REGISTRY_PATH` to isolate the dev service registry, allowing multiple dev environments to run side by side without service-binding collisions. Quarry also discovers a running `wrangler dev` session so service bindings resolve against it.
   - **SMTP/socket support** — outbound TCP/TLS (e.g. sending email over SMTP) now works when running under Quarry.
   - **Queues and events in commands** — CLI commands can now dispatch to queues and emit events, with listeners wired automatically.
 
 - 13b0e8d: Add failed-job storage, idempotent dispatch, and queue management CLI commands
-
   - Messages that exhaust their retry attempts are persisted to a KV-backed store so they can be inspected and replayed.
   - New Quarry commands to manage failed jobs:
     - `queue:failed` — list failed jobs (filter with `--queue`, cap with `--limit`).
@@ -175,13 +218,11 @@
   - Queue state (idempotency claims and failed jobs) is stored in a KV namespace that defaults to the `CACHE` binding; override it with `store: { binding: 'YOUR_KV' }` in the queue module options.
 
 - 13b0e8d: Add precognition request validation, a safe WebSocket send, and cron misconfiguration warnings
-
   - **Precognition** — send a `Precognition: true` header to run a route's validators (across all parameters, including localized/prefixed routes) and get a `204` without executing the handler, enabling live form validation.
   - **`trySend()`** — gateways can now send a WebSocket message only when the socket is open, returning `false` instead of throwing for closed connections.
   - A warning is now logged when a cron job is registered without a `schedule`, instead of silently skipping it.
 
 - 13b0e8d: Add an opt-in isolate-local L1 cache tier and back queue idempotency with it.
-
   - New `TieredCacheService` (`CACHE_TOKENS.TieredCacheService`) layers an isolate-local in-memory L1 over `CacheService` (KV). It gives read-after-write coherence within an isolate, closing KV's eventual-consistency gap (a `get` can otherwise return an edge-cached value for up to ~60s after a `put`). Same API as `CacheService` plus `binding(name)`, which memoizes a tiered instance per binding so each KV namespace keeps a stable, isolate-lifetime L1.
   - L1 semantics: caches string-backed values only (`text`/`json`); `put`/`delete` are write-through; `text` reads back-populate; `arrayBuffer`/`stream` reads and non-string writes bypass and invalidate L1; `getWithMetadata`/`list` always read KV. FIFO-bounded.
   - Queue idempotency claims and failed-job storage (`QueueStore`) now run through `TieredCacheService`, so a message redelivered to the same warm isolate is de-duplicated even inside KV's consistency window. Delivery remains at-least-once with best-effort de-duplication, not exactly-once. `QueueModule` now imports `CacheModule`.
@@ -196,7 +237,6 @@
 - 1658945: Overhaul error handling, rename queue "name" to "binding", add i18n CLI commands, and introduce QuarryRunner
 
   ### Breaking Changes
-
   - **`ApplicationError`** — Constructor changed from `(i18nKey, code, metadata?)` to `(message?, cause?)`. Remove error code and i18n key arguments from any subclass `super()` calls. The `code`, `metadata`, `toErrorResponse()`, `toJSON()`, `report()`, and `render()` members are removed.
   - **Error codes removed** — `ERROR_CODES` registry and `ErrorCode` type are deleted. Use plain error messages or custom properties on `HttpException` subclasses instead.
   - **Per-module error consolidation** — Individual error classes (e.g. `QueueBindingNotFoundError`, `CacheGetError`, `ConfigModuleNotInitializedError`) are replaced by single per-module error classes (`QueueError`, `CacheError`, `ConfigError`, etc.). Update any `catch` blocks or `instanceof` checks.
@@ -208,7 +248,6 @@
 - 4b273ea: Replace tsyringe and reflect-metadata with a built-in dependency injection container and switch i18n engine from @intlify/core-base to intl-messageformat
 
   ### Breaking Changes
-
   - **`tsyringe` and `reflect-metadata` removed** — All imports from `tsyringe` (`inject`, `injectable`, `container`, `delay`, `Lifecycle`) must be replaced with equivalents from `stratal/di`. Remove `reflect-metadata` from your dependencies and imports.
   - **`@Transient` decorator renamed to `@Request`** — Update all `@Transient(TOKEN)` usages to `@Request(TOKEN)` for request-scoped services.
   - **`delay()` replaced by `lazy()`** — Replace `delay(() => MyClass)` with `lazy(() => MyClass)` from `stratal/di`.
@@ -252,7 +291,6 @@
   Also exports `CUID2_REGEX` for callers composing the pattern into custom schemas.
 
 - f8c61e1: Add `RateLimiterModule` for request throttling with KV and in-memory stores
-
   - New opt-in `RateLimiterModule` configurable with `forRoot({ store: 'kv', binding })` or `forRoot({ store: 'memory' })` (or a custom `IRateLimiterStore`).
   - `Limit` builder API with `perSecond`, `perSeconds`, `perMinute`, `perMinutes`, `perHour`, `perDay`, and `none()` helpers; `.by(key)` scopes per-actor and `.response(handler)` overrides the default 429.
   - `RateLimiterRegistry.for(name, resolver)` defines named limiters; apply them with `router.throttle(name)` or the `@RateLimit(name)` decorator on controllers and route methods.
@@ -260,14 +298,12 @@
   - Misconfiguration surfaces at boot (missing `forRoot`) rather than on the first throttled request.
 
 - f8c61e1: Add Cloudflare request properties and full-record access on `RouterContext`
-
   - New `ctx.cf` getter exposes Cloudflare-provided request properties (geo, TLS, bot management, etc.) as `CfProperties`.
   - `ctx.param()` (no args) now returns the full validated param record as `Record<string, string>`. The single-key overload (`ctx.param('id')`) is unchanged. The same overload is available on `GatewayContext` for WebSocket gateways.
 
 - f8c61e1: Add `trailingSlash` application option for canonical URL handling
 
   A new `trailingSlash` field on `ApplicationConfig` controls how incoming paths and generated URLs handle a trailing `/`:
-
   - `'ignore'` (default) — both `/foo` and `/foo/` resolve to the same route; URL helpers leave paths unchanged.
   - `'always'` — non-trailing requests are 308-redirected to the trailing-slash form; URL helpers append `/`. Paths whose last segment looks file-like (e.g. `/api/openapi.json`) are skipped.
   - `'never'` — trailing requests are 308-redirected to the non-trailing form; URL helpers strip a single trailing `/`.
@@ -281,7 +317,6 @@
 - 3b16f5b: Resolve cron jobs from request-scoped DI container at execution time
 
   ### Breaking Changes
-
   - `CronManager.registerJob()` now accepts `(schedule, jobClass)` instead of a `CronJob` instance. Jobs are resolved from the container at execution time, ensuring request-scoped dependencies (e.g. database connections) are properly scoped.
   - `CronManager.executeScheduled()` now requires a `Container` as its second argument.
   - `CronManager.getJobsForSchedule()` returns `RegisteredJob[]` instead of `CronJob[]`.
@@ -291,7 +326,6 @@
   **Why:** Multiple modules augmenting `AppMessages` with a shared top-level parent (e.g., `errors.auth`, `errors.uploads`, `errors.branding`) collided with TypeScript error **TS2717** ("Subsequent property declarations must have the same type"). Interface merging adds new properties across declarations but requires same-named properties to have structurally identical types — it does not deep-merge nested shapes.
 
   **What changed:**
-
   - Replaced the single augmentable `AppMessages` interface with an `AppMessageNamespaces` keyed registry. Each module declares its own distinct top-level key (Laravel-style package namespacing). Because each declaration adds a different property, interface merging accepts them all.
   - `AppMessages` is now derived: `{ [K in keyof AppMessageNamespaces]: AppMessageNamespaces[K] }`.
   - Access keys are unchanged dot-notation — `i18n.t('auth.errors.invalidCredentials')` — so no custom resolver is needed.
@@ -319,7 +353,6 @@
   ```
 
   **Framework package moves:**
-
   - All `errors.auth.*` keys (previously split between `stratal` core and `@stratal/framework`) now live in the auth module as `auth.errors.*`. `errors.auth.org.*` → `auth.org.*`. The `errors.auth.*` namespace has been removed from `stratal`'s core messages.
   - `@stratal/framework`'s `DatabaseModule` now registers its `database.*` validation messages via `I18nModule.registerMessages` (previously the messages file existed but was never wired up).
   - `@stratal/inertia-modal`'s `errors.modal.*` key moved to `modal.errors.*`.
@@ -339,13 +372,11 @@
   No runtime API change: `I18nModule.registerMessages(messages)` keeps its existing signature, and deep-merge behavior is unchanged. Locale-only contributions that override core's built-in `errors.*` / `common.*` / etc. continue to work.
 
 - 3b16f5b: Add `Macroable` base class for dynamic method registration and introduce `ConfigStore` for request-scoped configuration
-
   - Add `Macroable` class (inspired by Laravel/AdonisJS) that supports `macro()`, `instanceProperty()`, and `getter()` for runtime method registration with full inheritance support.
   - Introduce `ConfigStore` as a singleton source of truth for validated config, making `ConfigService` request-scoped with per-request overrides via `set()` and `reset()`.
   - `ConfigService` now extends `Macroable`, allowing apps to add domain-specific getters and methods.
 
 - 3b16f5b: Improve middleware error handling and defer routing initialization for better performance
-
   - Add `MiddlewareNextCalledMultipleTimesError` to detect and report when `next()` is called more than once in a middleware.
   - Defer routing and handler initialization until first request for improved cold-start performance.
   - Improve `isApplicationError` type guard with structural fallback for cross-module boundary cases.
@@ -361,14 +392,12 @@
 - 3b16f5b: Migrate storage from AWS S3 to Cloudflare R2 for all storage operations
 
   ### Breaking Changes
-
   - The `S3StorageProvider` has been removed. All storage operations now use the native Cloudflare R2 API via `R2StorageProvider`.
   - Storage configuration no longer requires AWS credentials or S3 endpoint settings. Instead, configure an R2 bucket binding in your `wrangler.toml` and reference it in your storage config.
   - Presigned URLs now require the `APP_SECRET` environment variable instead of AWS credentials.
   - The `StorageProviderNotSupportedError` has been replaced with `R2BindingNotFoundError` and `R2PresignedUrlSecretMissingError`.
 
   ### Migration
-
   1. Replace any `S3StorageProvider` references with `R2StorageProvider`.
   2. Update your `wrangler.toml` to bind your R2 bucket.
   3. Set `APP_SECRET` in your environment for presigned URL support.
@@ -382,7 +411,6 @@
 - 17f8675: Add `ExceptionHandler` with customizable error reporting, rendering, and throttling support
 
   ### Details
-
   - Introduce `ExceptionHandler` base class with `report()`, `render()`, `shouldReport()`, and `throttle()` hooks
   - Add `HttpException` class for structured HTTP error responses with fluent API
   - Add `ExceptionContext` for collecting contextual metadata during error handling
@@ -391,13 +419,11 @@
   - Streamline OpenAPI service and routing metadata handling
 
   ### Breaking Changes
-
   - `GlobalErrorHandler` has been removed. Migrate to `ExceptionHandler` by extending the base class and implementing the `render()` hook for custom error responses.
 
 - c9176ea: Enhance i18n locale detection with configurable strategies and message loader service
 
   ### Details
-
   - Support multiple locale detection strategies: cookie, header, querystring, and path-based
   - Add `MessageLoaderService` for dynamic message loading and registration
   - Add `stratal/i18n/utils` subpath export for i18n setup utilities
@@ -405,7 +431,6 @@
 - c9176ea: Add Laravel-style routing with named routes, URI generation, signed URLs, domain routing, and response validation
 
   ### Details
-
   - Add `Uri` service for generating URLs from named routes with parameter binding
   - Add signed URL support with HMAC-based signature generation and verification
   - Add domain-based routing with `@Route({ domain })` and domain middleware
@@ -417,7 +442,6 @@
   - Replace module-level middleware system with router-scoped middleware via `RouteConfigurable`
 
   ### Breaking Changes
-
   - The `stratal/middleware` subpath export has been removed. Middleware is now configured through the router using `RouteConfigurable` instead of `MiddlewareConfigurable`. Implement `configureRoutes(router: Router)` on your module and use `router.use(...)` to apply middleware.
 
 ## 0.0.17
@@ -427,7 +451,6 @@
 - [#147](https://github.com/strataljs/stratal/pull/147) [`7f2772b`](https://github.com/strataljs/stratal/commit/7f2772ba90a9b6a91603f79293d384e972864125) Thanks [@adesege](https://github.com/adesege)! - Add MCP server support and API CLI commands
 
   ### Details
-
   - Add `mcp:serve` command to start a stdio MCP server that exposes OpenAPI routes as tools
   - Add `mcp:tools` command to list available MCP tools derived from the OpenAPI spec
   - Add `api` command to invoke API endpoints directly from the CLI
@@ -438,7 +461,6 @@
 - [#145](https://github.com/strataljs/stratal/pull/145) [`79e05de`](https://github.com/strataljs/stratal/commit/79e05de7482c925323a2f37a00e47929133a979f) Thanks [@adesege](https://github.com/adesege)! - Enhance Quarry CLI with dynamic command generation, improved help output, and usage generator
 
   ### Details
-
   - Replace static `ListCommand` with dynamic command generation via `createDynamicCommands` that auto-registers user-defined commands with Clipanion
   - Improve `HelpCommand` to display detailed usage for specific commands including arguments, options, and aliases
   - Add `UsageGenerator` for rendering formatted command usage with ANSI colors (name, description, arguments, options sections)
@@ -451,13 +473,11 @@
 - [`916fd90`](https://github.com/strataljs/stratal/commit/916fd90727a06b5ce7c0397467fe9dc1f859f841) Thanks [@adesege](https://github.com/adesege)! - Add `I18nModule.registerMessages()` for decentralized i18n message registration
 
   ### Details
-
   - Any module can now call `I18nModule.registerMessages()` to contribute translations, enabling package-level message ownership
   - Messages are deep-merged across all registrations in order — later calls override earlier ones at leaf level
   - `RouterContext.json()` now accepts `null` and automatically returns 204 No Content
 
   ### Breaking Changes
-
   - Remove `messages` option from `I18nModule.forRoot()` — use `I18nModule.registerMessages()` instead
 
     **Before:**
@@ -479,7 +499,6 @@
 - [`cbfce8b`](https://github.com/strataljs/stratal/commit/cbfce8b3a3517b60d94f500c5dc1ef68d8ee76f4) Thanks [@adesege](https://github.com/adesege)! - Support multiple seeder names in `db:seed` command via variadic `{names*}` argument
 
   ### Details
-
   - Change `db:seed {name?}` to `db:seed {names*}` to accept multiple seeder class names in a single invocation
   - When `--all` is used with named seeders, warn and ignore the names
   - Iterate over all provided names, running each seeder sequentially
@@ -491,7 +510,6 @@
 - [#144](https://github.com/strataljs/stratal/pull/144) [`3dd0bc8`](https://github.com/strataljs/stratal/commit/3dd0bc84c8638db30db7b70f3532a44aa187ace8) Thanks [@adesege](https://github.com/adesege)! - Enhance Quarry CLI with dynamic command generation, improved help output, and usage generator
 
   ### Details
-
   - Replace static `ListCommand` with dynamic command generation via `createDynamicCommands` that auto-registers user-defined commands with Clipanion
   - Improve `HelpCommand` to display detailed usage for specific commands including arguments, options, and aliases
   - Add `UsageGenerator` for rendering formatted command usage with ANSI colors (name, description, arguments, options sections)
@@ -502,7 +520,6 @@
 - [#142](https://github.com/strataljs/stratal/pull/142) [`4b958e2`](https://github.com/strataljs/stratal/commit/4b958e250c99681a99a34a398fbf706546f556cc) Thanks [@adesege](https://github.com/adesege)! - Lazy-load S3 storage provider and enhance StorageManagerService with promise deduplication
 
   ### Details
-
   - `StorageManager.getProvider()` is now async and dynamically imports `S3StorageProvider` to avoid loading AWS SDK at module evaluation time
   - Add promise deduplication to prevent concurrent `getProvider` calls from creating multiple provider instances
   - Register `StorageManager` as a singleton to share cached providers across requests
@@ -517,7 +534,6 @@
 - [#125](https://github.com/strataljs/stratal/pull/125) [`0731e99`](https://github.com/strataljs/stratal/commit/0731e99c3e0c96f988387611f0ef8559b63d7bd8) Thanks [@adesege](https://github.com/adesege)! - Introduce Quarry command framework with auto-discovery and Clipanion-based CLI
 
   ### Details
-
   - Add `Command` base class with declarative signature parsing (arguments, options, flags)
   - Add `QuarryRegistry` for command registration, discovery from modules, and execution
   - Add `quarry` CLI bin (`npx quarry`) with Clipanion-based command routing
@@ -532,7 +548,6 @@
 - [#134](https://github.com/strataljs/stratal/pull/134) [`52f1daa`](https://github.com/strataljs/stratal/commit/52f1daa981f5a38b983bb3c14abfefb663eb6941) Thanks [@adesege](https://github.com/adesege)! - Move seeders from standalone `@stratal/seeders` package into core as `stratal/seeder`
 
   ### Details
-
   - Add `Seeder` abstract base class with `run()` and `call(OtherSeeder)` methods
   - Add `SeederRegistry` for seeder registration and execution
   - Auto-discover seeders from module `providers` (any class extending `Seeder`)
@@ -558,7 +573,6 @@
 - [#120](https://github.com/strataljs/stratal/pull/120) [`8d0df50`](https://github.com/strataljs/stratal/commit/8d0df506411bc725ef4e4eaf4efdb314b3384d98) Thanks [@adesege](https://github.com/adesege)! - Add WebSocket gateway support with `@Gateway`, `@OnMessage`, `@OnClose`, and `@OnError` decorators
 
   ### Details
-
   - `@Gateway(path, options?)` decorator marks a class as a WebSocket gateway, reusing controller route metadata for middleware compatibility. Accepts optional `GatewayOptions` with `version` support (single, array, or `VERSION_NEUTRAL`)
   - `@OnMessage()`, `@OnClose()`, `@OnError()` method decorators wire handler methods to WebSocket events
   - `GatewayContext` extends `RouterContext` with WebSocket-specific methods (`send()`, `close()`, `readyState`)
@@ -570,7 +584,6 @@
 - [#117](https://github.com/strataljs/stratal/pull/117) [`527f675`](https://github.com/strataljs/stratal/commit/527f675ea3b4cdb98165cbe1f81e820fa9e79490) Thanks [@adesege](https://github.com/adesege)! - Add configurable content type support for request and response bodies in route definitions
 
   ### Details
-
   - Add `RouteBodyObject` and `RouteResponseObject` types with optional `contentType` field
   - Support `{ schema, contentType }` object form for `body` and `response` in `@Route()` config
   - Bare `ZodType` values default to `application/json` (backward-compatible)
@@ -581,7 +594,6 @@
 - [#115](https://github.com/strataljs/stratal/pull/115) [`bb99119`](https://github.com/strataljs/stratal/commit/bb991196dbcc55963d16ee1a6f5db580c18c796a) Thanks [@adesege](https://github.com/adesege)! - Replace Scalar with Swagger UI as the default OpenAPI docs renderer and add pluggable UI support
 
   ### Details
-
   - Replace `@scalar/hono-api-reference` dependency with `@hono/swagger-ui`
   - Add `OpenAPIUIRenderer` type for custom docs UI renderers
   - Add `ui` option to `OpenAPIModuleOptions` with `path` and `renderer` fields
@@ -589,7 +601,6 @@
   - Remove `docsPath` option in favor of `ui.path` (default remains `/api/docs`)
 
   ### Breaking Changes
-
   - The `docsPath` option in `OpenAPIModuleOptions` has been removed. Use `ui.path` instead:
 
     ```ts
@@ -605,7 +616,6 @@
 - [#119](https://github.com/strataljs/stratal/pull/119) [`957de6e`](https://github.com/strataljs/stratal/commit/957de6e88684344bf26e95d03187345bf77f4f52) Thanks [@adesege](https://github.com/adesege)! - Remove redundant `i18nKey` property from `ApplicationError` and use `Error.message` instead
 
   ### Details
-
   - Remove `i18nKey` property — the i18n key is already stored in `Error.message` via `super(i18nKey)`
   - `toErrorResponse()` now uses `this.message` for fallback and stack trace rewriting
   - `GlobalErrorHandler.translateError()` casts `error.message as MessageKeys` for i18n lookup
@@ -614,7 +624,6 @@
 - [#118](https://github.com/strataljs/stratal/pull/118) [`0ade941`](https://github.com/strataljs/stratal/commit/0ade94162f9058e9230039fa72efbbf3e57cf572) Thanks [@adesege](https://github.com/adesege)! - Add streaming response methods (`stream`, `streamText`, `streamSSE`) to RouterContext
 
   ### Details
-
   - `stream()` — generic/binary streaming via Hono's `stream` helper
   - `streamText()` — text streaming with automatic `Content-Encoding: Identity` for Cloudflare Workers compatibility
   - `streamSSE()` — Server-Sent Events streaming with automatic `Content-Encoding: Identity` for Cloudflare Workers compatibility
@@ -627,7 +636,6 @@
 - [#113](https://github.com/strataljs/stratal/pull/113) [`11b0da9`](https://github.com/strataljs/stratal/commit/11b0da97ef436bffef592fbc34685bbcc85d7ef7) Thanks [@adesege](https://github.com/adesege)! - Add HTTP method decorators (`@Get`, `@Post`, `@Put`, `@Patch`, `@Delete`, `@All`) for explicit route handling as an alternative to convention-based `@Route()` routing
 
   ### Details
-
   - **stratal**
     - Add `@Get`, `@Post`, `@Put`, `@Patch`, `@Delete`, and `@All` decorators that accept an explicit path and optional `RouteConfig`
     - Routes decorated with `@All` are automatically hidden from OpenAPI documentation
@@ -640,7 +648,6 @@
 - [#114](https://github.com/strataljs/stratal/pull/114) [`e1a2ba2`](https://github.com/strataljs/stratal/commit/e1a2ba2da883481d192a15b8015456705982d683) Thanks [@adesege](https://github.com/adesege)! - Add URI-based API versioning support with configurable version prefix and default version
 
   ### Details
-
   - **stratal**
     - Add `versioning` option to `ApplicationConfig` to enable URI-based versioning (e.g., `/v1/users`, `/v2/users`)
     - Add `version` option to `ControllerOptions` for per-controller version assignment (single, array, or `VERSION_NEUTRAL`)
@@ -655,9 +662,7 @@
 - [#97](https://github.com/strataljs/stratal/pull/97) [`d58b878`](https://github.com/strataljs/stratal/commit/d58b8782848562a50b79cd558eaf01978aa77f26) Thanks [@adesege](https://github.com/adesege)! - Add `stratalTest()` vitest plugin and migrate fetch mocking from Cloudflare's undici-based `fetchMock` to MSW
 
   ### Details
-
   - **@stratal/testing**
-
     - Add `@stratal/testing/vitest-plugin` sub-export with `stratalTest()` — wraps `cloudflareTest` with Stratal defaults (tslib alias, ZenStack mocks, SSR externals)
     - Replace `FetchMock`/`createFetchMock` with `MockFetch`/`createMockFetch` backed by MSW (`setupServer`)
     - Re-export `http` and `HttpResponse` from `msw` for convenience
@@ -665,7 +670,6 @@
     - Bump vitest peer dependency from `^3.2.0` to `^4.1.0`
 
   - **stratal**
-
     - Update test mocks to use class syntax for Vitest 4 compatibility
     - Bump dependencies: `@intlify/*`, `@scalar/hono-api-reference`, `hono`, `@aws-sdk/*`, `vitest`
 
@@ -674,7 +678,6 @@
     - Bump dependencies: `better-auth`, `@zenstackhq/*`, `wrangler`, `vitest`
 
   ### Breaking Changes
-
   - **@stratal/testing**: `FetchMock` and `createFetchMock` are removed. Use `MockFetch`/`createMockFetch` instead. The new API uses MSW lifecycle methods (`listen`/`reset`/`close`) instead of `activate`/`disableNetConnect`/`deactivate`.
   - **@stratal/testing**: Vitest peer dependency is now `^4.1.0` (was `^3.2.0`).
 
@@ -691,7 +694,6 @@
 - [#88](https://github.com/strataljs/stratal/pull/88) [`3329d20`](https://github.com/strataljs/stratal/commit/3329d20658ea6a6f7cadbbb3efb7630b1cca9ad2) Thanks [@adesege](https://github.com/adesege)! - Add worker base classes (`StratalDurableObject`, `StratalWorkerEntrypoint`, `StratalWorkflow`) with DI support and request-scoped containers
 
   ### Details
-
   - Introduce `stratal/workers` sub-path export with `StratalDurableObject`, `StratalWorkerEntrypoint`, `StratalWorkflow`, and `runInScope` helper
   - Add `Stratal.resolveApplication()` static method for worker classes to access the DI container
   - Add `StratalNotInitializedError` for when `resolveApplication()` is called before Stratal is instantiated
@@ -704,7 +706,6 @@
 - [#86](https://github.com/strataljs/stratal/pull/86) [`c0d9313`](https://github.com/strataljs/stratal/commit/c0d9313b30272eece8a4596718b7d4c1b442c221) Thanks [@adesege](https://github.com/adesege)! - Remove default CORS middleware from HonoApp
 
   ### Breaking Changes
-
   - **stratal**: `HonoApp` no longer applies `cors()` middleware by default. If your application relies on the built-in CORS handling, add it explicitly via a custom middleware in your module's `configure()` method or by registering it globally.
 
 ## 0.0.8
@@ -718,7 +719,6 @@
   ### Breaking Changes
 
   **`stratal` (core)**
-
   - **Removed `RequestContextStore`** — The `AsyncLocalStorage`-based request context propagation is eliminated. This removes the dependency on the `nodejs_als` compatibility flag in Cloudflare Workers.
   - **Removed `RouterService` and `RequestScopeService`** — Replaced by `HonoApp`, a subclass of `OpenAPIHono` that directly integrates request scoping, middleware class support, and global error handling.
   - **Removed `RouterAlreadyConfiguredError` and `RouterNotConfiguredError`** — Replaced by `HonoAppAlreadyConfiguredError`.
@@ -730,12 +730,10 @@
   - **New `HonoApp` class** — Extends `OpenAPIHono` with Stratal concerns; supports `Constructor<Middleware>` in `use()` via module augmentation.
 
   **`@stratal/framework`**
-
   - **`DatabaseConnectionConfig.dialect` changed from `Dialect` to `() => Dialect`** — Database connections now take a factory function for lazy dialect/pool creation.
   - **Caching strategy changed from `instancePerContainerCachingFactory` to `instanceCachingFactory`**.
 
   **`@stratal/testing`**
-
   - **`TestingModule.runInRequestScope()` callback now receives a `container` parameter** — Update all callbacks to use the passed container for service resolution.
   - **`TestingModule.fetch()` now routes through `HonoApp`** instead of `RouterService`.
   - **`TestingModuleBuilder.compile()` now applies overrides before `initialize()`** — Fixes issue where overrides were applied after initialization.
@@ -743,7 +741,6 @@
   ### Minor Changes
 
   **`@stratal/seeders`**
-
   - Updated `executeSeeder()` to use the explicit `requestContainer` parameter from `runInRequestScope()`.
 
 - [#83](https://github.com/strataljs/stratal/pull/83) [`bcb3556`](https://github.com/strataljs/stratal/commit/bcb3556a6e1f185e088286f202c605c73799e63f) Thanks [@adesege](https://github.com/adesege)! - Introduce @stratal/zenstack-plugin and rearchitect database module to use shared schema with per-connection slicing
@@ -751,7 +748,6 @@
   ### New Package
 
   **`@stratal/zenstack-plugin`**
-
   - ZenStack plugin for multi-connection database support with schema slicing
   - Generates connection-specific schema types and `StratalDatabase` augmentation
   - CLI commands: `stratal-db migrate` and `stratal-db push` for per-connection database management
@@ -760,11 +756,9 @@
   ### Breaking Changes
 
   **`stratal` (core)**
-
   - Re-exports `delay` from tsyringe via `stratal/di`
 
   **`@stratal/framework`**
-
   - **Replaced `DatabaseSchemaRegistry` and `DefaultDatabaseConnection` with unified `StratalDatabase` interface** — Consumers must update their type augmentations to use the new single interface with `schema`, `defaultConnection`, and `slicing` properties.
   - **`schema` moved from `DatabaseConnectionConfig` to `DatabaseModuleConfig`** — All connections now share a single schema; per-connection schema is no longer supported.
   - **Added `slicing` option to `DatabaseConnectionConfig`** — Connections can narrow available models via ZenStack slicing options.
@@ -774,7 +768,6 @@
   - **Removed `InferConnectionSchema` type** — Replaced by `InferDatabaseSchema` (shared) and `InferConnectionSlicing` (per-connection slicing).
 
   **`@stratal/testing`**
-
   - **`TestingModule.getDb()` is now synchronous** — Returns `DatabaseService` directly instead of `Promise<DatabaseService>`.
   - **`TestingModule` creates a single request-scoped container at construction** — `container` property now returns the request-scoped container. The `runInRequestScope` pattern is removed.
   - **`TestingModule.close()` now disposes the request container** before shutting down the application.
@@ -883,24 +876,20 @@
 - Initial release of the Stratal framework — a modular Cloudflare Workers framework built on Hono and tsyringe.
 
   **Core Infrastructure**
-
   - NestJS-style module system with `@Module()` decorator, dynamic modules (`withRoot`, `withRootAsync`), and lifecycle hooks (`OnInitialize`, `OnShutdown`)
   - Two-tier dependency injection container (global singletons + request-scoped) powered by tsyringe with conditional registration and service decoration
   - `StratalWorker` entry point extending Cloudflare's `WorkerEntrypoint` for HTTP fetch, queue batches, and scheduled cron triggers
 
   **Routing & API**
-
   - Hono-based routing with `@Controller()` and `@Route()` decorators, automatic controller discovery, and route guards via `@UseGuards()`
   - OpenAPI schema generation with `@hono/zod-openapi` and Scalar API reference integration
   - NestJS-like middleware configuration with route-specific application and exclusion
 
   **Background Processing**
-
   - Queue consumerfor Cloudflare Queues with `@Consumer()` and `@QueueJob()` decorators and batch processing
   - Cron job scheduling via `CronManager` integrated with Cloudflare's scheduled events
 
   **Services & Integrations**
-
   - Email module with pluggable providers (Nodemailer, Resend) and queue-based sending
   - Storage module with AWS S3 / Cloudflare R2 support, multipart uploads, presigned URLs, and TUS resumable uploads
   - Internationalization (i18n) module with locale detection, message compilation, and request-scoped translations
@@ -909,7 +898,6 @@
   - Structured logging with JSON and pretty formatters
 
   **Developer Experience**
-
   - Zod-powered request/response validation with type inference
   - Custom `ApplicationError` class with HTTP status mapping
   - ESM-only with full TypeScript decorator support (`emitDecoratorMetadata`)
