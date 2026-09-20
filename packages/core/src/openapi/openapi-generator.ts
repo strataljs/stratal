@@ -147,7 +147,11 @@ function convert(schema: ZodType, io: 'input' | 'output', components: Record<str
   if (id) {
     if (!(id in components)) {
       components[id] = {} // placeholder breaks recursion before the body is built
-      components[id] = convertInline(schema, io, components)
+      // A registered schema converts to a bare `$ref` with its body hoisted into
+      // `components` by convertInline. Assigning that back would point the
+      // component at itself.
+      const inline = convertInline(schema, io, components)
+      if (!('$ref' in inline)) components[id] = inline
     }
     return { $ref: REF_TO + id }
   }
@@ -166,7 +170,10 @@ function convertInline(schema: ZodType, io: 'input' | 'output', components: Reco
     delete json.definitions
     delete json.$defs
     for (const [name, def] of Object.entries(defs)) {
-      components[name] ??= rewriteRefs(def) as SchemaObject
+      const existing = components[name]
+      if (!existing || Object.keys(existing).length === 0) {
+        components[name] = rewriteRefs(def) as SchemaObject
+      }
     }
   }
   return rewriteRefs(json) as SchemaObject
