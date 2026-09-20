@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module'
 import path from 'node:path'
 
-import { cloudflareTest } from '@cloudflare/vitest-pool-workers'
+import { cloudflareTest } from '@cloudflare/vitest-plugin'
 import type { StratalEnv } from 'stratal'
 import type { Plugin, UserConfig } from 'vite'
 import type { TestUserConfig } from 'vitest/config'
@@ -54,7 +54,7 @@ const pgCjsResolvers = new Map<string, () => string>([
  * root Vite instance doesn't resolve.
  *
  * Must be used at the **root** `defineConfig` level so that the
- * `@cloudflare/vitest-pool-workers` module fallback resolver (which uses the root Vite
+ * `@cloudflare/vitest-plugin` module fallback resolver (which uses the root Vite
  * instance) resolves pg sub-deps correctly.
  *
  * @example
@@ -144,9 +144,10 @@ export const fixNobleHashesCjs = (): Plugin => {
   }
 }
 
-const createStratalPlugin = (databaseEnabled: boolean): Plugin => ({
+/** Builds the Stratal defaults plugin returned by {@link stratalTest}; exported for direct unit testing. */
+export const createStratalPlugin = (databaseEnabled: boolean): Plugin => ({
   name: 'stratal-test',
-  config() {
+  config(userConfig: UserConfig & { test?: TestUserConfig }) {
     const config: UserConfig & { test?: TestUserConfig } = {
       resolve: {
         alias: {
@@ -160,17 +161,32 @@ const createStratalPlugin = (databaseEnabled: boolean): Plugin => ({
         noExternal: ['@zenstackhq/better-auth'],
       },
     }
-    // Per-file DB isolation requires real file parallelism; each file gets its
-    // own database, cloned from the migrated template, and resets between
-    // tests. Setup hooks do real DB work (the clone itself — a
-    // `CREATE DATABASE ... TEMPLATE` serialized across concurrent files by a
-    // Postgres advisory lock — plus per-test tenant/seed provisioning in
-    // `beforeAll`) that routinely exceeds Vitest's 10s default hook timeout
-    // under a full worker slot — give a sensible floor. The advisory lock is
-    // exactly the contention this timeout has to absorb, not a queue that's
-    // been removed. Consumers with heavier setup override `hookTimeout` on
-    // their own project.
-    if (databaseEnabled) config.test = { fileParallelism: true, isolate: true, hookTimeout: 30_000 }
+    // Each test file leases a worker database for as long as its isolate lives
+    // and gets a fresh clone of the migrated template in it. `isolate` is
+    // required, not a default: the lease is released when the pool disposes the
+    // file's isolate, so a shared isolate would hand the next file the previous
+    // file's database, rows and all. Setup hooks do real DB work (the clone
+    // itself — a `CREATE DATABASE ... TEMPLATE` serialized across concurrent
+    // files by a Postgres advisory lock — plus per-test tenant/seed provisioning
+    // in `beforeAll`) that routinely exceeds Vitest's 10s default hook timeout
+    // under a full worker slot. `fileParallelism` and `hookTimeout` are
+    // defaults, not floors: each only applies where the consuming project's own
+    // `test` config leaves it unset.
+    if (databaseEnabled) {
+      const existing = userConfig.test ?? {}
+      if (existing.isolate === false) {
+        throw new Error(
+          '[stratal-testing] stratalTest({ database }) needs `isolate: true`. Each test file leases its ' +
+            'database for the life of its isolate, so files sharing an isolate would share a database. ' +
+            'Remove `isolate: false` from this project.',
+        )
+      }
+      config.test = {
+        fileParallelism: existing.fileParallelism ?? true,
+        isolate: true,
+        hookTimeout: existing.hookTimeout ?? 30_000,
+      }
+    }
     return config
   },
 })
@@ -179,9 +195,9 @@ const createStratalPlugin = (databaseEnabled: boolean): Plugin => ({
  * Returns Vite plugins for Stratal tests running in the Cloudflare Workers (workerd) environment.
  *
  * Includes the cloudflare pool plugin and Stratal alias plugin. Pass a
- * `database` option to give each worker its own database (cloned once from a
- * migrated template, reset between tests) and enable file parallelism. Use
- * inside a project-level `plugins` array.
+ * `database` option to give each test file a leased database holding a fresh
+ * clone of a migrated template, and to enable file parallelism. Use inside a
+ * project-level `plugins` array.
  *
  * **Note:** `fixPgCjs()` must be registered separately at the root `defineConfig` level.
  *
@@ -197,7 +213,11 @@ export function stratalTest(options: StratalTestOptions = {}): Plugin[] {
   // Its presence is how the testing-module builder tells "isolation requested"
   // from "plain app" — so it can hard-error on `database: {}` with no connection
   // string instead of silently running parallel files without isolation.
-  const dbEnv = databaseEnabled
+  // Annotated rather than inferred: the ternary would otherwise widen to
+  // `{ …: string } | { …?: undefined }`, and spreading that union produces
+  // optionally-`undefined` bindings, which miniflare's `Record<string, Json>`
+  // rejects.
+  const dbEnv: Record<string, string> = databaseEnabled
     ? {
         [BINDING_ENV_VAR]: binding,
         // Run the consuming app's DB connections on ONE shared pool per
@@ -215,7 +235,7 @@ export function stratalTest(options: StratalTestOptions = {}): Plugin[] {
     miniflare: {
       ...cfOptions.miniflare,
       bindings: {
-        ...(cfOptions.miniflare?.bindings as Record<string, unknown> | undefined),
+        ...cfOptions.miniflare?.bindings,
         ...dbEnv,
       },
     },

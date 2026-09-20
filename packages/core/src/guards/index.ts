@@ -7,6 +7,7 @@
  * - GuardExecutionService for executing guards
  */
 
+export * from './errors'
 export * from './types'
 export * from './use-guards.decorator'
 export { GuardExecutionService } from './guard-execution.service'

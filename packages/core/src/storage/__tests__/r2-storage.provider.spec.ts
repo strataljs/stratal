@@ -114,6 +114,125 @@ describe('R2StorageProvider', () => {
     })
   })
 
+  describe('deleteMany', () => {
+    it('should delete in one call when under the bulk limit', async () => {
+      await provider.deleteMany(['a.json', 'b.json'])
+
+      expect(bucket.delete).toHaveBeenCalledTimes(1)
+      expect(bucket.delete).toHaveBeenCalledWith(['a.json', 'b.json'])
+    })
+
+    it('should split into chunks of 1000, which is R2 ceiling per call', async () => {
+      const paths = Array.from({ length: 2001 }, (_, i) => `unit-${String(i)}.json`)
+
+      await provider.deleteMany(paths)
+
+      expect(bucket.delete).toHaveBeenCalledTimes(3)
+      expect(vi.mocked(bucket.delete).mock.calls[0]?.[0]).toHaveLength(1000)
+      expect(vi.mocked(bucket.delete).mock.calls[1]?.[0]).toHaveLength(1000)
+      // The remainder must still go — a chunker that dropped it would delete 2000 of 2001 and
+      // report success.
+      expect(vi.mocked(bucket.delete).mock.calls[2]?.[0]).toEqual(['unit-2000.json'])
+    })
+
+    it('should not call the bucket at all for an empty list', async () => {
+      await provider.deleteMany([])
+
+      expect(bucket.delete).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('head', () => {
+    it('should return the object metadata without reading its body', async () => {
+      bucket.head.mockResolvedValue(
+        createMock<R2Object>({
+          key: 'files/doc.pdf',
+          size: 2048,
+          etag: 'abc123',
+          uploaded: new Date('2026-08-16T00:00:00.000Z'),
+          httpMetadata: { contentType: 'application/pdf' },
+          customMetadata: { owner: 'u1' },
+        })
+      )
+
+      const result = await provider.head('files/doc.pdf')
+
+      expect(result).toEqual({
+        path: 'files/doc.pdf',
+        size: 2048,
+        contentType: 'application/pdf',
+        etag: 'abc123',
+        uploadedAt: new Date('2026-08-16T00:00:00.000Z'),
+        metadata: { owner: 'u1' },
+      })
+      // The body is what `head` exists to avoid moving.
+      expect(bucket.get).not.toHaveBeenCalled()
+    })
+
+    it('should return null rather than throwing when the object is absent', async () => {
+      bucket.head.mockResolvedValue(null)
+      expect(await provider.head('missing.txt')).toBeNull()
+    })
+  })
+
+  describe('list', () => {
+    it('should report truncation and a cursor so a caller can finish the set', async () => {
+      // R2 caps a page at 1000 objects whatever `limit` asks. A caller summing sizes across a
+      // prefix gets a quietly-too-small answer unless it follows this, so the flags must survive
+      // the mapping rather than being resolved away.
+      bucket.list.mockResolvedValue({
+        objects: [createMock<R2Object>({ key: 'a.json', size: 10 })],
+        truncated: true,
+        cursor: 'next-page',
+        delimitedPrefixes: [],
+      })
+
+      const result = await provider.list({ prefix: 'units/' })
+
+      expect(bucket.list).toHaveBeenCalledWith({
+        prefix: 'units/',
+        cursor: undefined,
+        limit: undefined,
+        include: [],
+      })
+      expect(result.truncated).toBe(true)
+      expect(result.cursor).toBe('next-page')
+      expect(result.objects[0]).toMatchObject({ path: 'a.json', size: 10 })
+    })
+
+    it('should ask R2 for metadata only when the caller says it reads it', async () => {
+      // R2 returns neither `httpMetadata` nor `customMetadata` unless `include` names them, and
+      // returns fewer objects per page when it does — so requesting them by default would make
+      // every size-only listing pay for fields it never reads.
+      bucket.list.mockResolvedValue({
+        objects: [],
+        truncated: false,
+        delimitedPrefixes: [],
+      })
+
+      await provider.list({ prefix: 'units/', includeMetadata: true })
+
+      expect(bucket.list).toHaveBeenCalledWith(
+        expect.objectContaining({ include: ['httpMetadata', 'customMetadata'] })
+      )
+    })
+
+    it('should not hand back a cursor when the listing is complete', async () => {
+      // A complete listing must end the caller's `while (cursor)` loop rather than sending it
+      // round again for a page that does not exist.
+      bucket.list.mockResolvedValue({
+        objects: [createMock<R2Object>({ key: 'a.json', size: 10 })],
+        truncated: false,
+        delimitedPrefixes: [],
+      })
+
+      const result = await provider.list({})
+
+      expect(result.truncated).toBe(false)
+      expect(result.cursor).toBeUndefined()
+    })
+  })
+
   describe('getPresignedUrl', () => {
     it('should generate a signed URL using signUrl()', async () => {
       const result = await provider.getPresignedUrl('files/doc.pdf', 'GET', 3600)

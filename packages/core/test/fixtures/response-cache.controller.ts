@@ -91,3 +91,28 @@ export class GatewayDemoController {
   ],
 })
 export class GatewayAppModule {}
+
+/**
+ * The same app, with a representation header in the cache key.
+ *
+ * Separate from `GatewayAppModule` so the props asserted there stay the
+ * partitions alone: `keyBy` adds an entry to every forwarded call, and folding
+ * it into the shared fixture would make every existing assertion about props
+ * describe two features at once.
+ */
+/**
+ * `as const`, because the constant an adapter exports for this is one — and a
+ * readonly tuple assigning to `keyBy` is the whole point of its type.
+ */
+const VARIANT_HEADERS = ['X-Variant'] as const
+
+@Module({
+  controllers: [GatewayDemoController],
+  imports: [
+    ResponseCacheModule.forRoot({
+      gateway: { entrypoint: 'Cached', keyBy: VARIANT_HEADERS },
+      partitions: { user: userPartition },
+    }),
+  ],
+})
+export class KeyedGatewayAppModule {}

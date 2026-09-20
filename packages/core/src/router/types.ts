@@ -107,12 +107,12 @@ export type RouteResponse = ZodType | RouteResponseObject
 export interface RouteConfig {
   /**
    * Request body schema (for POST, PUT, PATCH)
-   * @example z.object({}) or { schema: z.object({}), contentType: 'multipart/form-data' }
+   * @example object({}) or { schema: object({}), contentType: 'multipart/form-data' }
    */
   body?: RouteBody
 
   /**
-   * URL parameters schema (e.g., { id: z.string().uuid() })
+   * URL parameters schema (e.g., object({ id: uuid() }))
    * Must be ZodObject or ZodPipe for OpenAPI compatibility
    */
   params?: RouteParameter

@@ -13,14 +13,7 @@ import { type InjectionToken, Module, type ModuleClass, type ModuleOptions } fro
 import { EMAIL_TOKENS } from 'stratal/email'
 import { RATE_LIMITER_TOKENS } from 'stratal/rate-limiter'
 import { STORAGE_TOKENS } from 'stratal/storage'
-import {
-  BINDING_ENV_VAR,
-  buildConnectionString,
-  deriveAdminConnectionString,
-  deriveFileDbName,
-  deriveTemplateName,
-  ensureWorkerDatabase,
-} from '../database'
+import { BINDING_ENV_VAR, leaseWorkerDatabase, type WorkerDatabaseLease } from '../database'
 import { FakeStorageService } from '../storage'
 import { NoopRateLimiterStore } from '../mocks/noop-rate-limiter-store'
 import { TestEmailProvider } from '../mocks/test-email-provider'
@@ -32,21 +25,12 @@ import { Test } from './test'
 import { TestingModule } from './testing-module'
 
 /**
- * Per-file guard: the first `compile()` in a file clones its database; later
- * compiles in the same file skip straight to retargeting.
+ * This isolate's worker-database lease, per base connection string. The pool
+ * runs each test file in its own isolate (`isolate: true`), so the first
+ * `compile()` in a file leases and clones a database and later compiles in the
+ * same file reuse it. The lease ends when the pool disposes the isolate.
  */
-const ensuredWorkerDbs = new Map<string, Promise<void>>()
-
-/**
- * A crypto-random token generated ONCE per test-file isolate. The pool runs one
- * isolate per file (`isolate: true`), so this is stable across a file's compiles
- * and unique across files — giving every file its own database. Lazily created so
- * DB-less test files never touch `crypto`.
- */
-let fileToken: string | undefined
-function currentFileToken(): string {
-  return (fileToken ??= crypto.randomUUID().replace(/-/g, '').slice(0, 16))
-}
+const workerDatabases = new Map<string, Promise<WorkerDatabaseLease>>()
 
 /**
  * Configuration for creating a testing module
@@ -74,6 +58,25 @@ export interface TestingModuleConfig extends ModuleOptions {
    * `initialize()` (before overrides apply).
    */
   exceptionHandler?: Constructor<ExceptionHandler>
+  /**
+   * Trailing-slash canonicalisation. Mirrors `ApplicationConfig.trailingSlash`,
+   * so it takes the same bare mode or `{ mode, exclude }` object. Defaults to
+   * the framework default, `'ignore'`.
+   *
+   * A testing module builds its own `Application` and never runs the app's
+   * entry file, so an app that canonicalises URLs there only does so in
+   * production unless its suite repeats the setting here. Left unset, every
+   * route assertion checks a URL shape that configuration would never emit,
+   * and neither the 308 redirect nor any `exclude` entry is exercised.
+   */
+  trailingSlash?: ApplicationConfig['trailingSlash']
+  /**
+   * URI versioning. Mirrors `ApplicationConfig.versioning`, and is subject to
+   * the same constraint as {@link TestingModuleConfig.trailingSlash}: unset,
+   * routes register at their unversioned path, which an app configuring a
+   * version prefix never serves.
+   */
+  versioning?: ApplicationConfig['versioning']
   /**
    * Set to `false` to compile without a `ctx.cache` stub, reproducing a
    * runtime where Workers Caching is genuinely unconfigured. Neither
@@ -143,11 +146,11 @@ export class TestingModuleBuilder {
     // shared resource at teardown — risking a hang when that resource is disposed.
     const pendingTasks: Promise<unknown>[] = []
     // Neither Miniflare nor workerd ever populates `ExecutionContext.cache`, so
-    // without this a `@Cacheable`/`@PurgesCache` route 500s on its first
-    // request in every test suite that adopts the feature (`assertCachingAvailable`
-    // fails boot). Install a stub by default — recording every purge spec for
-    // `module.cache.purges` — and opt out via `cache: false` to reproduce that
-    // genuinely-unconfigured runtime (e.g. to test the boot guard itself).
+    // without this every `@Cacheable` route in a test serves uncached and
+    // stamped `private, no-store`, and a spec asserting what the route declares
+    // reads what an unconfigured runtime produces instead. Install a stub by
+    // default — recording every purge spec for `module.cache.purges` — and opt
+    // out via `cache: false` to reproduce that genuinely-unconfigured runtime.
     const testWorkersCache = this.config.cache === false ? undefined : new TestWorkersCache()
     // Same defect class, one layer up: workerd never populates
     // `ExecutionContext.exports` here either, so an app configuring
@@ -203,6 +206,8 @@ export class TestingModuleBuilder {
         env,
         ctx,
         exceptionHandler: this.config.exceptionHandler,
+        trailingSlash: this.config.trailingSlash,
+        versioning: this.config.versioning,
       })
 
       await app.initialize()
@@ -301,16 +306,15 @@ export class TestingModuleBuilder {
   }
 
   /**
-   * Point this app's Hyperdrive binding at the current worker's database,
-   * creating that database from the template on the slot's first compile. Returns
-   * nothing to clean up — worker databases live for the whole run and are reset
-   * between tests, not dropped per file. No-op when the consumer didn't opt into
+   * Point this app's Hyperdrive binding at the database this file leased,
+   * leasing it on the file's first compile. Returns nothing to clean up — the
+   * lease ends with the isolate. No-op when the consumer didn't opt into
    * `stratalTest({ database })`; throws if they did but no connection string is
    * configured (a misconfiguration that would otherwise silently skip isolation).
    */
   private async attachWorkerDatabase(env: StratalEnv): Promise<void> {
     const bindings = env as unknown as Record<string, unknown>
-    // `BINDING_ENV_VAR` is injected only when the consumer opted into per-worker
+    // `BINDING_ENV_VAR` is injected only when the consumer opted into database
     // isolation via `stratalTest({ database })`. Absent → plain app, nothing to
     // isolate.
     const bindingName = bindings[BINDING_ENV_VAR] as string | undefined
@@ -325,25 +329,23 @@ export class TestingModuleBuilder {
       )
     }
 
-    const name = deriveFileDbName(base, currentFileToken())
-    const adminConnectionString = deriveAdminConnectionString(base)
-    let ensure = ensuredWorkerDbs.get(name)
-    if (!ensure) {
-      ensure = ensureWorkerDatabase(adminConnectionString, name, deriveTemplateName(base)).catch((error: unknown) => {
+    let lease = workerDatabases.get(base)
+    if (!lease) {
+      lease = leaseWorkerDatabase(base).catch((error: unknown) => {
         // Don't let one transient failure poison every later compile in this file.
-        ensuredWorkerDbs.delete(name)
+        workerDatabases.delete(base)
         throw error
       })
-      ensuredWorkerDbs.set(name, ensure)
+      workerDatabases.set(base, lease)
     }
-    await ensure
+    const { connectionString } = await lease
 
     const isolated = Object.create(
       Object.getPrototypeOf(db) as object | null,
       Object.getOwnPropertyDescriptors(db),
     ) as Record<string, unknown>
     Object.defineProperty(isolated, 'connectionString', {
-      value: buildConnectionString(base, name),
+      value: connectionString,
       enumerable: true,
       configurable: true,
       writable: true,

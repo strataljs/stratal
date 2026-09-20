@@ -1,90 +1,19 @@
 import type { Page } from '@inertiajs/core'
-import type { Context } from 'hono'
-import type { Application } from 'stratal'
-import { DI_TOKENS } from 'stratal/di'
-import { ROUTER_CONTEXT_KEYS, ROUTER_TOKENS, RouterContext, type RegisteredRoute, type RouteRegistry, type TrailingSlashConfig } from 'stratal/router'
+import type { RegisteredRoute } from 'stratal/router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { UnrecognizedScrollShapeError } from '../errors/unrecognized-scroll-shape.error'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { DocumentRendererService } from '../services/document-renderer.service'
 import { InertiaService } from '../services/inertia.service'
 import type { SeoService } from '../services/seo.service'
 import { resetSsrExcludeMatchers } from '../services/ssr-exclusion'
 import type { SsrRendererService } from '../services/ssr-renderer.service'
+import { INERTIA_VARY_HEADERS } from '../types'
 import type { TemplateService } from '../services/template.service'
+import { createMockContext } from './support/mock-router-context'
 
 async function parsePageJson(response: Response): Promise<Page> {
   return response.json()
-}
-
-function createMockContext(overrides: {
-  url?: string
-  headers?: Record<string, string>
-  isInertia?: boolean
-  routes?: RegisteredRoute[]
-  trailingSlash?: TrailingSlashConfig
-  routePath?: string
-  validatedParams?: Record<string, string>
-  defaults?: Record<string, string>
-} = {}): RouterContext {
-  const headers = new Headers(overrides.headers ?? {})
-  if (overrides.isInertia) {
-    headers.set('x-inertia', 'true')
-  }
-
-  const mockRegistry = {
-    named: () => overrides.routes ?? [],
-    findNameByRoute: (method: string, path: string) => {
-      const m = method.toLowerCase()
-      return overrides.routes?.find(r => r.path === path && (r.method === m || r.method === 'all'))?.name
-    },
-  } as unknown as RouteRegistry
-
-  const mockApplication = {
-    config: { trailingSlash: overrides.trailingSlash },
-  } as unknown as Application
-
-  const mockUri = {
-    getDefaults: () => overrides.defaults ?? {},
-  }
-
-  const mockLocalePathService = {
-    localePathConfig: null,
-    prefixDefaultLocale: false,
-  }
-
-  const mockContainer = {
-    resolve: (token: symbol) => {
-      if (token === ROUTER_TOKENS.RouteRegistry) return mockRegistry
-      if (token === DI_TOKENS.Application) return mockApplication
-      if (token === ROUTER_TOKENS.Uri) return mockUri
-      if (token === ROUTER_TOKENS.LocalePathService) return mockLocalePathService
-      throw new Error(`Unexpected token: ${String(token)}`)
-    },
-  }
-
-  const variables: Record<string, unknown> = {
-    inertia: overrides.isInertia ?? false,
-    inertiaFlash: {},
-    inertiaFlashOut: {},
-    [ROUTER_CONTEXT_KEYS.REQUEST_CONTAINER]: mockContainer,
-  }
-
-  const c = {
-    req: {
-      url: overrides.url ?? 'http://localhost/',
-      method: 'GET',
-      routePath: overrides.routePath ?? '/',
-      header: (name: string) => headers.get(name) ?? undefined,
-      valid: (target: string) => target === 'param' ? (overrides.validatedParams ?? {}) : {},
-    },
-    get: (key: string) => variables[key],
-    set: (key: string, value: unknown) => { variables[key] = value },
-    header: vi.fn(),
-    status: vi.fn(),
-    res: { status: 200 },
-  } as unknown as Context
-
-  return new RouterContext(c)
 }
 
 describe('InertiaService', () => {
@@ -199,7 +128,9 @@ describe('InertiaService', () => {
       expect(body.props).not.toHaveProperty('extra')
     })
 
-    it('should include parent prop when dot-notation partial data is requested', async () => {
+    it('should narrow into a parent prop when dot-notation partial data is requested', async () => {
+      // `only: ['user.permissions']` asks for one field of `user`, not for all of it. Answering
+      // with the whole of `user` sends the payload the partial reload exists to avoid.
       const ctx = createMockContext({
         isInertia: true,
         headers: {
@@ -214,8 +145,26 @@ describe('InertiaService', () => {
       })
 
       const body = await parsePageJson(response)
-      expect(body.props).toEqual({ user: { name: 'John', permissions: ['read'] }, seo: {}, errors: {} })
+      expect(body.props).toEqual({ user: { permissions: ['read'] }, seo: {}, errors: {} })
       expect(body.props).not.toHaveProperty('extra')
+    })
+
+    it('should carry a whole parent prop when the parent itself is requested', async () => {
+      const ctx = createMockContext({
+        isInertia: true,
+        headers: {
+          'x-inertia-partial-component': 'Home',
+          'x-inertia-partial-data': 'user',
+        },
+      })
+
+      const response = await service.render(ctx, 'Home', {
+        user: { name: 'John', permissions: ['read'] },
+        extra: 'data',
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.props).toEqual({ user: { name: 'John', permissions: ['read'] }, seo: {}, errors: {} })
     })
 
     it('should resolve optional props with dot-notation partial data', async () => {
@@ -287,6 +236,7 @@ describe('InertiaService', () => {
         hasFlash: false,
         isPartial: false,
         hasOnceProps: false,
+        varyHeaders: INERTIA_VARY_HEADERS,
       })
     })
 
@@ -407,6 +357,41 @@ describe('InertiaService', () => {
       expect(body.props).not.toHaveProperty('comments')
     })
 
+    it('should report a nested deferred prop at its full path', async () => {
+      // The client addresses a prop where it sits in the page object, so a deferred prop nested
+      // under another names both segments — otherwise the reload it triggers asks for a path the
+      // page does not have, and the prop it is waiting for never arrives.
+      const ctx = createMockContext({ isInertia: true })
+
+      const response = await service.render(ctx, 'Home', {
+        panel: { title: 'Overview', analytics: service.defer(() => ({ hits: 1 })) },
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.deferredProps).toEqual({ default: ['panel.analytics'] })
+      expect(body.props.panel).toEqual({ title: 'Overview' })
+    })
+
+    it('should resolve a nested deferred prop when its full path is requested', async () => {
+      const ctx = createMockContext({
+        isInertia: true,
+        headers: {
+          'x-inertia-partial-component': 'Home',
+          'x-inertia-partial-data': 'panel.analytics',
+        },
+      })
+
+      const response = await service.render(ctx, 'Home', {
+        panel: { title: 'Overview', analytics: service.defer(() => ({ hits: 1 })) },
+        other: 'skipped',
+      })
+
+      const body = await parsePageJson(response)
+      // Narrowed to what was asked for: the sibling stays behind, and so does the rest of the page.
+      expect(body.props.panel).toEqual({ analytics: { hits: 1 } })
+      expect(body.props).not.toHaveProperty('other')
+    })
+
     it('should resolve deferred props on partial reload and exclude from deferredProps', async () => {
       const ctx = createMockContext({
         isInertia: true,
@@ -517,6 +502,325 @@ describe('InertiaService', () => {
 
       const body = await parsePageJson(response)
       expect(body.deepMergeProps).toEqual(['data'])
+    })
+
+    it('should emit matchOn as a dot path the client can resolve', async () => {
+      const ctx = createMockContext({ isInertia: true })
+
+      const response = await service.render(ctx, 'Home', {
+        items: service.merge(() => [{ id: 1 }], { matchOn: 'id' }),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.matchPropsOn).toEqual(['items.id'])
+    })
+
+    it('should drop the merge strategy for a prop the client asked to reset', async () => {
+      const ctx = createMockContext({
+        isInertia: true,
+        headers: { 'x-inertia-reset': 'items' },
+      })
+
+      const response = await service.render(ctx, 'Home', {
+        items: service.merge(() => [1, 2, 3], { matchOn: 'id' }),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body).not.toHaveProperty('mergeProps')
+      expect(body).not.toHaveProperty('matchPropsOn')
+      expect(body.props).toHaveProperty('items', [1, 2, 3])
+    })
+  })
+
+  describe('scroll()', () => {
+    function paginated(page: number, totalPages: number, data: unknown[] = []) {
+      return { data, pagination: { page, limit: 10, total: totalPages * 10, totalPages } }
+    }
+
+    it('should publish the five fields the client reads, keyed by prop name', async () => {
+      const ctx = createMockContext({ isInertia: true })
+
+      const response = await service.render(ctx, 'Home', {
+        items: service.scroll(() => paginated(2, 5, [{ id: 3 }])),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.scrollProps).toEqual({
+        items: {
+          pageName: 'page',
+          currentPage: 2,
+          previousPage: 1,
+          nextPage: 3,
+          reset: false,
+        },
+      })
+    })
+
+    it('should keep the prop value paginator-shaped and merge only the wrapper key', async () => {
+      const ctx = createMockContext({ isInertia: true })
+
+      const response = await service.render(ctx, 'Home', {
+        items: service.scroll(() => paginated(1, 3, [{ id: 1 }])),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.props.items).toEqual({
+        data: [{ id: 1 }],
+        pagination: { page: 1, limit: 10, total: 30, totalPages: 3 },
+      })
+      expect(body.mergeProps).toEqual(['items.data'])
+    })
+
+    it('should omit scrollProps entirely when no scroll prop is present', async () => {
+      const ctx = createMockContext({ isInertia: true })
+
+      const response = await service.render(ctx, 'Home', { items: [1, 2, 3] })
+
+      const body = await parsePageJson(response)
+      expect(body).not.toHaveProperty('scrollProps')
+    })
+
+    it('should report null on both sides for a single-page result', async () => {
+      const ctx = createMockContext({ isInertia: true })
+
+      const response = await service.render(ctx, 'Home', {
+        items: service.scroll(() => paginated(1, 1)),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.scrollProps?.items).toMatchObject({ previousPage: null, nextPage: null })
+    })
+
+    it('should prepend when the request carries a prepend merge intent', async () => {
+      const ctx = createMockContext({
+        isInertia: true,
+        headers: { 'x-inertia-infinite-scroll-merge-intent': 'prepend' },
+      })
+
+      const response = await service.render(ctx, 'Home', {
+        items: service.scroll(() => paginated(1, 5)),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.prependProps).toEqual(['items.data'])
+      expect(body).not.toHaveProperty('mergeProps')
+    })
+
+    it('should append when the request carries an append merge intent', async () => {
+      const ctx = createMockContext({
+        isInertia: true,
+        headers: { 'x-inertia-infinite-scroll-merge-intent': 'append' },
+      })
+
+      const response = await service.render(ctx, 'Home', {
+        items: service.scroll(() => paginated(3, 5)),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.mergeProps).toEqual(['items.data'])
+      expect(body).not.toHaveProperty('prependProps')
+    })
+
+    it('should append when the request carries no merge intent at all', async () => {
+      const ctx = createMockContext({ isInertia: true })
+
+      const response = await service.render(ctx, 'Home', {
+        items: service.scroll(() => paginated(1, 5)),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.mergeProps).toEqual(['items.data'])
+      expect(body).not.toHaveProperty('prependProps')
+    })
+
+    it('should emit matchOn under the wrapper path', async () => {
+      const ctx = createMockContext({ isInertia: true })
+
+      const response = await service.render(ctx, 'Home', {
+        items: service.scroll(() => paginated(1, 2), { matchOn: 'id' }),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.matchPropsOn).toEqual(['items.data.id'])
+    })
+
+    it('should honour a custom wrapper key', async () => {
+      const ctx = createMockContext({ isInertia: true })
+
+      const response = await service.render(ctx, 'Home', {
+        items: service.scroll(
+          () => ({ rows: [{ id: 1 }], pagination: { page: 1, limit: 10, total: 20, totalPages: 2 } }),
+          { wrapper: 'rows', matchOn: 'id' },
+        ),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.mergeProps).toEqual(['items.rows'])
+      expect(body.matchPropsOn).toEqual(['items.rows.id'])
+    })
+
+    it('should override the derived page name', async () => {
+      const ctx = createMockContext({ isInertia: true })
+
+      const response = await service.render(ctx, 'Home', {
+        items: service.scroll(() => paginated(1, 2), { pageName: 'comments_page' }),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.scrollProps?.items.pageName).toBe('comments_page')
+    })
+
+    it('should derive from a cursor-paginated result with no metadata resolver', async () => {
+      const ctx = createMockContext({ isInertia: true })
+
+      const response = await service.render(ctx, 'Home', {
+        items: service.scroll(() => ({
+          data: [{ id: 3 }],
+          perPage: 2,
+          cursorName: 'cursor',
+          cursor: 'cur_current',
+          nextCursor: 'cur_next',
+          prevCursor: 'cur_prev',
+        })),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.scrollProps?.items).toEqual({
+        pageName: 'cursor',
+        currentPage: 'cur_current',
+        previousPage: 'cur_prev',
+        nextPage: 'cur_next',
+        reset: false,
+      })
+    })
+
+    it('should stand `1` in for the first cursor page, which has no cursor of its own', async () => {
+      const ctx = createMockContext({ isInertia: true })
+
+      const response = await service.render(ctx, 'Home', {
+        items: service.scroll(() => ({
+          data: [{ id: 1 }],
+          perPage: 2,
+          cursorName: 'cursor',
+          cursor: null,
+          nextCursor: 'cur_next',
+          prevCursor: null,
+        })),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.scrollProps?.items).toMatchObject({ currentPage: 1, previousPage: null, nextPage: 'cur_next' })
+    })
+
+    it('should honour a cursor result\'s own cursor name', async () => {
+      const ctx = createMockContext({ isInertia: true })
+
+      const response = await service.render(ctx, 'Home', {
+        items: service.scroll(() => ({
+          data: [],
+          perPage: 2,
+          cursorName: 'thread_cursor',
+          cursor: null,
+          nextCursor: null,
+          prevCursor: null,
+        })),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.scrollProps?.items).toMatchObject({ pageName: 'thread_cursor', nextPage: null, previousPage: null })
+    })
+
+    it('should take the identifiers from a custom metadata resolver', async () => {
+      const ctx = createMockContext({ isInertia: true })
+
+      const response = await service.render(ctx, 'Home', {
+        items: service.scroll(
+          () => ({ data: [{ id: 9 }], startingAfter: 'cur_8', endingBefore: 'cur_10' }),
+          {
+            metadata: (value) => ({
+              pageName: 'cursor',
+              currentPage: value.startingAfter,
+              previousPage: null,
+              nextPage: value.endingBefore,
+            }),
+          },
+        ),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.scrollProps?.items).toEqual({
+        pageName: 'cursor',
+        currentPage: 'cur_8',
+        previousPage: null,
+        nextPage: 'cur_10',
+        reset: false,
+      })
+    })
+
+    it('should throw rather than guess identifiers for an unrecognised shape', async () => {
+      const ctx = createMockContext({ isInertia: true })
+
+      await expect(
+        service.render(ctx, 'Home', { items: service.scroll(() => [{ id: 1 }]) }),
+      ).rejects.toThrow(UnrecognizedScrollShapeError)
+    })
+
+    it('should flag reset and register no merge when the client asked to reset the prop', async () => {
+      const ctx = createMockContext({
+        isInertia: true,
+        headers: { 'x-inertia-reset': 'items' },
+      })
+
+      const response = await service.render(ctx, 'Home', {
+        items: service.scroll(() => paginated(1, 4), { matchOn: 'id' }),
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.scrollProps?.items).toMatchObject({ reset: true, currentPage: 1, nextPage: 2 })
+      expect(body).not.toHaveProperty('mergeProps')
+      expect(body).not.toHaveProperty('matchPropsOn')
+    })
+
+    it('should resolve on a partial reload that requests the prop', async () => {
+      const ctx = createMockContext({
+        isInertia: true,
+        headers: {
+          'x-inertia-partial-component': 'Home',
+          'x-inertia-partial-data': 'items',
+          'x-inertia-infinite-scroll-merge-intent': 'append',
+        },
+      })
+
+      const response = await service.render(ctx, 'Home', {
+        items: service.scroll(() => paginated(4, 5)),
+        other: 'ignored',
+      })
+
+      const body = await parsePageJson(response)
+      expect(body.props).not.toHaveProperty('other')
+      expect(body.scrollProps?.items).toMatchObject({ currentPage: 4, previousPage: 3, nextPage: 5 })
+      expect(body.mergeProps).toEqual(['items.data'])
+    })
+
+    it('should leave the callback unresolved on a partial reload that does not request it', async () => {
+      const ctx = createMockContext({
+        isInertia: true,
+        headers: {
+          'x-inertia-partial-component': 'Home',
+          'x-inertia-partial-data': 'stats',
+        },
+      })
+
+      const callback = vi.fn(() => paginated(1, 5))
+      const response = await service.render(ctx, 'Home', {
+        items: service.scroll(callback),
+        stats: service.optional(() => ({ total: 5 })),
+      })
+
+      const body = await parsePageJson(response)
+      expect(callback).not.toHaveBeenCalled()
+      expect(body).not.toHaveProperty('scrollProps')
+      expect(body.props).not.toHaveProperty('items')
     })
   })
 

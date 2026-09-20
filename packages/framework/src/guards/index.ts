@@ -4,6 +4,7 @@ export {
   getControllerGuards,
   getMethodGuards,
   GuardExecutionService,
+  GuardRejectedError,
   GUARD_METADATA_KEY,
   type CanActivate,
   type Guard,

@@ -20,10 +20,7 @@
  * Cloudflare's `webSocket`/`cf` init fields the original carried, which
  * `{ status, statusText, headers }` alone can't reproduce.
  */
-export function setResponseHeaders(
-  response: Response,
-  headers: Record<string, string | null>,
-): Response {
+export function setResponseHeaders(response: Response, headers: Record<string, string | null>): Response {
   if (response.status < 200 || response.status > 599) return response
 
   try {
@@ -44,4 +41,32 @@ export function setResponseHeaders(
       headers: merged,
     })
   }
+}
+
+/** `public` as a whole directive, not the substring inside `no-cache="public"` or a field name. */
+const PUBLIC_DIRECTIVE = /(?:^|,)\s*public\s*(?:,|$)/
+
+/**
+ * Whether a SHARED cache is permitted to store this response and serve it to a
+ * different caller.
+ *
+ * `public` and `s-maxage` are the two directives that say so outright (RFC 9111
+ * §5.2.2). Everything else is treated as not shared-cacheable: `private` and
+ * `no-store` say so explicitly, and a response with no `Cache-Control` at all
+ * never reaches a caller in a Stratal app without one — `createNoStoreFallback\
+Middleware` stamps it first.
+ *
+ * `CDN-Cache-Control` is read the same way and counts on its own. It is the
+ * header a CDN honours in preference to `Cache-Control`, so a response can be
+ * stored and replayed to other callers on the strength of it alone — reading
+ * only `Cache-Control` would call such a response private and leave whatever
+ * this guards, per-caller headers included, to be served to everyone.
+ */
+export function isSharedCacheable(response: Response): boolean {
+  const says = (header: string): boolean => {
+    const directives = response.headers.get(header)?.toLowerCase() ?? ''
+    return PUBLIC_DIRECTIVE.test(directives) || directives.includes('s-maxage')
+  }
+
+  return says('Cache-Control') || says('CDN-Cache-Control')
 }

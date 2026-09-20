@@ -1,4 +1,4 @@
-import type { MiniflareOptions } from 'miniflare';
+import type { MiniflareOptions, V4MiniflareOptions } from 'miniflare';
 import { existsSync } from 'node:fs';
 import { createRequire, register } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
@@ -7,6 +7,7 @@ import type { QuarryRegistry } from 'stratal/quarry';
 import { type Application } from '../application';
 import { extractEnvFlag } from './argv';
 import { createDynamicCommands } from './commands/dynamic-command';
+import { stripModuleRules } from './module-rules';
 import { resolveDevRegistryPath } from './registry';
 import { stripWorkflowBindings } from './workflow-bindings';
 
@@ -37,6 +38,10 @@ interface WranglerModule {
 
 interface MiniflareModule {
   Miniflare: new (opts: MiniflareOptions) => { ready: Promise<URL>; getBindings: (name?: string) => Promise<Record<string, unknown>>; dispose: () => Promise<void> }
+  // Miniflare 5 takes a `workers` array; wrangler's `unstable_getMiniflareWorkerOptions`
+  // still returns the flat v4 shape, so this converter is the supported bridge
+  // between them — see the `new Miniflare(...)` call below.
+  convertV4MiniflareOptions: (opts: V4MiniflareOptions) => MiniflareOptions
 }
 
 const require = createRequire(import.meta.url)
@@ -85,7 +90,7 @@ async function main(): Promise<void> {
   const cwdRequire = createRequire(join(process.cwd(), 'package.json'))
 
   const { unstable_readConfig: readConfig, unstable_getMiniflareWorkerOptions: getMiniflareWorkerOptions, unstable_getVarsForDev: getVarsForDev, maybeStartOrUpdateRemoteProxySession } = await import(cwdRequire.resolve('wrangler')) as WranglerModule
-  const { Miniflare } = await import(cwdRequire.resolve('miniflare')) as MiniflareModule
+  const { Miniflare, convertV4MiniflareOptions } = await import(cwdRequire.resolve('miniflare')) as MiniflareModule
 
   const candidates = ['wrangler.jsonc', 'wrangler.json', 'wrangler.toml']
   const configName = candidates.find(c => existsSync(resolve(process.cwd(), c)))
@@ -168,7 +173,7 @@ async function main(): Promise<void> {
     QUEUE_PROVIDER: 'sync',
   }
 
-  // The quarry worker runs an empty script (`script: ''` below), so it can't own
+  // The quarry worker runs an empty script (see the Miniflare options below), so it can't own
   // a Workflow entrypoint, and a sourceless CLI host can't reach a Workflow
   // defined in another worker either (it boots before that worker exists, and
   // Workflows can't be remote bindings). Drop the Workflow bindings so Miniflare
@@ -186,16 +191,33 @@ async function main(): Promise<void> {
   const workerName = config.name ? `quarry-${config.name}-${process.pid}` : `quarry-${process.pid}`
   workerOptions.name = workerName
 
-  const mf = new Miniflare({
+  // Wrangler always emits `modulesRules`, and the v4→v5 converter below rejects
+  // any input carrying it. A sourceless host loads no modules, so the rules can
+  // never apply here — see stripModuleRules.
+  stripModuleRules(workerOptions)
+
+  // Miniflare 5 dropped the flat `script`/`modules` options for a `workers`
+  // array, but wrangler still hands back v4-shaped worker options, so the
+  // options are built in the v4 shape and converted. Miniflare owns that
+  // mapping; hand-rolling it here would drift from whatever wrangler emits.
+  const mf = new Miniflare(convertV4MiniflareOptions({
     ...workerOptions,
     script: '',
     modules: true,
     unsafeDevRegistryPath: registryPath,
     // Persist every durable plugin (KV, D1, R2, Durable Objects, cache) under
     // the same root `wrangler dev` uses, so state survives across `quarry`
-    // invocations and is shared with a running `wrangler dev` session.
-    defaultPersistRoot: join(process.cwd(), '.wrangler/state/v3'),
-  })
+    // invocations and is shared with a running `wrangler dev` session. Layout is
+    // `<root>/<plugin>`, unchanged from v4.
+    //
+    // Deliberately the v5 key in an otherwise v4-shaped object: the converter
+    // maps the worker options SHAPE, not option names, and `defaultPersistRoot`
+    // no longer exists anywhere in Miniflare 5 — its v4-compatibility input
+    // already spells this `resourcePersistencePath`. The v4 name is accepted and
+    // then ignored, which would leave no persistence path at all and silently
+    // discard local state between runs.
+    resourcePersistencePath: join(process.cwd(), '.wrangler/state/v3'),
+  }))
 
   await mf.ready
   const env = await mf.getBindings()

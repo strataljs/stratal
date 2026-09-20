@@ -11,8 +11,10 @@ describe('bindRouteCache', () => {
 
   it('resolves a cacheable route against module defaults', () => {
     const bound = bindRouteCache({ ttl: 300 }, undefined, { swr: 60 }, ctx)
+    // `browserTtl` mirrors `ttl` unless the route narrows it, so a route that
+    // says nothing about browsers resolves one here.
     expect(bound?.cacheable).toEqual({
-      ttl: 300, swr: 60, tags: [], partitionBy: [], vary: [],
+      ttl: 300, browserTtl: 300, swr: 60, tags: [], partitionBy: [], vary: [],
     })
   })
 
@@ -120,6 +122,47 @@ describe('bindRouteCache', () => {
       {},
       ctx,
     )?.cacheable?.tags).toEqual(['item:{param.id}', 'q:{query.tenant}', 'd:{data.categoryId}'])
+  })
+
+  describe('{partition.X} static resolvability', () => {
+    const gateway = { ...ctx, gatewayConfigured: true }
+
+    it('allows a {partition.X} tag whose X is a declared partition', () => {
+      const bound = bindRouteCache(
+        { ttl: 300, tags: ['user:{partition.user}'], partitionBy: ['user'] },
+        undefined,
+        {},
+        gateway,
+      )
+      expect(bound?.cacheable?.tags).toEqual(['user:{partition.user}'])
+    })
+
+    it('throws when a {partition.X} tag names a partition the route does not declare', () => {
+      expect(() =>
+        bindRouteCache(
+          { ttl: 300, tags: ['tenant:{partition.tenant}'], partitionBy: ['user'] },
+          undefined,
+          {},
+          gateway,
+        ),
+      ).toThrow(ResponseCacheConfigError)
+    })
+
+    it('honours a partitionBy inherited from module defaults', () => {
+      const bound = bindRouteCache(
+        { ttl: 300, tags: ['user:{partition.user}'] },
+        undefined,
+        { partitionBy: ['user'] },
+        gateway,
+      )
+      expect(bound?.cacheable?.tags).toEqual(['user:{partition.user}'])
+    })
+
+    it('throws on a @PurgesCache {partition.X} tag, which runs in the gateway and resolves none', () => {
+      expect(() =>
+        bindRouteCache(undefined, { tags: ['user:{partition.user}'] }, {}, gateway),
+      ).toThrow(ResponseCacheConfigError)
+    })
   })
 
   describe('{param.X} static resolvability', () => {

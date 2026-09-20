@@ -1,9 +1,14 @@
 # @stratal/testing
 
-Testing utilities and mocks for [Stratal](https://github.com/strataljs/stratal) framework applications.
+Testing utilities and mocks for [Stratal](https://stratal.dev) applications.
 
 [![npm version](https://img.shields.io/npm/v/@stratal/testing)](https://www.npmjs.com/package/@stratal/testing)
+[![CI](https://github.com/strataljs/stratal/actions/workflows/ci.yml/badge.svg)](https://github.com/strataljs/stratal/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![npm downloads](https://img.shields.io/npm/dm/@stratal/testing)](https://www.npmjs.com/package/@stratal/testing)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/strataljs/stratal/pulls)
+[![GitHub stars](https://img.shields.io/github/stars/strataljs/stratal?style=social)](https://github.com/strataljs/stratal)
 
 ## Installation
 
@@ -29,7 +34,22 @@ npx skills add strataljs/stratal
 
 | Skill | Description |
 |---|---|
-| `stratal` | Build Cloudflare Workers apps with the Stratal framework — modules, DI, controllers, routing, OpenAPI, queues, cron, events, seeders, CLI, auth, database, RBAC, testing, and more |
+| `stratal` | Build Cloudflare Workers apps with the Stratal framework — modules, DI, controllers, routing, OpenAPI, queues, cron, events, seeders, CLI, auth, database, access control, testing, and more |
+
+## Vitest setup
+
+`stratalTest()` wraps [`@cloudflare/vitest-plugin`](https://developers.cloudflare.com/workers/testing/vitest-integration/) with Stratal defaults (tslib alias, ZenStack mocks, SSR externals). It needs no database — `Test.createTestingModule()` and unit tests run with no DB wiring at all.
+
+```typescript
+// vitest.config.ts
+import { fixNobleHashesCjs, fixPgCjs, stratalTest } from '@stratal/testing/vitest-plugin'
+
+export default defineConfig({
+  plugins: [fixPgCjs(), fixNobleHashesCjs(), stratalTest()],
+})
+```
+
+A database is opt-in via the `database` option, which gives **each test file** its own database cloned from a migrated template. Omit it entirely for suites that don't touch Postgres.
 
 ## Quick Start
 
@@ -120,9 +140,17 @@ module.http
 // Access fake storage for assertions
 module.storage
 
+// Other test clients and fakes
+module.ws('/ws/chat')          // WebSocket request builder
+module.sse('/streaming/events') // Server-sent events request builder
+module.quarry('users:create')   // Quarry command request builder
+module.cache                    // Workers Cache stub — inspect purges
+module.featureFlags             // Fake feature flag service
+module.sentEmails               // Emails sent during the test
+
 // Execute code in a request-scoped container
-await module.runInRequestScope(async () => {
-  const scoped = module.get(REQUEST_SCOPED_TOKEN)
+await module.runInRequestScope(async (container) => {
+  const scoped = container.resolve(REQUEST_SCOPED_TOKEN)
 })
 
 // Cleanup in afterAll
@@ -145,6 +173,14 @@ const response = await module.http
 ```
 
 All HTTP methods are supported: `.get()`, `.post()`, `.put()`, `.patch()`, `.delete()`.
+
+Requests can also act as a user, force JSON, or carry a locale:
+
+```typescript
+await module.http.get('/api/v1/profile').actingAs({ id: user.id }).send()
+await module.http.get('/api/v1/notes').asJson().send()
+await module.http.get('/api/v1/notes').withLocale('fr').send()
+```
 
 ### Response assertions
 
@@ -218,59 +254,60 @@ const module = await Test.createTestingModule({
 
 ## Fetch Mocking
 
-Mock external HTTP calls with `createFetchMock()`, backed by [undici MockAgent](https://undici.nodejs.org/#/docs/api/MockAgent):
+Mock external HTTP calls with `createMockFetch()`, backed by [Mock Service Worker](https://mswjs.io). `http` and `HttpResponse` are re-exported for convenience.
 
 ```typescript
-import { createFetchMock, type FetchMock } from '@stratal/testing'
+import { createMockFetch, http, HttpResponse, type MockFetch } from '@stratal/testing'
 
 describe('GeoService', () => {
-  let module: TestingModule
-  let fetchMock: FetchMock
+  let mockFetch: MockFetch
 
-  beforeEach(() => {
-    fetchMock = createFetchMock()
-    fetchMock.activate()
-    fetchMock.disableNetConnect()
+  beforeAll(() => {
+    mockFetch = createMockFetch([
+      http.get('https://geo.api.com/lookup', () => {
+        return HttpResponse.json({ lat: 40.7128, lng: -74.006 })
+      }),
+    ])
+    mockFetch.listen()
   })
 
-  afterEach(() => {
-    fetchMock.reset()
-  })
+  afterEach(() => mockFetch.reset())
+  afterAll(() => mockFetch.close())
 
   it('looks up coordinates', async () => {
-    fetchMock.mockJsonResponse('https://geo.api.com/lookup', {
-      lat: 40.7128,
-      lng: -74.006,
-    })
-
     const response = await module.http
       .get('/api/geo/lookup?address=NYC')
       .send()
 
     response.assertOk()
     await response.assertJsonPath('data.lat', 40.7128)
-    fetchMock.assertNoPendingInterceptors()
-  })
-
-  it('handles API errors', async () => {
-    fetchMock.mockError('https://geo.api.com/lookup', 503, 'Service Unavailable')
-
-    const response = await module.http
-      .get('/api/geo/lookup?address=NYC')
-      .send()
-
-    response.assertServerError()
   })
 })
 ```
 
-For advanced scenarios, access the undici `MockPool` directly:
+### Lifecycle
 
 ```typescript
-fetchMock
-  .get('https://api.example.com')
-  .intercept({ path: '/users', method: 'POST' })
-  .reply(201, { id: '1' })
+mockFetch.listen()  // start intercepting
+mockFetch.reset()   // clear runtime handlers, between tests
+mockFetch.close()   // stop intercepting
+```
+
+### Adding handlers for a single test
+
+```typescript
+mockFetch.use(
+  http.post('https://geo.api.com/submit', () => {
+    return HttpResponse.json({ success: true }, { status: 201 })
+  }),
+)
+```
+
+### Shorthands
+
+```typescript
+mockFetch.mockJsonResponse('https://geo.api.com/lookup', { lat: 40.7128 })
+mockFetch.mockError('https://geo.api.com/lookup', 503, 'Service Unavailable')
 ```
 
 ## Storage Testing
@@ -300,6 +337,59 @@ afterEach(() => {
 })
 ```
 
+## WebSocket Testing
+
+```typescript
+const ws = await module.ws('/ws/chat')
+  .actingAs({ id: user.id })
+  .connect()
+
+ws.send('hello')
+await ws.assertMessage('echo:hello')
+
+ws.close()
+await ws.waitForClose()
+```
+
+## SSE Testing
+
+```typescript
+const sse = await module.sse('/streaming/events')
+  .actingAs({ id: user.id })
+  .connect()
+
+await sse.assertEvent({ event: 'message', data: 'hello' })
+await sse.assertJsonEventData({ status: 'done' })
+await sse.waitForEnd()
+```
+
+## Command Testing
+
+```typescript
+const result = await module
+  .quarry('users:create')
+  .withInput({ email: 'test@example.com', admin: true })
+  .run()
+
+result.assertSuccessful()
+result.assertOutputContains('User created')
+result.assertExitCode(0)
+```
+
+## Response Cache
+
+A `ctx.cache` stub is installed by default, so `@Cacheable` / `@PurgesCache` routes are testable with no configuration.
+
+```typescript
+const response = await module.http.get('/blog/hello-world').send()
+response.assertHeader('Cache-Control', 'public, max-age=300')
+
+await module.http.post('/posts/hello-world/publish').send()
+expect(module.cache.purges).toEqual([{ tags: ['post:hello-world'] }])
+```
+
+Pass `cache: false` to `Test.createTestingModule()` to reproduce a runtime where Workers Caching is genuinely unconfigured.
+
 ## Deep Mocking
 
 Create deeply-mocked instances of any interface or class with `createMock()` from [`@golevelup/ts-vitest`](https://github.com/golevelup/nestjs/tree/master/packages/ts-vitest):
@@ -318,9 +408,20 @@ beforeEach(() => {
 ## Sub-path Exports
 
 ```typescript
-import { Test, TestingModule, createFetchMock } from '@stratal/testing'
+import { Test, TestingModule, createMockFetch, http, HttpResponse } from '@stratal/testing'
 import { createMock, type DeepMocked } from '@stratal/testing/mocks'
+import { stratalTest, fixPgCjs, fixNobleHashesCjs } from '@stratal/testing/vitest-plugin'
+import { FakeStorageService } from '@stratal/testing/storage'
+import { FakeFeatureFlagService } from '@stratal/testing/feature-flags'
 ```
+
+## Support the project
+
+If Stratal is useful to you, **[star the repository](https://github.com/strataljs/stratal)** — it is the simplest way to help others find it.
+
+## Maintainer
+
+Built and maintained by **Temitayo Fadojutimi** — [@adesege_](https://x.com/adesege_).
 
 ## License
 

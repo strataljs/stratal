@@ -4,10 +4,12 @@ import type { Container } from '../../di/container'
 import { shouldLoopback } from '../../response-cache/cached-entrypoint'
 import { resolveCachedEntrypoint } from '../../response-cache/gateway-binding'
 import { isGatewayMode } from '../../response-cache/gateway-mode'
+import { REPRESENTATION_PROP, representationOf } from '../../response-cache/representation'
 import { RESPONSE_CACHE_TOKENS } from '../../response-cache/response-cache.tokens'
 import type { GatewayPrimerService } from '../../response-cache/services/gateway-primer.service'
 import type { GatewayRouteEntry, GatewayRouteTable } from '../../response-cache/services/gateway-route-table'
 import type { PartitionResolverService } from '../../response-cache/services/partition-resolver.service'
+import { isNestedDispatch } from '../nested-dispatch'
 import { RouterContext } from '../router-context'
 import type { RouterEnv } from '../types'
 
@@ -90,9 +92,10 @@ function lookupRoute(
  *
  * **Everything else runs inline**, which is always the safe direction: an
  * inline response never enters the cached entrypoint at all, so it can never
- * be stored. That covers a table miss, a non-`GET`/`HEAD` method, a primer
- * that short-circuited, and any partition resolver that returned
- * `null`/`undefined` or threw.
+ * be stored. That covers a table miss, a non-`GET`/`HEAD` method, a request
+ * the app dispatched into itself (`markNestedDispatch`), a primer that
+ * short-circuited, and any partition resolver that returned `null`/`undefined`
+ * or threw.
  *
  * ### Placement
  *
@@ -125,10 +128,9 @@ export function createGatewayDispatchMiddleware(container: Container): Middlewar
   let looked = false
 
   // Latches the *result* of the `ctx.exports` reachability check, not merely
-  // that it ran — same reasoning as `RouteRegistrationService.bootCheckFailure`.
-  // A typo'd entrypoint name cannot start resolving later in the isolate's
-  // life, so failing exactly one arbitrary request and then silently running
-  // every partitioned route inline forever is the outcome to avoid.
+  // that it ran. A typo'd entrypoint name cannot start resolving later in the
+  // isolate's life, so failing exactly one arbitrary request and then silently
+  // running every partitioned route inline forever is the outcome to avoid.
   let bootChecked = false
   let bootFailure: Error | undefined
 
@@ -150,6 +152,16 @@ export function createGatewayDispatchMiddleware(container: Container): Middlewar
 
     const ctx = executionContextOf(c)
     if (!isGatewayMode(ctx)) return next()
+
+    // A request the app dispatched into itself renders inline, always. It can
+    // be answered differently from the same URL asked for by a client — that
+    // is what a route recognising one is for — so forwarding it would store
+    // that answer under the client's key, and hand it to the next client the
+    // key matches. It is also the only request whose answer depends on
+    // reaching the same isolate: a route tells a nested dispatch apart from a
+    // client by a value minted in this one, which nothing on the far side of
+    // `ctx.exports` can be handed.
+    if (isNestedDispatch(c.req.raw)) return next()
 
     if (!bootChecked) {
       bootChecked = true
@@ -181,6 +193,13 @@ export function createGatewayDispatchMiddleware(container: Container): Middlewar
 
     const { props, resolved } = await resolver.resolve(routerContext, entry.partitionBy)
     if (!resolved) return next()
+
+    // The representation joins the partitions in the key. A route that answers
+    // one URL with both a document and a JSON payload has two bodies to keep
+    // apart, and `Vary` alone has been measured failing to keep them apart on a
+    // URL with a query string — see `representation.ts`.
+    const representation = representationOf(c.req.raw.headers, routeTable.keyBy)
+    if (representation !== undefined) props[REPRESENTATION_PROP] = representation
 
     // The callable form of a loopback binding is what selects the callee's
     // `ctx.props`; `.fetch` on the binding itself would forward with the

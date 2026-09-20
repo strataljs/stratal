@@ -7,8 +7,7 @@ Maintainer rules for `@stratal/framework`.
 - `src/auth/` — Better Auth integration; `AuthModule.forRootAsync()`; `AuthService`; auth middleware pipeline.
 - `src/context/` — `AuthContext` (request-scoped).
 - `src/database/` — `DatabaseModule`, ZenStack ORM wrapper, `@InjectDB(name)` decorator, plugins under `src/database/plugins/` (ErrorHandler, EventEmitter, SchemaSwitcher), commands under `src/database/commands/`, custom Postgres types in `src/database/custom-pg-types.ts`.
-- `src/access-control/` — Casbin + ZenStack adapter (`./access-control` sub-path export). `CasbinService` is request-scoped.
-- `src/rbac/` — RBAC helpers (internal — not in `package.json` exports). Don't add an export entry without confirming consumer surface.
+- `src/access-control/` — resources/roles/permissions on Better Auth's `access` plugin (`./access-control` sub-path export): `createAccessControl()`, `extendRole()`, `createStratalAcPlugin()`, `AccessShareMiddleware`, and the request-scoped `AccessService`. This is the only access-control mechanism — authorization belongs here, not in a separate engine or an `src/rbac/` directory.
 - `src/factory/` — `Factory` abstract base + `Sequence` for test data.
 - `src/guards/` — `AuthGuard` factory (auth + optional permission check).
 
@@ -33,5 +32,5 @@ Maintainer rules for `@stratal/framework`.
 - DatabaseModule plugins are stacked at construction; order is meaningful — preserve existing order when adding plugins.
 - New named connection: update `DatabaseSchemaRegistry` augmentation contract (in consumer code) and the `@InjectDB(name)` lookup; both must agree.
 - Database events follow `{phase}.{Model}.{operation}` (e.g., `after.User.create`). Adding a new phase or operation requires updating the wildcard resolver in core's `EventRegistry` and the type augmentation `DatabaseEvents<ConnectionName>` in `src/database/event-types.ts`.
-- `AuthContext` and `CasbinService` are request-scoped. Never inject as singletons — they hold per-request state.
+- `AuthContext` and `AccessService` are request-scoped (`@Request(...)`). Never inject as singletons — they hold per-request state.
 - New factories must be re-exported through `src/factory/index.ts` to be visible at `@stratal/framework/factory`.

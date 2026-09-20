@@ -76,7 +76,12 @@ function isPageComponent<TProps>(value: unknown): value is ComponentType<TProps>
   return typeof value === 'function' || (typeof value === 'object' && value !== null)
 }
 
-export interface CreateInertiaSsrAppOptions<TProps = unknown> {
+/**
+ * The declared options of {@link createInertiaSsrApp}, before `prepare`'s
+ * presence requirement is applied. Every inference site for `TProps` and
+ * `TPrepared` lives here, in plain (non-conditional) positions.
+ */
+export interface InertiaSsrAppOptions<TProps = unknown, TPrepared = undefined> {
   /**
    * Resolve a page by name. Typically backed by `import.meta.glob`, whose modules
    * are opaque (`unknown`) — the returned value is unwrapped (a `default` export is
@@ -88,16 +93,48 @@ export interface CreateInertiaSsrAppOptions<TProps = unknown> {
   // `unknown` default) instead of being widened back out of the resolver return.
   resolve: (name: string) => ResolverReturn<NoInfer<TProps>>
   /**
-   * Optional wrapper for application-level providers (theme, store, i18n, …).
-   * Receives the Inertia `App` component and its props; return the React tree to
-   * render. When omitted, `App` is rendered directly.
+   * Compute a per-render value before the tree is built, and receive it back in
+   * `setup`. Runs once per `render(page)` call. Required whenever `setup` expects
+   * a `prepared` other than `undefined` — see {@link CreateInertiaSsrAppOptions}.
+   *
+   * This exists so a request-scoped value — resolved modal components, a request
+   * logger — can reach the tree without a module-level variable. A worker isolate
+   * serves many requests concurrently and interleaves them at every await, so a
+   * module-level "current request" value is a cross-request leak, not a shortcut.
    */
-  setup?: (args: { App: ComponentType<AppProps>; props: AppProps }) => ReactNode
+  prepare?: (page: Page) => TPrepared | Promise<TPrepared>
+  /**
+   * Optional wrapper for application-level providers (theme, store, i18n, …).
+   * Receives the Inertia `App` component, its props, and this render's `prepare`
+   * result. Return the React tree to render. When omitted, `App` is rendered
+   * directly.
+   */
+  // Declared as a property with a function type, never method shorthand: only the
+  // property form is checked contravariantly under `strictFunctionTypes`, so an
+  // annotated `prepared` here is an inference site for `TPrepared` rather than a
+  // bivariantly-accepted lie.
+  setup?: (args: { App: ComponentType<AppProps>; props: AppProps; prepared: TPrepared }) => ReactNode
   /**
    * Optional document-title callback (Inertia `title`), applied to page titles.
    */
   title?: HeadManagerTitleCallback
 }
+
+/**
+ * Options for {@link createInertiaSsrApp}.
+ *
+ * `TPrepared` is inferred from `prepare`'s return type *and* from an annotated
+ * `prepared` on `setup`. The intersected member closes the gap between the two:
+ * unless `TPrepared` is `undefined`, `prepare` becomes required, so a `setup`
+ * that claims a `prepared` nothing produces fails to compile instead of reading
+ * `undefined` at runtime. The requirement is expressed as an intersection rather
+ * than a union of two option shapes because a union is discriminated only by
+ * literal-valued properties — `prepare` holds a function, so a union would leave
+ * `setup`'s parameters without a contextual type.
+ */
+export type CreateInertiaSsrAppOptions<TProps = unknown, TPrepared = undefined> =
+  InertiaSsrAppOptions<TProps, TPrepared> &
+    ([undefined] extends [TPrepared] ? unknown : Pick<Required<InertiaSsrAppOptions<TProps, TPrepared>>, 'prepare'>)
 
 export interface InertiaSsrApp {
   render(page: Page): Promise<InertiaSsrResult>
@@ -111,8 +148,8 @@ export interface InertiaSsrApp {
  * progressively. Head tags rendered inside a *suspended* boundary are not
  * captured; use Stratal's server-side SEO (`ctx.seo()`) for `<head>` metadata.
  */
-export function createInertiaSsrApp<TProps = unknown>(
-  options: CreateInertiaSsrAppOptions<TProps>,
+export function createInertiaSsrApp<TProps = unknown, TPrepared = undefined>(
+  options: CreateInertiaSsrAppOptions<TProps, TPrepared>,
 ): InertiaSsrApp {
   const resolveComponent = (name: string): Promise<ComponentType<TProps>> =>
     Promise.resolve(options.resolve(name)).then((module) => {
@@ -126,7 +163,16 @@ export function createInertiaSsrApp<TProps = unknown>(
   return {
     async render(page: Page): Promise<InertiaSsrResult> {
       let head: string[] = []
-      const initialComponent = await resolveComponent(page.component)
+      const [initialComponent, prepared] = await Promise.all([
+        resolveComponent(page.component),
+        // Awaiting a `TPrepared | Promise<TPrepared>` yields `Awaited<TPrepared>`,
+        // which is `TPrepared` itself: inference against that union prefers the
+        // `Promise<TPrepared>` constituent over the naked one, so `TPrepared` is
+        // never a promise. The `?.` short-circuit only stands in for a `TPrepared`
+        // of `undefined`, because the options type requires `prepare` for any
+        // other `TPrepared`.
+        Promise.resolve(options.prepare?.(page)) as Promise<TPrepared>,
+      ])
       const props: AppProps = {
         initialPage: page,
         initialComponent,
@@ -135,7 +181,7 @@ export function createInertiaSsrApp<TProps = unknown>(
         onHeadUpdate: (elements: string[]) => { head = elements },
       }
       const app = options.setup
-        ? options.setup({ App, props })
+        ? options.setup({ App, props, prepared })
         : createElement(App, props)
       const stream = await renderToReadableStream(app)
       return { head, stream }

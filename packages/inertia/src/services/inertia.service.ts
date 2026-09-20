@@ -13,7 +13,11 @@ import type {
   InertiaMergeProp,
   InertiaOnceProp,
   InertiaOptionalProp,
+  InertiaPartialRequest,
+  InertiaPropResolution,
   InertiaRenderOptions,
+  InertiaScrollOptions,
+  InertiaScrollProp,
   SharedDataResolver,
 } from '../types'
 import {
@@ -22,9 +26,12 @@ import {
   INERTIA_PROP_MERGE,
   INERTIA_PROP_ONCE,
   INERTIA_PROP_OPTIONAL,
+  INERTIA_PROP_SCROLL,
+  INERTIA_SCROLL_MERGE_INTENT_HEADER,
 } from '../types'
 import type { DocumentRendererService } from './document-renderer.service'
 import { buildInertiaCacheSignals } from './inertia-cache-signals'
+import { deriveScrollMetadata } from './scroll-metadata'
 import type { SeoService } from './seo.service'
 
 @Request(INERTIA_TOKENS.InertiaService)
@@ -69,6 +76,17 @@ export class InertiaService {
     }
   }
 
+  scroll<T>(callback: () => T | Promise<T>, options?: InertiaScrollOptions<T>): InertiaScrollProp<T> {
+    return {
+      [INERTIA_PROP_SCROLL]: true,
+      callback,
+      wrapper: options?.wrapper ?? 'data',
+      matchOn: options?.matchOn,
+      pageName: options?.pageName,
+      metadata: options?.metadata,
+    }
+  }
+
   once<T>(callback: () => T, options?: InertiaOnceOptions): InertiaOnceProp<T> {
     return {
       [INERTIA_PROP_ONCE]: true,
@@ -110,7 +128,7 @@ export class InertiaService {
     const allSharedKeys = [...sharedKeys, ...Object.keys(this.sharedData), 'seo']
 
     // Process props: handle optional, deferred, merge, once, always
-    const result = await this.processProps(allProps, ctx, component, isInertia)
+    const result = await this.processProps(allProps, this.partialRequestFor(ctx, component, isInertia))
 
     // Read flash data from context (set by middleware)
     const rawFlash = (ctx.c.get('inertiaFlash') as Record<string, unknown> | undefined) ?? {}
@@ -144,6 +162,7 @@ export class InertiaService {
       ...(result.prependProps.length > 0 ? { prependProps: result.prependProps } : {}),
       ...(result.deepMergeProps.length > 0 ? { deepMergeProps: result.deepMergeProps } : {}),
       ...(result.matchPropsOn.length > 0 ? { matchPropsOn: result.matchPropsOn } : {}),
+      ...(Object.keys(result.scrollProps).length > 0 ? { scrollProps: result.scrollProps } : {}),
       ...(Object.keys(result.deferredProps).length > 0 ? { deferredProps: result.deferredProps } : {}),
       ...(Object.keys(result.deferredProps).length > 0 && !this.isPartialReload(ctx, component) ? { initialDeferredProps: result.deferredProps } : {}),
       ...(Object.keys(result.onceProps).length > 0 ? { onceProps: result.onceProps } : {}),
@@ -234,54 +253,121 @@ export class InertiaService {
     return !!(isInertia && partialComponent === component && partialDataHeader)
   }
 
-  private async processProps(
-    allProps: Record<string, unknown>,
-    ctx: RouterContext,
-    component: string,
-    isInertia: boolean,
-  ): Promise<{
-    resolvedProps: Record<string, unknown>
-    mergeProps: string[]
-    prependProps: string[]
-    deepMergeProps: string[]
-    matchPropsOn: string[]
-    deferredProps: Record<string, string[]>
-    onceProps: Record<string, { prop: string; expiresAt?: number | null }>
-  }> {
-    const resolvedProps: Record<string, unknown> = {}
-    const mergeProps: string[] = []
-    const prependProps: string[] = []
-    const deepMergeProps: string[] = []
-    const matchPropsOn: string[] = []
-    const deferredProps: Record<string, string[]> = {}
-    const onceProps: Record<string, { prop: string; expiresAt?: number | null }> = {}
-
+  /**
+   * Reads everything about the incoming request that changes how props resolve.
+   *
+   * Split out so a caller assembling its own page — a modal level, whose props
+   * sit under a path rather than at the page root — can resolve props with the
+   * same semantics while supplying its own notion of which ones were asked for.
+   */
+  partialRequestFor(ctx: RouterContext, component: string, isInertia: boolean): InertiaPartialRequest {
     const partialComponent = ctx.header('x-inertia-partial-component')
     const partialDataHeader = ctx.header('x-inertia-partial-data')
     const partialExceptHeader = ctx.header('x-inertia-partial-except')
     const resetHeader = ctx.header('x-inertia-reset')
-    const shouldResolveDeferred = ctx.header('x-inertia-resolve-deferred') === 'true'
-    const isPartialReload = isInertia && partialComponent === component && partialDataHeader
 
-    const requestedProps = partialDataHeader?.split(',').map((s) => s.trim()) ?? []
-    const exceptProps = partialExceptHeader?.split(',').map((s) => s.trim()) ?? []
-    const _resetProps = resetHeader?.split(',').map((s) => s.trim()) ?? []
+    return {
+      isPartial: !!(isInertia && partialComponent === component && partialDataHeader),
+      requested: partialDataHeader?.split(',').map((s) => s.trim()) ?? [],
+      except: partialExceptHeader?.split(',').map((s) => s.trim()) ?? [],
+      reset: resetHeader?.split(',').map((s) => s.trim()) ?? [],
+      // Only the literal `prepend` prepends — this mirrors the client, which
+      // sends exactly `append` or `prepend` and nothing else. Anything
+      // unrecognised is a request that did not come from the infinite-scroll
+      // helper, so it renders like a first paint.
+      prependIntent: ctx.header(INERTIA_SCROLL_MERGE_INTENT_HEADER) === 'prepend',
+      resolveDeferred: ctx.header('x-inertia-resolve-deferred') === 'true',
+    }
+  }
 
-    for (const [key, value] of Object.entries(allProps)) {
+  /**
+   * Resolves a prop record with the helper semantics `render()` applies, for a
+   * caller that owns its own page assembly.
+   *
+   * The returned paths are relative to the record passed in; a caller whose
+   * props live under a page path re-anchors them before they reach the page
+   * object.
+   */
+  async resolveProps(props: Record<string, unknown>, request: InertiaPartialRequest): Promise<InertiaPropResolution> {
+    return this.processProps(props, request)
+  }
+
+  private async processProps(
+    allProps: Record<string, unknown>,
+    request: InertiaPartialRequest,
+  ): Promise<InertiaPropResolution> {
+    const resolution: InertiaPropResolution = {
+      resolvedProps: {},
+      mergeProps: [],
+      prependProps: [],
+      deepMergeProps: [],
+      matchPropsOn: [],
+      scrollProps: {},
+      deferredProps: {},
+      onceProps: {},
+    }
+
+    await this.collectProps(allProps, request, resolution, resolution.resolvedProps, '', false)
+
+    return resolution
+  }
+
+  /**
+   * Resolve one record of props into `into`, naming each by its full path.
+   *
+   * Recursive because the protocol addresses a nested prop by its dot path: `only: ['auth.user']`
+   * asks for one field of `auth`, not for the whole of it. Answering with all of `auth` is the
+   * payload the partial reload was sent to avoid.
+   *
+   * Three things make a prop survive a partial reload, mirroring Laravel's resolver: the request
+   * is not partial, its own path was asked for, or an ancestor of it resolved. The last is why a
+   * `defer()`/`optional()` prop comes back whole when a path inside it is asked for — nothing
+   * inside a callback's result can be narrowed without running the callback, so once it runs, all
+   * of it is included.
+   *
+   * Only plain objects are descended into. An array is a value: the client reads `items.0.name`
+   * as a path, but a partial reload asking for one element of a list it does not hold yet has
+   * nothing to merge that element into.
+   */
+  private async collectProps(
+    props: Record<string, unknown>,
+    request: InertiaPartialRequest,
+    resolution: InertiaPropResolution,
+    into: Record<string, unknown>,
+    parentPath: string,
+    parentWasResolved: boolean,
+  ): Promise<void> {
+    const {
+      isPartial: isPartialReload,
+      requested: requestedProps,
+      except: exceptProps,
+      reset: resetProps,
+      prependIntent,
+      resolveDeferred: shouldResolveDeferred,
+    } = request
+
+    for (const [key, value] of Object.entries(props)) {
+      const path = parentPath === '' ? key : `${parentPath}.${key}`
+
+      // This path was named, or sits inside one that was.
+      const named = !isPartialReload || parentWasResolved || this.isNamed(path, requestedProps)
+      // Something inside this path was named, so it is on the way to what was asked for.
+      const encloses = isPartialReload && this.enclosesNamed(path, requestedProps)
+
       // Handle always props — always resolve regardless of partial reload
       if (this.isAlwaysProp(value)) {
-        resolvedProps[key] = await value.callback()
+        into[key] = await value.callback()
         continue
       }
 
       // Handle once props
       if (this.isOnceProp(value)) {
-        if (isPartialReload && this.isRequested(key, requestedProps)) {
-          resolvedProps[key] = await value.callback()
+        if (isPartialReload && (named || encloses)) {
+          into[key] = await value.callback()
         } else if (!isPartialReload) {
-          resolvedProps[key] = await value.callback()
-          onceProps[key] = {
-            prop: value.key ?? key,
+          into[key] = await value.callback()
+          resolution.onceProps[path] = {
+            prop: value.key ?? path,
             ...(value.expiresAt != null ? { expiresAt: value.expiresAt } : {}),
           }
         }
@@ -290,14 +376,14 @@ export class InertiaService {
 
       // Handle deferred props
       if (this.isDeferredProp(value)) {
-        if (isPartialReload && this.isRequested(key, requestedProps)) {
-          resolvedProps[key] = await value.callback()
+        if (isPartialReload && (named || encloses)) {
+          into[key] = await value.callback()
         } else if (!isPartialReload) {
           if (shouldResolveDeferred) {
-            resolvedProps[key] = await value.callback()
+            into[key] = await value.callback()
           } else {
-            deferredProps[value.group] ??= []
-            deferredProps[value.group].push(key)
+            resolution.deferredProps[value.group] ??= []
+            resolution.deferredProps[value.group].push(path)
           }
         }
         continue
@@ -305,57 +391,125 @@ export class InertiaService {
 
       // Handle merge props (append/prepend/deep)
       if (this.isMergeProp(value)) {
-        if (isPartialReload && !this.isRequested(key, requestedProps)) {
+        if (isPartialReload && !named && !encloses) {
           continue
         }
 
-        switch (value.strategy) {
-          case 'prepend':
-            prependProps.push(key)
-            break
-          case 'deep':
-            deepMergeProps.push(key)
-            break
-          default:
-            mergeProps.push(key)
-            break
+        // A prop the client asked to reset replaces its accumulated state
+        // instead of joining it, so it registers no merge strategy at all.
+        if (!resetProps.includes(path)) {
+          switch (value.strategy) {
+            case 'prepend':
+              resolution.prependProps.push(path)
+              break
+            case 'deep':
+              resolution.deepMergeProps.push(path)
+              break
+            default:
+              resolution.mergeProps.push(path)
+              break
+          }
+
+          // Dot-separated: the client finds an entry by dropping its last
+          // segment and comparing the rest to the merged prop's path, so the
+          // key it matches on is the final segment of a full path.
+          if (value.matchOn) {
+            resolution.matchPropsOn.push(`${path}.${value.matchOn}`)
+          }
         }
 
-        if (value.matchOn) {
-          matchPropsOn.push(`${key}:${value.matchOn}`)
+        into[key] = await value.callback()
+        continue
+      }
+
+      // Handle scroll props — a merge prop whose direction the request picks,
+      // plus the pagination metadata the client's infinite-scroll helper reads
+      // off the page object. The merge targets the wrapper key inside the prop,
+      // so the value stays paginator-shaped and only its rows accumulate.
+      if (this.isScrollProp(value)) {
+        if (isPartialReload && !named && !encloses) {
+          continue
         }
 
-        resolvedProps[key] = await value.callback()
+        const resolved = await value.callback()
+        const isReset = resetProps.includes(path)
+
+        if (!isReset) {
+          const mergePath = `${path}.${value.wrapper}`
+
+          if (prependIntent) {
+            resolution.prependProps.push(mergePath)
+          } else {
+            resolution.mergeProps.push(mergePath)
+          }
+
+          if (value.matchOn) {
+            resolution.matchPropsOn.push(`${mergePath}.${value.matchOn}`)
+          }
+        }
+
+        const metadata = value.metadata ? value.metadata(resolved) : deriveScrollMetadata(resolved)
+
+        resolution.scrollProps[path] = {
+          pageName: value.pageName ?? metadata.pageName,
+          currentPage: metadata.currentPage,
+          previousPage: metadata.previousPage,
+          nextPage: metadata.nextPage,
+          reset: isReset,
+        }
+
+        into[key] = resolved
         continue
       }
 
       // Handle optional props
       if (this.isOptionalProp(value)) {
-        if (isPartialReload && this.isRequested(key, requestedProps)) {
-          resolvedProps[key] = await value.callback()
+        if (isPartialReload && (named || encloses)) {
+          into[key] = await value.callback()
         }
         continue
       }
 
-      // Regular props
-      if (isPartialReload) {
-        if (this.isRequested(key, requestedProps) && !this.isExcepted(key, exceptProps)) {
-          resolvedProps[key] = value
-        }
-      } else {
-        resolvedProps[key] = value
+      // A plain object on the way to a named path: descend, so the answer carries the field that
+      // was asked for rather than everything beside it.
+      if (!named && encloses && this.isPlainRecord(value)) {
+        const child: Record<string, unknown> = {}
+        await this.collectProps(value, request, resolution, child, path, false)
+        if (Object.keys(child).length > 0) into[key] = child
+        continue
       }
-    }
 
-    return { resolvedProps, mergeProps, prependProps, deepMergeProps, matchPropsOn, deferredProps, onceProps }
+      if (!named || this.isExcepted(path, exceptProps)) continue
+
+      // Named, and holding props of its own: walk it so a `defer()` or `merge()` nested inside is
+      // resolved and reported at its full path, rather than travelling as an unresolved marker.
+      if (this.isPlainRecord(value)) {
+        const child: Record<string, unknown> = {}
+        await this.collectProps(value, request, resolution, child, path, true)
+        into[key] = child
+        continue
+      }
+
+      into[key] = value
+    }
   }
 
-  /**
-   * Check if a prop key is requested — supports dot-notation (e.g., `user.permissions`
-   * matches the top-level `user` key).
-   */
-  private isRequested(key: string, requestedProps: string[]): boolean {
-    return requestedProps.some((prop) => prop === key || prop.startsWith(`${key}.`))
+  /** Whether a plain `{}` record, as opposed to an array, a class instance or a prop marker. */
+  private isPlainRecord(value: unknown): value is Record<string, unknown> {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+
+    const prototype = Object.getPrototypeOf(value) as unknown
+    return prototype === Object.prototype || prototype === null
+  }
+
+  /** Whether this path was asked for, or sits inside a path that was. */
+  private isNamed(path: string, requestedProps: string[]): boolean {
+    return requestedProps.some((prop) => prop === path || path.startsWith(`${prop}.`))
+  }
+
+  /** Whether something asked for sits inside this path. */
+  private enclosesNamed(path: string, requestedProps: string[]): boolean {
+    return requestedProps.some((prop) => prop.startsWith(`${path}.`))
   }
 
   private isExcepted(key: string, exceptProps: string[]): boolean {
@@ -372,6 +526,10 @@ export class InertiaService {
 
   private isMergeProp(value: unknown): value is InertiaMergeProp {
     return typeof value === 'object' && value !== null && INERTIA_PROP_MERGE in value
+  }
+
+  private isScrollProp(value: unknown): value is InertiaScrollProp {
+    return typeof value === 'object' && value !== null && INERTIA_PROP_SCROLL in value
   }
 
   private isOnceProp(value: unknown): value is InertiaOnceProp {

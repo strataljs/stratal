@@ -150,6 +150,18 @@ export function stratalInertia(options?: StratalInertiaPluginOptions): Plugin[] 
     // redirects to the converted copy. (Optimizing `react-dom` alone is not enough — the optimizer
     // keys on the specifier, and the import is `react-dom/server`, condition-resolved per env.)
     'react-dom/server',
+    // `@inertiajs/react`'s `App` component — imported by the SSR renderer above through
+    // `@stratal/inertia`, itself optimize-EXCLUDED — imports the `react-dom/client` subpath
+    // unconditionally at module scope, so the same discovery gap applies: the optimizer never
+    // crawls into it and so never auto-discovers `react-dom/client` either. `react-dom/client`
+    // is the same kind of CJS shim as `react-dom/server`, conditionally `require()`-ing its
+    // production/development build; left undiscovered, that `require` reaches the workerd SSR
+    // runner and every SSR page 500s with "module is not defined". Force-optimizing the exact
+    // subpath makes esbuild convert it and inline its own CJS dependencies (`react`, `scheduler`,
+    // …) in the process, the same way it already does for `react-dom/server` — no separate entry
+    // is needed for those siblings. The import reaching the optimizer at all is what matters
+    // here, not whether `App` ever calls `createRoot`/`hydrateRoot` during a server render.
+    'react-dom/client',
     // Same mechanism as `react-dom/server`: CJS packages reachable only through the optimize-excluded
     // packages above, force-optimized when installed (see `optionalCjsOptimizeTargets`).
     ...resolvableFrom(process.cwd(), optionalCjsOptimizeTargets),
@@ -351,20 +363,57 @@ function excludeSsrPages(args: { patterns: string[] }): Plugin {
         [runtimeGlobal]: JSON.stringify(args.patterns),
       }
     },
-    transform(code, _id) {
+    transform(code, id) {
       if (this.environment.name === 'client') return null
       if (!code.includes('import.meta.glob')) return null
 
-      const next = code.replace(
-        // The optional trailing group preserves a second `import.meta.glob`
-        // argument (e.g. `{ eager: true }`) so option-bearing resolvers are
-        // rewritten rather than silently skipped.
-        /import\.meta\.glob\(\s*(['"])([^'"]*pages[^'"]*)\1\s*(,[^)]*)?\)/g,
-        (_match, quote: string, arg: string, rest = '') =>
-          `import.meta.glob([${quote}${arg}${quote}, ${negativeGlobs}]${rest})`,
-      )
+      // Array form first, then single-string. The order is load-bearing: the single-string
+      // rewrite EMITS an array, so running it first would leave output the array rewrite then
+      // matches, appending every negative a second time. Neither regex matches the other's
+      // output — one requires a quote after the paren, the other a bracket — so this order
+      // applies exactly one of them.
+      const next = code
+        .replace(
+          // Vite's documented way to write negative patterns, so a resolver that already
+          // excludes something of its own arrives here. Exclusions are appended to what is
+          // there rather than replacing it.
+          //
+          // Matched as a list of quoted strings, excluding only quote characters — the same
+          // basis as the single-string form below. Excluding `]` or `)` instead would break on
+          // patterns that legitimately contain them: `[A-Z]` character classes and `!(*.spec)`
+          // extglobs respectively, both valid Vite globs.
+          /import\.meta\.glob\(\s*\[((?:\s*(['"])[^'"]*\2\s*,?)+)\]\s*(,[^)]*)?\)/g,
+          (match: string, list: string, _quote: string, rest = '') => {
+            if (!list.includes('pages')) return match
+            return `import.meta.glob([${list.trim().replace(/,$/, '')}, ${negativeGlobs}]${rest})`
+          },
+        )
+        .replace(
+          // The optional trailing group preserves a second `import.meta.glob` argument
+          // (e.g. `{ eager: true }`) so option-bearing resolvers are rewritten rather than
+          // silently skipped.
+          /import\.meta\.glob\(\s*(['"])([^'"]*pages[^'"]*)\1\s*(,[^)]*)?\)/g,
+          (_match, quote: string, arg: string, rest = '') =>
+            `import.meta.glob([${quote}${arg}${quote}, ${negativeGlobs}]${rest})`,
+        )
 
-      return next === code ? null : { code: next, map: null }
+      if (next === code) {
+        // Loud rather than silent. The rewrite is the only thing that keeps excluded pages
+        // out of the worker bundle, so a resolver this cannot match means `ssrExclude` did
+        // nothing at all — every page still server-renders, with no error to explain why.
+        // Only the SSR entry is expected to carry the page glob; other modules matching
+        // `import.meta.glob` without a `pages` argument are none of this plugin's business.
+        if (/import\.meta\.glob\([^)]*pages/.test(code)) {
+          this.warn(
+            `stratalInertia: ssrExclude could not rewrite the page glob in ${id}. ` +
+              `Expected import.meta.glob('./pages/**/*.tsx') or the array form. ` +
+              `No pages were excluded from the worker bundle.`
+          )
+        }
+        return null
+      }
+
+      return { code: next, map: null }
     },
   }
 }

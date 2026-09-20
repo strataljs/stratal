@@ -88,6 +88,7 @@ describe('cachedEntrypoint: workerd integration', () => {
     )
 
     expect(response.headers.get('Cache-Control')).toBe('public, max-age=60')
+    expect(response.headers.get('CDN-Cache-Control')).toBe('public, max-age=60')
   })
 
   it('fails a partitioned route closed when a caller supplies no props', async () => {

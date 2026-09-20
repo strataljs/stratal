@@ -2,6 +2,7 @@ export const modalMessages = {
   en: {
     errors: {
       backgroundFetchFailed: 'Failed to load background page for modal',
+      baseCycle: 'The modal base chain leads back to {url}',
     },
   },
 } as const

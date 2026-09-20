@@ -5,7 +5,10 @@
   "type": "module",
   "sideEffects": false,
   "license": "MIT",
-  "author": "Temitayo Fadojutimi",
+  "author": {
+    "name": "Temitayo Fadojutimi",
+    "url": "https://x.com/adesege_"
+  },
   "homepage": "https://stratal.dev",
   "repository": {
     "type": "git",
@@ -173,15 +176,15 @@
   },
   "dependencies": {
     "@hono/swagger-ui": "^0.6.1",
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "@swc-node/register": "^1.12.0",
-    "@swc/core": "^1.15.43",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@swc-node/register": "^1.12.1",
+    "@swc/core": "^1.16.2",
     "@swc/helpers": "^0.5.23",
     "clipanion": "^4.0.0-rc.4",
-    "hono": "^4.12.30",
-    "intl-messageformat": "^11.2.12",
-    "openapi3-ts": "^4.6.0",
-    "zod": "^4.4.3"
+    "hono": "^4.13.8",
+    "intl-messageformat": "^12.1.1",
+    "openapi3-ts": "^4.6.1",
+    "zod": "^4.6.5"
   },
   "peerDependencies": {
     "@react-email/render": ">=2",
@@ -200,21 +203,21 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.18.5",
-    "@cloudflare/workers-types": "5.20260716.1",
+    "@cloudflare/vitest-plugin": "^1.1.13",
+    "@cloudflare/workers-types": "5.20260919.1",
     "@react-email/render": "^2.1.0",
     "@stratal/testing": "workspace:*",
-    "@types/node": "^26.1.1",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@vitest/coverage-v8": "^4.1.10",
-    "@vitest/runner": "~4.1.10",
-    "@vitest/snapshot": "~4.1.10",
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/runner": "~4.1.11",
+    "@vitest/snapshot": "~4.1.11",
     "jsonc-parser": "^3.3.1",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "tsdown": "^0.22.9",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tsdown": "^0.23.0",
     "typescript": "^7.0.2",
-    "vitest": "~4.1.10"
+    "vitest": "~4.1.11"
   }
 }

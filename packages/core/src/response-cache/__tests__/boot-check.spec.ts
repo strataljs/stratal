@@ -1,23 +1,33 @@
 import { describe, expect, it } from 'vitest'
 import { ResponseCacheConfigError } from '../errors'
-import { assertCachingAvailable, assertNoGatewayOptions, assertValidGatewayEntrypoint } from '../boot-check'
+import { assertNoGatewayOptions, assertValidGatewayEntrypoint, cachingUnavailableReason } from '../boot-check'
 import { ResponseCacheModule } from '../response-cache.module'
 
-describe('assertCachingAvailable', () => {
-  it('passes when no cacheable routes are registered', () => {
-    expect(() => assertCachingAvailable(0, undefined)).not.toThrow()
+describe('cachingUnavailableReason', () => {
+  it('reports nothing when no cacheable routes are registered', () => {
+    expect(cachingUnavailableReason(0, undefined)).toBeUndefined()
   })
 
-  it('passes when cacheable routes exist and ctx.cache is present', () => {
-    expect(() => assertCachingAvailable(3, { purge: async () => { /* Mock cache */ } })).not.toThrow()
+  it('reports nothing when cacheable routes exist and ctx.cache is present', () => {
+    expect(cachingUnavailableReason(3, { purge: async () => { /* Mock cache */ } })).toBeUndefined()
   })
 
-  it('throws when cacheable routes exist but ctx.cache is absent', () => {
-    expect(() => assertCachingAvailable(3, undefined)).toThrow(ResponseCacheConfigError)
+  it('reports a reason when cacheable routes exist but ctx.cache is absent', () => {
+    expect(cachingUnavailableReason(3, undefined)).toMatch(/3 route\(s\)/)
   })
 
-  it('names the required wrangler settings in the error', () => {
-    expect(() => assertCachingAvailable(1, undefined)).toThrow(/cache.*enabled/i)
+  it('names the required wrangler settings in the reason', () => {
+    expect(cachingUnavailableReason(1, undefined)).toMatch(/cache.*enabled/i)
+  })
+
+  it('says what happens to those responses, so the reason is actionable on its own', () => {
+    // The caller serves the response uncached; a reason that named only the
+    // fix would leave a reader unsure whether the request had failed.
+    expect(cachingUnavailableReason(1, undefined)).toMatch(/no-store/)
+  })
+
+  it('reports rather than throws, so one entrypoint cannot take the isolate down', () => {
+    expect(() => cachingUnavailableReason(3, undefined)).not.toThrow()
   })
 })
 

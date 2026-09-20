@@ -81,14 +81,13 @@ describe('AuthModule.forRootAsync — rate-limit auto-wiring', () => {
     const merged = provider.useFactory(container) as BetterAuthOptions
 
     expect(merged.rateLimit?.enabled).toBe(true)
-    expect(typeof merged.rateLimit?.customStorage?.get).toBe('function')
-    expect(typeof merged.rateLimit?.customStorage?.set).toBe('function')
+    expect(typeof merged.rateLimit?.customStorage?.consume).toBe('function')
     expect(merged.rateLimit?.customRules).toHaveProperty('/sign-in/email')
     expect(typeof merged.rateLimit?.customRules?.['/sign-in/email']).toBe('function')
   })
 
   it('respects user-supplied customStorage (does not overwrite)', () => {
-    const userStorage = { get: vi.fn(), set: vi.fn() }
+    const userStorage = { consume: vi.fn() }
     const store = new FakeStore()
     const registry = new RateLimiterRegistry(container)
 

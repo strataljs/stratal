@@ -1,13 +1,16 @@
 import { zenstackAdapter } from '@zenstackhq/better-auth'
 import type { BetterAuthOptions } from 'better-auth'
 import type { DatabaseService } from '../../src/database/database.service'
-import { schema } from '../zenstack/schema'
+import { schema, type SchemaType } from '../zenstack/schema'
 
 export function createTestAuthOptions(
   db: DatabaseService,
 ): BetterAuthOptions {
   return {
-    database: zenstackAdapter(db, { provider: 'postgresql' }),
+    // The schema is named rather than inferred: inferring it walks `DatabaseService`'s
+    // intersection against `ClientContract<Schema>`, which instantiates the client-only
+    // `computedFields` map over every model and field and exceeds the checker's stack depth.
+    database: zenstackAdapter<SchemaType>(db, { provider: 'postgresql' }),
     secret: 'test-secret-key-for-deterministic-sessions',
     baseURL: 'http://localhost',
     emailAndPassword: {

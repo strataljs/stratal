@@ -35,8 +35,26 @@ export interface StratalDatabase {}
 type ExtractPluginQueryArgs<P> =
   P extends RuntimePlugin<infer _S, infer Q, infer _M, infer _R> ? Q : {}
 
-/** Extract `ExtClientMembers` from a `RuntimePlugin` */
-type ExtractPluginClientMembers<P> =
+/**
+ * Drops index signatures, keeping the members a type actually declares.
+ *
+ * `ExtClientMembers` is constrained to `Record<string, unknown>`, so every
+ * plugin's member type carries an index signature. Letting one reach the client
+ * type is not cosmetic: it survives `$transaction`'s `Omit` and collapses every
+ * model delegate on a transaction client to `unknown`.
+ */
+export type DeclaredMembers<T> = {
+  [K in keyof T as string extends K ? never : number extends K ? never : K]: T[K]
+}
+
+/**
+ * Extract `ExtClientMembers` from a `RuntimePlugin`.
+ *
+ * Exported because the built-in plugins `createDatabaseService` always registers
+ * go through this same extraction, so their members reach the client type by the
+ * path an app's own plugins take rather than by a second hand-written copy.
+ */
+export type ExtractPluginClientMembers<P> =
   P extends RuntimePlugin<infer _S, infer _Q, infer M, infer _R> ? M : {}
 
 /** Extract `ExtResult` from a `RuntimePlugin` */

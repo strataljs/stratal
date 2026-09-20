@@ -3,7 +3,7 @@ import { CachePurgeError } from '../errors'
 import { ResponseCacheService } from '../services/response-cache.service'
 
 const logger = { warn: vi.fn(), error: vi.fn(), debug: vi.fn(), info: vi.fn() }
-const scopes = { param: { slug: 'hello' }, query: {}, body: undefined, data: { post: { categoryId: 42 } } }
+const scopes = { param: { slug: 'hello' }, query: {}, body: undefined, data: { post: { categoryId: 42 } }, partition: {} }
 
 describe('ResponseCacheService', () => {
   let service: ResponseCacheService

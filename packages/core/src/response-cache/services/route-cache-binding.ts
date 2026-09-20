@@ -87,6 +87,53 @@ function assertParamTagsResolvable(
   }
 }
 
+/** Matches a `{partition.X}` cache tag placeholder, capturing the partition name `X`. */
+const PARTITION_SCOPE_TAG = /\{partition\.([^}.]+)/g
+
+/**
+ * Reject a `{partition.X}` tag whose `X` is not one of this route's own
+ * declared partitions.
+ *
+ * Knowable at boot for the same reason `{param.X}` is: `partitionBy` is fixed
+ * when the route registers. A partition the route does not declare is not in
+ * the cache key, so a tag naming it would describe an entry by something that
+ * did not key it — and on `@PurgesCache` it throws mid-purge, after the
+ * mutation committed.
+ *
+ * Only checked on `@Cacheable`, which is where `partitionBy` is declared. A
+ * `@PurgesCache` route runs inline in the gateway, which resolves no
+ * partitions of its own, so `{partition.*}` can never render there.
+ */
+function assertPartitionTagsResolvable(
+  tags: string[] | undefined,
+  partitionBy: string[],
+  decorator: '@Cacheable' | '@PurgesCache',
+  context: CacheableContext,
+): void {
+  if (!tags?.length) return
+
+  for (const tag of tags) {
+    for (const match of tag.matchAll(PARTITION_SCOPE_TAG)) {
+      const partition = match[1]
+      if (decorator === '@Cacheable' && partitionBy.includes(partition)) continue
+
+      const available = partitionBy.length > 0 ? partitionBy.join(', ') : '(none)'
+
+      throw new ResponseCacheConfigError(
+        decorator === '@PurgesCache'
+          ? `${context.controller}.${context.method}: @PurgesCache tag "${tag}" references ` +
+            `\`{partition.${partition}}\`, but a mutation runs inline in the gateway, which ` +
+            'resolves no partitions — so it can never resolve. Purge by a `{param.*}`/' +
+            '`{query.*}`/`{data.*}` tag the cached route also carries.'
+          : `${context.controller}.${context.method}: @Cacheable tag "${tag}" references ` +
+            `\`{partition.${partition}}\`, but this route does not declare that partition, so ` +
+            `it is not in the cache key and can never resolve — declared: ${available}. Add it ` +
+            'to `partitionBy`, or use one of those.',
+      )
+    }
+  }
+}
+
 /**
  * Reject a `pathPrefixes` entry that looks like it expects interpolation.
  *
@@ -145,6 +192,7 @@ export function bindRouteCache(
   assertNoBodyScopeTags(purges?.tags, '@PurgesCache', context)
   assertParamTagsResolvable(cacheable?.tags, '@Cacheable', context)
   assertParamTagsResolvable(purges?.tags, '@PurgesCache', context)
+  assertPartitionTagsResolvable(purges?.tags, [], '@PurgesCache', context)
   assertNoTemplatedPathPrefixes(purges?.pathPrefixes, context)
 
   const binding: RouteCacheBinding = {}
@@ -152,6 +200,8 @@ export function bindRouteCache(
 
   if (cacheable) {
     const declared = cacheable.partitionBy ?? defaults.partitionBy ?? []
+
+    assertPartitionTagsResolvable(cacheable.tags, declared, '@Cacheable', context)
 
     if (declared.length > 0 && !context.gatewayConfigured) {
       throw new ResponseCacheConfigError(

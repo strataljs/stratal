@@ -1,4 +1,5 @@
 import { inject } from '../../di'
+import { getContainer } from '../../di/container-storage'
 import type { Application } from '../../application'
 import { DI_TOKENS } from '../../di/tokens'
 import { OPENAPI_TOKENS } from '../../openapi/openapi.tokens'
@@ -23,7 +24,11 @@ export class McpToolsCommand extends Command {
 
     // ensureHono() registers routes, populating the route metadata registry.
     await this.app.ensureHono()
-    const spec = await this.openAPIService.getSpec(this.app.container)
+    // The OpenAPI document pulls the request-scoped ConfigService, so it must be
+    // built from the ACTIVE scope. `QuarryRegistry.call` runs commands inside
+    // runInRequestScope; `app.container` is the ROOT container and resolving a
+    // request-scoped provider from it throws.
+    const spec = await this.openAPIService.getSpec(getContainer())
 
     const service = new OpenApiToolsService(spec)
     const filter = {

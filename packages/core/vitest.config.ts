@@ -36,6 +36,13 @@ export default defineConfig({
           exclude: ['**/node_modules/**', '**/dist/**'],
           setupFiles: ['./vitest.setup.ts'],
           globals: true,
+          // The first test in a file that boots an Application pays the
+          // decorator/reflect-metadata and DI container warm-up for that
+          // worker — every later test in the same file runs in single-digit
+          // milliseconds. That one-time cost is charged to whichever test runs
+          // first, so this budget covers it on a cold, contended runner while
+          // still failing a genuinely hung test quickly.
+          testTimeout: 30_000,
           benchmark: {
             include: ['src/**/__benchmarks__/**/*.bench.ts'],
           },

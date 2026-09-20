@@ -1,4 +1,12 @@
-import type { DownloadResult, PresignedUrlResult, UploadOptions, UploadResult } from '../contracts'
+import type {
+  DownloadResult,
+  HeadResult,
+  ListOptions,
+  ListResult,
+  PresignedUrlResult,
+  UploadOptions,
+  UploadResult,
+} from '../contracts'
 
 /**
  * Streaming blob payload input types
@@ -40,11 +48,35 @@ export interface IStorageProvider {
   delete(path: string): Promise<void>
 
   /**
+   * Delete many files in as few round trips as the provider allows
+   * @param paths - Full paths to delete
+   */
+  deleteMany(paths: string[]): Promise<void>
+
+  /**
    * Check if a file exists in storage
    * @param path - Full path to the file
    * @returns True if file exists, false otherwise
    */
   exists(path: string): Promise<boolean>
+
+  /**
+   * Read an object's metadata without transferring its body
+   * @param path - Full path to the file
+   * @returns Metadata, or null when no object exists at that path
+   */
+  head(path: string): Promise<HeadResult | null>
+
+  /**
+   * List objects, one page at a time
+   *
+   * Paginated by the provider. A caller that aggregates across a prefix must follow
+   * `truncated`/`cursor` — see `ListResult`.
+   *
+   * @param options - Prefix, cursor and page limit, with paths full rather than disk-relative
+   * @returns One page of matching objects
+   */
+  list(options: ListOptions): Promise<ListResult>
 
   /**
    * Generate a presigned URL for temporary access

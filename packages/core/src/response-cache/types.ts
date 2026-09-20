@@ -5,6 +5,17 @@ import type { RouterContext } from '../router/router-context'
 export interface CacheableOptions {
   /** Freshness lifetime in seconds, emitted as `max-age`. */
   ttl?: number
+  /**
+   * How long a PRIVATE cache — a visitor's browser — may reuse the response
+   * without asking, in seconds. Defaults to {@link ttl}.
+   *
+   * Set it to `0` for a response whose retraction has to be reliable. A purge
+   * reaches the shared cache and nothing else, so for a long `ttl` a browser
+   * copy outlives the response the server has already withdrawn. Pair `0` with
+   * {@link swr} and the browser still paints from its copy without waiting on
+   * the network, then picks the retraction up in the background.
+   */
+  browserTtl?: number
   /** `stale-while-revalidate` window in seconds. */
   swr?: number
   /** `Cache-Tag` values. Supports `{scope.path}` interpolation. Never defaulted at module level. */
@@ -26,6 +37,7 @@ export interface PurgesCacheOptions {
 /** A `@Cacheable` config after module defaults have been applied. */
 export interface ResolvedCacheable {
   ttl: number
+  browserTtl: number
   swr?: number
   tags: string[]
   partitionBy: string[]
@@ -94,6 +106,29 @@ export interface ResponseCacheGatewayOptions {
    * runtime (`resolveCachedEntrypoint`) for projects without generated types.
    */
   entrypoint: CachedEntrypointName
+  /**
+   * Request headers whose values join the cache key, for routes that answer
+   * one URL with more than one representation.
+   *
+   * `Vary` is the mechanism HTTP defines for this, and Workers Caching
+   * documents it as honoured — but a response that varies is only *correct*
+   * when the thing it varies on is in the key, and the key is the one part of
+   * this that the framework controls. `ctx.props` is documented as impossible
+   * to bypass; `Vary` is a request-matching pass on top of a stored entry, and
+   * a URL carrying a query string has been measured serving one
+   * representation to a request that asked for the other. Naming the headers
+   * here makes the representation part of the key itself, so two
+   * representations are two entries and no matching pass has to hold.
+   *
+   * For an Inertia app this is `INERTIA_VARY_HEADERS` from `@stratal/inertia`:
+   * the document, the visit and each distinct partial reload are separate
+   * representations of one URL.
+   *
+   * Anything a response declares in `Vary` that is not named here (or handled
+   * by the platform itself, as `Accept-Encoding` is) makes that response
+   * uncacheable rather than wrongly cacheable — see `CacheabilityService`.
+   */
+  keyBy?: readonly string[]
 }
 
 export interface ResponseCacheModuleOptions {

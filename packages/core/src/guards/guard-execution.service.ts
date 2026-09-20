@@ -1,6 +1,7 @@
 import type { Container } from '../di'
 import type { LoggerService } from '../logger'
 import type { RouterContext } from '../router'
+import { GuardRejectedError } from './errors'
 import type { CanActivate, Guard } from './types'
 
 /**
@@ -19,7 +20,8 @@ export class GuardExecutionService {
    * @param context - Router context
    * @param container - Request-scoped DI container
    * @returns true if all guards pass
-   * @throws Error from first failing guard
+   * @throws {@link GuardRejectedError} if a guard's `canActivate` returns `false`, or the guard's
+   * own thrown error if it rejects by throwing instead
    */
   async executeGuards(
     guards: Guard[],
@@ -41,12 +43,17 @@ export class GuardExecutionService {
       const canActivate = await guardInstance.canActivate(context)
 
       if (!canActivate) {
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- guard.constructor may be null at runtime
+        const guardName = guard.constructor?.name || 'AnonymousGuard'
+
         this.logger.debug('Guard denied access', {
-          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- guard.constructor may be null at runtime
-          guard: guard.constructor?.name || 'AnonymousGuard',
+          guard: guardName,
           path: context.c.req.path,
         })
-        return false
+        // Denial is an exception, not a return value: every caller awaits this without
+        // branching, so a `false` that merely returned would let the handler run and the guard
+        // would silently protect nothing.
+        throw new GuardRejectedError(guardName)
       }
     }
 

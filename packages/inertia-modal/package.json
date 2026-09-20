@@ -3,8 +3,16 @@
   "version": "0.0.27",
   "description": "Modal page primitive for Stratal Inertia — backend-driven modal dialogs",
   "type": "module",
+  "sideEffects": [
+    "./dist/index.mjs",
+    "./dist/testing.mjs"
+  ],
   "license": "MIT",
-  "author": "Temitayo Fadojutimi",
+  "author": {
+    "name": "Temitayo Fadojutimi",
+    "url": "https://x.com/adesege_"
+  },
+  "homepage": "https://stratal.dev",
   "engines": {
     "node": ">=22.0.0"
   },
@@ -33,6 +41,10 @@
       "types": "./dist/react.d.mts",
       "import": "./dist/react.mjs"
     },
+    "./testing": {
+      "types": "./dist/testing.d.mts",
+      "import": "./dist/testing.mjs"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {
@@ -44,9 +56,11 @@
     "@inertiajs/core": ">=3",
     "@inertiajs/react": ">=3",
     "@stratal/inertia": ">=0.0.27",
+    "@stratal/testing": ">=0.0.27",
     "hono": ">=4",
     "react": ">=19",
-    "stratal": ">=0.0.27"
+    "stratal": ">=0.0.27",
+    "vitest": ">=4"
   },
   "peerDependenciesMeta": {
     "@inertiajs/core": {
@@ -55,22 +69,30 @@
     "@inertiajs/react": {
       "optional": true
     },
+    "@stratal/testing": {
+      "optional": true
+    },
     "react": {
+      "optional": true
+    },
+    "vitest": {
       "optional": true
     }
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20260716.1",
-    "@inertiajs/core": "^3.6.1",
-    "@inertiajs/react": "^3.6.1",
+    "@cloudflare/workers-types": "5.20260919.1",
+    "@inertiajs/core": "^3.7.1",
+    "@inertiajs/react": "^3.7.1",
     "@stratal/inertia": "workspace:*",
-    "@types/node": "^26.1.1",
-    "@types/react": "^19.2.17",
-    "hono": "^4.12.30",
-    "react": "^19.2.7",
+    "@stratal/testing": "workspace:*",
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "hono": "^4.13.8",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "stratal": "workspace:*",
-    "tsdown": "^0.22.9",
+    "tsdown": "^0.23.0",
     "typescript": "^7.0.2",
-    "vitest": "~4.1.10"
+    "vitest": "~4.1.11"
   }
 }

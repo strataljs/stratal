@@ -45,7 +45,7 @@ import type { ConventionRouteMetadata, RouteConfig, RouteMetadata } from '../typ
  *
  *   @Route({
  *     query: paginationSchema,
- *     response: z.array(noteSchema) // 200 auto-derived from 'index' method
+ *     response: array(noteSchema) // 200 auto-derived from 'index' method
  *   })
  *   async index(ctx: RouterContext): Promise<Response> {
  *     // GET /api/v1/notes (auto-derived)
@@ -55,7 +55,7 @@ import type { ConventionRouteMetadata, RouteConfig, RouteMetadata } from '../typ
  *   }
  *
  *   @Route({
- *     params: z.object({ id: z.string().uuid() }),
+ *     params: object({ id: uuid() }),
  *     response: {
  *       schema: noteSchema,
  *       description: 'Note details'

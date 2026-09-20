@@ -16,8 +16,7 @@ export default defineConfig([
       },
     },
     deps: {
-      skipNodeModulesBundle: true,
-      neverBundle: [/^cloudflare:/],
+      neverBundle: true,
     },
   },
   {
@@ -29,8 +28,7 @@ export default defineConfig([
     clean: false,
     banner: { js: '#!/usr/bin/env -S node --no-warnings' },
     deps: {
-      skipNodeModulesBundle: true,
-      neverBundle: [/^cloudflare:/, 'stratal', /^stratal\//],
+      neverBundle: true,
     },
   },
 ])

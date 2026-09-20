@@ -23,8 +23,8 @@ export interface StratalExecutionContext {
   /**
    * The Cloudflare Workers Caching API (`ctx.cache`). Optional because
    * Wrangler only attaches it when `cache.enabled: true` is configured — see
-   * `assertCachingAvailable`, which fails boot when `@Cacheable`/`@PurgesCache`
-   * routes exist but this is absent.
+   * `cachingUnavailableReason`, which reports why `@Cacheable`/`@PurgesCache`
+   * routes are serving uncached when this is absent.
    *
    * Declared here (rather than left for call sites to cast onto their own
    * narrower `ExecutionContext`) so `@stratal/testing` can populate a stub on

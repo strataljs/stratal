@@ -9,6 +9,7 @@ export default defineConfig({
     'src/vite.ts',
     'src/react.ts',
     'src/react/access.ts',
+    'src/services/ssr-exclusion.ts',
     'src/ssr.ts',
     'src/seo-runtime.ts',
     'src/testing.ts',
@@ -26,8 +27,7 @@ export default defineConfig({
     },
   },
   deps: {
-    skipNodeModulesBundle: true,
-    neverBundle: [/^cloudflare:/],
+    neverBundle: true,
   },
   hooks: {
     'build:done': () => {

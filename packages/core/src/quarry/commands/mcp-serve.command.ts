@@ -1,4 +1,5 @@
 import { inject } from '../../di'
+import { getContainer } from '../../di/container-storage'
 import { z } from 'zod'
 import type { Application } from '../../application'
 import { DI_TOKENS } from '../../di/tokens'
@@ -39,7 +40,11 @@ export class McpServeCommand extends Command {
 
     // ensureHono() registers routes, populating the route metadata registry.
     const hono = await this.app.ensureHono()
-    const spec = await this.openAPIService.getSpec(this.app.container)
+    // The OpenAPI document pulls the request-scoped ConfigService, so it must be
+    // built from the ACTIVE scope. `QuarryRegistry.call` runs commands inside
+    // runInRequestScope; `app.container` is the ROOT container and resolving a
+    // request-scoped provider from it throws.
+    const spec = await this.openAPIService.getSpec(getContainer())
 
     const dispatcher: Dispatcher = baseUrl
       ? async (method, url, opts) => {
@@ -82,8 +87,9 @@ export class McpServeCommand extends Command {
     }
     const tools = service.getTools(filter)
 
-    // CLI runs outside a request scope; the store carries the static base config
-    // (there are no per-request overrides here).
+    // ConfigStore is a SINGLETON on the root container, so the root is the right
+    // place to read it — unlike the request-scoped ConfigService the document
+    // above needs. Don't copy this line for a request-scoped provider.
     const config = this.app.container
       .resolve<IOpenAPIConfigStore>(OPENAPI_TOKENS.ConfigStore)
       .getBaseConfig()

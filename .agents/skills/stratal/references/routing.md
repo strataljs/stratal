@@ -484,6 +484,28 @@ export const noteSchema = named(object({
 }), 'Note')
 ```
 
+A check may be async, so one that needs a database, a cache or a service binding stays on the field it belongs to. Request and response schemas are both parsed with `safeParseAsync`, and a rejected value renders as a 400 carrying the refinement's message. Resolve services with `getContainer()` from `stratal/di` — the check runs inside the request's DI scope, so nothing is threaded into the schema:
+
+```typescript
+import { getContainer } from 'stratal/di'
+import { object, refine, string } from 'zod/mini'
+import { named } from 'stratal/validation'
+
+import { NotesService } from '../notes.service'
+
+export const publishNoteSchema = named(object({
+  slug: string().check(
+    refine((value) => /^[a-z0-9-]+$/.test(value), { error: 'Invalid slug.', abort: true }),
+    refine(
+      async (value) => getContainer().resolve(NotesService).isSlugFree(value),
+      { error: 'That slug is taken.' },
+    ),
+  ),
+}), 'PublishNote')
+```
+
+Put a cheap synchronous check first and mark it `abort: true`. Zod runs every check on a field otherwise, so malformed input pays for the round trip and the field reports two issues at once. Keep the check free of side effects — it runs on every request to the route, and again on each precognition pass.
+
 ### i18n Validation Messages
 
 Use `withZodI18n()` for translatable validation messages:
@@ -503,24 +525,26 @@ export const createNoteSchema = named(object({
 
 ## API Versioning
 
-Enable in the Stratal constructor:
+Enable in the Stratal constructor. The version segment is **prepended** to the controller path as `/<prefix><version><path>`, so put any leading segments in `prefix`:
 
 ```typescript
 export default new Stratal({
   module: AppModule,
-  versioning: { prefix: 'v', defaultVersion: '1' },
+  versioning: { prefix: 'api/v', defaultVersion: '1' },
 })
 ```
 
-Use on controllers:
+Write controller paths WITHOUT the version — the router builds the prefixed path:
 
 ```typescript
 import { VERSION_NEUTRAL } from 'stratal/router'
 
-@Controller('/api/users', { version: '2' })       // -> /api/v2/users
-@Controller('/api/users', { version: ['1', '2'] }) // -> /api/v1/users + /api/v2/users
-@Controller('/api/health', { version: VERSION_NEUTRAL }) // -> /api/health (no prefix)
+@Controller('/users', { version: '2' })        // -> /api/v2/users
+@Controller('/users', { version: ['1', '2'] }) // -> /api/v1/users + /api/v2/users
+@Controller('/health', { version: VERSION_NEUTRAL }) // -> /health (no prefix)
 ```
+
+A controller with no `version` gets `defaultVersion`. With `prefix: 'v'` (the default) the same controllers resolve to `/v2/users`, `/v1/users` and `/health`.
 
 Or via the Router:
 

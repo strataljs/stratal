@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { UserFactory } from '../factories/user.factory'
 import { TestAppModule } from '../fixtures/app.module'
 
-describe('per-file test runner', () => {
+describe('leased worker database test runner', () => {
   let module: TestingModule
 
   beforeAll(async () => {
@@ -23,16 +23,15 @@ describe('per-file test runner', () => {
     await module.close()
   })
 
-  it("connects to this file's OWN isolated database (…_f_<token>)", async () => {
+  it('connects to the worker database this file leased (…_w_<slot>)', async () => {
     const db = module.getDb()
     const [{ current_database }] = await db.$queryRawUnsafe<{ current_database: string }[]>(
       'SELECT current_database()',
     )
-    // Each test file gets its own database, named `<base>_f_<token>`. We can't
-    // reconstruct the exact token here (it's generated inside the builder), but
-    // the connection must be pointed at a per-file database (the sweep prefix),
-    // never the base or template.
-    expect(current_database).toContain('_f_')
+    // Each test file leases a worker database, named `<base>_w_<slot>`. The slot
+    // depends on which files run alongside this one, but the connection must
+    // point at a worker database (the sweep prefix), never the base or template.
+    expect(current_database).toMatch(/_w_\d+$/)
     expect(current_database).not.toBe('stratal_test')
     expect(current_database).not.toContain('_template')
     // Sanity: the name matches the leak-sweep prefix so it gets reclaimed.

@@ -7,6 +7,7 @@ const scopes = (over: Partial<TagScopes> = {}): TagScopes => ({
   query: {},
   body: undefined,
   data: undefined,
+  partition: {},
   ...over,
 })
 

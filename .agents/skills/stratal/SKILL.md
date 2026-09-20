@@ -5,7 +5,7 @@ license: MIT
 compatibility: Designed for AI Agents. Requires Node.js 22+, npm.
 metadata:
   author: Temitayo Fadojutimi
-  version: "2.12"
+  version: "2.26"
 ---
 
 # Stratal Framework
@@ -24,7 +24,7 @@ Breaking any of these causes runtime failures.
 
 1. **Every injectable class MUST have a scope decorator** — Use `@Singleton()`, `@Request()`, or `@Transient()` from `stratal/di`. Without it, DI fails. `@Controller()` applies it automatically; services, repositories, listeners, seeders, and commands all need it explicitly.
 
-2. **Build schemas with `zod/mini` named imports** — Import builders and checks directly: `import { object, string, array, minLength } from 'zod/mini'`. Apply constraints with `.check(...)` — `string().check(minLength(5))`, `number().check(int(), maximum(100))`. For OpenAPI metadata use `named(schema, 'Id')` (reusable component) and `describe(schema, 'text')` (field docs); for translated validation messages pass `withZodI18n('key', params)` to a check — all from `stratal/validation`.
+2. **Build schemas with `zod/mini` named imports** — Import builders and checks directly: `import { object, string, array, minLength } from 'zod/mini'`. Apply constraints with `.check(...)` — `string().check(minLength(5))`, `number().check(int(), maximum(100))`. For OpenAPI metadata use `named(schema, 'Id')` (reusable component) and `describe(schema, 'text')` (field docs); for translated validation messages pass `withZodI18n('key', params)` to a check — all from `stratal/validation`. A check may be async (`refine(async v => …)`), resolving services with `getContainer()` from `stratal/di`; see `references/routing.md`.
 
 3. **Use `cuid2` from `stratal/validation`, NOT `zod/mini`'s `cuid2()`** — `zod/mini`'s `cuid2()` regex is `/^[0-9a-z]+$/` and accepts any non-empty lowercase-alphanumeric string (`'sw'`, `'a'`, `'0'`). Stratal's `cuid2()` enforces real cuid2 shape and keeps `format: cuid2` in the OpenAPI spec.
 
@@ -193,7 +193,7 @@ Framework: `@stratal/framework/access-control`, `@stratal/framework/auth`, `@str
 
 Testing: `@stratal/testing`, `@stratal/testing/mocks`, `@stratal/testing/mocks/zenstack-language`, `@stratal/testing/storage`, `@stratal/testing/vitest-plugin`
 
-Inertia: `@stratal/inertia`, `@stratal/inertia/quarry` (CLI-only: `InertiaQuarryModule`, build/dev/types/install commands), `@stratal/inertia/react`, `@stratal/inertia/testing`, `@stratal/inertia/vite`, `@stratal/inertia-modal`, `@stratal/inertia-modal/react`
+Inertia: `@stratal/inertia`, `@stratal/inertia/quarry` (CLI-only: `InertiaQuarryModule`, build/dev/types/install commands), `@stratal/inertia/react`, `@stratal/inertia/testing`, `@stratal/inertia/vite`, `@stratal/inertia-modal`, `@stratal/inertia-modal/react`, `@stratal/inertia-modal/testing`
 
 ## Workflows
 
@@ -229,7 +229,7 @@ Install `@stratal/inertia`, configure `InertiaModule.forRoot({ rootView, ssr: { 
 
 ### Set Up Backend Modals
 
-Install `@stratal/inertia-modal`, add `ModalModule`, return `ctx.inertiaModal('Page/Component', props, { baseURL })` from a controller, wire the frontend `resolver` in `src/inertia/app.tsx`, place `<Modal />` in the layout. Full steps in `references/inertia-modal.md`.
+Install `@stratal/inertia-modal`, add `ModalModule`, return `ctx.modal('Page/Component', props, { base })` from a controller, pass `resolve` through `withModals()` in both entries, place `<Modal />` in the layout, and open sheets with `<ModalLink>`. Nest a modal above another by pointing its `base` at the modal route below it. Full steps in `references/inertia-modal.md`.
 
 ### Expose API as MCP Server
 
@@ -243,7 +243,7 @@ Install `@stratal/inertia-modal`, add `ModalModule`, return `ctx.inertiaModal('P
 
 **User says "Write tests for my service"** -> Read `references/testing.md`. Use `Test.createTestingModule()` with provider overrides. Use `module.http` for HTTP tests, `module.get()` for unit tests.
 
-**User says "Run my tests in parallel with isolated databases"** -> Read `references/testing.md` (Setup) — opt-in per-file DB isolation via `database: {}` on `stratalTest()`, `createTestDatabaseGlobalSetup()`, `prepare`, `truncateDb()`.
+**User says "Run my tests in parallel with isolated databases"** -> Read `references/testing.md` (Setup) — opt-in leased worker databases via `database: {}` on `stratalTest()`, `createTestDatabaseGlobalSetup()`, `prepare`, `truncateDb()`.
 
 **User says "Set up the database"** -> Read `references/database.md`. Configure `DatabaseModule.forRootAsync()` with ZenStack.
 
@@ -253,15 +253,17 @@ Install `@stratal/inertia-modal`, add `ModalModule`, return `ctx.inertiaModal('P
 
 **User says "Set up Inertia.js"** -> Read `references/inertia.md`. Install `@stratal/inertia`, configure `InertiaModule.forRoot()`, use `@InertiaRoute()` + `ctx.inertia()`.
 
-**User says "Don't server-render the admin pages" / "Exclude a page from SSR" / "Client-only page" / "Shrink the SSR bundle"** -> Read `references/inertia.md`. Add the page-component-name globs to `ssrExclude` in the `stratalInertia()` Vite plugin (e.g. `ssrExclude: ['Admin/**', 'Reports/Heavy']`) — matched pages and their deps are dropped from the SSR/worker bundle and render client-only.
+**User says "Don't server-render the admin pages" / "Exclude a page from SSR" / "Client-only page" / "Shrink the SSR bundle"** -> Read `references/inertia.md`. Add the page-component-name globs to `ssrExclude` in the `stratalInertia()` Vite plugin (e.g. `ssrExclude: ['Admin/**', 'Reports/Heavy']`) — matched pages and their deps are dropped from the SSR/worker bundle and render client-only. If the build warns `ssrExclude could not rewrite the page glob`, the SSR entry resolves pages with something other than a literal `import.meta.glob` (single string, array, or extglob) and nothing was excluded.
 
-**User says "Add a modal route" / "Open a modal page"** -> Read `references/inertia-modal.md`. Install `@stratal/inertia-modal`, add `ModalModule`, use `ctx.inertiaModal('Component', props, { baseURL })` in controllers, place `<Modal />` in the layout.
+**User says "Add a modal route" / "Open a modal page"** -> Read `references/inertia-modal.md`. Install `@stratal/inertia-modal`, add `ModalModule`, use `ctx.modal('Component', props, { base })` in controllers, place `<Modal />` in the layout, wrap `resolve` with `withModals()` in both entries, and open the sheet with `<ModalLink>`. Prop helpers (`defer`/`merge`/`once`/`scroll`) work on modal props; for infinite scroll import `InfiniteScroll` from `@stratal/inertia-modal/react`, not `@inertiajs/react`.
+
+**User says "Open a sheet from inside another sheet" / "Stack modals" / "Nest a modal"** -> Read `references/inertia-modal.md` (Stack Modals). Point the inner route's `base` at the outer modal route's path — `ctx.modal('Parent/History', props, { base: '/parent/42/edit' })` nests above a modal already rendered at `/parent/42/edit`. Open it with `<ModalLink>` so the pages behind the stack aren't re-fetched. `useModal()` exposes `depth`/`isTop` for the level, and `closeAll()` to dismiss the whole stack at once.
 
 **User says "Add a WebSocket gateway" / "Real-time endpoint"** -> Read `references/websocket.md`. Use `@Gateway('/ws/path')` + `@OnMessage()/@OnClose()/@OnError()`. Register in module `controllers` array.
 
 **User says "Use Durable Objects" / "Cloudflare Workflows" / "Service binding RPC"** -> Read `references/workers.md`. Extend `StratalDurableObject` / `StratalWorkflow` / `StratalWorkerEntrypoint` and call `this.runInScope(container => …)` to access DI services.
 
-**User says "Configure storage" / "Upload files to R2"** -> Read `references/infrastructure.md` Storage section. Configure `StorageModule.forRoot()` with R2 bindings, use `StorageService` for upload/download/presigned URLs.
+**User says "Configure storage" / "Upload files to R2" / "How big is this file?" / "List files in a folder" / "Delete a folder's files"** -> Read `references/infrastructure.md` Storage section. Configure `StorageModule.forRoot()` with R2 bindings, use `StorageService` for upload/download/presigned URLs, `storage.head(path)` for size without downloading, `storage.list({ prefix })` to walk a prefix (**one page — loop while `cursor` is set**), `storage.deleteMany(paths)` for bulk delete.
 
 **User says "Expose my API as MCP tools"** -> Run `npx quarry mcp:serve`. Use `--tag` or `--path` flags to filter. Preview with `npx quarry mcp:tools`.
 
@@ -276,6 +278,8 @@ Install `@stratal/inertia-modal`, add `ModalModule`, return `ctx.inertiaModal('P
 **User says "Add hreflang tags" / "Localized SEO" / "Alternate language URLs"** -> Read `references/inertia.md` (Hreflang section) — auto-emitted once Inertia + `I18nModule.forRoot({ locales, defaultLocale, detection: { strategy: 'path' | 'querystring' } })` are configured with ≥2 locales, no extra setup.
 
 **User says "Set the page title/description" / "Add SEO / Open Graph / meta tags" / "Set page metadata"** -> Read `references/inertia.md` (SEO section) — `ctx.seo({ title, description, openGraph, twitter, ... })` in the controller, app-wide `InertiaModule.forRoot({ seo: { defaults, titleTemplate } })`, auto head-sync, `useSeo()` to read it in a component.
+
+**User says "Paginate this" / "Load more" / "Infinite scroll" / "The list skips rows when new ones arrive"** -> Read `references/database.md` (Reading by Cursor) and `references/inertia.md` (Scroll Props). Read rows with `db.$cursor.thread.findMany({ cursor: ctx.query('cursor'), take: 20, orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }] })` — order on a set ending in a unique column, and never ZenStack's own `cursor` on `db.thread.findMany()`, which silently empties, skips or repeats once the row it names changes. For scrolling, pass that result to `ctx.scroll(() => …, { matchOn: 'id' })` and render `<InfiniteScroll data="threads">` from `@inertiajs/react`; the prop keeps its paginator shape, so map over `threads.data`.
 
 **User says "Check if all translations are complete" / "Audit i18n" / "Missing translations"** -> Run `npx quarry i18n:check`. Use `--locale=fr` to check a single locale, `--prefix=common` to filter by namespace. See `references/quarry-cli.md` for all i18n commands.
 
@@ -315,12 +319,12 @@ Load these when the task needs deeper knowledge:
 | `references/modules-and-di.md` | Provider types, scopes, container API, dynamic modules, lazy module loading (`LazyModuleLoader`) |
 | `references/routing.md` | RouteConfig, RouterContext API, named routes, URL generation, signed URLs, domain routing, Router fluent API, OpenAPI, versioning |
 | `references/errors-and-i18n.md` | ExceptionHandler, ApplicationError, HttpException, domain error classes, i18n, withZodI18n(), withI18n() |
-| `references/inertia.md` | Inertia.js setup, rendering, props, SSR, SEO (`ctx.seo()`, auto head-sync), type safety, Vite, access control (`Can`/`HasRole` components, `useCan`/`useRole`/`useAccess` hooks) |
-| `references/inertia-modal.md` | Backend-driven modal pages: `ModalModule`, `ctx.inertiaModal()`, `<Modal>`, `useModal()` |
+| `references/inertia.md` | Inertia.js setup, rendering, props (`defer`/`merge`/`once`/`always`/`optional`, infinite scroll via `ctx.scroll()` + `<InfiniteScroll>`), SSR (incl. the per-render `prepare` hook on `createInertiaSsrApp`), SEO (`ctx.seo()`, auto head-sync), type safety, Vite, access control (`Can`/`HasRole` components, `useCan`/`useRole`/`useAccess` hooks) |
+| `references/inertia-modal.md` | Backend-driven modal pages: `ModalModule`, `ctx.modal()`, `<Modal>`, `<ModalLink>`, `useModal()` (`depth`, `isTop`, `close()`, `closeAll()`, `refresh()`, `reload()`), stacking nested modals via `base`, wiring both entries with `withModals()`, prop helpers in a modal (`InfiniteScroll`), replacing the background dispatcher, modal test assertions (`assertModalComponents`, `assertModalProp`, `modalLevel`), `ModalBaseCycleError` |
 | `references/feature-flags.md` | Cloudflare Flagship: `FeatureFlagModule`, `FeatureFlagService`, flag manifest, `use()`, `all()`, `FeatureFlagShareMiddleware` (Inertia sharing), `useFlag`/`useFeatureFlags` |
 | `references/websocket.md` | WebSocket gateways: `@Gateway`, `@OnMessage`, `GatewayContext` |
 | `references/workers.md` | Durable Objects, Workflows, Service Bindings — DI-aware base classes |
-| `references/database.md` | DatabaseModule, ZenStack, connections, plugins, transactions |
+| `references/database.md` | DatabaseModule, ZenStack, connections, plugins, transactions, reading by cursor (`db.$cursor.<model>.findMany()`) |
 | `references/auth-and-rbac.md` | Better Auth, AuthContext, access control, AuthGuard, rate-limit interop (`registry.forPath()` + auto-wired `customStorage` / `customRules`) |
 | `references/events.md` | Event listeners, @On/@Listener, database events, wildcards |
 | `references/queues-and-cron.md` | Queue consumers, senders, auto-idempotent dispatch, failed job management + `FailedJobCleanupJob` cron, cron jobs, wrangler config |
@@ -328,7 +332,7 @@ Load these when the task needs deeper knowledge:
 | `references/middleware-and-guards.md` | RouteConfigurable, middleware registration with Router, guards, @UseGuards |
 | `references/response-cache.md` | Workers Caching: `@Cacheable`, `@PurgesCache`, `ResponseCacheModule.forRoot({ defaults })`, `Cache-Tag` interpolation (`{param/query/data}`), purging, fail-closed rules, per-caller `partitionBy` via the two-entrypoint gateway (`cachedEntrypoint`, `partitions`, `primers`), Inertia SSR caching, Wrangler setup, local-dev limits |
 | `references/rate-limiter.md` | Named rate limiters, `RateLimiterModule.forRoot()`, `Limit` value class (incl. `perSeconds`), `router.throttle()`, `@RateLimit` decorator, typed-KV custom stores, 429 headers |
-| `references/testing.md` | TestingModule, TestHttpClient, mocks, factories; opt-in per-file database isolation (`database: {}`, `createTestDatabaseGlobalSetup`, `prepare`, `truncateDb`) |
+| `references/testing.md` | TestingModule (incl. mirroring the app's `trailingSlash` / `versioning` / `exceptionHandler`), TestHttpClient, mocks, factories; opt-in leased worker databases (`database: {}`, `createTestDatabaseGlobalSetup`, `prepare`, `truncateDb`) |
 | `references/infrastructure.md` | Cache (KV), Logger, Email (SMTP), Storage (R2 — multi-disk, presigned URLs), OpenAPI |
 | `references/config.md` | ConfigService, registerAs(), namespaces |
 | `references/incremental-adoption.md` | Mounting Stratal into existing Hono app |
@@ -358,6 +362,12 @@ Load these when the task needs deeper knowledge:
 
 **Inertia returns JSON instead of full HTML** -> Missing SSR bundle configuration. Check `ssr.bundle` in `InertiaModule.forRoot()` options.
 
+**`CursorOrderingError`** / **`UnrecognizedScrollShapeError`** / **`<InfiniteScroll>` throws "does not contain a scroll prop named X"** -> For the first, `orderBy` has no unique component, so tied rows share a position and walking over them skips or repeats — append it (`orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }]`) or name another with `uniqueBy`; it also covers a missing `orderBy`, a clause with no direction, and an ordering column a `select` dropped or that is null. A bad cursor from the URL is a separate `MalformedCursorError`, an `HttpException` carrying a 400 — let it surface rather than catching it to serve the first page. For the second, the value given to `ctx.scroll()` is neither `{ data, pagination: { page, totalPages } }` nor a `db.$cursor.<model>.findMany()` result — return one, or pass `metadata`. For the third, the prop was returned plain or as `ctx.merge()`; wrap it in `ctx.scroll()`, and pass the prop name as `data`, not the wrapper key (`data="notes"`, not `data="notes.data"`).
+
+**A modal test fails with `Target cannot be null or undefined` on `props.modal.stack`** / **`Expected a modal to be open, but the response carries none`** / **`The response carries only the level it rendered, so it does not say how many levels are open`** -> Import `@stratal/inertia-modal/testing` and assert through it instead of reading the payload, which carries one level at `props.modal`. The second means the route returned `ctx.inertia()` rather than `ctx.modal()`. The third means `assertModalCount()`, `assertModalComponents()`, `assertModalDepth()` or `modalLevels()` was called on an Inertia visit — request the URL as a document to get the whole chain, or assert the level itself with `assertModalComponent()`.
+
+**`ModalBaseCycleError`** -> A `base` chain leads back to a route already in it. Check the `base` of each level in the stack for a cycle. **`no resolver registered`** / **`could not resolve modal component "X"`** / **a level missing from the server HTML** -> the app entries are not wired for server-rendered levels: both need `resolve` passed through `withModals()`. A level still absent from server HTML is either in `ssrExclude` or inside a portal — `createPortal` is client-only, so a Radix `DialogPortal` level cannot server-render. See `references/inertia-modal.md`.
+
 **`MissingAccessPropsError`** -> `accessControl` is not configured on `AuthModule.forRootAsync()`. Configure it (see `references/auth-and-rbac.md`) — `@stratal/framework` then shares the `access` prop automatically.
 
 **Permission string rejected as a type error** -> The generated types are stale, or the permission isn't defined in `accessControl`. Run `quarry inertia:types` and confirm the resource and action exist in your `accessControl` definition.
@@ -374,7 +384,7 @@ Load these when the task needs deeper knowledge:
 
 **"Domain mismatch" / 404 on domain routes** -> Request host doesn't match controller's domain pattern. Check `@Controller({ domain })` or `router.domain()` config.
 
-**Trailing slashes redirect unexpectedly (308)** -> `trailingSlash` is set to `'always'` or `'never'`. Default is `'ignore'`. Root `/` and file-like paths (last segment containing `.`, e.g. `/api/openapi.json`) are excluded from `'always'` redirects.
+**Trailing slashes redirect unexpectedly (308)** -> `trailingSlash` is set to `'always'` or `'never'`. Default is `'ignore'`. Root `/` and file-like paths (last segment containing `.`, e.g. `/api/openapi.json`) are excluded from `'always'` redirects. In tests, pass the same `trailingSlash` to `Test.createTestingModule()`: it builds its own application and never runs the entry file, so a suite that omits it asserts URLs production never emits.
 
 **`RateLimiterNotConfiguredError` at boot** -> `RateLimiterModule` is imported (directly or via another import) but `forRoot({ store })` was never called. There is no implicit default — pick `'kv'` / `'memory'` / `{ useClass }`.
 
@@ -382,8 +392,8 @@ Load these when the task needs deeper knowledge:
 
 **`RateLimiterNotDefinedError` for limiter name** -> `router.throttle('foo')` references a name that's never registered. Call `RateLimiterRegistry.for('foo', ...)` inside a module's `OnInitialize` hook.
 
-**`ResponseCacheConfigError`** -> One of: `ResponseCacheModule` was never imported while a route uses `@Cacheable`/`@PurgesCache`; `"cache": { "enabled": true }` is missing from `wrangler.jsonc` (fails on the **first request**, not at deploy — also needs Wrangler >= 4.69.0 and `compatibility_date` >= `2026-07-06`); the configured `gateway.entrypoint` is not reachable on `ctx.exports` (a typo, a missing `export const`, or a missing `enable_ctx_exports` compatibility flag — fails on the **first request**); or the route config is rejected — `@Cacheable` on a guarded route with no effective `partitionBy`, a `partitionBy`/`partitions`/`primers` without `gateway: { entrypoint }`, a `gateway.entrypoint` of `"default"`, a partition name with no registered resolver, a `{body.*}` cache tag, a missing/non-positive `ttl`, or `purgeEverything` combined with `tags`/`pathPrefixes`. The message names the controller and method.
+**`ResponseCacheConfigError`** -> One of: `ResponseCacheModule` was never imported while a route uses `@Cacheable`/`@PurgesCache`; the configured `gateway.entrypoint` is not reachable on `ctx.exports` (a typo, a missing `export const`, or a missing `enable_ctx_exports` compatibility flag — fails on the **first request**); or the route config is rejected — `@Cacheable` on a guarded route with no effective `partitionBy`, a `partitionBy`/`partitions`/`primers` without `gateway: { entrypoint }`, a `gateway.entrypoint` of `"default"`, a partition name with no registered resolver, a `{body.*}` cache tag, a missing/non-positive `ttl`, or `purgeEverything` combined with `tags`/`pathPrefixes`. The message names the controller and method. A missing `"cache": { "enabled": true }` is **not** one of these: those routes serve uncached and stamped `private, no-store`, with the reason logged at error level once per entrypoint (it also needs Wrangler >= 4.69.0 and `compatibility_date` >= `2026-07-06`).
 
 **`CachePurgeError` / `InvalidCacheTagError`** -> `@PurgesCache` awaits its purge and throws when it fails, so the client sees a `500` for a mutation that **already committed** — treat it as possibly-applied and re-read. Usual cause: the `cache` binding is missing in that environment. `InvalidCacheTagError` means a tag template could not render; on `@Cacheable` it is caught and the response fails closed (not cached), on `@PurgesCache` it fails the request.
 
-**Caching not working / responses are `private, no-store`** -> Miniflare does not implement `ctx.cache`, so real hit/miss behaviour cannot be exercised locally (`wrangler dev`, vitest workers pool) — use `wrangler dev --remote` or a deployed environment; header emission and boot checks *are* locally testable. If the header is `private, no-store` on a `@Cacheable` route, it failed closed: `Set-Cookie` present, non-2xx status, an unrenderable `Cache-Tag`, or (Inertia) flash data, a partial reload, or a `once()` prop.
+**Caching not working / responses are `private, no-store`** -> Miniflare does not implement `ctx.cache`, so real hit/miss behaviour cannot be exercised locally (`wrangler dev`, vitest workers pool) — use `wrangler dev --remote` or a deployed environment; header emission and boot checks *are* locally testable. If the header is `private, no-store` on a `@Cacheable` route, it failed closed: `Set-Cookie` present, non-2xx status, an unrenderable `Cache-Tag`, or (Inertia) flash data or a `once()` prop. Partial reloads — and so `ctx.defer()` props — DO cache, as `Vary` variants keyed on the Inertia protocol headers; the one exception is `inertia-partial-unkeyed`, a partial reload whose adapter reported no `varyHeaders`, which fails closed because the URL alone would not distinguish it from the full page.

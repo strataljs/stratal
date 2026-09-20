@@ -30,6 +30,16 @@ describe('stratalInertia optimizeDeps include', () => {
     expect(env.optimizeDeps?.include).toContain('@react-email/render')
   })
 
+  // `@inertiajs/react`'s `App` component — reachable only through the optimize-excluded
+  // `@stratal/inertia` SSR renderer — imports `react-dom/client` unconditionally, the same
+  // undiscoverable-CJS-subpath shape as `react-dom/server` above.
+  it('force-includes react-dom/client alongside react-dom/server', () => {
+    const env: EnvironmentOptions = {}
+    configureEnv(optimizeDepsPlugin(stratalInertia()), env)
+
+    expect(env.optimizeDeps?.include).toContain('react-dom/client')
+  })
+
   it('preserves an existing include list', () => {
     const env: EnvironmentOptions = { optimizeDeps: { include: ['some-app-dep'] } }
     configureEnv(optimizeDepsPlugin(stratalInertia()), env)

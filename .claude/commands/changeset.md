@@ -1,5 +1,24 @@
 Generate a changeset file for the changes on the current branch.
 
+## When NOT to write a changeset
+
+A changeset becomes a line in the published CHANGELOG and the release notes, so it is
+warranted only when a **consumer's experience of the package changes**. Decide this
+first — before picking packages or bump levels — and if nothing qualifies, write no
+file and say so.
+
+Write no changeset for:
+
+- Documentation-only changes, including comments and JSDoc that ship in the `.d.ts`
+- Internal refactors that leave the public API and its behaviour unchanged
+- Tests, CI, tooling, and build configuration
+- Changes to private packages (e.g., the root `stratal-monorepo`)
+
+The test: what would a consumer reading the release notes do differently? If the answer
+is nothing, there is no changeset to write. Do not add one to satisfy a CI step or to
+make a PR look complete — an entry describing a change no consumer can observe is noise
+in someone else's upgrade notes.
+
 ## Instructions
 
 1. Determine the base branch by checking if this branch tracks an upstream, otherwise default to `main`.
@@ -64,6 +83,7 @@ Changeset summaries are published in CHANGELOGs and GitHub Releases. Write for *
 
 ## Rules
 
+- Write no changeset at all when nothing a consumer can observe has changed (see above).
 - Use imperative mood ("add", not "added").
 - Create a separate changeset file for each affected package — do not combine multiple packages into one file.
 - The summary line should be a single sentence, user-friendly, and written for package consumers (see Writing Style above).

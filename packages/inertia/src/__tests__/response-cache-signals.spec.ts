@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildInertiaCacheSignals } from '../services/inertia-cache-signals'
+import { INERTIA_VARY_HEADERS } from '../types'
 
 describe('buildInertiaCacheSignals', () => {
   it('reports a clean page as cacheable', () => {
@@ -7,7 +8,28 @@ describe('buildInertiaCacheSignals', () => {
       hasFlash: false,
       isPartial: false,
       hasOnceProps: false,
+      varyHeaders: INERTIA_VARY_HEADERS,
     })
+  })
+
+  it('reports the vary headers on a partial reload, so it can be cached as its own variant', () => {
+    const signals = buildInertiaCacheSignals({ flash: {}, isPartial: true, onceProps: {} })
+    expect(signals.varyHeaders).toContain('X-Inertia-Partial-Data')
+    expect(signals.varyHeaders).toContain('X-Inertia-Partial-Component')
+  })
+
+  it('names every header the partial-request reader consults', () => {
+    // Each of these changes which props the response carries, so one missing
+    // from Vary means two different bodies share a cache entry at one URL.
+    expect([...INERTIA_VARY_HEADERS]).toEqual([
+      'X-Inertia',
+      'X-Inertia-Partial-Component',
+      'X-Inertia-Partial-Data',
+      'X-Inertia-Partial-Except',
+      'X-Inertia-Reset',
+      'X-Inertia-Resolve-Deferred',
+      'x-inertia-infinite-scroll-merge-intent',
+    ])
   })
 
   it('flags non-empty flash data', () => {

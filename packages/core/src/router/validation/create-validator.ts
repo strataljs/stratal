@@ -16,9 +16,15 @@ export type ValidatorTarget = 'json' | 'form' | 'query' | 'param' | 'header'
  *
  * This is the plain-Hono replacement for `@hono/zod-openapi`'s `app.openapi()`
  * validator composition. It carries **no runtime `zod` import** — it only calls
- * `safeParse` on the caller-supplied schema instance and references `ZodType`/
- * `ZodError` as erased types — so a route without a declared schema attaches no
- * validator and pulls in no `zod`.
+ * `safeParseAsync` on the caller-supplied schema instance and references
+ * `ZodType`/`ZodError` as erased types — so a route without a declared schema
+ * attaches no validator and pulls in no `zod`.
+ *
+ * Parsing is async so a schema may carry an async refinement — one that reaches
+ * a database, a cache or a service binding to decide whether a value is
+ * acceptable. Zod's synchronous `safeParse` throws `$ZodAsyncError` rather than
+ * returning a failure when it meets one, which would surface as a 500 instead
+ * of a 400. A fully synchronous schema resolves on the same tick.
  *
  * On failure it throws {@link SchemaValidationError}, which the global exception
  * handler renders as a 400 with i18n-translated issues (the Zod error map is
@@ -34,10 +40,10 @@ export function createValidator(
   schema: ZodType,
   omit?: readonly string[],
 ): MiddlewareHandler<RouterEnv> {
-  return validator(target, (value) => {
+  return validator(target, async (value) => {
     const record = value as Record<string, unknown>
     const input = omit?.length ? omitKeys(record, omit) : record
-    const result = schema.safeParse(input)
+    const result = await schema.safeParseAsync(input)
     if (!result.success) {
       throw new SchemaValidationError(result.error)
     }

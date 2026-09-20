@@ -8,7 +8,6 @@ A modular framework for building Cloudflare Workers with dependency injection, O
 
 [![npm version](https://img.shields.io/npm/v/stratal)](https://www.npmjs.com/package/stratal)
 [![CI](https://github.com/strataljs/stratal/actions/workflows/ci.yml/badge.svg)](https://github.com/strataljs/stratal/actions/workflows/ci.yml)
-[![Benchmark](https://github.com/strataljs/stratal/actions/workflows/benchmark.yml/badge.svg)](https://github.com/strataljs/stratal/actions/workflows/benchmark.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/strataljs/stratal/badge)](https://securityscorecards.dev/viewer/?uri=github.com/strataljs/stratal)
 [![Known Vulnerabilities](https://snyk.io/test/github/strataljs/stratal/badge.svg)](https://snyk.io/test/github/strataljs/stratal)
@@ -20,20 +19,49 @@ A modular framework for building Cloudflare Workers with dependency injection, O
 
 ## Features
 
-- **Dependency Injection** - Two-tier DI container (global + request-scoped) with built-in decorator support
-- **OpenAPI Documentation** - Define Zod schemas once and get a full OpenAPI 3.0 spec with interactive docs
-- **Modular Architecture** - NestJS-style modules with lifecycle hooks, dynamic configuration, and middleware
-- **Hono Routing** - Convention-based RESTful controllers with automatic HTTP method mapping
-- **Queue Consumers** - Typed Cloudflare Queue consumers with message-type filtering
-- **Cron Jobs** - Scheduled tasks via Cloudflare Workers cron triggers
-- **Storage** - S3-compatible file storage with presigned URLs and TUS upload support
-- **Email** - SMTP provider with React Email template support
-- **i18n** - Type-safe internationalization with locale detection from request headers
-- **Guards and Middleware** - Route protection and per-module middleware configuration
+- **Dependency Injection** — Two-tier DI container (global + request-scoped) with decorator-based injection
+- **Modular Architecture** — NestJS-style modules with lifecycle hooks, dynamic configuration, and lazy loading
+- **Routing** — Convention-based RESTful controllers on Hono, plus explicit method decorators, named routes, versioning, and domain routing
+- **OpenAPI Documentation** — Define Zod schemas once and get an OpenAPI 3.0 spec with Swagger UI
+- **Queues and Cron** — Typed Cloudflare Queue consumers with message-type filtering, and scheduled jobs via cron triggers
+- **Events** — In-process and queue-backed event listeners with `@Listener` / `@On`
+- **WebSockets and SSE** — Gateway classes with `@OnMessage` / `@OnClose` / `@OnError`, and server-sent event streams
+- **Caching** — KV-backed cache with optional isolate-level L1 tiering, plus `@Cacheable` / `@PurgesCache` response caching on the Workers Cache API
+- **Rate Limiting** — Declarative `@RateLimit` with named limiters
+- **Storage** — Cloudflare R2 file storage with presigned URLs and resumable multipart uploads (TUS-compatible)
+- **Email** — SMTP provider with React Email template support and queued delivery
+- **i18n** — Type-safe internationalization with locale detection from request headers
+- **Configuration** — Namespaced, validated config with typed dot-path access
+- **Guards and Middleware** — Route protection and per-module middleware configuration
+- **Seeders** — Ordered database seeders with `db:seed` commands
+- **Quarry CLI** — Built-in commands for routes, queues, events, i18n and schedules — and `mcp:serve`, which exposes your API routes to an AI agent as MCP tools
 
-> **Note:** Stratal is in active development and APIs may change before v1. It is okay to use in projects, but consider pinning your dependency version so that a new patch does not break your existing code.
+## Used in production
 
-## Installation
+<p align="center">
+  <a href="https://nounstudy.com"><img src="https://nounstudy.com/brand/logo.png" alt="NounStudy" height="36" /></a>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://admissio.app"><img src="https://admissio.app/brand/logo.png" alt="Admissio" height="36" /></a>
+</p>
+
+## Requirements
+
+- Node.js ≥ 22
+- A Cloudflare Workers project
+
+## Getting started
+
+Scaffold a new project from an official template:
+
+```bash
+npm create stratal my-app
+# or
+yarn create stratal my-app
+# or
+pnpm create stratal my-app
+```
+
+Or add Stratal to an existing project:
 
 ```bash
 npm install stratal
@@ -45,9 +73,15 @@ yarn add stratal
 
 | Package | npm | Description |
 |---|---|---|
-| `stratal` | [![npm](https://img.shields.io/npm/v/stratal)](https://www.npmjs.com/package/stratal) | Core framework — modules, DI, routing, OpenAPI, queues, cron, storage, email, i18n |
-| `@stratal/testing` | [![npm](https://img.shields.io/npm/v/@stratal/testing)](https://www.npmjs.com/package/@stratal/testing) | Testing utilities and mocks |
-| `@stratal/framework` | [![npm](https://img.shields.io/npm/v/@stratal/framework)](https://www.npmjs.com/package/@stratal/framework) | Auth (Better Auth), database ORM (ZenStack), RBAC (Casbin), guards, factories |
+| `stratal` | [![npm](https://img.shields.io/npm/v/stratal)](https://www.npmjs.com/package/stratal) | Core framework — modules, DI, routing, OpenAPI, queues, cron, events, cache, storage, email, i18n, Quarry CLI |
+| `@stratal/framework` | [![npm](https://img.shields.io/npm/v/@stratal/framework)](https://www.npmjs.com/package/@stratal/framework) | Auth (Better Auth), database ORM (ZenStack), access control, guards, factories |
+| `@stratal/testing` | [![npm](https://img.shields.io/npm/v/@stratal/testing)](https://www.npmjs.com/package/@stratal/testing) | Testing utilities, HTTP/WebSocket/SSE/CLI clients, mocks, Vitest plugin |
+| `@stratal/inertia` | [![npm](https://img.shields.io/npm/v/@stratal/inertia)](https://www.npmjs.com/package/@stratal/inertia) | Inertia.js v3 server adapter — React SSR on Workers, SEO, partial reloads |
+| `@stratal/inertia-modal` | [![npm](https://img.shields.io/npm/v/@stratal/inertia-modal)](https://www.npmjs.com/package/@stratal/inertia-modal) | Backend-driven modal pages built on `@stratal/inertia` |
+| `@stratal/feature-flags` | [![npm](https://img.shields.io/npm/v/@stratal/feature-flags)](https://www.npmjs.com/package/@stratal/feature-flags) | Cloudflare Flagship feature flags with Inertia sharing and React hooks |
+
+All packages are versioned together — one release bumps them all.
+
 ### AI Agent Skills
 
 Stratal provides [Agent Skills](https://agentskills.io) for AI coding assistants like Claude Code and Cursor. Install to give your AI agent knowledge of Stratal patterns, conventions, and APIs:
@@ -58,7 +92,7 @@ npx skills add strataljs/stratal
 
 | Skill | Description |
 |---|---|
-| `stratal` | Build Cloudflare Workers apps with the Stratal framework — modules, DI, controllers, routing, OpenAPI, queues, cron, events, seeders, CLI, auth, database, RBAC, testing, and more |
+| `stratal` | Build Cloudflare Workers apps with the Stratal framework — modules, DI, controllers, routing, OpenAPI, queues, cron, events, seeders, CLI, auth, database, access control, testing, and more |
 
 ## Quick Start
 
@@ -68,14 +102,14 @@ Define a module with a controller and wire it up as a Cloudflare Worker:
 import { Stratal } from 'stratal'
 import { Module } from 'stratal/module'
 import { Controller, Route, type RouterContext } from 'stratal/router'
-import { z } from 'stratal/validation'
+import { object, string } from 'zod/mini'
 
 // Define a controller
 @Controller('/api/greetings')
 class GreetingsController {
   @Route({
     summary: 'Say hello',
-    response: z.object({ message: z.string() }),
+    response: object({ message: string() }),
   })
   async index(ctx: RouterContext) {
     return ctx.json({ message: 'Hello from Stratal!' })
@@ -92,93 +126,23 @@ class AppModule {}
 export default new Stratal({ module: AppModule })
 ```
 
+`@Route()` maps method names to HTTP verbs by convention — `index` → `GET /api/greetings`, `show` → `GET /api/greetings/:id`, `create` → `POST` (201), `update` → `PUT`, `patch` → `PATCH`, `destroy` → `DELETE`. Use `@Get()`, `@Post()` and friends when the convention doesn't fit.
+
 ## Documentation
 
-Full guides and examples are available at **[stratal.dev](https://stratal.dev)**. API reference lives at **[api-reference.stratal.dev](https://api-reference.stratal.dev)**.
+Full guides and examples are available at **[stratal.dev](https://stratal.dev)**. API reference lives at **[api-reference.stratal.dev](https://api-reference.stratal.dev)**. Runnable examples live at **[strataljs/examples](https://github.com/strataljs/examples)**.
 
-## Benchmarks
+## Support the project
 
-### Request / Response (e2e)
-
-Full request lifecycle: DI resolution → middleware → routing → validation → response serialization.
-
-| Benchmark | ops/sec | ±% | Median | P99 |
-|---|--:|--:|--:|--:|
-| simple GET - 200 | 99,191 | ±0.73% | 10.1 µs | 17.8 µs |
-| GET with route params - 200 | 80,096 | ±0.74% | 12.5 µs | 19.5 µs |
-| POST with JSON body - 201 | 49,954 | ±0.74% | 20.0 µs | 31.9 µs |
-| POST invalid body - validation error | 23,587 | ±3.19% | 42.4 µs | 71.8 µs |
-| GET unknown route - 404 | 43,228 | ±0.69% | 23.1 µs | 34.8 µs |
-
-### DI Container - Registration
-
-| Benchmark | ops/sec | ±% | Median | P99 |
-|---|--:|--:|--:|--:|
-| register class provider | 5,396,472 | ±0.91% | 0.20 µs | 0.30 µs |
-| registerSingleton | 5,061,380 | ±0.63% | 0.20 µs | 0.30 µs |
-| registerValue | 5,264,393 | ±0.58% | 0.20 µs | 0.30 µs |
-| registerFactory | 4,966,905 | ±0.67% | 0.20 µs | 0.30 µs |
-
-### DI Container - Resolution
-
-| Benchmark | ops/sec | ±% | Median | P99 |
-|---|--:|--:|--:|--:|
-| resolve class token | 2,259,399 | ±0.73% | 0.40 µs | 0.60 µs |
-| resolve symbol token | 2,085,313 | ±0.88% | 0.50 µs | 0.70 µs |
-| resolve value token | 2,252,901 | ±0.45% | 0.40 µs | 0.60 µs |
-| resolve singleton token | 2,180,625 | ±0.53% | 0.50 µs | 0.60 µs |
-| isRegistered check | 2,786,645 | ±0.51% | 0.40 µs | 0.50 µs |
-
-### DI Container - Conditional Binding
-
-| Benchmark | ops/sec | ±% | Median | P99 |
-|---|--:|--:|--:|--:|
-| when().use().give().otherwise() | 1,545,062 | ±3.07% | 0.50 µs | 1.10 µs |
-| when() with cached predicate | 1,630,576 | ±2.65% | 0.50 µs | 1.00 µs |
-
-### Module Registry - Registration
-
-| Benchmark | ops/sec | ±% | Median | P99 |
-|---|--:|--:|--:|--:|
-| register single module | 2,155,261 | ±0.95% | 0.50 µs | 0.60 µs |
-| register 3-level module tree | 1,028,422 | ±0.41% | 1.00 µs | 1.30 µs |
-| register dynamic module (forRoot) | 2,107,991 | ±1.60% | 0.50 µs | 1.00 µs |
-
-### Module Registry - Initialization
-
-| Benchmark | ops/sec | ±% | Median | P99 |
-|---|--:|--:|--:|--:|
-| initialize with lifecycle hooks | 1,657,987 | ±0.12% | 0.60 µs | 0.80 µs |
-
-### Module Registry - Collection
-
-| Benchmark | ops/sec | ±% | Median | P99 |
-|---|--:|--:|--:|--:|
-| getAllControllers | 983,234 | ±0.72% | 1.00 µs | 2.30 µs |
-| getAllConsumers | 1,000,669 | ±0.46% | 1.00 µs | 1.30 µs |
-| getAllJobs | 1,003,687 | ±0.46% | 1.00 µs | 1.30 µs |
-
-### Route Registration
-
-| Benchmark | ops/sec | ±% | Median | P99 |
-|---|--:|--:|--:|--:|
-| controller with 5 OpenAPI routes | 42,263 | ±4.73% | 21.9 µs | 42.2 µs |
-| single-route controller | 215,349 | ±3.33% | 4.60 µs | 8.00 µs |
-| register multiple controllers | 38,840 | ±3.69% | 19.8 µs | 51.8 µs |
-
-### Application
-
-| Benchmark | ops/sec | ±% | Median | P99 |
-|---|--:|--:|--:|--:|
-| constructor only | 312,943 | ±1.69% | 2.70 µs | 7.70 µs |
-| full initialize() | 48,051 | ±4.92% | 16.3 µs | 43.1 µs |
-| resolve service after bootstrap | 45,913 | ±5.33% | 16.2 µs | 42.7 µs |
-
-> Benchmarks ran on: Apple M3 Max (16-core), 48 GB RAM, macOS 26.2, Node.js v22.12.0
+If Stratal is useful to you, **[star the repository](https://github.com/strataljs/stratal)** — it is the simplest way to help others find it.
 
 ## Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## Maintainer
+
+Built and maintained by **Temitayo Fadojutimi** — [@adesege_](https://x.com/adesege_).
 
 ## License
 

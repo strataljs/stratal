@@ -1,10 +1,11 @@
 /**
  * Test database isolation helpers.
  *
- * Implements database-per-worker isolation for parallel e2e runs against
- * Postgres. A migrated **template** database is built once in global setup;
- * each worker clones it once into a per-worker database that is reused (and
- * reset between tests, not dropped per file). See `@stratal/testing/database`.
+ * Implements leased worker databases for parallel runs against Postgres. A
+ * migrated **template** database is built once in global setup. Each test file
+ * leases one numbered worker database for as long as its isolate lives and
+ * receives a fresh clone of the template in it, so a run holds at most as many
+ * databases as it runs files at once. See `@stratal/testing/database`.
  *
  * `pg` is imported dynamically so this module loads without it — consumers
  * that don't use a database never pay the dependency.
@@ -97,10 +98,10 @@ export function buildConnectionString(base: string, dbName: string): string {
   return url.toString()
 }
 
-/** The shared prefix for per-file databases, used as the leak-sweep key. */
+/** The shared prefix for worker databases, used as the sweep key. */
 export function databasePrefix(base: string): string {
   const baseName = databaseNameOf(base).replace(/[^a-z0-9_]/gi, '_')
-  return `${baseName}_f_`
+  return `${baseName}_w_`
 }
 
 /** Name of the migrated template database cloned per worker. */
@@ -111,18 +112,29 @@ export function deriveTemplateName(base: string): string {
 }
 
 /**
- * Name of the database owned by a single test FILE, keyed by a per-file `token`.
- * Each test file clones the template into its OWN database — no two files ever
- * share one — because `@cloudflare/vitest-pool-workers` isolates per file and can
- * run a worker's files concurrently; per-file databases make cross-file
- * contamination impossible by construction. Asserted against Postgres' 63-char
- * identifier limit (keep the base name short so `_f_<token>` fits).
+ * Name of the worker database behind lease `slot`. Asserted against Postgres'
+ * 63-char identifier limit (keep the base name short so `_w_<slot>` fits).
  */
-export function deriveFileDbName(base: string, token: string): string {
+export function deriveWorkerDbName(base: string, slot: number): string {
   const baseName = databaseNameOf(base).replace(/[^a-z0-9_]/gi, '_')
-  const name = `${baseName}_f_${token}`
-  assertIdentifierLength(name, 'per-file database name')
+  const name = `${baseName}_w_${slot}`
+  assertIdentifierLength(name, 'worker database name')
   return name
+}
+
+/** The lease slot a worker database name carries, or `null` for any other name. */
+function slotOfWorkerDb(prefix: string, dbName: string): number | null {
+  if (!dbName.startsWith(prefix)) return null
+  const slot = dbName.slice(prefix.length)
+  return /^\d+$/.test(slot) ? Number(slot) : null
+}
+
+/**
+ * The advisory-lock key that reserves lease `slot` of `template`. Keyed on the
+ * template so two suites with different base databases never compete for slots.
+ */
+function leaseLockKey(template: string, slot: number): string {
+  return `stratal:worker-db-lease:${template}:${slot}`
 }
 
 async function withAdminClient<T>(adminConn: string, fn: (query: (sql: string) => Promise<unknown>) => Promise<T>): Promise<T> {
@@ -136,11 +148,6 @@ async function withAdminClient<T>(adminConn: string, fn: (query: (sql: string) =
   }
 }
 
-/** True when the error is Postgres' "duplicate database" (concurrent create). */
-function isDuplicateDatabase(error: unknown): boolean {
-  return (error as { code?: string })?.code === '42P04'
-}
-
 /**
  * True for SQLSTATE 55006 ("source database is being accessed by other users") —
  * what `CREATE DATABASE ... TEMPLATE t` raises while another session is using the
@@ -152,53 +159,36 @@ function isTemplateInUse(error: unknown): boolean {
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
-/** True when a database with `dbName` already exists. */
-async function databaseExists(
-  query: (sql: string) => Promise<unknown>,
-  dbName: string,
-): Promise<boolean> {
-  const { rows } = (await query(
-    `SELECT 1 AS one FROM pg_database WHERE datname = ${quoteLiteral(dbName)}`,
-  )) as { rows: unknown[] }
-  return rows.length > 0
-}
-
 /**
- * Ensure worker database `dbName` exists, cloned from `template`. Idempotent and
- * lock-frugal: it first checks `pg_database`, so the common "already exists" path
- * (every file after a slot's first) never issues `CREATE DATABASE ... TEMPLATE`
- * and never takes the clone lock.
+ * Replace worker database `dbName` with a fresh clone of `template`.
  *
  * The clone is serialized across all workers and processes by one Postgres
  * advisory lock keyed on the template. Postgres permits only one
  * `CREATE DATABASE ... TEMPLATE t` at a time — a concurrent one fails with
- * SQLSTATE 55006. On a fresh run every worker's first compile races to clone the
- * same template, so without this they'd all fire `CREATE ... TEMPLATE` at once
- * and all but one would fail their first file. The lock funnels them one-at-a-
- * time, each blocking *in Postgres* (not busy-waiting) until its turn. A create
- * that still hits a transient 55006 is retried with backoff; one that loses the
- * race for the same name (SQLSTATE 42P04) is treated as success.
+ * SQLSTATE 55006 — so without the lock every file starting at once would race
+ * and all but one would fail. The lock funnels them one at a time, each
+ * blocking *in Postgres* (not busy-waiting) until its turn. A create that still
+ * hits a transient 55006 is retried with backoff.
+ *
+ * `WITH (FORCE)` ends connections the previous lessee's pool left open: its
+ * isolate is gone, so nothing will close them.
  */
-export async function ensureWorkerDatabase(
+export async function cloneWorkerDatabase(
   adminConn: string,
   dbName: string,
   template: string,
 ): Promise<void> {
   await withAdminClient(adminConn, async (query) => {
-    if (await databaseExists(query, dbName)) return
-
     const lockKey = quoteLiteral(`stratal:worker-db-clone:${template}`)
     await query(`SELECT pg_advisory_lock(hashtext(${lockKey}))`)
     try {
-      // A sibling worker may have cloned it while we waited for the lock.
-      if (await databaseExists(query, dbName)) return
+      await query(`DROP DATABASE IF EXISTS ${quoteIdent(dbName)} WITH (FORCE)`)
       const create = `CREATE DATABASE ${quoteIdent(dbName)} TEMPLATE ${quoteIdent(template)}`
       for (let attempt = 1; ; attempt++) {
         try {
           await query(create)
           return
         } catch (error) {
-          if (isDuplicateDatabase(error)) return
           if (isTemplateInUse(error) && attempt < 5) {
             await sleep(250 * attempt)
             continue
@@ -212,19 +202,70 @@ export async function ensureWorkerDatabase(
   })
 }
 
+/** A worker database leased to the current isolate. */
+export interface WorkerDatabaseLease {
+  /** The leased database's name (`<base>_w_<slot>`). */
+  name: string
+  /** `base` pointed at the leased database. */
+  connectionString: string
+}
+
 /**
- * Drop leaked per-file databases matching the prefix while leaving a concurrent
- * process's **live** databases intact.
- *
- * Multiple setups can run at once (CI sharding, several e2e projects). A blanket
- * "drop everything matching the prefix" sweep would delete a sibling process's
- * in-flight per-file databases. So we only drop databases that currently have
- * **no active backend connections** — i.e. true leaks from a crashed prior run.
- * A live per-file database always has the test worker's pool connected, so it is
- * skipped. The `WITH (FORCE)` covers the narrow race where a connection appears
- * between the check and the drop.
+ * The connections holding this isolate's leases. A lease is a session-level
+ * advisory lock, so it lasts exactly as long as its connection: kept open here
+ * for the isolate's lifetime, it closes — and the slot frees — when the pool
+ * disposes the isolate at the end of its test file.
  */
-async function sweepStaleDatabases(adminConn: string, prefix: string): Promise<void> {
+const leaseConnections: pg.Client[] = []
+
+/**
+ * Lease the lowest free worker database for `base` and fill it with a fresh
+ * clone of the template.
+ *
+ * A slot is free when no other session holds its advisory lock. The pool runs
+ * each test file in its own isolate and disposes that isolate when the file
+ * ends, so a run never holds more slots than it runs files at once — and so
+ * never more worker databases. Every lease re-clones, so a file starts from
+ * exactly the template, including anything `prepare` baked into it.
+ */
+export async function leaseWorkerDatabase(base: string): Promise<WorkerDatabaseLease> {
+  const pg = await importPg()
+  const adminConn = deriveAdminConnectionString(base)
+  const template = deriveTemplateName(base)
+  const client = new pg.Client({ connectionString: adminConn })
+  await client.connect()
+  try {
+    let slot = 0
+    for (; ; slot++) {
+      const { rows } = await client.query<{ acquired: boolean }>(
+        `SELECT pg_try_advisory_lock(hashtext(${quoteLiteral(leaseLockKey(template, slot))})) AS acquired`,
+      )
+      if (rows[0]?.acquired) break
+    }
+    const name = deriveWorkerDbName(base, slot)
+    await cloneWorkerDatabase(adminConn, name, template)
+    leaseConnections.push(client)
+    return { name, connectionString: buildConnectionString(base, name) }
+  } catch (error) {
+    await client.end().catch(() => {
+      // The lease failed; its connection's close error adds nothing.
+    })
+    throw error
+  }
+}
+
+/**
+ * Drop worker databases nobody is using, leaving a concurrent process's live
+ * ones intact.
+ *
+ * Multiple setups can run at once (CI sharding, several e2e projects), so a
+ * database is dropped only when it has **no active backend connections** and
+ * its lease slot is free. The slot check closes the window between a lease and
+ * the lessee's first connection: a just-cloned database has no connections yet
+ * but is already spoken for. The sweep takes the slot's lock itself while it
+ * drops, so no lease can begin mid-drop.
+ */
+async function sweepStaleDatabases(adminConn: string, prefix: string, template: string): Promise<void> {
   // Escape both the SQL-string quote and the LIKE metacharacters (`\`, `%`, `_`)
   // so a prefix containing `_` (a single-char wildcard) can't over-match and drop
   // an unrelated database. `\` is the explicit ESCAPE character below.
@@ -238,7 +279,18 @@ async function sweepStaleDatabases(adminConn: string, prefix: string): Promise<v
         `AND NOT EXISTS (SELECT 1 FROM pg_stat_activity a WHERE a.datname = d.datname)`,
     )) as { rows: { datname: string }[] }
     for (const { datname } of rows) {
-      await query(`DROP DATABASE IF EXISTS ${quoteIdent(datname)} WITH (FORCE)`)
+      const slot = slotOfWorkerDb(prefix, datname)
+      if (slot === null) continue
+      const lockKey = quoteLiteral(leaseLockKey(template, slot))
+      const { rows: lock } = (await query(
+        `SELECT pg_try_advisory_lock(hashtext(${lockKey})) AS acquired`,
+      )) as { rows: { acquired: boolean }[] }
+      if (!lock[0]?.acquired) continue
+      try {
+        await query(`DROP DATABASE IF EXISTS ${quoteIdent(datname)} WITH (FORCE)`)
+      } finally {
+        await query(`SELECT pg_advisory_unlock(hashtext(${lockKey}))`)
+      }
     }
   })
 }
@@ -349,7 +401,7 @@ export function computeSchemaFingerprint(
  * Read the template database's stored schema fingerprint (kept as the database
  * COMMENT). Returns `null` when the template does not exist or carries no
  * fingerprint. Database comments are NOT copied by `CREATE DATABASE ...
- * TEMPLATE`, so per-file clones never inherit it.
+ * TEMPLATE`, so worker clones never inherit it.
  */
 async function readTemplateFingerprint(
   query: (sql: string) => Promise<unknown>,
@@ -394,9 +446,9 @@ export interface TestDatabaseGlobalSetupOptions {
  * Build a Vitest `globalSetup` default export that prepares the test database.
  *
  * Under a Postgres advisory lock (so concurrent setups across CI shards /
- * multiple e2e projects don't clobber each other), sweeps leaked per-worker
+ * multiple e2e projects don't clobber each other), sweeps unused worker
  * databases, then ensures a migrated (and optionally prepared) template exists
- * — ready to be cloned per worker.
+ * — ready to be cloned into each leased worker database.
  *
  * **Template reuse.** The template is fingerprinted from the `schema` source(s)
  * + the `migrate` routine + the `prepare` routine, and the fingerprint is
@@ -409,11 +461,11 @@ export interface TestDatabaseGlobalSetupOptions {
  *
  * **Concurrency model.** The reuse check + rebuild runs under
  * `pg_advisory_lock(hashtext(<template>))`, so only one process rebuilds the
- * template at a time. The stale-database sweep only drops per-worker databases
- * with **no active connections**, leaving a sibling process's live databases
- * intact. Teardown deliberately does **not** sweep or drop the template: a
- * concurrent process may still be using both, and the next run's setup sweep is
- * the backstop for any leak.
+ * template at a time. The sweep only drops worker databases with **no active
+ * connections** and a free lease slot, leaving a sibling process's live databases
+ * intact — which is what lets it run at teardown as well as at setup, so a run
+ * takes its own databases with it. Teardown deliberately does **not** drop the
+ * template: it is shared, and the next run reuses it by fingerprint.
  *
  * @example
  * ```ts
@@ -429,7 +481,7 @@ export interface TestDatabaseGlobalSetupOptions {
  */
 export function createTestDatabaseGlobalSetup(
   opts: TestDatabaseGlobalSetupOptions,
-): () => Promise<void> {
+): () => Promise<() => Promise<void>> {
   return async () => {
     const base = opts.connectionString ?? process.env.DATABASE_URL
     if (!base) {
@@ -441,12 +493,14 @@ export function createTestDatabaseGlobalSetup(
     const adminConn = deriveAdminConnectionString(base)
     const template = opts.templateName ?? deriveTemplateName(base)
     const prefix = databasePrefix(base)
+    // Leases are keyed on the derived template name, so the sweep checks the same keys.
+    const leaseTemplate = deriveTemplateName(base)
     const fingerprint = computeSchemaFingerprint(opts.schema, opts.migrate, opts.prepare)
 
     // Serialize template rebuild across concurrent setups so they don't drop or
     // migrate the template out from under each other.
     await withAdvisoryLock(adminConn, template, async () => {
-      await sweepStaleDatabases(adminConn, prefix)
+      await sweepStaleDatabases(adminConn, prefix, leaseTemplate)
 
       // Reuse the existing template when its stored fingerprint matches — the
       // schema is unchanged, so the migrated template is ready to clone. Only a
@@ -472,8 +526,23 @@ export function createTestDatabaseGlobalSetup(
       )
     })
 
-    // No teardown hook: anything destructive here (sweeping per-worker databases
-    // or dropping the template) could clobber a concurrent process that is still
-    // running. The next run's setup sweep (connection-guarded) reclaims leaks.
+    // The run reclaims its own worker databases as it ends.
+    //
+    // The sweep matches on the base database's name, so the only process that
+    // ever sees these databases is one configured with that same name. Nothing
+    // else will reach them, which is why the sweep belongs here as well as at
+    // setup — and why a pile of them is otherwise bounded by nothing.
+    //
+    // Connection- and lease-guarded, which is what makes it safe here: by now
+    // this run's files have finished and hold neither, while a concurrent
+    // process's databases are still leased and are skipped. The template is
+    // shared and reused by fingerprint, so it stays.
+    //
+    // Once per run, not once per file: the drop is trivial, but reaching the
+    // maintenance database to issue it is not, and a per-file hook pays that
+    // connection on every spec file.
+    return async () => {
+      await sweepStaleDatabases(adminConn, prefix, leaseTemplate)
+    }
   }
 }

@@ -91,9 +91,18 @@ export class TestingModule {
 
   /**
    * Get Inertia test client for making Inertia requests
+   *
+   * Sends no `X-Inertia-Version`. It used to send `'1'`, which meant any app configuring a real
+   * asset version had every request from this client read as a stale client and answered with a
+   * version-mismatch 409 — an entire Inertia suite failing on a value the tests never chose. The
+   * check needs a version from BOTH sides, so omitting it here leaves the app under test in charge
+   * rather than this header.
+   *
+   * A test that wants the mismatch path asks for it:
+   * `module.inertia.withHeaders({ 'X-Inertia-Version': 'stale' })`.
    */
   get inertia(): TestHttpClient {
-    return this.http.withHeaders({ 'X-Inertia': 'true', 'X-Inertia-Version': '1' })
+    return this.http.withHeaders({ 'X-Inertia': 'true' })
   }
 
   /**

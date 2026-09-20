@@ -15,16 +15,16 @@ import type { RouteConfigurable, Router } from '../router'
 import type { RouterContext } from '../router-context'
 import type * as BootCheck from '../../response-cache/boot-check'
 
-// Wraps (rather than replaces) the real `assertCachingAvailable`, so the
-// boot-check tests below still exercise the genuine implementation while
-// being able to assert *how many times* it was invoked — the difference
-// between "the check is latched" and "the failure is latched".
-const { assertCachingAvailableSpy } = vi.hoisted(() => ({ assertCachingAvailableSpy: vi.fn() }))
+// Wraps (rather than replaces) the real `cachingUnavailableReason`, so the
+// tests below still exercise the genuine implementation while being able to
+// assert *how many times* it was consulted — the answer is memoized per
+// entrypoint, and a memo that never hits would re-derive it per request.
+const { cachingUnavailableReasonSpy } = vi.hoisted(() => ({ cachingUnavailableReasonSpy: vi.fn() }))
 
 vi.mock('../../response-cache/boot-check', async (importOriginal) => {
   const actual = await importOriginal<typeof BootCheck>()
-  assertCachingAvailableSpy.mockImplementation(actual.assertCachingAvailable)
-  return { ...actual, assertCachingAvailable: assertCachingAvailableSpy }
+  cachingUnavailableReasonSpy.mockImplementation(actual.cachingUnavailableReason)
+  return { ...actual, cachingUnavailableReason: cachingUnavailableReasonSpy }
 })
 
 // ── Fixtures ──────────────────────────────────────────────────────────
@@ -59,14 +59,14 @@ class WiringInertiaController {
   @Get('/once-props', { response: object({ ok: boolean() }) })
   @Cacheable({ ttl: 300 })
   onceProps(ctx: RouterContext) {
-    ctx.c.set('inertiaCacheSignals', { hasFlash: false, isPartial: false, hasOnceProps: true })
+    ctx.c.set('inertiaCacheSignals', { hasFlash: false, isPartial: false, hasOnceProps: true, varyHeaders: ['X-Inertia'] })
     return ctx.json({ ok: true })
   }
 
   @Get('/clean-signals', { response: object({ ok: boolean() }) })
   @Cacheable({ ttl: 300 })
   cleanInertiaSignals(ctx: RouterContext) {
-    ctx.c.set('inertiaCacheSignals', { hasFlash: false, isPartial: false, hasOnceProps: false })
+    ctx.c.set('inertiaCacheSignals', { hasFlash: false, isPartial: false, hasOnceProps: false, varyHeaders: ['X-Inertia'] })
     return ctx.json({ ok: true })
   }
 }
@@ -182,6 +182,7 @@ describe('response-cache wiring (route-registration.service.ts)', () => {
       const res = await fetchPath(app, '/wiring/42', undefined, fetchCtx(vi.fn()))
       expect(res.status).toBe(200)
       expect(res.headers.get('Cache-Control')).toBe('public, max-age=300')
+      expect(res.headers.get('CDN-Cache-Control')).toBe('public, max-age=300')
     })
 
     it('an Inertia once-prop signal fails a @Cacheable route closed (private, no-store)', async () => {
@@ -198,6 +199,7 @@ describe('response-cache wiring (route-registration.service.ts)', () => {
       const res = await fetchPath(app, '/wiring-inertia/clean-signals', undefined, fetchCtx(vi.fn()))
       expect(res.status).toBe(200)
       expect(res.headers.get('Cache-Control')).toBe('public, max-age=300')
+      expect(res.headers.get('CDN-Cache-Control')).toBe('public, max-age=300')
     })
 
     it('a @PurgesCache-only route purges on success — locks in the purge-gating fix', async () => {
@@ -306,18 +308,12 @@ describe('response-cache wiring (route-registration.service.ts)', () => {
       consoleError.mockRestore()
     })
 
-    it('the `cache` binding vanishing mid-lifetime still fails the purge loudly via the defensive guard', async () => {
-      // `assertCachingAvailable` latches on the *first* request this
-      // `RouteRegistrationService` instance ever handles, using whichever
-      // executionCtx that request happens to carry — and in a real Workers
-      // deploy `cache.enabled` is a static setting, so `ctx.cache`'s presence
-      // can never actually change between requests within one isolate. This
-      // test manufactures the scenario the boot check cannot itself prevent:
-      // an app whose *first* request (to an unrelated route) has `cache`
-      // present — so the boot check passes and is never repeated — followed
-      // by a later request to a @PurgesCache route whose executionCtx has no
-      // `cache` at all. That proves `applyCacheDecision`'s own `!cache` guard
-      // is reachable independently of the boot check, not dead code.
+    it('lets the mutation stand when there is no cache for its @PurgesCache to invalidate', async () => {
+      // A purge names entries *this* entrypoint stored, so an entrypoint with
+      // no cache stored none and there is nothing for the purge to do. The
+      // write has already committed by this point, so failing the request
+      // would report a successful mutation as an error — and the caller would
+      // reasonably retry a write that already landed.
       app = createApp()
 
       const firstReqCache = fetchCtx(vi.fn().mockResolvedValue({ success: true }))
@@ -327,7 +323,7 @@ describe('response-cache wiring (route-registration.service.ts)', () => {
       const secondReqNoCache = fetchCtx() // no `cache` at all on this request's executionCtx
       const second = await fetchPath(app, '/wiring', { method: 'POST' }, secondReqNoCache)
 
-      expect(second.status).toBe(500)
+      expect(second.status).toBe(201)
       expect(second.headers.get('Cache-Control')).toBe('private, no-store')
     })
   })
@@ -418,7 +414,7 @@ describe('response-cache wiring (route-registration.service.ts)', () => {
       expect((caught as Error).message).toMatch(/Promise/)
     })
 
-    it('throws when @Cacheable routes exist but ctx.cache is absent', async () => {
+    it('leaves routes that never asked to be cached working when the entrypoint cannot cache', async () => {
       @Controller('/cacheable-missing')
       class CacheableController {
         @Get('/cacheable', { response: object({ ok: boolean() }) })
@@ -445,17 +441,28 @@ describe('response-cache wiring (route-registration.service.ts)', () => {
       await app.initialize()
       const hono = await app.ensureHono()
 
-      // First request (to non-cacheable route) should trigger the boot check
-      // and throw because cache is not available. When thrown in a handler,
-      // Hono converts it to a 500 response.
-      const response = await hono.fetch(
-        new Request('http://localhost/cacheable-missing/normal'),
-        mockEnv,
-        { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext,
-      )
+      const fetchPathOn = (path: string) =>
+        hono.fetch(
+          new Request(`http://localhost${path}`),
+          mockEnv,
+          { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext,
+        )
 
-      // The boot check throws ResponseCacheConfigError, which Hono converts to 500
-      expect(response.status).toBe(500)
+      // `/normal` carries no cache decorator, so whether caching is available
+      // is none of its business. An unavailable cache that took this route
+      // down with it would fail an app wholesale over a feature the failing
+      // route never opted into — and it reads as the whole worker being
+      // broken rather than as one facility being off.
+      const normal = await fetchPathOn('/cacheable-missing/normal')
+      expect(normal.status).toBe(200)
+      expect(normal.headers.get('Cache-Control')).toBe('private, no-store')
+
+      // The `@Cacheable` route serves too, and drops the freshness claim it
+      // cannot keep. Order matters here: the non-cacheable route went first,
+      // so this also pins that its verdict did not decide this route's.
+      const cacheable = await fetchPathOn('/cacheable-missing/cacheable')
+      expect(cacheable.status).toBe(200)
+      expect(cacheable.headers.get('Cache-Control')).toBe('private, no-store')
     })
 
     it('does not throw when @Cacheable routes exist and ctx.cache is present', async () => {
@@ -521,7 +528,7 @@ describe('response-cache wiring (route-registration.service.ts)', () => {
       expect(response.status).toBe(200)
     })
 
-    it('@PurgesCache-only routes trigger the boot check when cache is absent', async () => {
+    it('serves a @PurgesCache-only app when the entrypoint cannot cache', async () => {
       @Controller('/purge-only')
       class PurgeOnlyController {
         @Get('/item', { response: object({ ok: boolean() }) })
@@ -548,15 +555,20 @@ describe('response-cache wiring (route-registration.service.ts)', () => {
       await app.initialize()
       const hono = await app.ensureHono()
 
-      // Request to a non-purge route that triggers boot check.
-      // Since the app has @PurgesCache routes but no cache, the check should fire.
-      const response = await hono.fetch(
-        new Request('http://localhost/purge-only/item'),
-        mockEnv,
-        { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext,
-      )
+      const fetchPathOn = (path: string, init?: RequestInit) =>
+        hono.fetch(
+          new Request(`http://localhost${path}`, init),
+          mockEnv,
+          { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext,
+        )
 
-      expect(response.status).toBe(500)
+      const read = await fetchPathOn('/purge-only/item')
+      expect(read.status).toBe(200)
+
+      // The write lands. With no cache there are no entries for its
+      // `@PurgesCache` to invalidate, which is nothing to fail over.
+      const write = await fetchPathOn('/purge-only/item', { method: 'POST' })
+      expect(write.status).toBe(201)
     })
 
     it('throws when a @PurgesCache tag uses the {body.*} scope, reached via real route registration', async () => {
@@ -615,7 +627,7 @@ describe('response-cache wiring (route-registration.service.ts)', () => {
       expect((caught as Error).message).toMatch(/not available/i)
     })
 
-    it('performs the boot check once but keeps failing every later request', async () => {
+    it('serves a @Cacheable route uncached, reporting the reason once, when the entrypoint cannot cache', async () => {
       @Controller('/once-check')
       class OnceCheckController {
         @Get('/cacheable', { response: object({ ok: boolean() }) })
@@ -637,8 +649,11 @@ describe('response-cache wiring (route-registration.service.ts)', () => {
       await app.initialize()
       const hono = await app.ensureHono()
 
-      // Other tests in this file boot their own apps and trip the same check.
-      assertCachingAvailableSpy.mockClear()
+      // Other tests in this file boot their own apps and consult the same check.
+      cachingUnavailableReasonSpy.mockClear()
+      const consoleError = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => { /* silence expected error log */ })
 
       const request = () =>
         hono.fetch(
@@ -647,25 +662,47 @@ describe('response-cache wiring (route-registration.service.ts)', () => {
           { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext,
         )
 
-      // The *work* happens once — `bootCheckPerformed` latches, so
-      // `assertCachingAvailable` is not re-run per request.
+      // The route is served. `public, max-age=60` is the claim that would be
+      // false — `private, no-store` is the response saying what actually
+      // happened, which is the whole reason this does not need to 500.
       const first = await request()
-      expect(first.status).toBe(500)
-      expect(assertCachingAvailableSpy).toHaveBeenCalledTimes(1)
+      expect(first.status).toBe(200)
+      expect(first.headers.get('Cache-Control')).toBe('private, no-store')
 
-      // …but the *result* is latched too, and rethrown. Latching only the
-      // attempt would let request #2 onwards succeed while stamping
-      // `public, max-age=60` on a response nothing can ever cache — the exact
-      // silent no-op the boot check exists to prevent.
+      // Reported at error level, because an app that declares `@Cacheable`
+      // and gets no caching is misconfigured somewhere. Without this the
+      // uncached serve would be indistinguishable from a working cache.
+      const reasons = () =>
+        consoleError.mock.calls
+          .map((args) => JSON.parse(args[0] as string) as Record<string, unknown>)
+          .filter(
+            (entry) =>
+              typeof entry.message === 'string' &&
+              entry.message.startsWith('[stratal:response-cache]') &&
+              entry.message.includes('not available on this entrypoint'),
+          )
+      expect(reasons()[0]?.level).toBe('error')
+
+      // Said once, not once per request. Counted from here rather than in
+      // total, so a report from another test's app landing in this spy cannot
+      // stand in for a repeat from this one.
+      consoleError.mockClear()
+
       const second = await request()
-      expect(second.status).toBe(500)
-      expect(assertCachingAvailableSpy).toHaveBeenCalledTimes(1)
+      expect(second.status).toBe(200)
+      expect(second.headers.get('Cache-Control')).toBe('private, no-store')
 
-      // Third, to show it is a standing failure rather than an alternation.
       const third = await request()
-      expect(third.status).toBe(500)
+      expect(third.status).toBe(200)
       expect(third.headers.get('Cache-Control')).toBe('private, no-store')
-      expect(assertCachingAvailableSpy).toHaveBeenCalledTimes(1)
+
+      expect(reasons()).toHaveLength(0)
+      // The answer is memoized: `cache.enabled` is a static Wrangler setting,
+      // so within one entrypoint it cannot change, and re-deriving it would
+      // put the check on every request's hot path.
+      expect(cachingUnavailableReasonSpy).toHaveBeenCalledTimes(1)
+
+      consoleError.mockRestore()
     })
 
     it('throws when @Cacheable is applied to a route carrying a real @UseGuards', async () => {

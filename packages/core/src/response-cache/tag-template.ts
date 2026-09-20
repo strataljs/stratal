@@ -17,6 +17,17 @@ export interface TagScopes {
   query: Record<string, string>
   body: unknown
   data: unknown
+  /**
+   * The partition values this request resolved, keyed by partition name.
+   *
+   * The only scope guaranteed present on every variant of a response. `data`
+   * is the resolved payload, and an Inertia partial reload carries only the
+   * props it asked for — so `{data.auth.user.id}` renders on the document and
+   * throws on the partial, which fails that variant closed and leaves exactly
+   * the deferred work uncached. A partition is in the cache key by
+   * construction, so `{partition.user}` renders identically on both.
+   */
+  partition: Record<string, string>
 }
 
 /** Cloudflare's per-tag ceiling. Longer tags are dropped silently. */
@@ -45,7 +56,7 @@ const TEXT_ENCODER = new TextEncoder()
  */
 const VALID_TAG = /^[\x21\x23-\x2B\x2D-\x7E]+$/
 const PLACEHOLDER = /\{([A-Za-z]+)\.([^}]+)\}/g
-const SCOPES = ['param', 'query', 'body', 'data'] as const
+const SCOPES = ['param', 'query', 'body', 'data', 'partition'] as const
 
 /**
  * Render `Cache-Tag` templates against the current request's scopes.

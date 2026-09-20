@@ -1,6 +1,6 @@
 import { Test, type TestingModule } from '@stratal/testing'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { GatewayAppModule } from '../fixtures/response-cache.controller'
+import { GatewayAppModule, KeyedGatewayAppModule } from '../fixtures/response-cache.controller'
 
 /**
  * Workerd integration coverage for the response-cache **gateway**.
@@ -56,6 +56,7 @@ describe('response-cache gateway: workerd integration', () => {
       .send()
 
     response.assertHeader('Cache-Control', 'public, max-age=60')
+    response.assertHeader('CDN-Cache-Control', 'public, max-age=60')
   })
 
   it('gives two callers separate props, so their entries cannot collide', async () => {
@@ -100,6 +101,7 @@ describe('response-cache gateway: workerd integration', () => {
 
     response.assertOk()
     response.assertHeader('Cache-Control', 'public, max-age=3600')
+    response.assertHeader('CDN-Cache-Control', 'public, max-age=3600')
     expect(module.gateway.loopbacks.slice(before)).toHaveLength(0)
   })
 
@@ -114,5 +116,66 @@ describe('response-cache gateway: workerd integration', () => {
     // Recorded on `module.cache.purges` whether it arrived over RPC or
     // directly, so a consumer's purge assertions read the same either way.
     expect(module.cache.purges.slice(beforePurges)).toEqual([{ tags: ['dashboard'] }])
+  })
+})
+
+/**
+ * `gateway.keyBy` — the representation in the cache key.
+ *
+ * A route may answer one URL with two different bodies chosen from a request
+ * header, and `Vary` is not enough to keep them in separate cache entries. The
+ * claim under test is that the header reaches `ctx.props`, which IS the key.
+ */
+describe('response-cache gateway: keyBy', () => {
+  let module: TestingModule
+
+  beforeAll(async () => {
+    module = await Test.createTestingModule({ imports: [KeyedGatewayAppModule] }).compile()
+  })
+
+  afterAll(async () => {
+    await module.close()
+  })
+
+  it('gives two representations of one URL different props', async () => {
+    const before = module.gateway.loopbacks.length
+
+    await module.http.get('/gateway-demo/dashboard').withHeaders({ 'x-user': 'u-1' }).send()
+    await module.http
+      .get('/gateway-demo/dashboard')
+      .withHeaders({ 'x-user': 'u-1', 'x-variant': 'json' })
+      .send()
+
+    const [document, variant] = module.gateway.loopbacks.slice(before).map((call) => call.props)
+
+    // Same URL, same caller, same partition — so the partitions alone would
+    // have put both bodies in one entry.
+    expect(document.user).toBe('u-1')
+    expect(variant.user).toBe('u-1')
+    expect(document.$representation).not.toBe(variant.$representation)
+  })
+
+  it('gives one representation a stable prop, so it still caches', async () => {
+    const before = module.gateway.loopbacks.length
+
+    await module.http.get('/gateway-demo/dashboard').withHeaders({ 'x-user': 'u-2', 'x-variant': 'json' }).send()
+    await module.http.get('/gateway-demo/dashboard').withHeaders({ 'x-user': 'u-2', 'x-variant': 'json' }).send()
+
+    const [first, second] = module.gateway.loopbacks.slice(before).map((call) => call.props)
+
+    // Asserted present as well as equal: two absent values are also equal, and
+    // that reading would pass with the representation never reaching props.
+    expect(first.$representation).toBeDefined()
+    expect(first.$representation).toBe(second.$representation)
+  })
+
+  it('leaves props untouched when the app declares no keyBy', async () => {
+    const plain = await Test.createTestingModule({ imports: [GatewayAppModule] }).compile()
+    const before = plain.gateway.loopbacks.length
+
+    await plain.http.get('/gateway-demo/dashboard').withHeaders({ 'x-user': 'u-3' }).send()
+
+    expect(plain.gateway.loopbacks.slice(before)[0].props).toEqual({ user: 'u-3' })
+    await plain.close()
   })
 })

@@ -24,7 +24,9 @@ export interface CanActivate {
    * Determine if the request should be allowed
    *
    * @param context - Router context with request/response helpers
-   * @returns true to allow, false to deny (throws 403)
+   * @returns true to allow, false to deny — a `false` is turned into a `GuardRejectedError`
+   * (HTTP 403) and thrown, so the handler never runs. To deny with a different status, throw your
+   * own `HttpException` instead; it is passed through untouched.
    */
   canActivate(context: RouterContext): boolean | Promise<boolean>
 }

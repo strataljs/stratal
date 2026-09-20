@@ -13,13 +13,13 @@ export default defineConfig({
 })
 ```
 
-`stratalTest()` wraps `@cloudflare/vitest-pool-workers` with Stratal defaults (tslib alias, ZenStack mocks, SSR externals). It needs no database — `Test.createTestingModule()` and unit tests run with no DB wiring at all. A database is opt-in via the `database` option (below).
+`stratalTest()` wraps `@cloudflare/vitest-plugin` with Stratal defaults (tslib alias, ZenStack mocks, SSR externals). It needs no database — `Test.createTestingModule()` and unit tests run with no DB wiring at all. A database is opt-in via the `database` option (below).
 
 Add `fixPgCjs()` and `fixNobleHashesCjs()` when the project uses `@stratal/framework` (ZenStack). Both are no-ops if the relevant packages aren't installed.
 
 ### Parallel tests with a database per test file
 
-Opt in by passing a `database` option to `stratalTest()`, which gives **each test file its own database**, cloned from a migrated template. This automatically enables file parallelism and raises the setup hook timeout to 30s. An empty object is enough; within a file, reset state between tests via `truncateDb()`. Per-**file** (not per-worker) is deliberate — `@cloudflare/vitest-pool-workers` isolates per file and can run a worker's files concurrently, so a shared database would corrupt under load. Omit `database` entirely for suites that don't touch Postgres.
+Opt in by passing a `database` option to `stratalTest()`, which gives **each test file its own database**, cloned from a migrated template. This automatically enables file parallelism and raises the setup hook timeout to 30s. An empty object is enough; within a file, reset state between tests via `truncateDb()`. Per-**file** (not per-worker) is deliberate — `@cloudflare/vitest-plugin` isolates per file and can run a worker's files concurrently, so a shared database would corrupt under load. Omit `database` entirely for suites that don't touch Postgres.
 
 ```typescript
 // vitest.config.ts
@@ -38,7 +38,7 @@ export default defineConfig({
           stratalTest({
             wrangler: { configPath: './test/wrangler.jsonc' },
             miniflare: { hyperdrives: { DB: DATABASE_URL } },
-            database: {}, // opt in to per-file database isolation
+            database: {}, // opt in to leased worker databases
           }),
         ],
         test: {
@@ -93,8 +93,9 @@ Notes:
 - **`prepare` fingerprints its source text only.** If it reads external seed files (JSON/SQL) at runtime, changing only those files will NOT invalidate the template — bump the hook's source (e.g. a version comment) or drop the template manually.
 - The binding defaults to `DB`. For a differently-named Hyperdrive binding, set `database: { binding: 'MY_DB' }` (typed to your declared Hyperdrive bindings).
 - Requires Postgres and the `pg` package (an optional peer of `@stratal/testing`). If the `database` option is set without `pg` installed, setup throws an actionable "install pg" error.
-- **Concurrency-safe.** The fingerprint check + template rebuild runs under a Postgres advisory lock, so multiple concurrent setups (CI sharding, several e2e projects) don't clobber each other. Per-file database clones are likewise serialized by an advisory lock (only one `CREATE DATABASE ... TEMPLATE` at a time). The setup-time stale-database sweep only drops per-file databases with **no active connections**, so a sibling process's live databases survive. Teardown is intentionally non-destructive (it neither sweeps nor drops the template); the next run's sweep reclaims any leak.
-- The base database name must be short enough that the per-file suffix (`<base>_f_<token>`) and the template name (`<base>_template`) fit within Postgres' 63-character identifier limit. Setup throws a clear error if it doesn't, rather than silently truncating and colliding names.
+- **Concurrency-safe.** The fingerprint check + template rebuild runs under a Postgres advisory lock, so multiple concurrent setups (CI sharding, several e2e projects) don't clobber each other. Each test file leases the lowest free worker database (`<base>_w_<slot>`, reserved by an advisory lock for the life of the file's isolate) and receives a fresh clone of the template, so a run holds at most as many databases as it runs files at once. Clones are serialized by an advisory lock (only one `CREATE DATABASE ... TEMPLATE` at a time). The sweep at setup and teardown drops only worker databases with **no active connections** and a free lease, so a sibling process's databases survive. Teardown never drops the template.
+- `database` requires `isolate: true` (the default); `stratalTest` throws on `isolate: false`, since files sharing an isolate would share a leased database.
+- The base database name must be short enough that the worker suffix (`<base>_w_<slot>`) and the template name (`<base>_template`) fit within Postgres' 63-character identifier limit. Setup throws a clear error if it doesn't, rather than silently truncating and colliding names.
 - Heavier per-file setup (e.g. provisioning a tenant schema in `beforeAll`) can exceed the 30s hook-timeout floor — raise it per project with `test: { hookTimeout: 60000 }`.
 
 ### Setup File
@@ -146,9 +147,36 @@ Test.createTestingModule({
     level: LogLevel.ERROR,
     formatter: 'json',
   },
+  exceptionHandler: AppExceptionHandler,                 // Same class you pass to `new Stratal()`
+  trailingSlash: { mode: 'always', exclude: ['/api'] },  // Or a bare 'always' / 'never' / 'ignore'
+  versioning: { prefix: 'v', defaultVersion: '1' },
   cache: false,      // Opt out of the default ctx.cache stub (see Response Cache below)
 })
 ```
+
+### Mirror the app's URL configuration
+
+`trailingSlash`, `versioning` and `exceptionHandler` take the same shapes `new Stratal({ ... })` takes. Set them to whatever the application sets — they are not inherited from the app entry, and a testing module that omits them asserts URLs the app never serves.
+
+```typescript
+// src/index.ts
+export default new Stratal({ module: AppModule, trailingSlash: { mode: 'always', exclude: ['/api'] } })
+
+// the spec — same config, so it asserts the URL shape the app emits
+const module = await Test.createTestingModule({
+  imports: [PostsModule],
+  trailingSlash: { mode: 'always', exclude: ['/api'] },
+}).compile()
+
+await module.http.get('/posts').send()      // 308, Location: /posts/
+await module.http.get('/posts/').send()     // 200
+await module.http.get('/api/posts').send()  // 200 — excluded prefix, never canonicalised
+```
+
+- `trailingSlash` — `'always'`, `'never'` or `'ignore'`, or `{ mode, exclude }`. `exclude` takes string segment-prefixes (`'/api'` exempts `/api` and `/api/posts`, not `/api-docs`) and RegExps. Default `'ignore'`.
+- `versioning` — `{ prefix, defaultVersion }`. Default: no version prefix.
+
+Both govern `ctx.route()` and the other URL helpers as well as the 308 canonicalisation, so a route assertion and the links a page generates are only right together.
 
 ### Provider Overrides
 
@@ -322,7 +350,7 @@ await module.assertDatabaseHas('note', { title: 'Test' })
 await module.assertDatabaseMissing('note', { title: 'Deleted' })
 ```
 
-With per-file `database` isolation (see Setup), each test file owns its own database cloned from the migrated template. Call `truncateDb()` in a `beforeEach`/`afterEach` to reset rows between tests within the file. Anything baked into the template via `prepare` should be listed in `preserve` so a reset keeps it.
+With `database` isolation (see Setup), each test file leases a worker database holding a fresh clone of the migrated template. Call `truncateDb()` in a `beforeEach`/`afterEach` to reset rows between tests within the file. Anything baked into the template via `prepare` should be listed in `preserve` so a reset keeps it.
 
 ## MockFetch (MSW)
 

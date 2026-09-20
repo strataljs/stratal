@@ -85,7 +85,19 @@ export class DatabaseModule implements OnInitialize, OnShutdown {
   }
 
   async onInitialize(context: ModuleContext): Promise<void> {
-    const config = context.container.resolve<DatabaseModuleConfig>(DATABASE_TOKENS.Options)
+    // Awaited, because `forRootAsync` takes a factory typed
+    // `TOptions | Promise<TOptions>` and a container resolves it to whatever it
+    // returned. Read without awaiting, an async factory hands this a Promise and
+    // the loop below walks `undefined` connections — the type permitting exactly
+    // what the runtime broke on.
+    //
+    // What that buys a consumer is a schema behind an `import()`: a generated
+    // schema is a large object literal, and a static import evaluates it while
+    // the isolate starts, where the runtime's startup budget is. Awaiting here
+    // lets it be imported when the module initializes instead.
+    const config = await context.container.resolve<DatabaseModuleConfig | Promise<DatabaseModuleConfig>>(
+      DATABASE_TOKENS.Options,
+    )
     // EventRegistry is loaded on demand — pull in EventsModule via the loader.
     const loader = context.container.resolve<LazyModuleLoader>(DI_TOKENS.LazyModuleLoader)
     const eventsRef = await loader.load(() => import('stratal/events').then((m) => m.EventsModule))

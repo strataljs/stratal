@@ -288,6 +288,9 @@ interface StorageService {
   download(path, disk?): Promise<DownloadResult>
   delete(path, disk?): Promise<void>
   exists(path, disk?): Promise<boolean>
+  head(path, disk?): Promise<HeadResult | null>       // metadata only, no body transfer
+  list(options?, disk?): Promise<ListResult>          // one PAGE — see below
+  deleteMany(paths, disk?): Promise<void>             // bulk delete, 1000 keys per round trip
   getPresignedDownloadUrl(path, expiresIn?, disk?): Promise<PresignedUrlResult>
   getPresignedUploadUrl(path, expiresIn?, disk?): Promise<PresignedUrlResult>
   getPresignedDeleteUrl(path, expiresIn?, disk?): Promise<PresignedUrlResult>
@@ -296,6 +299,60 @@ interface StorageService {
 ```
 
 Path supports template variables: `{date}`, `{year}`, `{month}`.
+
+### Inspecting objects: `head`, `list`, `deleteMany`
+
+Use `head()` to read size or content type without transferring the body. It returns `null` when
+nothing is stored at that path.
+
+```typescript
+const meta = await this.storage.head('documents/report.pdf')
+if (meta) {
+  console.log(meta.size, meta.contentType, meta.uploadedAt)
+}
+```
+
+Use `list()` to walk a prefix. **It returns one page — always loop on `cursor`** to cover a whole
+prefix, or the total is silently short:
+
+```typescript
+let cursor: string | undefined
+let bytes = 0
+do {
+  const page = await this.storage.list({ prefix: `documents/${version}/`, cursor })
+  bytes += page.objects.reduce((sum, object) => sum + object.size, 0)
+  cursor = page.cursor
+} while (cursor)
+```
+
+`cursor` is `undefined` on the final page, so the loop terminates.
+
+Listed objects carry `path`, `size`, `etag` and `uploadedAt`. `contentType` and `metadata` are
+undefined unless you pass `includeMetadata: true`, which costs page size — leave it off and
+`head()` the few objects you need those fields for:
+
+```typescript
+const page = await this.storage.list({ prefix: 'documents/', includeMetadata: true })
+```
+
+Use `deleteMany()` rather than looping over `delete()` — it deletes 1000 keys per round trip.
+Deleting everything under a prefix still needs the `cursor` loop, or only the first page goes:
+
+```typescript
+let cursor: string | undefined
+do {
+  const page = await this.storage.list({ prefix: `documents/${oldVersion}/`, cursor })
+  await this.storage.deleteMany(page.objects.map((object) => object.path))
+  cursor = page.cursor
+} while (cursor)
+```
+
+Paths returned by `head` and `list` are disk-relative, so pass them straight back to `download`,
+`head`, `delete` or `deleteMany`.
+
+`FakeStorageService` implements all three. Its `list()` returns **one object per page** unless you
+pass a `limit`, so a missing `cursor` loop fails in tests rather than against a real bucket — pass
+`limit` when a test asserts the contents of a page instead of the loop.
 
 ### Auto-Registered Storage Routes
 

@@ -4,12 +4,13 @@ import type { PurgeSpec, WorkersCache } from 'stratal/response-cache'
  * In-memory stand-in for Cloudflare Workers Caching's `ctx.cache`.
  *
  * Neither Miniflare nor workerd populates `ExecutionContext.cache` locally,
- * which would otherwise make every `@Cacheable`/`@PurgesCache` route 500 in
- * tests — `assertCachingAvailable` fails boot the moment such a route exists
- * without it. The testing module builder installs this by default so those
- * routes are testable with zero configuration: `@Cacheable` responses carry
- * real `Cache-Control`/`Cache-Tag` headers, and `@PurgesCache` purges succeed
- * instead of throwing `CachePurgeError`.
+ * which would otherwise leave every `@Cacheable` route in a test serving
+ * uncached and stamped `private, no-store` — so a spec asserting the headers
+ * the route declares would read the ones an unconfigured runtime produces. The
+ * testing module builder installs this by default so those routes are testable
+ * with zero configuration: `@Cacheable` responses carry real
+ * `Cache-Control`/`Cache-Tag` headers, and `@PurgesCache` purges are recorded
+ * rather than skipped.
  *
  * Every spec passed to `purge()` is recorded, in call order, for assertion
  * via `module.cache.purges`. Purges always succeed — this stub only proves an

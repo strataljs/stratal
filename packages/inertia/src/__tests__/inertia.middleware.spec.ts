@@ -4,6 +4,17 @@ import { RouterContext } from 'stratal/router'
 import type { RouterEnv } from 'stratal/router'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { InertiaMiddleware } from '../middleware/inertia.middleware'
+import { INERTIA_VARY_HEADERS } from '../types'
+
+/**
+ * What the middleware should emit: every protocol header first, in declaration
+ * order, then whatever the handler stamped for itself.
+ */
+function expectedVary(...handlerNames: string[]): string {
+  const seen = new Set(handlerNames.map((name) => name.toLowerCase()))
+  return [...INERTIA_VARY_HEADERS.filter((name) => !seen.has(name.toLowerCase())), ...handlerNames]
+    .join(', ')
+}
 
 function createMockContext(overrides: {
   url?: string
@@ -67,10 +78,13 @@ describe('InertiaMiddleware', () => {
 
     await middleware.handle(ctx, vi.fn())
 
-    expect(c.header).toHaveBeenCalledWith('Vary', 'X-Inertia')
+    expect(c.header).toHaveBeenCalledWith('Vary', expectedVary())
   })
 
-  it('should return 409 on version mismatch for GET requests', async () => {
+  it('should answer a version mismatch on a GET with a real 409 response', async () => {
+    // A RESPONSE, not `status()` + `header()` and a bare return. Without one `c.res` is left unset
+    // and the outermost no-store fallback reads `c.res.headers` off `undefined` — so the client got
+    // a 500 where this branch exists to send a 409.
     const { ctx, c } = createMockContext({
       headers: { 'x-inertia': 'true', 'x-inertia-version': 'old-version' },
     })
@@ -78,9 +92,28 @@ describe('InertiaMiddleware', () => {
     const next = vi.fn()
     await middleware.handle(ctx, next)
 
-    expect(c.status).toHaveBeenCalledWith(409)
-    expect(c.header).toHaveBeenCalledWith('X-Inertia-Location', 'http://localhost/')
+    const res: unknown = c.res
+    expect(res).toBeInstanceOf(Response)
+    if (!(res instanceof Response)) throw new Error('expected a Response')
+    expect(res.status).toBe(409)
+    expect(res.headers.get('X-Inertia-Location')).toBe('http://localhost/')
     expect(next).not.toHaveBeenCalled()
+  })
+
+  it('should send the current version on a mismatch, so the client knows it is a version change', async () => {
+    // Inertia's client reads this back off the 409 to compute `versionChange`, which it passes to
+    // the cancelable `location` event and uses to leave an async visit alone rather than reloading
+    // the page under a background request. Without the header the flag is always false and an app
+    // cannot tell "you are out of date" apart from an ordinary external redirect.
+    const { ctx, c } = createMockContext({
+      headers: { 'x-inertia': 'true', 'x-inertia-version': 'old-version' },
+    })
+
+    await middleware.handle(ctx, vi.fn())
+
+    const res: unknown = c.res
+    if (!(res instanceof Response)) throw new Error('expected a Response')
+    expect(res.headers.get('X-Inertia-Version')).toBe('1.0')
   })
 
   it('should not check version for non-GET requests', async () => {
@@ -154,8 +187,7 @@ describe('InertiaMiddleware', () => {
       const vary = (res.headers.get('Vary') ?? '').split(',').map((v) => v.trim())
       expect(vary).toContain('X-Inertia')
       expect(vary).toContain('Accept-Language')
-      // Documented in references/response-cache.md as exactly this value.
-      expect(res.headers.get('Vary')).toBe('X-Inertia, Accept-Language')
+      expect(res.headers.get('Vary')).toBe(expectedVary('Accept-Language'))
       // The rest of the cache decision is untouched.
       expect(res.headers.get('Cache-Control')).toBe('public, max-age=300')
     })
@@ -163,25 +195,47 @@ describe('InertiaMiddleware', () => {
     it('keeps several handler-stamped Vary names', async () => {
       const res = await appVarying('Accept-Language', 'Accept-Encoding').request('/')
 
-      expect(res.headers.get('Vary')).toBe('X-Inertia, Accept-Language, Accept-Encoding')
+      expect(res.headers.get('Vary')).toBe(expectedVary('Accept-Language', 'Accept-Encoding'))
     })
 
-    it('still emits X-Inertia when the handler stamped no Vary at all', async () => {
+    it('emits the protocol headers when the handler stamped no Vary at all', async () => {
       const res = await appVarying().request('/')
 
-      expect(res.headers.get('Vary')).toBe('X-Inertia')
+      expect(res.headers.get('Vary')).toBe(INERTIA_VARY_HEADERS.join(', '))
     })
 
-    it('does not duplicate X-Inertia when the route already declared it', async () => {
+    it('keys every header that selects which props a partial reload carries', async () => {
+      // Without these a partial reload and the full page share one entry at the
+      // same URL: both send `X-Inertia: true`, and only these tell them apart.
+      const vary = ((await appVarying().request('/')).headers.get('Vary') ?? '')
+        .split(',')
+        .map((v) => v.trim().toLowerCase())
+
+      expect(vary).toContain('x-inertia-partial-component')
+      expect(vary).toContain('x-inertia-partial-data')
+      expect(vary).toContain('x-inertia-partial-except')
+      expect(vary).toContain('x-inertia-reset')
+      expect(vary).toContain('x-inertia-resolve-deferred')
+      expect(vary).toContain('x-inertia-infinite-scroll-merge-intent')
+    })
+
+    it('does not vary on the asset version, which the Worker version already keys', async () => {
+      const vary = ((await appVarying().request('/')).headers.get('Vary') ?? '').toLowerCase()
+
+      expect(vary).not.toContain('x-inertia-version')
+    })
+
+    it('does not duplicate a protocol name the route already declared', async () => {
       const res = await appVarying('X-Inertia', 'Accept-Language').request('/')
 
-      expect(res.headers.get('Vary')).toBe('X-Inertia, Accept-Language')
+      expect(res.headers.get('Vary')).toBe(expectedVary('X-Inertia', 'Accept-Language'))
     })
 
-    it('matches an existing X-Inertia case-insensitively', async () => {
+    it('matches an existing protocol name case-insensitively', async () => {
       const res = await appVarying('x-inertia').request('/')
 
-      expect(res.headers.get('Vary')).toBe('x-inertia')
+      const vary = (res.headers.get('Vary') ?? '').split(',').map((v) => v.trim())
+      expect(vary.filter((name) => name.toLowerCase() === 'x-inertia')).toEqual(['x-inertia'])
     })
   })
 })

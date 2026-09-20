@@ -1,6 +1,14 @@
 import { type StratalEnv } from '../../env'
 import { signUrl } from '../../router/signed-url'
-import type { DownloadResult, PresignedUrlResult, UploadOptions, UploadResult } from '../contracts'
+import type {
+  DownloadResult,
+  HeadResult,
+  ListOptions,
+  ListResult,
+  PresignedUrlResult,
+  UploadOptions,
+  UploadResult,
+} from '../contracts'
 import { StorageError } from '../storage.error'
 import type { StorageEntry, StorageRouteConfig } from '../types'
 import type {
@@ -18,6 +26,7 @@ import type {
 import type { StreamingBlobPayloadInputTypes } from './storage-provider.interface'
 
 const MIN_PART_SIZE = 5 * 1024 * 1024 // 5MB
+const R2_BULK_DELETE_LIMIT = 1000
 const MULTIPART_PREFIX = '__multipart/'
 const PARTS_PREFIX = '__parts/'
 
@@ -95,6 +104,46 @@ export class R2StorageProvider implements IMultipartProvider {
   async exists(path: string): Promise<boolean> {
     const head = await this.bucket.head(path)
     return head !== null
+  }
+
+  async deleteMany(paths: string[]): Promise<void> {
+    // Chunked here rather than by the caller: R2 accepts 1000 keys per call, and unlike a
+    // listing there is no partial answer to misread — every key given is deleted before this
+    // resolves.
+    for (let i = 0; i < paths.length; i += R2_BULK_DELETE_LIMIT) {
+      await this.bucket.delete(paths.slice(i, i + R2_BULK_DELETE_LIMIT))
+    }
+  }
+
+  async head(path: string): Promise<HeadResult | null> {
+    const obj = await this.bucket.head(path)
+    if (obj === null) {
+      return null
+    }
+
+    return toHeadResult(obj)
+  }
+
+  async list(options: ListOptions): Promise<ListResult> {
+    const listed = await this.bucket.list({
+      prefix: options.prefix,
+      cursor: options.cursor,
+      limit: options.limit,
+      // R2 omits both unless asked (`r2_list_honor_include`, default since 2022-08-04), and
+      // including them makes it return fewer objects per page — so this stays off unless the
+      // caller says it reads those fields.
+      include: options.includeMetadata ? ['httpMetadata', 'customMetadata'] : [],
+    })
+
+    return {
+      objects: listed.objects.map((obj) => toHeadResult(obj)),
+      // Passed through rather than resolved here. R2 caps a single list at 1000 keys whatever
+      // `limit` asks for, so `truncated` is the only thing that tells a caller its aggregate is
+      // complete — and looping internally would turn one await into an unbounded number of
+      // subrequests, which on Workers is a budget the caller has to own.
+      truncated: listed.truncated,
+      cursor: listed.truncated ? listed.cursor : undefined,
+    }
   }
 
   async getPresignedUrl(
@@ -387,5 +436,22 @@ export class R2StorageProvider implements IMultipartProvider {
     if (keysToDelete.length > 0) {
       await this.bucket.delete(keysToDelete)
     }
+  }
+}
+
+/**
+ * Narrows an R2 object to the provider-agnostic shape.
+ *
+ * Takes `R2Object` rather than the `R2ObjectBody` `get` returns, so it works for both `head` and
+ * `list` — neither of which carries a body.
+ */
+function toHeadResult(obj: R2Object): HeadResult {
+  return {
+    path: obj.key,
+    size: obj.size,
+    contentType: obj.httpMetadata?.contentType,
+    etag: obj.etag,
+    uploadedAt: obj.uploaded,
+    metadata: obj.customMetadata,
   }
 }

@@ -20,7 +20,7 @@ import { GUARD_METADATA_KEY, type Guard, type GuardMetadata } from './types'
  *
  * @example Authentication only
  * ```typescript
- * @Controller('/api/v1/profile')
+ * @Controller('/profile', { version: '1' })
  * @UseGuards(AuthGuard())
  * export class ProfileController {
  *   show() { } // Requires authentication
@@ -29,8 +29,8 @@ import { GUARD_METADATA_KEY, type Guard, type GuardMetadata } from './types'
  *
  * @example Authentication with permissions
  * ```typescript
- * @Controller('/api/v1/students')
- * @UseGuards(AuthGuard({ scopes: ['students:read'] }))
+ * @Controller('/students', { version: '1' })
+ * @UseGuards(AuthGuard({ permissions: ['students:read'] }))
  * export class StudentsController {
  *   index() { } // Requires 'students:read' permission
  * }
@@ -38,12 +38,12 @@ import { GUARD_METADATA_KEY, type Guard, type GuardMetadata } from './types'
  *
  * @example Method-level guards
  * ```typescript
- * @Controller('/api/v1/students')
+ * @Controller('/students', { version: '1' })
  * @UseGuards(AuthGuard()) // Controller-level: auth only
  * export class StudentsController {
  *   index() { } // Auth only (inherited)
  *
- *   @UseGuards(AuthGuard({ scopes: ['students:create'] }))
+ *   @UseGuards(AuthGuard({ permissions: ['students:create'] }))
  *   create() { } // Auth + 'students:create' permission
  * }
  * ```

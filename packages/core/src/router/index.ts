@@ -63,6 +63,9 @@ export * from './schemas'
 // Domain middleware
 export { createDomainMiddleware, parseDomainPattern } from './middleware/domain.middleware'
 
+// Nested dispatch
+export { isNestedDispatch, markNestedDispatch } from './nested-dispatch'
+
 // Signed URLs
 export { VerifySignatureMiddleware } from './middleware/verify-signature.middleware'
 export { signUrl, verifySignedUrl, type SignedUrlOptions } from './signed-url'

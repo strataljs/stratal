@@ -16,5 +16,5 @@ export default defineConfig({
   exports: {
     customExports: withTypesExports,
   },
-  deps: { skipNodeModulesBundle: true },
+  deps: { neverBundle: true },
 })

@@ -39,9 +39,19 @@ export class GatewayRouteTable {
    */
   entrypoint: string | undefined
 
+  /**
+   * `gateway.keyBy` — the request headers whose values join the cache key.
+   *
+   * Carried here rather than resolved per request because the dispatch
+   * middleware already memoises this table, so reading it costs a property
+   * access on the hot path instead of a container lookup.
+   */
+  keyBy: readonly string[] = []
+
   /** Set by `RouteRegistrationService.configure()`, before any request. */
-  configure(entrypoint: string | undefined): void {
+  configure(entrypoint: string | undefined, keyBy: readonly string[] = []): void {
     this.entrypoint = entrypoint
+    this.keyBy = keyBy
   }
 
   /** True when no route in this app declares a partition. */

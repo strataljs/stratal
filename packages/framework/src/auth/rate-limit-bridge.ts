@@ -99,27 +99,65 @@ declare module 'stratal/rate-limiter' {
   }
 }
 
-// Better-auth manages window expiry itself by reading `lastRequest`. We still
-// need a TTL on the underlying KV so dead records don't accumulate. 1 day
-// covers any reasonable better-auth window without colliding with the next.
-const BETTER_AUTH_TTL_SECONDS = 86_400
 const BETTER_AUTH_KEY_PREFIX = 'ba-rl:'
+
+/** Outcome of a single `consume` step. */
+interface BetterAuthConsumeResult {
+  allowed: boolean
+  retryAfter: number | null
+}
 
 /**
  * Adapt Stratal's `IRateLimiterStore` into better-auth's `customStorage` shape.
- * Better-auth supplies its own `RateLimit` records (`{ key, count, lastRequest }`);
- * the adapter just persists them under a separate key namespace.
+ *
+ * Better-auth requires a single atomic `consume(key, rule)` rather than the
+ * separate `get`/`set` pair it used to accept, because a split read and write
+ * cannot hold a limit under concurrent requests. `IRateLimiterStore` is a plain
+ * typed KV with no compare-and-set, so this is better-auth's documented
+ * read-decide-write fallback for backends lacking an atomic primitive, and the
+ * decision below mirrors their reference implementation exactly.
+ *
+ * Accuracy therefore follows the configured store, and matches what Stratal's
+ * own throttling already does on the same backend: exact on
+ * `InMemoryRateLimiterStore` (read-decide-write is atomic in a single isolate),
+ * best-effort on `KvRateLimiterStore`, where concurrent writes from different
+ * edge locations may undercount. Register a Durable Object store for strict
+ * accuracy across edges — the same escape hatch the KV store documents.
  */
 export function createBetterAuthRateLimitStorage(store: IRateLimiterStore): {
-  get: (key: string) => Promise<BetterAuthRateLimit | null>
-  set: (key: string, value: BetterAuthRateLimit, update?: boolean) => Promise<void>
+  consume: (key: string, rule: BetterAuthRateLimitRule) => Promise<BetterAuthConsumeResult>
 } {
   return {
-    async get(key) {
-      return await store.get<BetterAuthRateLimit>(`${BETTER_AUTH_KEY_PREFIX}${key}`)
-    },
-    async set(key, value, _update) {
-      await store.set(`${BETTER_AUTH_KEY_PREFIX}${key}`, value, BETTER_AUTH_TTL_SECONDS)
+    async consume(key, rule) {
+      const storageKey = `${BETTER_AUTH_KEY_PREFIX}${key}`
+      const windowMs = rule.window * 1000
+      const now = Date.now()
+      const record = await store.get<BetterAuthRateLimit>(storageKey)
+
+      // TTL is the window itself: once it elapses an expired record and a
+      // surviving one are treated the same, so there is nothing to preserve.
+      // `KvRateLimiterStore` raises this to KV's 60s floor on its own.
+      const write = async (count: number, lastRequest: number): Promise<void> => {
+        await store.set(storageKey, { key, count, lastRequest }, rule.window)
+      }
+
+      // Unseen key, or the previous window has elapsed — open a new one at 1.
+      if (!record || now - record.lastRequest >= windowMs) {
+        await write(1, now)
+        return { allowed: true, retryAfter: null }
+      }
+
+      // Window is live and already spent. Leave the record alone so a rejected
+      // request can't extend the window it just bounced off.
+      if (record.count >= rule.max) {
+        return {
+          allowed: false,
+          retryAfter: Math.ceil((record.lastRequest + windowMs - now) / 1000),
+        }
+      }
+
+      await write(record.count + 1, now)
+      return { allowed: true, retryAfter: null }
     },
   }
 }

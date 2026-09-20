@@ -11,6 +11,9 @@ export type { InertiaFlashOptions, InertiaI18nOptions, InertiaModuleOptions, Ine
 export { buildSeoTags, DATA_SEO_ATTR, descriptorToHtml } from './seo/build-seo-tags';
 export type { SeoData, SeoLinkTag, SeoMetaTag, SeoOpenGraph, SeoTagDescriptor, SeoTwitter } from './seo/types';
 
+// Protocol headers
+export { INERTIA_SCROLL_MERGE_INTENT_HEADER, INERTIA_VARY_HEADERS } from './types';
+
 // Types
 export type {
     InertiaAlwaysProp,
@@ -25,7 +28,14 @@ export type {
     InertiaPage,
     InertiaPageComponent,
     InertiaPageRegistry,
+    InertiaPartialRequest,
+    InertiaPropResolution,
     InertiaRenderOptions,
+    InertiaScrollMetadata,
+    InertiaScrollMetadataResolver,
+    InertiaScrollOptions,
+    InertiaScrollPageIdentifier,
+    InertiaScrollProp,
     InertiaSharedProps,
     InertiaSsrBundle,
     InertiaSsrResult,
@@ -49,8 +59,12 @@ export type {
 export { CookieFlashStore } from './flash/cookie-flash-store';
 export type { FlashStore } from './flash/flash-store';
 
+// Errors
+export { UnrecognizedScrollShapeError } from './errors/unrecognized-scroll-shape.error';
+
 // Services
 export { InertiaService } from './services/inertia.service';
+export { deriveScrollMetadata } from './services/scroll-metadata';
 export { SeoService } from './services/seo.service';
 export { ManifestService } from './services/manifest.service';
 export { SsrRendererService } from './services/ssr-renderer.service';

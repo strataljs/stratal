@@ -51,6 +51,20 @@ export function resolveCacheable(
     throw new ResponseCacheConfigError(`${where}: @Cacheable \`ttl\` must be a positive number of seconds.`)
   }
 
+  // Defaults to `ttl`: a response the shared cache may hold for an hour is
+  // one a browser may hold for an hour too, and that equivalence is what a
+  // route gets without saying anything. A route whose retraction must be
+  // reliable narrows it — see `browserTtl` on `CacheableOptions`.
+  const browserTtl = route.browserTtl ?? defaults.browserTtl ?? ttl
+
+  // `0` is meaningful — it means the browser asks every time — so only
+  // negative and non-finite values are rejected.
+  if (browserTtl < 0 || !Number.isFinite(browserTtl)) {
+    throw new ResponseCacheConfigError(
+      `${where}: @Cacheable \`browserTtl\` must be a non-negative finite number of seconds.`,
+    )
+  }
+
   const swr = route.swr ?? defaults.swr
 
   // Unlike `ttl`, `0` is meaningful here — it means no stale window — so only
@@ -88,6 +102,7 @@ export function resolveCacheable(
 
   return {
     ttl,
+    browserTtl,
     swr,
     tags: route.tags ?? [],
     partitionBy,

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { Container } from '../../../di/container'
+import { runWithContainer } from '../../../di/container-storage'
 import { Transient } from '../../../di/decorators'
 import { DI_TOKENS } from '../../../di/tokens'
 import { OPENAPI_TOKENS } from '../../../openapi/openapi.tokens'
@@ -63,10 +64,17 @@ function createCommand(input: Record<string, unknown> = {}): McpToolsCommand {
   return cmd
 }
 
+// `mcp:*` commands run inside `runInRequestScope` (QuarryRegistry.call), so the
+// specs must enter a container scope too — calling handle() bare tests a calling
+// convention the framework never uses.
+function run(cmd: { handle: () => Promise<number | undefined> }) {
+  return runWithContainer(childContainer, () => cmd.handle())
+}
+
 describe('McpToolsCommand', () => {
   it('should list all tools as a table', async () => {
     const cmd = createCommand()
-    const exitCode = await cmd.handle()
+    const exitCode = await run(cmd)
     const result = getCommandResult(cmd)
 
     expect(exitCode).toBe(0)
@@ -80,7 +88,7 @@ describe('McpToolsCommand', () => {
 
   it('should filter by tag', async () => {
     const cmd = createCommand({ tag: ['users'] })
-    const exitCode = await cmd.handle()
+    const exitCode = await run(cmd)
     const result = getCommandResult(cmd)
 
     expect(exitCode).toBe(0)
@@ -91,7 +99,7 @@ describe('McpToolsCommand', () => {
 
   it('should filter by path prefix', async () => {
     const cmd = createCommand({ path: '/api/notes' })
-    const exitCode = await cmd.handle()
+    const exitCode = await run(cmd)
     const result = getCommandResult(cmd)
 
     expect(exitCode).toBe(0)
@@ -103,7 +111,7 @@ describe('McpToolsCommand', () => {
 
   it('should show "No tools found" when filters match nothing', async () => {
     const cmd = createCommand({ tag: ['nonexistent'] })
-    const exitCode = await cmd.handle()
+    const exitCode = await run(cmd)
     const result = getCommandResult(cmd)
 
     expect(exitCode).toBe(0)

@@ -21,6 +21,7 @@ Per-package contributor rules: `packages/<name>/CLAUDE.md` — auto-load when wo
 - Don't hand-edit `packages/*/package.json` `exports` — `tsdown` regenerates on build. Add new sub-paths via the package's `tsdown.config.ts` `entry` list. For an alias (path A exposed at name B) use `customExports`.
 - Keep `experimentalDecorators` + `emitDecoratorMetadata` on (needed by the DI decorator system).
 - DI tokens: `Symbol.for('stratal:...')` in each package's `tokens.ts`. Never strings.
+- `types` is `@cloudflare/workers-types/experimental` in every package, never the bundled entrypoint — that one declares `Buffer` and `process` as `any`, overriding `@types/node` and silently untyping every call site touching them. An explicit `node:buffer` import doesn't escape it. Don't switch back.
 - Type-only imports must be marked `type` (`consistent-type-imports`). Both `import type { X }` and `import { type X }` satisfy the rule — `import type { X }` is the prevailing style; don't flag either form. Leading-underscore for unused vars.
 - `oxlint` lints. Husky + lint-staged auto-fixes staged `.ts/.mts` on commit. Don't pass `--no-verify`.
 - Shared build helpers in `tsdown.base.ts` (`baseConfig`, `withTypesExports`). Touching this file affects every package — typecheck and build all on changes.
@@ -30,7 +31,7 @@ Per-package contributor rules: `packages/<name>/CLAUDE.md` — auto-load when wo
 
 - Changesets with **fixed** versioning across all packages: `yarn changeset` before committing version-worthy changes. One bump bumps all packages together, so changes here are coupled.
 - Release runs from `.github/workflows/publish.yml`, which fires on CI completing for `main`. Its `publish` job runs `changesets/action`, which opens a `chore: version packages` PR; merging that PR is what publishes `latest`. Its `canary` job has no gate — every successful CI run on `main` with a pending changeset publishes `0.0.0-canary-<sha>` under the `canary` dist-tag.
-- `@changesets/cli` is pinned to an exact version (`2.31.1`, not `^2.31.1`) in the root `package.json`. `.changeset/config.json` relies on the nested `___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH.onlyUpdatePeerDependentsWhenOutOfRange` flag to stop every `@stratal/*` package (each peers on `stratal`) from escalating to a major bump whenever `stratal` itself releases. That option's own name advertises an unstable shape, and an unrecognized shape is silently ignored — no parse error, no warning. Don't unpin the CLI without re-verifying the flag still has an effect, or the next release can silently become a major instead of the intended minor/patch.
+- `@changesets/cli` is pinned to an exact version (`3.0.1`, not `^3.0.1`) in the root `package.json`. Keep it pinned. Every `@stratal/*` package peers on `stratal`, and changesets picks peer-dependent bumps silently, so after any deliberate bump of it run `yarn changeset status` and confirm the plan is still minor/patch — the `Versioning` CI job enforces this.
 
 ## CI
 

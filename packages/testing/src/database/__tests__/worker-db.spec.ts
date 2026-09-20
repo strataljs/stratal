@@ -1,29 +1,29 @@
 import { describe, expect, it } from 'vitest'
-import { databasePrefix, deriveFileDbName } from '../test-database'
+import { databasePrefix, deriveWorkerDbName } from '../test-database'
 
-describe('deriveFileDbName', () => {
-  it('is deterministic per (base, token)', () => {
-    const base = 'postgres://u:p@localhost:5432/data_plane_test'
-    expect(deriveFileDbName(base, 'abc123')).toBe('data_plane_test_f_abc123')
-    expect(deriveFileDbName(base, 'abc123')).toBe('data_plane_test_f_abc123')
+describe('deriveWorkerDbName', () => {
+  it('names the database behind a lease slot', () => {
+    const base = 'postgres://u:p@localhost:5432/suite_test'
+    expect(deriveWorkerDbName(base, 0)).toBe('suite_test_w_0')
+    expect(deriveWorkerDbName(base, 12)).toBe('suite_test_w_12')
   })
-  it('differs per token (so no two files share a database)', () => {
+  it('gives each slot its own database', () => {
     const base = 'postgres://u:p@localhost:5432/app_test'
-    expect(deriveFileDbName(base, 'aaa')).not.toBe(deriveFileDbName(base, 'bbb'))
+    expect(deriveWorkerDbName(base, 1)).not.toBe(deriveWorkerDbName(base, 2))
   })
   it('rejects a base name that would exceed 63 chars', () => {
-    const long = 'a'.repeat(55)
+    const long = 'a'.repeat(60)
     const base = `postgres://u:p@localhost:5432/${long}`
-    expect(() => deriveFileDbName(base, 'abcdef0123456789')).toThrow(/identifier limit/)
+    expect(() => deriveWorkerDbName(base, 1)).toThrow(/identifier limit/)
   })
 })
 
 describe('databasePrefix', () => {
-  it('is the per-file sweep key and does NOT match the template database', () => {
+  it('is the worker sweep key and does NOT match the template database', () => {
     const base = 'postgres://u:p@localhost:5432/app_test'
     const prefix = databasePrefix(base)
-    expect(prefix).toBe('app_test_f_')
-    expect(deriveFileDbName(base, 'tok').startsWith(prefix)).toBe(true)
+    expect(prefix).toBe('app_test_w_')
+    expect(deriveWorkerDbName(base, 3).startsWith(prefix)).toBe(true)
     expect('app_test_template'.startsWith(prefix)).toBe(false) // sweep must never drop the template
   })
 })

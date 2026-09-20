@@ -48,7 +48,7 @@ InertiaModule.forRootAsync({
 ### Options
 
 - `rootView` (required) — Root HTML template name
-- `version?` — Asset version for cache busting (nullable)
+- `version?` — Asset version for cache busting (nullable). Set it and a GET from a client running a different version is answered `409` with `X-Inertia-Location` and `X-Inertia-Version`, which the Inertia client turns into a hard reload. Both sides must be non-empty for the check to run — an unset `version`, or a client that sends none (a hand-rolled `fetch` with only `X-Inertia: true`), skips it. The reload fires the cancelable `location` event first with `detail.versionChange: true`, so an app can cancel it and ask the user before the page goes.
 - `ssr?` — `{ bundle: () => Promise<SsrModule> }` (exclude pages from SSR via the Vite plugin's `ssrExclude`, see [SSR](#ssr))
 - `sharedData?` — Static values or `(ctx: RouterContext) => any` resolver functions
 - `flash?` — `{ store: FlashStore }` — flash message storage (use `CookieFlashStore`)
@@ -267,6 +267,63 @@ return ctx.inertia('notes/Index', {
 ```
 
 Strategies: `'append'` (default), `'prepend'`, `'deep'`. Use `matchOn` to deduplicate array items by a key field.
+
+### Scroll Props (infinite scroll)
+
+Use `ctx.scroll()` to paginate a list by scrolling with `@inertiajs/react`'s `<InfiniteScroll>`. It is a merge prop that also publishes the pagination metadata the component needs. Hand it a paginated result — the page identifiers are derived from it:
+
+```typescript
+return ctx.inertia('notes/Index', {
+  notes: ctx.scroll(() => this.service.paginate(page), { matchOn: 'id' }),
+})
+```
+
+```tsx
+import { InfiniteScroll } from '@inertiajs/react'
+
+<InfiniteScroll data="notes">
+  {notes.data.map((note) => <NoteCard key={note.id} note={note} />)}
+</InfiniteScroll>
+```
+
+The prop value keeps its paginator shape (`{ data, pagination }`), so read the rows as `notes.data`. Only the rows under the wrapper key accumulate across pages.
+
+| Option | Default | Purpose |
+|---|---|---|
+| `wrapper` | `'data'` | Key inside the value holding the rows that accumulate. |
+| `matchOn` | — | Field to deduplicate rows on, e.g. `id`. |
+| `pageName` | derived | Query parameter the client sends the page under. Set it when one page has two independent scroll lists. |
+| `metadata` | — | Extracts the identifiers from a shape the framework cannot derive. |
+
+Derivation recognises both of the framework's paginated shapes, so neither needs `metadata`:
+
+- offset — `{ data, pagination: { page, totalPages } }`, what `paginatedResponseSchema` describes.
+- cursor — `{ data, cursorName, cursor, nextCursor, prevCursor }`, what `db.$cursor.<model>.findMany()` returns (see `references/database.md`). Use this when rows are added, removed or updated while the list is being read.
+
+```typescript
+return ctx.inertia('ask/Index', {
+  threads: ctx.scroll(() => this.db.$cursor.thread.findMany({
+    cursor: ctx.query('cursor'),
+    take: 20,
+    orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+  }), { matchOn: 'id' }),
+})
+```
+
+Any other shape throws `UnrecognizedScrollShapeError` (imported from `@stratal/inertia`); pass `metadata` to name the identifiers yourself:
+
+```typescript
+notes: ctx.scroll(() => this.service.afterCursor(cursor), {
+  metadata: (result) => ({
+    pageName: 'cursor',
+    currentPage: result.cursor,
+    previousPage: null,
+    nextPage: result.nextCursor ?? null,
+  }),
+})
+```
+
+Return `null` for `previousPage` / `nextPage` when there is no page on that side — that is what the client reads as "no more".
 
 ## Shared Data
 
@@ -621,7 +678,7 @@ SEO + Vite CSS) flushes immediately and the app body streams progressively, lowe
 TTFB. There is **no client-side fallback** — if the SSR bundle fails to load or render,
 the error surfaces (500) rather than silently degrading.
 
-To skip the render entirely for public pages, add `@Cacheable({ ttl })` from `stratal/response-cache` — on a cache hit the Worker never executes, so no SSR and no CPU is billed. `Vary: X-Inertia` is already set (document and JSON page cache as separate variants) and a deploy invalidates automatically. Pages with flash data, partial reloads, and `once()` props are never cached, and guarded routes cannot be cached at all. See `references/response-cache.md`.
+To skip the render entirely, add `@Cacheable({ ttl })` from `stratal/response-cache` — on a cache hit the Worker never executes, so no SSR and no CPU is billed. The Inertia protocol headers are already in `Vary`, so the document, the JSON page and each partial reload cache as separate variants — which means `ctx.defer()` props cache too, and on a page that defers its expensive work that is where the whole saving is. A deploy invalidates automatically. Pages with flash data or a `once()` prop are never cached; a guarded route needs `partitionBy`. See `references/response-cache.md`.
 
 ### Configuration
 
@@ -656,6 +713,32 @@ export const { render } = createInertiaSsrApp({
 > inside a *suspended* boundary won't reach `<head>` — use server-side `ctx.seo()` for
 > document metadata (the blessed path), which is resolved before render regardless.
 
+#### `prepare` — a per-render value for `setup`
+
+`prepare(page)` runs once per `render(page)` call, before the tree is built, and its
+result reaches `setup` as `prepared`. Use it for a per-request value the tree needs and
+that has to be computed asynchronously — a request-scoped logger, say — instead of a
+module-level variable.
+
+```tsx
+import { createInertiaSsrApp } from '@stratal/inertia/ssr'
+
+export const { render } = createInertiaSsrApp({
+  resolve: async (name) => { /* … */ },
+  prepare: (page) => buildRequestScopedValue(page),
+  setup: ({ App, props, prepared }) => (
+    <RequestScope.Provider value={prepared}>
+      <App {...props} />
+    </RequestScope.Provider>
+  ),
+})
+```
+
+`prepared` is typed from `prepare`'s return type, awaited if it is a promise.
+**`prepare` is required whenever `prepared` is anything other than `undefined`** — a
+`setup` annotating `prepared` without a `prepare` to produce it fails to compile. Omit
+both and `prepared` is `undefined`. A `prepare` that throws or rejects fails the render.
+
 ### Excluding pages from SSR (`ssrExclude`)
 
 Some pages should never server-render — they depend on browser-only APIs, or pull
@@ -679,8 +762,27 @@ Pattern syntax (matched against the Inertia component name — the
 
 Excluded pages are **dropped from the worker bundle entirely** (smaller cold start)
 and rendered client-only at runtime; the browser bundle still includes them so they
-hydrate normally. `ssrExclude` is the only way to opt a page out of SSR. Requires the
-conventional `import.meta.glob('./pages/**/*.tsx')` resolver in your SSR entry.
+hydrate normally. `ssrExclude` is the only way to opt a page out of SSR.
+
+Your SSR entry must resolve pages with `import.meta.glob`, in either form:
+
+```typescript
+// Single string
+const pages = import.meta.glob('./pages/**/*.tsx')
+
+// Array — use when the resolver has exclusions of its own; they are kept
+const pages = import.meta.glob(['./pages/**/*.tsx', '!./pages/**/*.spec.tsx'])
+
+// Extglob, to exclude inside a single-string pattern
+const pages = import.meta.glob('./pages/**/!(*.spec).tsx')
+```
+
+A glob the plugin cannot rewrite emits a build warning naming the file. If you see it, no
+pages were excluded from the worker bundle.
+
+The same list governs modal levels. `@stratal/inertia-modal`'s `withModals()` honours it on
+**both** the server render and the client pre-pass, and takes no options — `ssrExclude` is the
+only place a component opts out.
 
 ## Type Safety
 
@@ -703,6 +805,10 @@ declare module '@stratal/inertia' {
 ```
 
 With augmentation, `ctx.inertia('notes/Index', { notes })` is fully type-checked.
+
+`quarry inertia:types` (and the Vite plugin) read `ctx.modal()` calls exactly as
+they read `ctx.inertia()`, so a modal page lands in `InertiaPageRegistry` too. Delete any
+hand-written prop types for a modal page — the generated type is the only source.
 
 ## Inertia CLI Commands
 
@@ -813,6 +919,7 @@ await response.assertInertiaProp('notes.0.title', 'My Note')
 | `assertInertiaFlash(key, value)` | Assert flash data. |
 | `assertInertiaDeferredProp(prop, group)` | Assert deferred prop in group. |
 | `assertInertiaMergeProp(prop)` | Assert merge prop. |
+| `assertInertiaScrollProp(prop, expected?)` | Assert scroll metadata for a prop, optionally matching its fields. |
 | `assertInertiaSharedProp(prop)` | Assert shared prop. |
 | `assertSuccessfulPrecognition()` | Assert 204 response with Precognition headers. |
 | `assertPrecognitionValidationErrors(errors?)` | Assert 422 with Precognition headers. Optionally assert error body. |

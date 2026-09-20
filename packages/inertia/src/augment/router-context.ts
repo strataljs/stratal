@@ -12,6 +12,8 @@ import type {
   InertiaPageComponent,
   InertiaPageRegistry,
   InertiaRenderOptions,
+  InertiaScrollOptions,
+  InertiaScrollProp,
   ResolvedInertiaPageProps,
 } from '../types'
 
@@ -42,6 +44,14 @@ declare module 'stratal/router' {
     optional<T>(callback: () => T): InertiaOptionalProp<T>
     /** Creates a mergeable prop that merges with existing client-side page data instead of replacing it. */
     merge<T>(callback: () => T, options?: InertiaMergeOptions): InertiaMergeProp<T>
+    /**
+     * Creates a scroll-paginated prop for the client's `<InfiniteScroll>`: a merge
+     * prop that also publishes the pagination identifiers the component needs.
+     * The rows accumulate under the `wrapper` key (`data` by default) while the
+     * prop value keeps its paginator shape, and the request — not the caller —
+     * decides whether a page is appended or prepended.
+     */
+    scroll<T>(callback: () => T | Promise<T>, options?: InertiaScrollOptions<T>): InertiaScrollProp<T>
     /** Creates a prop that is only sent on the first visit and cached for subsequent requests. */
     once<T>(callback: () => T, options?: InertiaOnceOptions): InertiaOnceProp<T>
     /** Creates a prop that is always evaluated and included, even on partial reload requests. */
@@ -99,6 +109,11 @@ export function augmentRouterContext(resolveService: (ctx: RouterContext) => Ine
   RouterContext.macro('merge', function <T>(this: RouterContext, callback: () => T, options?: InertiaMergeOptions) {
     const service = resolveService(this)
     return service.merge(callback, options)
+  })
+
+  RouterContext.macro('scroll', function <T>(this: RouterContext, callback: () => T | Promise<T>, options?: InertiaScrollOptions<T>) {
+    const service = resolveService(this)
+    return service.scroll(callback, options)
   })
 
   RouterContext.macro('once', function <T>(this: RouterContext, callback: () => T, options?: InertiaOnceOptions) {

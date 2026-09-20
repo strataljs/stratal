@@ -6,12 +6,34 @@ import {
   StorageService,
   type StreamingBlobPayloadInputTypes,
   type DownloadResult,
+  type HeadResult,
+  type ListOptions,
+  type ListResult,
   type PresignedUrlResult,
   type StorageConfig,
   type UploadOptions,
   type UploadResult,
 } from 'stratal/storage'
 import { expect } from 'vitest'
+
+/**
+ * Objects per `list` page when a test does not ask for a size.
+ *
+ * One, so that any listing of two or more objects truncates and a caller who skips the `cursor`
+ * loop fails here rather than against a real bucket.
+ */
+const FAKE_LIST_PAGE_SIZE = 1
+
+/** Shared by `head` and `list` so a listed object and a headed one cannot drift apart. */
+function toHeadResult(path: string, file: StoredFile): HeadResult {
+  return {
+    path,
+    size: file.size,
+    contentType: file.mimeType,
+    uploadedAt: file.uploadedAt,
+    metadata: file.metadata,
+  }
+}
 
 /**
  * Stored file representation in memory
@@ -122,6 +144,82 @@ export class FakeStorageService extends StorageService {
    */
   exists(path: string): Promise<boolean> {
     return Promise.resolve(this.files.has(path))
+  }
+
+  /**
+   * Delete many files from fake storage
+   */
+  // `async` so an unconfigured disk arrives as a rejected promise, as it does from the real
+  // service. Thrown synchronously it would slip past a caller that chains `.catch()` without
+  // awaiting — a difference in error surface is still a difference the fake exists to avoid.
+  async deleteMany(paths: string[], disk?: string): Promise<void> {
+    this.resolveDisk(disk)
+
+    for (const path of paths) {
+      this.files.delete(path)
+    }
+
+    return Promise.resolve()
+  }
+
+  /**
+   * Read a file's metadata from fake storage, without its contents
+   */
+  async head(path: string, disk?: string): Promise<HeadResult | null> {
+    this.resolveDisk(disk)
+
+    const file = this.files.get(path)
+    if (!file) {
+      return Promise.resolve(null)
+    }
+
+    return Promise.resolve(toHeadResult(path, file))
+  }
+
+  /**
+   * List files in fake storage, one page at a time
+   *
+   * Truncates after ONE object unless `limit` says otherwise. Real R2 pages at 1000, but no
+   * fixture stores 1000 files — matching that number would return everything in one page and let
+   * a caller who never follows `cursor` pass every test, then undercount against a real bucket.
+   * Paging at one means any listing of two or more objects exercises the loop.
+   *
+   * Pass `limit` to widen the page when a test is asserting page contents rather than the loop.
+   */
+  async list(options: ListOptions = {}, disk?: string): Promise<ListResult> {
+    this.resolveDisk(disk)
+
+    const prefix = options.prefix ?? ''
+    // Sorted so pagination is deterministic — an unordered Map iteration would make `cursor`
+    // meaningless and the page boundaries unrepeatable between runs.
+    const matching = Array.from(this.files.keys())
+      .filter((path) => path.startsWith(prefix))
+      .sort()
+
+    const start = options.cursor === undefined ? 0 : matching.indexOf(options.cursor)
+    if (start < 0) {
+      return Promise.reject(new Error(`Unknown storage list cursor: ${options.cursor ?? ''}`))
+    }
+
+    const limit = options.limit ?? FAKE_LIST_PAGE_SIZE
+    const page = matching.slice(start, start + limit)
+    const next = matching[start + limit]
+
+    return Promise.resolve({
+      objects: page.map((path) => {
+        const object = toHeadResult(path, this.files.get(path)!)
+        if (options.includeMetadata) {
+          return object
+        }
+
+        // Dropped unless asked for, because R2 omits them unless asked for. A fake that always
+        // returned them would let a caller read `contentType` off a listing in tests and find it
+        // undefined against a real bucket.
+        return { ...object, contentType: undefined, metadata: undefined }
+      }),
+      truncated: next !== undefined,
+      cursor: next,
+    })
   }
 
   /**

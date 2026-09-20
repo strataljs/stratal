@@ -2,6 +2,7 @@ import { Transient, inject } from 'stratal/di'
 import type { Middleware, Next, RouterContext } from 'stratal/router'
 import type { InertiaModuleOptions } from '../inertia.options'
 import { INERTIA_TOKENS } from '../inertia.tokens'
+import { INERTIA_VARY_HEADERS } from '../types'
 
 @Transient()
 export class InertiaMiddleware implements Middleware {
@@ -36,8 +37,25 @@ export class InertiaMiddleware implements Middleware {
       const serverVersion = this.options.version ?? ''
 
       if (clientVersion && serverVersion && clientVersion !== serverVersion) {
-        ctx.c.header('X-Inertia-Location', ctx.c.req.url)
-        ctx.c.status(409)
+        // A real Response, not `header()` + `status()` and a bare return. A middleware that
+        // short-circuits without one leaves `c.res` unset, and the outermost `no-store` fallback
+        // then reads `c.res.headers` off `undefined` — so the client received a 500 where the
+        // whole point of this branch is to send a 409 the Inertia client turns into a reload. This
+        // path had therefore never worked; every other short-circuit in the framework returns
+        // `c.redirect(...)`, which is a Response.
+        //
+        // `X-Inertia-Version` rides along because Inertia's client reads it back off this response
+        // to decide whether the location visit is a VERSION change. That flag is what lets an app
+        // tell "you are out of date, reload" apart from an ordinary external redirect — it is
+        // carried on the cancelable `location` event — and it also stops the client reloading the
+        // page underneath an async visit.
+        ctx.c.res = new Response(null, {
+          status: 409,
+          headers: {
+            'X-Inertia-Location': ctx.c.req.url,
+            'X-Inertia-Version': serverVersion,
+          },
+        })
         return
       }
     }
@@ -76,8 +94,13 @@ export class InertiaMiddleware implements Middleware {
       .map((name) => name.trim())
       .filter(Boolean)
 
-    const alreadyVaries = declaredVary.some((name) => name.toLowerCase() === 'x-inertia')
-    ctx.c.header('Vary', (alreadyVaries ? declaredVary : ['X-Inertia', ...declaredVary]).join(', '))
+    // Every name in INERTIA_VARY_HEADERS, not just `X-Inertia`: a partial reload
+    // sends `X-Inertia: true` like any other Inertia request, so a response
+    // keyed on that alone would be interchangeable with one carrying a
+    // different set of props. See the constant for the full argument.
+    const seen = new Set(declaredVary.map((name) => name.toLowerCase()))
+    const missing = INERTIA_VARY_HEADERS.filter((name) => !seen.has(name.toLowerCase()))
+    ctx.c.header('Vary', [...missing, ...declaredVary].join(', '))
 
     // Convert 302 to 303 for non-GET/HEAD Inertia requests
     if (isInertia && status === 302) {

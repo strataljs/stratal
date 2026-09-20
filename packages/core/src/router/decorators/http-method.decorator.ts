@@ -49,12 +49,14 @@ function createHttpMethodDecorator(method: HttpMethod) {
  *
  * @example
  * ```typescript
- * @Controller('/api/v1/users')
+ * import { array, object, uuid } from 'zod/mini'
+ *
+ * @Controller('/users', { version: '1' })
  * class UsersController {
- *   @Get('/', { response: z.array(userSchema), summary: 'List users' })
+ *   @Get('/', { response: array(userSchema), summary: 'List users' })
  *   async list(ctx: RouterContext) { ... }
  *
- *   @Get('/:id', { params: z.object({ id: z.string().uuid() }), response: userSchema })
+ *   @Get('/:id', { params: object({ id: uuid() }), response: userSchema })
  *   async getUser(ctx: RouterContext) { ... }
  * }
  * ```

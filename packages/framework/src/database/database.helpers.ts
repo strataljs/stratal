@@ -1,11 +1,13 @@
 import { ZenStackClient, type AnyPlugin } from '@zenstackhq/orm';
+import type { SchemaDef } from '@zenstackhq/orm/schema';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { array, custom, looseObject, minLength, object, optional, refine, string } from 'zod/mini';
-import { Transient } from 'stratal/di';
+import { Request as RequestScoped } from 'stratal/di';
 import type { IEventRegistry } from 'stratal/events';
 import type { LoggerService } from 'stratal/logger';
 import { withZodI18n } from 'stratal/validation';
 import type { DatabaseConnectionConfig } from './database.module';
+import { createCursorReader } from './pagination/cursor-reader';
 import { ErrorHandlerPlugin, EventEmitterPlugin } from './plugins';
 
 const databaseConnectionSchema = object({
@@ -37,6 +39,25 @@ export const databaseModuleConfigSchema = object({
 type ZenStackClientInstance = InstanceType<typeof ZenStackClient>
 
 /**
+ * Puts `$cursor` on a client, base or transaction.
+ *
+ * Defined on the client rather than contributed as a ZenStack plugin because
+ * the client proxy hands a plugin's member back unbound, and this one has to
+ * reach the client's own model delegates. Non-enumerable so it stays out of
+ * enumeration of the client, and skipped when already present — a reentrant
+ * `$transaction` hands back a client that has been through here.
+ */
+function defineCursorReader(client: object, schema: SchemaDef): void {
+  if ('$cursor' in client) return
+
+  Object.defineProperty(client, '$cursor', {
+    value: createCursorReader(client, schema),
+    enumerable: false,
+    configurable: true,
+  })
+}
+
+/**
  * Wrap a ZenStack client so `$transaction` is reentrant: when a transaction is
  * already open on this connection (tracked per-connection via
  * {@link AsyncLocalStorage}), nested calls run within the active transaction's
@@ -52,10 +73,16 @@ type ZenStackClientInstance = InstanceType<typeof ZenStackClient>
  *
  * ZenStackClient's constructor returns a Proxy (for dynamic model accessors), so
  * a subclass method override is shadowed — hence the proxy wrapper here.
+ *
+ * `prepareTransactionClient` runs against every transaction client before the
+ * callback sees it, which is how the built-in members reach it. ZenStack builds
+ * that client itself and types it with its own contract, so there is no other
+ * point at which it passes through this package.
  */
 export function makeReentrantTransaction<T extends object>(
   client: T,
   activeTransaction: AsyncLocalStorage<ZenStackClientInstance>,
+  prepareTransactionClient?: (tx: ZenStackClientInstance) => void,
 ): T {
   return new Proxy(client, {
     get(target, prop, receiver) {
@@ -89,8 +116,10 @@ export function makeReentrantTransaction<T extends object>(
         }
         return transaction.call(
           target,
-          (tx: ZenStackClientInstance) =>
-            activeTransaction.run(tx, () => (input as (t: ZenStackClientInstance) => unknown)(tx)),
+          (tx: ZenStackClientInstance) => {
+            prepareTransactionClient?.(tx)
+            return activeTransaction.run(tx, () => (input as (t: ZenStackClientInstance) => unknown)(tx))
+          },
           options,
         )
       }
@@ -135,23 +164,37 @@ export function createDatabaseService(
   // single connection, which is also the correct semantics (one atomic unit).
   const activeTransaction = new AsyncLocalStorage<InstanceType<typeof ZenStackClient>>()
 
-  // Live clients created from this service class, tracked weakly: the client
-  // is `@Transient`, so request-scoped resolutions must stay GC-able with
-  // their request. Dead refs are pruned on each add; live ones are
-  // disconnected by `disposeInstances()` on module shutdown.
+  // Live clients created from this service class, tracked weakly: one per
+  // request scope, so each stays GC-able with its request. Dead refs are pruned
+  // on each add; live ones are disconnected by `disposeInstances()` on module
+  // shutdown.
   //
-  // The dialect (and the pg pool it carries) is built FRESH per resolution —
+  // The dialect (and the pg pool it carries) is built FRESH per REQUEST —
   // `conn.dialect()` in the constructor below. This is MANDATORY on the Workers
   // runtime: a pool/socket opened inside one request's I/O context cannot be
   // reused by a later request — workerd cancels the cross-request I/O and the
   // request hangs forever ("the Worker's code had hung and would never generate
   // a response"). Memoizing one shared dialect across requests therefore breaks
-  // every request after the first.
+  // every request after the first, which is why this is `@Request` rather than
+  // `@Singleton`.
+  //
+  // It is `@Request` rather than `@Transient` because the scope is what decides
+  // how many pools a request opens. Transient hands every injecting service its
+  // own client, so a request resolving a controller, a guard and four services
+  // built six ZenStack clients over six pools — each one a fresh schema walk and
+  // its own set of connections — for work that shares a single I/O context. The
+  // request scope is the widest one a pool may legally span here, so it is the
+  // right one: one client, one pool, per request.
+  //
+  // Every entrypoint already runs inside a request scope — HTTP through
+  // `createRequestScope`, and queues, cron, seeders, quarry commands, Durable
+  // Objects, Workflows and WorkerEntrypoints through `runInRequestScope` /
+  // `runInScope` — so this costs no caller a change.
   //
   // Pool cleanup is at MODULE SHUTDOWN only: `disposeInstances()` disconnects the
   // still-live clients tracked here. The framework does not dispose pools per
-  // request, so a pool whose transient client is GC'd before shutdown is NOT
-  // explicitly `$disconnect()`ed — its idle connections are reclaimed by `pg`'s
+  // request, so a pool whose client is GC'd before shutdown is NOT explicitly
+  // `$disconnect()`ed — its idle connections are reclaimed by `pg`'s
   // own `idleTimeoutMillis` instead. On the primary target (Workers + Hyperdrive)
   // Hyperdrive fronts these pools and multiplexes the real server connections, so
   // they never accumulate. Consumers deploying against a DIRECT Postgres on a
@@ -159,7 +202,7 @@ export function createDatabaseService(
   // `idleTimeoutMillis` so any leaked-idle connection self-closes promptly.
   const instances = new Set<WeakRef<ZenStackClientInstance>>()
 
-  @Transient()
+  @RequestScoped()
   class DatabaseClient extends ZenStackClient<typeof conn.schema> {
     constructor() {
       const dialect = conn.dialect()
@@ -171,11 +214,17 @@ export function createDatabaseService(
         // @ts-expect-error - ZenStack 3+ requires `computedFields` whenever the schema declares any `@computed` fields, so pass them through when the consumer provides them.
         computedFields: conn.computedFields
       })
+      defineCursorReader(this, conn.schema)
+
       // ZenStackClient's constructor returns a Proxy (for dynamic model
       // accessors), so subclass method overrides are shadowed. Wrap it in a
       // proxy that makes `$transaction` reentrant. Returning from the
       // constructor replaces the instance DI receives.
-      const client = makeReentrantTransaction(this as InstanceType<typeof ZenStackClient>, activeTransaction)
+      const client = makeReentrantTransaction(
+        this as InstanceType<typeof ZenStackClient>,
+        activeTransaction,
+        (tx) => defineCursorReader(tx, conn.schema),
+      )
       for (const ref of instances) {
         if (ref.deref() === undefined) instances.delete(ref)
       }

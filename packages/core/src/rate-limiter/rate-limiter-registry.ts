@@ -22,6 +22,12 @@ interface StoredHit {
   resetAt: number
 }
 
+/** What a distinct-value window stores, in place of `StoredHit`'s counter. */
+interface StoredDistinct {
+  values: string[]
+  resetAt: number
+}
+
 /**
  * Central registry of named rate limiters and the request-time enforcement
  * pipeline. Resolved as a singleton; consumed by `ThrottleMiddleware`.
@@ -106,8 +112,11 @@ export class RateLimiterRegistry extends Macroable {
     let exceeded: { limit: Limit; resetAt: number } | undefined
 
     for (const limit of active) {
-      const key = this.makeKey(name, limit.windowSeconds, limit.key)
-      const hit = await this.hit(key, limit.windowSeconds)
+      const key = this.makeKey(name, limit.windowSeconds, limit.key, limit.distinctValue !== undefined)
+      const hit =
+        limit.distinctValue === undefined
+          ? await this.hit(key, limit.windowSeconds)
+          : await this.hitDistinct(key, limit.windowSeconds, limit.distinctValue, limit.max)
 
       if (hit.count > limit.max) {
         if (!exceeded || hit.resetAt > exceeded.resetAt) {
@@ -143,6 +152,10 @@ export class RateLimiterRegistry extends Macroable {
         mostRestrictive.resetAt,
       )
       // Hono populates ctx.c.res after next() — same pattern as logger.middleware.ts.
+      //
+      // Stamped unconditionally: the cache decision is not on the response yet at this point in
+      // the unwind, so whether these may be kept is decided by
+      // `createNoStoreFallbackMiddleware`, which strips them from a shared-cacheable response.
       const downstream = ctx.c.res
       downstream.headers.set('X-RateLimit-Limit', headers['X-RateLimit-Limit'])
       downstream.headers.set('X-RateLimit-Remaining', headers['X-RateLimit-Remaining'])
@@ -170,9 +183,70 @@ export class RateLimiterRegistry extends Macroable {
     return next
   }
 
-  private makeKey(name: string, windowSeconds: number, by: string | undefined): string {
+  /**
+   * A window that counts DISTINCT values rather than requests.
+   *
+   * Uses the same typed-KV store as {@link hit} — the store persists arbitrary values, so a
+   * cardinality window needs no store-interface change — but a key namespace of its own, since
+   * the two shapes are not interchangeable and a shared key would have each read the other's.
+   *
+   * A value already present is admitted WITHOUT a write, which both keeps the count stable and
+   * leaves the TTL alone: re-touching something already counted must not slide the window. The
+   * stored set therefore never exceeds `max`.
+   *
+   * The cap is a SOFT ceiling under an eventually-consistent store. This is a read-modify-write
+   * of the whole array, so N concurrent requests carrying N different values all read the same
+   * set and last-write-wins keeps one of them: a burst can overshoot `max`, and unlike a lost
+   * counter increment (which the next request re-adds) a lost set member is gone for the rest of
+   * the window. Intended for small caps — tens, not thousands; nothing bounds `max` itself, and
+   * the whole set is read and rewritten on every new value. A hard cap needs a
+   * strongly-consistent store, i.e. a Durable Object.
+   */
+  private async hitDistinct(
+    key: string,
+    windowSeconds: number,
+    value: string,
+    max: number,
+  ): Promise<RateLimitHit> {
+    const now = Date.now()
+    const existing = await this.store.get<StoredDistinct>(key)
+
+    if (existing && existing.resetAt > now) {
+      if (existing.values.includes(value)) {
+        return { count: existing.values.length, resetAt: existing.resetAt }
+      }
+
+      // A new value past the cap is refused WITHOUT being stored: persisting it would push the
+      // stored count past `max` for every later request, including ones for values already
+      // counted, which must stay admitted.
+      if (existing.values.length >= max) {
+        return { count: existing.values.length + 1, resetAt: existing.resetAt }
+      }
+
+      const values = [...existing.values, value]
+      const ttlSeconds = Math.max(1, Math.ceil((existing.resetAt - now) / 1000))
+      await this.store.set(key, { values, resetAt: existing.resetAt }, ttlSeconds)
+      return { count: values.length, resetAt: existing.resetAt }
+    }
+
+    const resetAt = now + windowSeconds * 1000
+    await this.store.set(key, { values: [value], resetAt }, Math.max(1, windowSeconds))
+    return { count: 1, resetAt }
+  }
+
+  /**
+   * Distinct windows carry a `d:` segment: they store `StoredDistinct` where a plain window
+   * stores `StoredHit`, and one limiter name can legitimately declare both on the same window
+   * and actor. Sharing a key would have each branch read the other's shape and throw.
+   */
+  private makeKey(
+    name: string,
+    windowSeconds: number,
+    by: string | undefined,
+    distinct: boolean,
+  ): string {
     const actor = by ?? '*'
-    return `rl:${name}:${windowSeconds}:${actor}`
+    return `rl:${name}:${distinct ? 'd:' : ''}${windowSeconds}:${actor}`
   }
 
   private makeHeaders(limit: number, remaining: number, resetAt: number): RateLimitHeaders {

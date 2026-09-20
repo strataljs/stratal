@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Container } from '../../../di/container'
+import { runWithContainer } from '../../../di/container-storage'
 import { Transient } from '../../../di/decorators'
 import { DI_TOKENS } from '../../../di/tokens'
 import { OPENAPI_TOKENS } from '../../../openapi/openapi.tokens'
@@ -69,8 +70,13 @@ const testSpec = {
   },
 }
 
+let getSpecContainer: unknown
+
 const mockOpenAPIService = {
-  getSpec: () => testSpec,
+  getSpec: (container: unknown) => {
+    getSpecContainer = container
+    return testSpec
+  },
 }
 
 const mockConfigStore = {
@@ -98,6 +104,7 @@ beforeEach(() => {
   registeredTools = []
   registeredResources = []
   connectCalled = false
+  getSpecContainer = undefined
   stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
 
   childContainer = new Container()
@@ -119,10 +126,17 @@ function createCommand(input: Record<string, unknown> = {}): McpServeCommand {
   return cmd
 }
 
+// `mcp:*` commands run inside `runInRequestScope` (QuarryRegistry.call), so the
+// specs must enter a container scope too — calling handle() bare tests a calling
+// convention the framework never uses.
+function run(cmd: { handle: () => Promise<number | undefined> }) {
+  return runWithContainer(childContainer, () => cmd.handle())
+}
+
 describe('McpServeCommand', () => {
   it('should register all tools from the OpenAPI spec', async () => {
     const cmd = createCommand()
-    await cmd.handle()
+    await run(cmd)
 
     expect(registeredTools).toHaveLength(3)
     expect(registeredTools.map((t) => t.name)).toEqual(['listNotes', 'createNote', 'listUsers'])
@@ -131,7 +145,7 @@ describe('McpServeCommand', () => {
 
   it('should register the OpenAPI spec as a resource', async () => {
     const cmd = createCommand()
-    await cmd.handle()
+    await run(cmd)
 
     expect(registeredResources).toHaveLength(1)
     expect(registeredResources[0].name).toBe('openapi-spec')
@@ -140,7 +154,7 @@ describe('McpServeCommand', () => {
 
   it('should respect tag filter', async () => {
     const cmd = createCommand({ tag: ['users'] })
-    await cmd.handle()
+    await run(cmd)
 
     expect(registeredTools).toHaveLength(1)
     expect(registeredTools[0].name).toBe('listUsers')
@@ -148,7 +162,7 @@ describe('McpServeCommand', () => {
 
   it('should respect path filter', async () => {
     const cmd = createCommand({ path: '/api/notes' })
-    await cmd.handle()
+    await run(cmd)
 
     expect(registeredTools).toHaveLength(2)
     expect(registeredTools.map((t) => t.name)).toEqual(['listNotes', 'createNote'])
@@ -159,7 +173,7 @@ describe('McpServeCommand', () => {
       url: 'https://api.example.com',
       header: ['Authorization:Bearer tok123', 'X-Custom:value'],
     })
-    await cmd.handle()
+    await run(cmd)
 
     // Just verify it runs without error — headers are used in dispatcher
     expect(registeredTools).toHaveLength(3)
@@ -167,9 +181,21 @@ describe('McpServeCommand', () => {
 
   it('should write tool count to stderr', async () => {
     const cmd = createCommand()
-    await cmd.handle()
+    await run(cmd)
 
     expect(stderrSpy).toHaveBeenCalledWith('MCP server started with 3 tool(s)\n')
+  })
+
+  it('builds the spec from the ACTIVE request scope, not the root container', async () => {
+    // `mcp:serve` runs inside runInRequestScope (QuarryRegistry.call). The spec
+    // pulls the request-scoped OpenAPI ConfigService, so handing getSpec the
+    // root `app.container` throws ContainerError at runtime — the command must
+    // pass the ambient request container instead.
+    const cmd = createCommand()
+    await runWithContainer(childContainer, () => cmd.handle())
+
+    expect(getSpecContainer).toBe(childContainer)
+    expect(getSpecContainer).not.toBe(mockApp.container)
   })
 
   it('should have the correct signature', () => {

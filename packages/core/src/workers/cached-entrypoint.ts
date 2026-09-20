@@ -4,8 +4,18 @@ import type { PurgeSpec, WorkersCache } from '../execution-context'
 import { ResponseCacheConfigError } from '../response-cache/errors'
 import type { Stratal } from '../stratal'
 
-/** What a cached entrypoint instance exposes. */
-export interface CachedEntrypoint {
+/**
+ * What a cached entrypoint instance exposes.
+ *
+ * Extends `Rpc.WorkerEntrypointBranded` because the class {@link cachedEntrypoint}
+ * returns really does extend `WorkerEntrypoint`, which carries that brand — and
+ * `Service<T>` only reads a class's RPC methods when the instance it constructs
+ * is branded. Without it, `wrangler types` emits `Service<typeof Cached>` for a
+ * binding to this entrypoint and the type silently degrades to a bare `Fetcher`
+ * with no `purge`, so every consumer needs a cast to call the one method the
+ * binding exists for.
+ */
+export interface CachedEntrypoint extends Rpc.WorkerEntrypointBranded {
   fetch(request: Request): Promise<Response>
   purge(spec: PurgeSpec): Promise<{ success: boolean } | void>
 }

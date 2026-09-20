@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Container } from '../../di/container'
 import type { LoggerService } from '../../logger/services/logger.service'
 import type { RouterContext } from '../../router/router-context'
+import { GuardRejectedError } from '../errors'
 import { GuardExecutionService } from '../guard-execution.service'
 import type { CanActivate, Guard } from '../types'
 
@@ -45,16 +46,48 @@ describe('GuardExecutionService', () => {
       expect(result).toBe(true)
     })
 
-    it('should return false when single guard returns false', async () => {
+    it('throws GuardRejectedError when a guard returns false', async () => {
       const guard: CanActivate = { canActivate: vi.fn().mockResolvedValue(false) }
 
-      const result = await service.executeGuards(
-        [guard],
-        mockContext,
-        mockContainer
-      )
+      await expect(
+        service.executeGuards([guard], mockContext, mockContainer)
+      ).rejects.toBeInstanceOf(GuardRejectedError)
+    })
 
-      expect(result).toBe(false)
+    it('names the rejecting guard, so a handler can tell which one denied', async () => {
+      class BudgetGuard implements CanActivate {
+        canActivate() {
+          return false
+        }
+      }
+
+      await expect(
+        service.executeGuards([new BudgetGuard()], mockContext, mockContainer)
+      ).rejects.toMatchObject({ guard: 'BudgetGuard' })
+    })
+
+    it('carries a 403 status', async () => {
+      const guard: CanActivate = { canActivate: vi.fn().mockResolvedValue(false) }
+
+      const error = await service
+        .executeGuards([guard], mockContext, mockContainer)
+        .catch((e: unknown) => e)
+
+      // `HttpException` exposes `httpStatus`, NOT `status` — see errors/http-exception.ts:21.
+      expect((error as GuardRejectedError).httpStatus).toBe(403)
+    })
+
+    it("lets a guard's own thrown error through unchanged", async () => {
+      // A guard that throws its own HttpException — the common case for an auth guard wanting a
+      // 401 rather than a 403 — must not have it replaced by GuardRejectedError.
+      const own = new Error('custom')
+      const guard: CanActivate = {
+        canActivate: vi.fn().mockRejectedValue(own),
+      }
+
+      await expect(
+        service.executeGuards([guard], mockContext, mockContainer)
+      ).rejects.toBe(own)
     })
 
     it('should return true when multiple guards all return true', async () => {
@@ -72,17 +105,13 @@ describe('GuardExecutionService', () => {
       expect(guard2.canActivate).toHaveBeenCalled()
     })
 
-    it('should short-circuit when first guard returns false', async () => {
+    it('stops at the first rejecting guard', async () => {
       const guard1: CanActivate = { canActivate: vi.fn().mockResolvedValue(false) }
       const guard2: CanActivate = { canActivate: vi.fn().mockResolvedValue(true) }
 
-      const result = await service.executeGuards(
-        [guard1, guard2] as Guard[],
-        mockContext,
-        mockContainer
-      )
-
-      expect(result).toBe(false)
+      await expect(
+        service.executeGuards([guard1, guard2] as Guard[], mockContext, mockContainer)
+      ).rejects.toBeInstanceOf(GuardRejectedError)
       expect(guard1.canActivate).toHaveBeenCalled()
       expect(guard2.canActivate).not.toHaveBeenCalled()
     })
@@ -133,12 +162,13 @@ describe('GuardExecutionService', () => {
       const guard = Object.create(null) as Record<string, unknown>
       guard.canActivate = vi.fn().mockResolvedValue(false)
 
-      await service.executeGuards(
-        [guard as unknown as Guard],
-        mockContext,
-        mockContainer
-      )
+      // Capture the rejection rather than swallowing it: a wholly different error would
+      // otherwise pass this test as long as the log line happened to match.
+      const error = await service
+        .executeGuards([guard as unknown as Guard], mockContext, mockContainer)
+        .catch((e: unknown) => e)
 
+      expect(error).toBeInstanceOf(GuardRejectedError)
       expect(mockLogger.debug).toHaveBeenCalledWith(
         'Guard denied access',
         expect.objectContaining({ guard: 'AnonymousGuard' })

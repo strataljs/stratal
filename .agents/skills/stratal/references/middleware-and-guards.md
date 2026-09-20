@@ -112,6 +112,8 @@ export class RoleGuard implements CanActivate {
 
 Guards use constructor injection — they are resolved from the request-scoped DI container, so they have access to request-scoped services like `AuthContext`.
 
+A `canActivate` that returns `false` raises `GuardRejectedError` (403), naming the rejecting guard. A guard that needs a different status (401 for unauthenticated, 429 for a budget) should throw its own `HttpException` instead — that passes through untouched rather than being replaced by `GuardRejectedError`.
+
 ### @UseGuards Decorator
 
 Apply guards at controller or method level:

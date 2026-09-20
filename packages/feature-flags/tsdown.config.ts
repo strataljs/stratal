@@ -12,7 +12,6 @@ export default defineConfig({
     customExports: (exports) => withTypesExports(exports),
   },
   deps: {
-    skipNodeModulesBundle: true,
-    neverBundle: [/^cloudflare:/],
+    neverBundle: true,
   },
 })

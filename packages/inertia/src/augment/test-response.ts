@@ -1,4 +1,4 @@
-import type { Page } from '@inertiajs/core'
+import type { Page, ScrollProp } from '@inertiajs/core'
 import { getValueAtPath, hasValueAtPath, TestResponse } from '@stratal/testing'
 import { expect } from 'vitest'
 
@@ -24,6 +24,8 @@ declare module '@stratal/testing' {
     assertInertiaDeferredProp(prop: string, group: string): Promise<this>
     /** Assert a prop is listed as a merge prop. */
     assertInertiaMergeProp(prop: string): Promise<this>
+    /** Assert a prop carries infinite-scroll metadata, optionally matching some of its fields. */
+    assertInertiaScrollProp(prop: string, expected?: Partial<ScrollProp>): Promise<this>
     /** Assert a prop is listed as a shared prop. */
     assertInertiaSharedProp(prop: string): Promise<this>
     /** Assert the response is a successful precognition response (204 with precognition headers). */
@@ -145,6 +147,25 @@ export function augmentTestResponse(): void {
       page.mergeProps,
       `Expected Inertia mergeProps to contain "${prop}"`,
     ).toContain(prop)
+
+    return this
+  })
+
+  TestResponse.macro('assertInertiaScrollProp', async function (this: TestResponse, prop: string, expected?: Partial<ScrollProp>) {
+    const page = await this.json<Page>()
+    const actual = page.scrollProps?.[prop]
+
+    expect(
+      actual,
+      `Expected Inertia scrollProps to contain "${prop}"`,
+    ).toBeDefined()
+
+    if (expected) {
+      expect(
+        actual,
+        `Expected Inertia scroll prop "${prop}" to match ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`,
+      ).toMatchObject(expected)
+    }
 
     return this
   })

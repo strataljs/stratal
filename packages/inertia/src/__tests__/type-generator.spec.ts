@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import { Project, SyntaxKind, ts } from 'ts-morph'
 import { describe, expect, it } from 'vitest'
-import { detectI18nConfig, extractAccessControlType, extractControllerPageTypes, extractFlashTypes, extractShareCallTypes, generateInertiaTypes, primeTranslationKeys, seedInertiaI18nAugmentation } from '../generator/type-generator'
+import { detectI18nConfig, extractAccessControlType, extractControllerPageTypes, extractFlashTypes, extractShareCallTypes, extractSharedDataType, generateInertiaTypes, primeTranslationKeys, seedInertiaI18nAugmentation } from '../generator/type-generator'
 
 // `packages/inertia/src/__tests__/` -> `packages/framework/src/access-control/`
 const FRAMEWORK_ACCESS_CONTROL_DIR = fileURLToPath(
@@ -79,6 +79,54 @@ describe('extractControllerPageTypes', () => {
     expect(propsType).toMatch(/items: Array<\{ id: string; title: string;? \}>/)
     expect(propsType).not.toContain('Promise<')
     expect(propsType).not.toContain('then:')
+  })
+
+  it('unwraps a scroll prop to the paginated value the page actually receives', () => {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+      compilerOptions: {
+        target: ts.ScriptTarget.ESNext,
+        module: ts.ModuleKind.ESNext,
+        moduleResolution: ts.ModuleResolutionKind.Bundler,
+        strict: true,
+      },
+    })
+
+    project.createSourceFile(
+      '/src/notes.controller.ts',
+      `
+export interface InertiaScrollProp<T = unknown> {
+  callback: () => T | Promise<T>
+  wrapper: string
+}
+
+export interface InertiaContext {
+  inertia: <P>(component: string, props: P) => unknown
+  scroll: <T>(cb: () => T | Promise<T>, options?: { wrapper?: string }) => InertiaScrollProp<T>
+}
+
+declare function listNotes(): Promise<{ data: { id: string }[]; pagination: { page: number; totalPages: number } }>
+
+declare const ctx: InertiaContext
+
+export class NotesController {
+  index() {
+    return ctx.inertia('notes/Index', {
+      items: ctx.scroll(() => listNotes()),
+    })
+  }
+}
+`,
+    )
+
+    const pages = extractControllerPageTypes(project, SyntaxKind, ts, '/src', '/src/inertia/pages')
+    const propsType = pages.find((p) => p.componentName === 'notes/Index')?.propsType
+
+    expect(propsType).toContain('data:')
+    expect(propsType).toContain('pagination:')
+    expect(propsType).not.toContain('InertiaScrollProp')
+    expect(propsType).not.toContain('callback:')
+    expect(propsType).not.toContain('Promise<')
   })
 
   it('preserves an InertiaTranslationKeys-typed prop as a reference instead of inlining the key union', () => {
@@ -958,7 +1006,7 @@ declare const AuthModule: {
 
     project.createSourceFile('/src/app.module.ts', `${AC_HEADER}\n${moduleBody}`)
 
-    return extractAccessControlType(project, SyntaxKind, '/src/app.module.ts')
+    return extractAccessControlType(project, SyntaxKind, '/src')
   }
 
   it('resolves an inline accessControl definition', () => {
@@ -1133,7 +1181,7 @@ export const config = AuthModule.forRootAsync({
       { overwrite: true },
     )
 
-    const result = extractAccessControlType(project, SyntaxKind, '/app/app.module.ts')
+    const result = extractAccessControlType(project, SyntaxKind, '/app')
 
     expect(result).toEqual({
       permissions: [
@@ -1193,7 +1241,7 @@ export const config = AuthModule.forRootAsync({
       { overwrite: true },
     )
 
-    const result = extractAccessControlType(project, SyntaxKind, '/app/app.module.ts')
+    const result = extractAccessControlType(project, SyntaxKind, '/app')
 
     expect(result).toEqual({
       permissions: [
@@ -1202,5 +1250,236 @@ export const config = AuthModule.forRootAsync({
       ],
       roles: ['editor', 'superAdmin'],
     })
+  })
+})
+
+describe('extractSharedDataType', () => {
+  it('reads sharedData from a config namespace passed as asProvider()', () => {
+    const project = new Project({ useInMemoryFileSystem: true })
+
+    project.createSourceFile('/src/config/inertia.config.ts', `
+      interface FactoryProvider<T> {
+        provide: symbol
+        useFactory: (...deps: any[]) => T
+        inject?: symbol[]
+      }
+
+      interface ConfigNamespace<TConfig> {
+        readonly KEY: symbol
+        readonly factory: (env: any) => TConfig
+        asProvider(): FactoryProvider<TConfig>
+      }
+
+      declare function registerAs<TConfig extends object>(
+        namespace: string,
+        factory: (env: any) => TConfig,
+      ): ConfigNamespace<TConfig>
+
+      export const inertiaConfig = registerAs('inertia', (env: any) => {
+        return {
+          rootView: 'app',
+          sharedData: {
+            appName: (ctx: any): string => 'Admissio',
+            tenant: (ctx: any) => ({ id: 'a', name: 'b' }),
+          },
+        }
+      })
+    `)
+
+    project.createSourceFile('/src/app.module.ts', `
+      import { inertiaConfig } from './config/inertia.config'
+
+      declare class InertiaModule {
+        static forRootAsync(provider: any): any
+      }
+
+      InertiaModule.forRootAsync(inertiaConfig.asProvider())
+    `)
+
+    const result = extractSharedDataType(project, SyntaxKind, ts, '/src')
+
+    // A module wired from a config namespace hands `forRootAsync` a provider,
+    // not a literal — the props are no less typed for it.
+    expect(result).not.toBeNull()
+    expect(result?.members.map((m) => m.name).sort()).toEqual(['appName', 'tenant'])
+    expect(result?.members.find((m) => m.name === 'appName')?.type).toBe('string')
+  })
+
+  it('types an async resolver as what it resolves to, not the promise', () => {
+    const project = new Project({ useInMemoryFileSystem: true })
+
+    project.createSourceFile('/src/config/inertia.config.ts', `
+      interface FactoryProvider<T> {
+        provide: symbol
+        useFactory: (...deps: any[]) => T
+        inject?: symbol[]
+      }
+
+      interface ConfigNamespace<TConfig> {
+        readonly KEY: symbol
+        readonly factory: (env: any) => TConfig
+        asProvider(): FactoryProvider<TConfig>
+      }
+
+      declare function registerAs<TConfig extends object>(
+        namespace: string,
+        factory: (env: any) => TConfig,
+      ): ConfigNamespace<TConfig>
+
+      export const inertiaConfig = registerAs('inertia', (env: any) => {
+        return {
+          rootView: 'app',
+          sharedData: {
+            branches: async (ctx: any) => [{ id: 'a' }],
+          },
+        }
+      })
+    `)
+
+    project.createSourceFile('/src/app.module.ts', `
+      import { inertiaConfig } from './config/inertia.config'
+
+      declare class InertiaModule {
+        static forRootAsync(provider: any): any
+      }
+
+      InertiaModule.forRootAsync(inertiaConfig.asProvider())
+    `)
+
+    const result = extractSharedDataType(project, SyntaxKind, ts, '/src')
+    const branches = result?.members.find((m) => m.name === 'branches')
+
+    // The page reads the resolved value; a `Promise<...>` here would make every
+    // consumer of the prop wrong.
+    expect(branches).toBeDefined()
+    expect(branches?.type).not.toContain('Promise')
+    expect(branches?.type).toContain('id')
+  })
+
+  it('ignores object literals returned by resolvers nested in the factory', () => {
+    const project = new Project({ useInMemoryFileSystem: true })
+
+    project.createSourceFile('/src/config/inertia.config.ts', `
+      interface FactoryProvider<T> {
+        provide: symbol
+        useFactory: (...deps: any[]) => T
+        inject?: symbol[]
+      }
+
+      interface ConfigNamespace<TConfig> {
+        readonly KEY: symbol
+        readonly factory: (env: any) => TConfig
+        asProvider(): FactoryProvider<TConfig>
+      }
+
+      declare function registerAs<TConfig extends object>(
+        namespace: string,
+        factory: (env: any) => TConfig,
+      ): ConfigNamespace<TConfig>
+
+      export const inertiaConfig = registerAs('inertia', (env: any) => {
+        return {
+          rootView: 'app',
+          sharedData: {
+            appName: (ctx: any): string => 'Admissio',
+            // A resolver with a block body of its own. Its return sits after
+            // the factory's in the file, so reading every descendant return
+            // last-wins picks THIS object as the module's options.
+            impersonation: (ctx: any) => {
+              if (!ctx) return null
+              return { staffLabel: 'a', userLabel: 'b' }
+            },
+          },
+        }
+      })
+    `)
+
+    project.createSourceFile('/src/app.module.ts', `
+      import { inertiaConfig } from './config/inertia.config'
+
+      declare class InertiaModule {
+        static forRootAsync(provider: any): any
+      }
+
+      InertiaModule.forRootAsync(inertiaConfig.asProvider())
+    `)
+
+    const result = extractSharedDataType(project, SyntaxKind, ts, '/src')
+
+    expect(result).not.toBeNull()
+    expect(result?.members.map((m) => m.name).sort()).toEqual(['appName', 'impersonation'])
+  })
+
+  it('finds the registration wherever the app composes its modules', () => {
+    const project = new Project({ useInMemoryFileSystem: true })
+
+    project.createSourceFile('/src/config/inertia.config.ts', `
+      interface FactoryProvider<T> {
+        provide: symbol
+        useFactory: (...deps: any[]) => T
+        inject?: symbol[]
+      }
+
+      interface ConfigNamespace<TConfig> {
+        readonly KEY: symbol
+        readonly factory: (env: any) => TConfig
+        asProvider(): FactoryProvider<TConfig>
+      }
+
+      declare function registerAs<TConfig extends object>(
+        namespace: string,
+        factory: (env: any) => TConfig,
+      ): ConfigNamespace<TConfig>
+
+      export const inertiaConfig = registerAs('inertia', (env: any) => {
+        return { rootView: 'app', sharedData: { appName: (ctx: any): string => 'Admissio' } }
+      })
+    `)
+
+    // Not `app.module.ts` — the module graph is assembled in a core module.
+    project.createSourceFile('/src/core/index.ts', `
+      import { inertiaConfig } from '../config/inertia.config'
+
+      declare class InertiaModule {
+        static forRootAsync(provider: any): any
+      }
+
+      InertiaModule.forRootAsync(inertiaConfig.asProvider())
+    `)
+
+    const result = extractSharedDataType(project, SyntaxKind, ts, '/src')
+    expect(result?.members.map((m) => m.name)).toEqual(['appName'])
+  })
+})
+
+describe('generateInertiaTypes shared prop collisions', () => {
+  it('declares a name once when access control and a .share() both answer for it', () => {
+    const output = generateInertiaTypes({
+      pages: [],
+      sharedData: null,
+      shareCallTypes: new Map([['access', '{ roles: Array<string> }']]),
+      i18n: { enabled: false, only: [] },
+      flashTypes: null,
+      accessControl: { permissions: ['admin'], roles: ['owner'] },
+    })
+
+    // Two members of one name do not compile, so the first declaration stands.
+    const occurrences = output.split('\n').filter((line) => /^\s*access\??:/.test(line))
+    expect(occurrences).toHaveLength(1)
+    expect(occurrences[0]).toContain('SharedAccess')
+  })
+
+  it('declares a name once when module config and a .share() both answer for it', () => {
+    const output = generateInertiaTypes({
+      pages: [],
+      sharedData: { members: [{ name: 'tenant', type: '{ id: string }', optional: false }] },
+      shareCallTypes: new Map([['tenant', '{ id: string; extra: boolean }']]),
+      i18n: { enabled: false, only: [] },
+      flashTypes: null,
+      accessControl: null,
+    })
+
+    const occurrences = output.split('\n').filter((line) => /^\s*tenant\??:/.test(line))
+    expect(occurrences).toHaveLength(1)
   })
 })

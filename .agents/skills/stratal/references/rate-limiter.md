@@ -115,6 +115,51 @@ Limit.none()                      // bypass for this request
 |--------|--------|
 | `.by(key)` | Scope counter to this actor (user id, IP, tenant). Defaults to a single global counter. |
 | `.response(handler)` | Override the default 429 response. Receives `(ctx, headers)` — spread `headers` to keep the standard `Retry-After` / `X-RateLimit-*`. |
+| `.distinctBy(value)` | Count DISTINCT values of `value` (string or number) in the window instead of counting requests. Read the caveats below before using. |
+
+### Distinct-value limits
+
+```typescript
+Limit.perDay(10).distinctBy(courseCode).by(userId)
+```
+
+Counts distinct values seen in the window, not requests — `perDay(10).distinctBy(courseCode)`
+admits a user touching up to ten different courses a day, however many requests each one takes.
+A value already counted stays admitted once the budget is full, so a student who has opened
+their limit of courses can still keep reading the ones they opened; only a genuinely new value
+past the cap is refused. This is what a plain request counter cannot express — do not rebuild it
+app-side with a bespoke table and guard, which loses the standard `Retry-After` / `X-RateLimit-*`
+headers this limiter gives for free.
+
+A refused value is never persisted, so the stored set never exceeds `max` — it holds exactly the
+values that were admitted.
+
+Distinct windows are stored under their own key namespace, so one limiter name can declare a
+plain and a distinct window on the same window length and actor and the two budgets are enforced
+independently:
+
+```typescript
+limiter.for('courses', (ctx) => [
+  Limit.perDay(500).by(ctx.userId),                        // request volume
+  Limit.perDay(10).distinctBy(courseCode).by(ctx.userId),  // distinct courses
+])
+```
+
+> **`X-RateLimit-Remaining` means something different here.** For a distinct window it is
+> `max - (distinct values counted)` — unused *slots*, not remaining requests. A user who has
+> opened all ten courses gets `X-RateLimit-Remaining: 0` on every **successful** read of a course
+> they already opened, because no slot is left even though the request is admitted. A client that
+> stops issuing requests when the header hits `0` will therefore stop issuing requests that would
+> have succeeded. Do not drive client-side backoff off this header on a distinct-limited route;
+> use the `429` itself.
+
+> **The cap is a soft ceiling, more so than a counter's.** `hitDistinct` is a read-modify-write of
+> the whole set, so N concurrent requests carrying N different values all read the same array and
+> last-write-wins keeps one of them. A lost counter increment self-corrects on the next request; a
+> lost set member is gone for the rest of the window, and a burst can overshoot the cap. Intended
+> for small caps — tens, not thousands. Nothing bounds `max`, and the entire set is read and
+> rewritten on every new value, so a large cap is both slower and lossier. A hard cap needs a
+> strongly-consistent store (a Durable Object), not KV.
 
 ## 3. Attach to routes
 

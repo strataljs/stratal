@@ -67,13 +67,28 @@ export class BlogController {
 }
 ```
 
-Emits `Cache-Control: public, max-age=300`.
+Emits `CDN-Cache-Control: public, max-age=300` plus `Cache-Control: public, max-age=300`.
+
+Both caches get the lifetime, because a response the CDN may hold for five minutes is one a
+browser may hold for five minutes. That is what makes a repeat visit free: the browser answers
+from its own copy rather than crossing the network, which matters most for a JSON route a page
+fetches on mount — the alternative is a request, and a skeleton, on every single render.
+
+`browserTtl` narrows it when retraction has to be reliable. A purge — `Cache-Tag`,
+`ctx.cache.purge()` — reaches the shared cache and nothing else, so on a long `ttl` a browser copy
+outlives every way you have of retiring it. `browserTtl: 0` says there must not be one to retire.
+
+Pair `browserTtl: 0` with `swr` and you keep both: nothing is served as fresh, so the browser
+always checks, but it paints from the copy it holds instead of waiting on the network, and picks
+the retraction up on the next navigation. A CDN reads `CDN-Cache-Control` in preference to
+`Cache-Control`, so the two audiences stay independent.
 
 `@Cacheable` options:
 
 | Option | Type | Meaning |
 |---|---|---|
 | `ttl` | `number` | Freshness lifetime in seconds. Required, on the route or via module defaults. Must be positive. |
+| `browserTtl` | `number` | How long a visitor's browser may reuse the response without asking. Defaults to `ttl`. `0` when retraction must be reliable — a purge cannot reach a browser copy. |
 | `swr` | `number` | `stale-while-revalidate` window in seconds. `0` means no stale window. |
 | `tags` | `string[]` | `Cache-Tag` values, for targeted purging. Supports `{scope.path}` interpolation. |
 | `vary` | `string[]` | Extra `Vary` header names, unioned with whatever the response already set. |
@@ -84,7 +99,7 @@ Emits `Cache-Control: public, max-age=300`.
 async pricing(ctx: RouterContext) { ... }
 ```
 
-Emits `Cache-Control: public, max-age=3600, stale-while-revalidate=60` and `Vary: Accept-Language`.
+Emits `CDN-Cache-Control: public, max-age=3600, stale-while-revalidate=60`, `Cache-Control: public, max-age=3600, stale-while-revalidate=60` and `Vary: Accept-Language`.
 
 Notes:
 
@@ -111,6 +126,11 @@ Interpolation scopes:
 | `{param.x}` | Route parameters |
 | `{query.x}` | Query string values |
 | `{data.x}` | The payload the handler returned — a JSON-family response body, or Inertia's resolved page props |
+| `{partition.x}` | A partition value this request resolved (see [Per-caller caching](#per-caller-caching-partitionby)) |
+
+A tag may combine several: `post:{partition.tenant}:{param.slug}`.
+
+**On a partitioned Inertia route, prefer `{partition.*}` over `{data.*}` for the per-caller part of a tag.** `{data.*}` reads the *resolved* props, and a partial reload carries only the props it asked for — so `user:{data.auth.user.id}` renders on the document and throws on the partial, which fails that variant closed and leaves precisely the deferred work uncached. A partition is in the cache key by construction, so it renders identically on every variant, which is also what lets them all carry the identical `Cache-Tag` set that purging requires.
 
 `{body.*}` is **rejected at boot**. The parsed request body is not available when tags are rendered, so such a tag could never resolve. Use `{param.*}`, `{query.*}`, or `{data.*}`.
 
@@ -177,7 +197,7 @@ async publish(ctx: RouterContext) {
 
 The purge is awaited before the response is sent — deferring it would let a client that immediately re-reads receive pre-write content. If the purge fails, `CachePurgeError` is thrown and the client sees a `500` **for a mutation that already committed**. This is deliberate: a cache silently disagreeing with the database is worse than a loud failure. Clients of a `@PurgesCache` route must treat a `500` as "possibly applied" and re-read rather than blindly retrying.
 
-The same applies when the `cache` binding is missing: every successful mutation on a `@PurgesCache` route turns into a `500`. Confirm `"cache": { "enabled": true }` is present in *every* environment.
+A missing `cache` binding is the one exception: there are no stored entries to invalidate, so the mutation stands and the purge is skipped. Confirm `"cache": { "enabled": true }` is present in *every* environment — without it the routes serve, but nothing is cached.
 
 ## 5. Module defaults
 
@@ -246,7 +266,7 @@ export const Cached = cachedEntrypoint(stratal)   // cached    (cache on)
 }
 ```
 
-All three of `enable_ctx_exports`, `cache.enabled: false` on `default`, and `cache.enabled: true` on the named export are required. Without them the app fails on its first request with `ResponseCacheConfigError`.
+All three of `enable_ctx_exports`, `cache.enabled: false` on `default`, and `cache.enabled: true` on the named export are required. A `gateway.entrypoint` that is not reachable on `ctx.exports` fails every request with `ResponseCacheConfigError` — a partitioned route served inline would answer one caller from another's partition. A missing `cache.enabled` does not fail: those routes serve uncached and stamped `private, no-store`, and the reason is logged at error level once per entrypoint.
 
 ### 3. Register the gateway and its resolvers
 
@@ -302,13 +322,13 @@ A `@Cacheable` response is downgraded to `Cache-Control: private, no-store` (and
 - the response carries `Set-Cookie` (a session or Inertia flash cookie)
 - the status is not `2xx`
 - a `Cache-Tag` template failed to render
-- **Inertia only:** the page has flash data, the request is a partial reload (`X-Inertia-Partial-Data`), or the resolved props contain a `once()` prop — replaying a send-once prop from cache to every client breaks its contract
+- **Inertia only:** the page has flash data, or the resolved props contain a `once()` prop — replaying a send-once prop from cache to every client breaks its contract
 
 Cloudflare additionally bypasses the cache when the request carried an `Authorization` header.
 
 A partitioned route is also downgraded to `private, no-store` whenever its partitions are not actually in the cache key — a resolver that returned `null`/`undefined` or threw, a primer that short-circuited, or a caller that reached the cached entrypoint without the matching `ctx.props`. Failing closed is always preferred over caching under a key that does not describe the caller.
 
-Cache decisions are also refused at boot for: `@Cacheable` on a guarded route with an empty effective `partitionBy`, a non-empty `partitionBy`/`partitions`/`primers` with no `gateway.entrypoint` configured, a `gateway.entrypoint` of `"default"` (the gateway cannot forward to itself — it would recurse until the subrequest limit) or an empty string, a `partitionBy` naming a partition with no registered resolver, a `{body.*}` tag, a `{param.x}` tag whose `x` isn't a `:param` in that route's own path (it can never resolve, same reasoning as `{body.*}`), a `{…}` placeholder in `pathPrefixes` (only `tags` are interpolated), a missing or non-positive `ttl`, a negative `swr`, `purgeEverything` combined with `tags`/`pathPrefixes`, and `@Cacheable`/`@PurgesCache` on a wildcard controller — one implementing `handle()`. (`@All` is an ordinary decorated method and *is* accepted.)
+Cache decisions are also refused at boot for: `@Cacheable` on a guarded route with an empty effective `partitionBy`, a non-empty `partitionBy`/`partitions`/`primers` with no `gateway.entrypoint` configured, a `gateway.entrypoint` of `"default"` (the gateway cannot forward to itself — it would recurse until the subrequest limit) or an empty string, a `partitionBy` naming a partition with no registered resolver, a `{body.*}` tag, a `{param.x}` tag whose `x` isn't a `:param` in that route's own path (it can never resolve, same reasoning as `{body.*}`), a `{partition.x}` tag whose `x` isn't in that route's own `partitionBy` — or any `{partition.*}` tag on `@PurgesCache`, whose mutation runs inline in the gateway and resolves no partitions — a `{…}` placeholder in `pathPrefixes` (only `tags` are interpolated), a missing or non-positive `ttl`, a negative `swr`, `purgeEverything` combined with `tags`/`pathPrefixes`, and `@Cacheable`/`@PurgesCache` on a wildcard controller — one implementing `handle()`. (`@All` is an ordinary decorated method and *is* accepted.)
 
 ## Inertia SSR
 
@@ -327,22 +347,35 @@ async show(ctx: RouterContext) {
 
 Two properties come for free:
 
-- **`Vary: X-Inertia` is already set** by `InertiaMiddleware`, so the HTML document and the JSON page response cache as separate variants of the same URL.
+- **The Inertia protocol headers are already in `Vary`**, set by `InertiaMiddleware`, so the HTML document, the JSON page response, and each partial reload cache as separate variants of the same URL.
 - **A deploy invalidates the cache automatically**, because the Worker version is part of the cache key. The asset-version `409` storm that would otherwise follow a deploy cannot happen.
 
-Pages are automatically not cached when they carry flash data, are a partial reload, or contain a `once()` prop. Since guarded routes cannot be cached at all, only public pages are eligible — a marketing site, blog, docs, or public catalogue.
+Pages are automatically not cached when they carry flash data or contain a `once()` prop.
+
+### Deferred props are cached too
+
+`ctx.defer()` props arrive on a follow-up **partial reload**, and those cache like any other response — which matters more than it sounds, because a page that defers its expensive work keeps *all* of that work on the partial. Caching the document alone would save almost nothing.
+
+They are keyed by the request headers that decide which props resolve, all of which `InertiaMiddleware` puts in `Vary`: `X-Inertia`, `X-Inertia-Partial-Component`, `X-Inertia-Partial-Data`, `X-Inertia-Partial-Except`, `X-Inertia-Reset`, `X-Inertia-Resolve-Deferred`, and the infinite-scroll merge intent. Two requests differing in any of them are separate variants, so a partial reload can never be served the whole page, or another prop group's payload.
+
+Two consequences worth knowing:
+
+- **Variants share one purge identity.** Purging a tag clears the document and every partial variant of that URL together, so one `@PurgesCache({ tags: ['user:{param.id}'] })` is enough — but every variant must carry the *same* `Cache-Tag` values, or purges are inconsistent.
+- **Cloudflare compares header values verbatim**, so a prop set sent in a different order is a different variant. Inertia's client sends a stable set per deferred group, so the fan-out is one variant per group; normalise in the gateway if you ever make the header order caller-dependent.
+
+`X-Inertia-Version` is deliberately *not* varied on: a mismatch answers `409`, which is never cached, and the asset version only moves with a deploy — which moves the Worker version the cache already keys on.
 
 **If access control is configured, every Inertia page carries a per-user `access` prop.** A `@Cacheable` Inertia route with no `partitionBy` caches the first requester's roles and permissions and serves them to every later visitor — set `partitionBy` on any cached Inertia route (see [Per-caller caching](#per-caller-caching-partitionby)).
 
 ## Local development
 
-**Miniflare does not implement `ctx.cache`.** `wrangler dev` (local mode) and raw `vitest-pool-workers` (without `@stratal/testing`) never populate `ExecutionContext.cache` — a `@Cacheable`/`@PurgesCache` route 500s on its first request (`ResponseCacheConfigError`) exactly as it would against a genuinely misconfigured deploy. Use `wrangler dev --remote` or a deployed environment to observe actual caching.
+**Miniflare does not implement `ctx.cache`.** `wrangler dev` (local mode) and raw `@cloudflare/vitest-plugin` (without `@stratal/testing`) never populate `ExecutionContext.cache` — a `@Cacheable`/`@PurgesCache` route 500s on its first request (`ResponseCacheConfigError`) exactly as it would against a genuinely misconfigured deploy. Use `wrangler dev --remote` or a deployed environment to observe actual caching.
 
 **`@stratal/testing` is the exception** — see [Testing](#testing) below. It supplies a `ctx.cache` stub by default, so `@Cacheable`/`@PurgesCache` routes are testable through `Test.createTestingModule()` with no extra configuration.
 
 What is locally testable (against `@stratal/testing`'s stub, or a hand-mocked `WorkersCache`):
 
-- header emission — assert `Cache-Control`, `Cache-Tag`, and `Vary` on the response
+- header emission — assert `Cache-Control`, `CDN-Cache-Control`, `Cache-Tag`, and `Vary` on the response
 - every boot-time configuration error
 - the fail-closed matrix (the `private, no-store` downgrades)
 - `@PurgesCache` succeeding and which `PurgeSpec` it issued
@@ -365,6 +398,7 @@ const module = await Test.createTestingModule({ imports: [BlogModule] }).compile
 const response = await module.http.get('/blog/hello-world').send()
 response.assertOk()
 response.assertHeader('Cache-Control', 'public, max-age=300')
+response.assertHeader('CDN-Cache-Control', 'public, max-age=300')
 response.assertHeader('Cache-Tag', 'post:hello-world')
 ```
 

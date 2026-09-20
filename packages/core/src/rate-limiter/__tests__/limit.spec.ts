@@ -72,4 +72,27 @@ describe('Limit', () => {
       expect(limit.customResponse).toBe(handler)
     })
   })
+
+  describe('distinctBy', () => {
+    it('is undefined by default, so a limit counts requests', () => {
+      expect(Limit.perDay(10).distinctValue).toBeUndefined()
+    })
+
+    it('records the value to count distinctly', () => {
+      expect(Limit.perDay(10).distinctBy('CIT101').distinctValue).toBe('CIT101')
+    })
+
+    it('composes with by() and response()', () => {
+      const limit = Limit.perDay(10).distinctBy('CIT101').by('user-1')
+
+      expect(limit.distinctValue).toBe('CIT101')
+      expect(limit.key).toBe('user-1')
+      expect(limit.windowSeconds).toBe(24 * 60 * 60)
+    })
+
+    it('composes with every window factory', () => {
+      expect(Limit.perHour(3).distinctBy('a').windowSeconds).toBe(3600)
+      expect(Limit.perMinute(3).distinctBy('a').windowSeconds).toBe(60)
+    })
+  })
 })

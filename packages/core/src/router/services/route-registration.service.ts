@@ -16,7 +16,7 @@ import type { ModuleRegistry } from '../../module/module-registry';
 import { getRateLimits } from '../../rate-limiter/decorators/rate-limit.decorator';
 import { createThrottleMiddleware } from '../../rate-limiter/throttle.middleware';
 import { getCacheable, getPurgesCache } from '../../response-cache/decorators';
-import { assertCachingAvailable } from '../../response-cache/boot-check';
+import { cachingUnavailableReason } from '../../response-cache/boot-check';
 import { CachePurgeError, ResponseCacheConfigError } from '../../response-cache/errors';
 import { RESPONSE_CACHE_TOKENS } from '../../response-cache/response-cache.tokens';
 import { bindRouteCache, type RouteCacheBinding } from '../../response-cache/services/route-cache-binding';
@@ -112,18 +112,22 @@ export class RouteRegistrationService {
   private controllerClasses = new Map<string, Constructor>()
   private upgradeWebSocketFn: UpgradeWebSocket | null = null
   private cacheableRouteCount = 0
-  private bootCheckPerformed = false
   /**
-   * The boot check's *result*, latched — not merely the fact that it ran.
+   * Whether Workers Caching is usable, answered once per entrypoint.
    *
-   * Latching only the attempt would make a misconfigured deploy fail exactly
-   * one arbitrary request per isolate and then serve every later request
-   * successfully, stamping `Cache-Control: public, max-age=…` while nothing
-   * is ever cached: precisely the silent no-op `assertCachingAvailable` exists
-   * to prevent. `cache.enabled` cannot change within an isolate's lifetime, so
-   * a failure the first time is a failure every time — remember it and rethrow.
+   * Keyed on whether the request arrived through the gateway, because that is
+   * the scope the answer actually has: a gateway topology runs two entrypoints
+   * — `cache.enabled` false on the gateway, true on the cached one — over a
+   * single isolate and therefore a single instance of this service. A verdict
+   * reached on one says nothing about the other, so holding one for the
+   * isolate lets whichever entrypoint happens to serve the first request
+   * decide for both, and a `cache.enabled` that is false *by design* on the
+   * gateway reads as the app being misconfigured.
+   *
+   * Memoized rather than recomputed because `cache.enabled` is a static
+   * Wrangler setting: within one entrypoint the answer cannot change.
    */
-  private bootCheckFailure: Error | undefined
+  private cachingAvailability = new Map<boolean, boolean>()
 
   constructor(
     @inject(LOGGER_TOKENS.LoggerService) private logger: LoggerService,
@@ -159,6 +163,13 @@ export class RouteRegistrationService {
     const options = this.responseCacheOptions
     if (isThenable(options)) return undefined
     return options?.gateway?.entrypoint
+  }
+
+  /** `gateway.keyBy`, read under the same `forRootAsync` caveat as the entrypoint. */
+  private gatewayKeyBy(): readonly string[] {
+    const options = this.responseCacheOptions
+    if (isThenable(options)) return []
+    return options?.gateway?.keyBy ?? []
   }
 
   /**
@@ -203,7 +214,7 @@ export class RouteRegistrationService {
 
     // Before any route registers, so the dispatch middleware never observes a
     // table that is populated but not yet pointed at an entrypoint.
-    this.gatewayRouteTable?.configure(this.gatewayEntrypoint())
+    this.gatewayRouteTable?.configure(this.gatewayEntrypoint(), this.gatewayKeyBy())
 
     this.logger.info('Registering controllers', {
       controllerCount: controllers.length,
@@ -1033,24 +1044,6 @@ export class RouteRegistrationService {
     cacheBinding?: RouteCacheBinding,
   ): (c: Context<RouterEnv>) => Promise<Response> {
     const handler = async (c: Context<RouterEnv>) => {
-      // Boot-time check: ensure Workers Caching is available if routes use it.
-      // The *work* runs once per isolate, on the first request (to any route),
-      // so we don't repeat it per request; the *outcome* is latched and
-      // rethrown on every subsequent request, so a misconfigured deploy keeps
-      // failing loudly instead of quietly succeeding from request #2 onward.
-      // Fires even if the first request is to a non-cacheable route, catching
-      // misconfiguration early.
-      if (!this.bootCheckPerformed) {
-        this.bootCheckPerformed = true
-        try {
-          assertCachingAvailable(this.cacheableRouteCount, this.executionCache(c))
-        } catch (error) {
-          // `assertCachingAvailable` only ever throws `ResponseCacheConfigError`.
-          this.bootCheckFailure = error as Error
-        }
-      }
-      if (this.bootCheckFailure) throw this.bootCheckFailure
-
       // Precognition short-circuit: HandlePrecognitiveRequests middleware
       // sets `validationSuccessResponse` for `Precognition: true` requests.
       // If we reach here, every request validator has passed — return the
@@ -1126,7 +1119,7 @@ export class RouteRegistrationService {
     let scopes: TagScopes | undefined
     let result = response
 
-    if (cacheBinding.cacheable) {
+    if (cacheBinding.cacheable && this.cachingAvailable(c)) {
       // Not "guaranteed non-null and defensively re-checked" — an actual
       // invariant. `collectRoutes` throws at registration if a route
       // resolves a `cacheBinding` while `ResponseCacheModule` was never
@@ -1163,22 +1156,12 @@ export class RouteRegistrationService {
       scopes ??= this.buildTagScopes(c)
       const cache = this.executionCache(c)
 
-      // Defensive invariant, not a path any correctly-configured deploy can
-      // reach: `assertCachingAvailable` already fails boot (and stays
-      // failed for the isolate's lifetime, see `bootCheckFailure`) the first
-      // time any request finds `@PurgesCache`/`@Cacheable` routes registered
-      // without `ctx.cache` — and `cache.enabled` is a static Wrangler
-      // setting, so its presence cannot flip between requests within one
-      // isolate. This only fires if that invariant is ever violated (e.g. a
-      // caller hands this handler an inconsistent `executionCtx` per
-      // request, as some tests do on purpose to reach this branch).
-      if (!cache) {
-        throw new CachePurgeError(
-          'the `cache` binding is unavailable on this request\'s executionCtx — set ' +
-            '`cache.enabled = true` (and a compatible compatibility_date) in your Wrangler ' +
-            'config to use `@PurgesCache`.',
-        )
-      }
+      // Nothing to invalidate: a purge names entries this entrypoint stored,
+      // and an entrypoint with no cache stored none. The mutation itself has
+      // already committed, so failing here would report a write that
+      // succeeded as an error, to undo work that does not exist. The reason
+      // caching is unavailable is reported once by `cachingAvailable`.
+      if (!cache) return result
 
       let spec: PurgeSpec
       try {
@@ -1237,9 +1220,7 @@ export class RouteRegistrationService {
    *
    * With **no execution context at all** — `hono.fetch(request, env)`, which
    * `quarry api` and `mcp serve` both do — there is no way to tell those cases
-   * apart, so unknown means uncacheable. (Reachable in a real isolate: the
-   * `assertCachingAvailable` boot check latches after the first request, so a
-   * later context-less one sails past it to here.)
+   * apart, so unknown means uncacheable.
    *
    * An app with no gateway configured can never have a non-empty
    * `partitionBy` (`bindRouteCache` rejects it at boot), so this returns
@@ -1287,6 +1268,41 @@ export class RouteRegistrationService {
    * leaving every cached read stale until its TTL ran out. Routing it over RPC
    * to the cached entrypoint puts the purge where the entries actually live.
    */
+  /**
+   * Whether the entrypoint serving this request can cache.
+   *
+   * Reported once per entrypoint, at error level, because an app that declares
+   * `@Cacheable` and gets no caching is misconfigured somewhere — in a
+   * deployment that omitted `cache.enabled`, or in a local runtime that has no
+   * Workers Caching to offer. Either way its routes then serve uncached and
+   * say so in the response, rather than advertising a freshness nothing keeps.
+   */
+  private cachingAvailable(c: Context<RouterEnv>): boolean {
+    const gateway = this.isGatewayRequest(c)
+    const known = this.cachingAvailability.get(gateway)
+    if (known !== undefined) return known
+
+    const reason = cachingUnavailableReason(this.cacheableRouteCount, this.executionCache(c))
+    this.cachingAvailability.set(gateway, reason === undefined)
+
+    if (reason !== undefined) this.logger.error(`[stratal:response-cache] ${reason}`)
+
+    return reason === undefined
+  }
+
+  /**
+   * Whether this request came in through the gateway rather than the cached
+   * entrypoint. Both run the same Hono app over the same isolate, and only the
+   * execution context tells them apart.
+   */
+  private isGatewayRequest(c: Context<RouterEnv>): boolean {
+    try {
+      return isGatewayMode(c.executionCtx)
+    } catch {
+      return false
+    }
+  }
+
   private executionCache(c: Context<RouterEnv>): WorkersCache | undefined {
     let ctx: CacheCapableExecutionContext
     try {
@@ -1325,7 +1341,37 @@ export class RouteRegistrationService {
       query: c.req.query(),
       body: undefined,
       data: c.get(ROUTER_CONTEXT_KEYS.RESPONSE_PAYLOAD),
+      partition: this.partitionValues(c),
     }
+  }
+
+  /**
+   * The partition values Cloudflare is keying this response on.
+   *
+   * Read from `ctx.props`, which is where the gateway put them and what the
+   * cache key is actually built from — so a `{partition.x}` tag names the same
+   * value the entry is stored under, on every variant of it.
+   *
+   * Empty when there is no execution context, or when running as the gateway
+   * (whose own responses are never stored). A tag naming a partition that is
+   * absent then fails to render, which fails the response closed — the right
+   * outcome, since the partition it claimed to be keyed by is not in the key.
+   */
+  private partitionValues(c: Context<RouterEnv>): Record<string, string> {
+    let ctx: CacheCapableExecutionContext
+    try {
+      ctx = c.executionCtx
+    } catch {
+      return {}
+    }
+
+    if (isGatewayMode(ctx)) return {}
+
+    const values: Record<string, string> = {}
+    for (const [name, value] of Object.entries(ctx.props ?? {})) {
+      if (typeof value === 'string') values[name] = value
+    }
+    return values
   }
 
   /**
@@ -1380,7 +1426,7 @@ export class RouteRegistrationService {
       return response
     }
 
-    const result = schema.safeParse(body)
+    const result = await schema.safeParseAsync(body)
     if (!result.success) {
       throw new ResponseValidationError(result.error)
     }

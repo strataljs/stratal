@@ -1,6 +1,14 @@
 import { inject } from '../../di'
 import { Request } from '../../di/decorators'
-import type { DownloadResult, PresignedUrlResult, UploadOptions, UploadResult } from '../contracts'
+import type {
+  DownloadResult,
+  HeadResult,
+  ListOptions,
+  ListResult,
+  PresignedUrlResult,
+  UploadOptions,
+  UploadResult,
+} from '../contracts'
 import { StorageError } from '../storage.error'
 import type { StreamingBlobPayloadInputTypes } from '../providers/storage-provider.interface'
 import { STORAGE_TOKENS } from '../storage.tokens'
@@ -90,6 +98,83 @@ export class StorageService {
     const fullPath = this.buildFullPath(relativePath, diskName)
 
     return provider.exists(fullPath)
+  }
+
+  /**
+   * Delete many files in one call
+   *
+   * Providers delete in bulk — R2 takes 1000 keys per round trip — so this costs a fraction of
+   * the subrequests that looping over `delete` would. Paths that do not exist are ignored.
+   *
+   * @param relativePaths - Relative paths within the disk
+   * @param disk - Optional disk name (uses default if not provided)
+   */
+  async deleteMany(relativePaths: string[], disk?: string): Promise<void> {
+    if (relativePaths.length === 0) {
+      return
+    }
+
+    const diskName = this.resolveDisk(disk)
+    const provider = await this.storageManager.getProvider(diskName)
+
+    await provider.deleteMany(relativePaths.map((path) => this.buildFullPath(path, diskName)))
+  }
+
+  /**
+   * Read an object's metadata without transferring its body
+   *
+   * Use this to learn a file's size or content type when the contents are not needed — asking
+   * `head` for a hundred objects costs a hundred metadata reads, where `download` would move a
+   * hundred bodies.
+   *
+   * @param relativePath - Relative path within the disk
+   * @param disk - Optional disk name (uses default if not provided)
+   * @returns Metadata, or null when nothing exists at that path
+   */
+  async head(relativePath: string, disk?: string): Promise<HeadResult | null> {
+    const diskName = this.resolveDisk(disk)
+    const provider = await this.storageManager.getProvider(diskName)
+    const fullPath = this.buildFullPath(relativePath, diskName)
+
+    const result = await provider.head(fullPath)
+    if (result === null) {
+      return null
+    }
+
+    return { ...result, path: this.toRelativePath(result.path, diskName) }
+  }
+
+  /**
+   * List objects on a disk, one page at a time
+   *
+   * **The result is a page, not the whole set.** Providers cap a single listing (R2 at 1000
+   * objects), so anything that aggregates across a prefix — summing sizes, counting files,
+   * copying a tree — must loop while `truncated` is true, passing `cursor` back in. Reading only
+   * the first page yields an answer that is quietly too small, with nothing having failed.
+   *
+   * Returned paths are relative to the disk, so they can be passed straight to `download`,
+   * `head` or `delete`.
+   *
+   * @param options - Prefix (relative to the disk), cursor and page limit
+   * @param disk - Optional disk name (uses default if not provided)
+   * @returns One page of matching objects
+   */
+  async list(options: ListOptions = {}, disk?: string): Promise<ListResult> {
+    const diskName = this.resolveDisk(disk)
+    const provider = await this.storageManager.getProvider(diskName)
+    // An empty relative prefix still has to become the disk root, or a listing would escape the
+    // disk and return every other disk's objects sharing the bucket.
+    const fullPrefix = this.buildFullPath(options.prefix ?? '', diskName)
+
+    const page = await provider.list({ ...options, prefix: fullPrefix })
+
+    return {
+      ...page,
+      objects: page.objects.map((object) => ({
+        ...object,
+        path: this.toRelativePath(object.path, diskName),
+      })),
+    }
   }
 
   /**
@@ -191,6 +276,27 @@ export class StorageService {
     const fullPath = `${root}/${relativePath}`.replace(/\/+/g, '/').replace(/^\//, '')
 
     return fullPath
+  }
+
+  /**
+   * Strip the disk root from a provider path
+   *
+   * The inverse of `buildFullPath`, so what `head`/`list` hand back is what `download`/`delete`
+   * accept. A path that does not start with the root is returned unchanged rather than mangled —
+   * that can only happen if a provider returned something outside the disk, and silently trimming
+   * a prefix off it would disguise the fault as a valid path.
+   *
+   * @param fullPath - Path as the provider reported it
+   * @param diskName - Name of the disk
+   * @returns Path relative to the disk root
+   */
+  protected toRelativePath(fullPath: string, diskName: string): string {
+    const root = this.buildFullPath('', diskName)
+    if (root === '' || !fullPath.startsWith(root)) {
+      return fullPath
+    }
+
+    return fullPath.slice(root.length).replace(/^\//, '')
   }
 
   /**

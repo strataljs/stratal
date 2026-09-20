@@ -75,18 +75,25 @@ The repo uses [husky](https://typicode.github.io/husky/) + [lint-staged](https:/
    This prompts you to select which packages are affected and whether the change is a patch, minor, or major version bump. It creates a markdown file in `.changeset/` describing your change.
 
    **When to use each level:**
-   - **patch** — bug fixes, internal refactors with no API changes
+   - **patch** — bug fixes a consumer can observe
    - **minor** — new features, new exports, non-breaking additions
    - **major** — breaking changes to public API
 
-   **When a changeset is not needed:**
-   - Documentation-only changes
-   - CI/tooling changes that don't affect published packages
+   **When a changeset is not needed:** a changeset is a line in the published
+   CHANGELOG, so it is warranted only when a consumer's experience of the package
+   changes. Write none for:
+   - Documentation-only changes, including comments and JSDoc that ship in the type
+     declarations
+   - Internal refactors that leave the public API and its behaviour unchanged
+   - Tests, CI, and tooling that don't affect published packages
    - Changes to private packages (e.g., the root `stratal-monorepo`)
+
+   When in doubt, ask what a consumer reading the release notes would do differently.
+   If the answer is nothing, skip the changeset.
 
 ## Code Style
 
-- **ESLint** with strict + stylistic TypeScript rules is the single source of truth for code style. The pre-commit hook enforces this automatically.
+- **oxlint** is the single source of truth for code style, configured in `.oxlintrc.json`. There is no ESLint. The pre-commit hook runs `oxlint --fix` on staged files; run it yourself with `yarn lint`.
 - **ESM-only** — use `import`/`export`, never `require`.
 - **Build uses `tsdown`** (powered by Rolldown/Oxc) for JS bundling and DTS generation.
 

@@ -51,11 +51,17 @@ async function createProject(tsConfigPath?: string): Promise<{ project: Project;
   return { project, SyntaxKind, ts }
 }
 
-// --- Controller ctx.inertia() extraction ---
+// --- Controller ctx.inertia() / ctx.modal() extraction ---
+
+// ctx.modal() shares ctx.inertia()'s first two argument positions (component
+// name, props) — its third argument (render options) carries no type
+// information the registry needs, so both names extract identically.
+const INERTIA_CALL_NAMES = ['inertia', 'modal']
 
 const WRAPPER_TYPE_NAMES = [
   'InertiaDeferredProp',
   'InertiaMergeProp',
+  'InertiaScrollProp',
   'InertiaOptionalProp',
   'InertiaOnceProp',
   'InertiaAlwaysProp',
@@ -85,7 +91,7 @@ export function extractControllerPageTypes(
     for (const call of callExpressions) {
       const expr = call.getExpression()
       if (!expr.isKind(SK.PropertyAccessExpression)) continue
-      if (expr.getName() !== 'inertia') continue
+      if (!INERTIA_CALL_NAMES.includes(expr.getName())) continue
 
       const args = call.getArguments()
       if (args.length === 0) continue
@@ -320,7 +326,7 @@ function resolveModuleOptionsLiteral(
 
       // Block body: { ... return {...}; }
       if (body.isKind(SK.Block)) {
-        const returnStatements = body.getDescendantsOfKind(SK.ReturnStatement)
+        const returnStatements = ownReturnStatements(initializer, body, SK)
         // Walk in reverse so a later `return` wins (last-write-wins semantics)
         for (let i = returnStatements.length - 1; i >= 0; i--) {
           const ret = returnStatements[i]
@@ -462,6 +468,31 @@ function resolveToVariableDeclaration(
   return null
 }
 
+/**
+ * The `return` statements the given function owns, skipping any that belong to a
+ * function nested inside it.
+ *
+ * A config factory's body is full of nested resolvers, and several of them
+ * return object literals of their own. Reading every descendant `return` picks
+ * one of those over the factory's, and the options literal is then whatever the
+ * last resolver happened to answer with.
+ */
+function ownReturnStatements(
+  fn: Node,
+  body: Node,
+  SK: TsMorphModule['SyntaxKind'],
+) {
+  const isFunctionLike = (node: Node): boolean =>
+    node.isKind(SK.ArrowFunction)
+    || node.isKind(SK.FunctionExpression)
+    || node.isKind(SK.FunctionDeclaration)
+    || node.isKind(SK.MethodDeclaration)
+
+  return body
+    .getDescendantsOfKind(SK.ReturnStatement)
+    .filter((ret) => ret.getFirstAncestor(isFunctionLike) === fn)
+}
+
 function extractLiteralFromRegisterAs(
   varDecl: Node,
   SK: TsMorphModule['SyntaxKind'],
@@ -488,7 +519,7 @@ function extractLiteralFromRegisterAs(
   if (unwrapped?.isKind(SK.ObjectLiteralExpression)) return unwrapped
 
   if (body.isKind(SK.Block)) {
-    const returnStatements = body.getDescendantsOfKind(SK.ReturnStatement)
+    const returnStatements = ownReturnStatements(factory, body, SK)
     for (let i = returnStatements.length - 1; i >= 0; i--) {
       const ret = returnStatements[i]
       const retExpr = ret.getExpression()
@@ -674,84 +705,101 @@ export interface AccessControlTypeInfo {
 export function extractAccessControlType(
   project: Project,
   SK: TsMorphModule['SyntaxKind'],
-  moduleFilePath: string,
+  srcDir: string,
 ): AccessControlTypeInfo | null {
-  const sourceFile = project.getSourceFile(moduleFilePath)
-  if (!sourceFile) return null
+  const normalizedSrcDir = srcDir.replace(/\\/g, '/')
 
-  for (const call of sourceFile.getDescendantsOfKind(SK.CallExpression)) {
-    const expr = call.getExpression()
-    if (!expr.isKind(SK.PropertyAccessExpression)) continue
-    if (expr.getName() !== 'forRootAsync') continue
+  // Scanned for the same reason `extractSharedDataType` is: access control is
+  // configured by whichever module owns it, which is not always `app.module.ts`.
+  for (const sourceFile of project.getSourceFiles()) {
+    const filePath = sourceFile.getFilePath()
+    if (!filePath.startsWith(normalizedSrcDir)) continue
+    if (filePath.includes('__tests__') || filePath.includes('.spec.') || filePath.includes('.test.')) continue
+    if (!sourceFile.getFullText().includes('accessControl')) continue
 
-    const optionsArg = call.getArguments()[0]
-    if (!optionsArg?.isKind(SK.ObjectLiteralExpression)) continue
+    for (const call of sourceFile.getDescendantsOfKind(SK.CallExpression)) {
+      const expr = call.getExpression()
+      if (!expr.isKind(SK.PropertyAccessExpression)) continue
+      if (expr.getName() !== 'forRootAsync') continue
 
-    const property = optionsArg.getProperty('accessControl')
-    if (!property?.isKind(SK.PropertyAssignment)) continue
+      const optionsArg = call.getArguments()[0]
+      if (!optionsArg) continue
 
-    const initializer = property.getInitializer()
-    if (!initializer) continue
+      // `accessControl` sits on the options object itself, beside `useFactory`
+      // — so the literal is read as-is, and only a provider argument needs
+      // following back to the factory it was registered from.
+      const optionsLiteral = optionsArg.isKind(SK.ObjectLiteralExpression)
+        ? optionsArg
+        : resolveConfigLiteralFromAsProvider(optionsArg, SK)
+      if (!optionsLiteral?.isKind(SK.ObjectLiteralExpression)) continue
 
-    const acType = initializer.getType()
+      const property = optionsLiteral.getProperty('accessControl')
+      if (!property?.isKind(SK.PropertyAssignment)) continue
 
-    const statementsType = acType
-      .getProperty('ac')
-      ?.getTypeAtLocation(initializer)
-      .getProperty('statements')
-      ?.getTypeAtLocation(initializer)
+      const initializer = property.getInitializer()
+      if (!initializer) continue
 
-    if (!statementsType) continue
+      const acType = initializer.getType()
 
-    const permissions: string[] = []
+      const statementsType = acType
+        .getProperty('ac')
+        ?.getTypeAtLocation(initializer)
+        .getProperty('statements')
+        ?.getTypeAtLocation(initializer)
 
-    for (const resourceSymbol of statementsType.getProperties()) {
-      const resource = resourceSymbol.getName()
-      const actions = resourceSymbol
-        .getTypeAtLocation(initializer)
-        .getTupleElements()
-        .map((element) => element.getLiteralValue())
-        .filter((value): value is string => typeof value === 'string')
+      if (!statementsType) continue
 
-      if (actions.length === 0) {
+      const permissions: string[] = []
+
+      for (const resourceSymbol of statementsType.getProperties()) {
+        const resource = resourceSymbol.getName()
+        const actions = resourceSymbol
+          .getTypeAtLocation(initializer)
+          .getTupleElements()
+          .map((element) => element.getLiteralValue())
+          .filter((value): value is string => typeof value === 'string')
+
+        if (actions.length === 0) {
+          throw new Error(
+            `@stratal/inertia: the \`accessControl\` resource "${resource}" in ${filePath} `
+            + 'has an action list that could not be resolved to string literals. Declare its '
+            + `actions as a literal array of strings (e.g. \`${resource}: ['read', 'update']\`) `
+            + 'so the generated AccessControlRegistry can check permission strings.',
+          )
+        }
+
+        permissions.push(resource, `${resource}:*`, ...actions.map((action) => `${resource}:${action}`))
+      }
+
+      if (permissions.length === 0) {
         throw new Error(
-          `@stratal/inertia: the \`accessControl\` resource "${resource}" in ${moduleFilePath} `
-          + 'has an action list that could not be resolved to string literals. Declare its '
-          + `actions as a literal array of strings (e.g. \`${resource}: ['read', 'update']\`) `
-          + 'so the generated AccessControlRegistry can check permission strings.',
+          `@stratal/inertia: the \`accessControl\` option in ${filePath} has no resources `
+          + 'that could be resolved to literal names. Declare `resources` as an object literal '
+          + "(e.g. `resources: { posts: ['read'] }`) so the generated AccessControlRegistry can "
+          + 'check permission strings.',
         )
       }
 
-      permissions.push(resource, `${resource}:*`, ...actions.map((action) => `${resource}:${action}`))
+      const roles = acType
+        .getProperty('roles')
+        ?.getTypeAtLocation(initializer)
+        .getProperties()
+        .map((symbol) => symbol.getName()) ?? []
+
+      if (roles.length === 0) {
+        throw new Error(
+          `@stratal/inertia: the \`accessControl\` option in ${filePath} has no roles that `
+          + 'could be resolved to literal names. Declare `roles` as an object literal (e.g. '
+          + '`roles: { admin: {...} }`) so the generated AccessControlRegistry can check role names.',
+        )
+      }
+
+      return {
+        permissions: permissions.sort((a, b) => a.localeCompare(b)),
+        roles: roles.sort((a, b) => a.localeCompare(b)),
+      }
     }
 
-    if (permissions.length === 0) {
-      throw new Error(
-        `@stratal/inertia: the \`accessControl\` option in ${moduleFilePath} has no resources `
-        + 'that could be resolved to literal names. Declare `resources` as an object literal '
-        + "(e.g. `resources: { posts: ['read'] }`) so the generated AccessControlRegistry can "
-        + 'check permission strings.',
-      )
-    }
-
-    const roles = acType
-      .getProperty('roles')
-      ?.getTypeAtLocation(initializer)
-      .getProperties()
-      .map((symbol) => symbol.getName()) ?? []
-
-    if (roles.length === 0) {
-      throw new Error(
-        `@stratal/inertia: the \`accessControl\` option in ${moduleFilePath} has no roles that `
-        + 'could be resolved to literal names. Declare `roles` as an object literal (e.g. '
-        + '`roles: { admin: {...} }`) so the generated AccessControlRegistry can check role names.',
-      )
-    }
-
-    return {
-      permissions: permissions.sort((a, b) => a.localeCompare(b)),
-      roles: roles.sort((a, b) => a.localeCompare(b)),
-    }
   }
 
   return null
@@ -763,61 +811,76 @@ export function extractSharedDataType(
   project: Project,
   SK: TsMorphModule['SyntaxKind'],
   tsObj: TsObj,
-  moduleFilePath: string,
+  srcDir: string,
 ): SharedDataTypeInfo | null {
-  const sourceFile = project.getSourceFile(moduleFilePath)
-    ?? project.addSourceFileAtPath(moduleFilePath)
   primeTranslationKeys(project)
+  const normalizedSrcDir = srcDir.replace(/\\/g, '/')
 
-  const callExpressions = sourceFile.getDescendantsOfKind(SK.CallExpression)
+  // An app composes its modules wherever it likes, so the registration is not
+  // necessarily in `app.module.ts` — scan the tree for it, as `detectI18nConfig`
+  // does. Reading one file instead answers `null` for every app that registers
+  // Inertia anywhere else, and the props silently lose their types.
+  for (const sourceFile of project.getSourceFiles()) {
+    const filePath = sourceFile.getFilePath()
+    if (!filePath.startsWith(normalizedSrcDir)) continue
+    if (filePath.includes('__tests__') || filePath.includes('.spec.') || filePath.includes('.test.')) continue
+    // Walking a file's nodes builds the whole tree; most files cannot hold the
+    // registration at all, and the text says so without paying for that.
+    if (!sourceFile.getFullText().includes('InertiaModule')) continue
 
-  for (const call of callExpressions) {
-    const expr = call.getExpression()
-    if (!expr.isKind(SK.PropertyAccessExpression)) continue
+    for (const call of sourceFile.getDescendantsOfKind(SK.CallExpression)) {
+      const expr = call.getExpression()
+      if (!expr.isKind(SK.PropertyAccessExpression)) continue
 
-    const propName = expr.getName()
-    if (propName !== 'forRoot' && propName !== 'forRootAsync') continue
+      const propName = expr.getName()
+      if (propName !== 'forRoot' && propName !== 'forRootAsync') continue
 
-    const objExpr = expr.getExpression()
-    if (!objExpr.isKind(SK.Identifier) || objExpr.getText() !== 'InertiaModule') continue
+      const objExpr = expr.getExpression()
+      if (!objExpr.isKind(SK.Identifier) || objExpr.getText() !== 'InertiaModule') continue
 
-    const args = call.getArguments()
-    if (args.length === 0) continue
+      const args = call.getArguments()
+      if (args.length === 0) continue
 
-    const optionsLiteral = resolveModuleOptionsLiteral(args[0], SK)
-    if (!optionsLiteral || !optionsLiteral.isKind(SK.ObjectLiteralExpression)) continue
+      // A module registered from a config namespace is handed `config.asProvider()`
+      // rather than a literal, so its options live in the `registerAs` factory —
+      // the same two steps `detectI18nConfig` takes to find `i18n`.
+      const optionsLiteral = resolveModuleOptionsLiteral(args[0], SK)
+        ?? resolveConfigLiteralFromAsProvider(args[0], SK)
+      if (!optionsLiteral || !optionsLiteral.isKind(SK.ObjectLiteralExpression)) continue
 
-    const sharedDataProp = optionsLiteral.getProperty('sharedData')
-    if (!sharedDataProp) continue
+      const sharedDataProp = optionsLiteral.getProperty('sharedData')
+      if (!sharedDataProp) continue
 
-    if (!sharedDataProp.isKind(SK.PropertyAssignment)) continue
+      if (!sharedDataProp.isKind(SK.PropertyAssignment)) continue
 
-    const initializer = sharedDataProp.getInitializer()
-    if (!initializer?.isKind(SK.ObjectLiteralExpression)) continue
+      const initializer = sharedDataProp.getInitializer()
+      if (!initializer?.isKind(SK.ObjectLiteralExpression)) continue
 
-    const members: SharedDataMember[] = []
-    for (const prop of initializer.getProperties()) {
-      if (!prop.isKind(SK.PropertyAssignment)) continue
+      const members: SharedDataMember[] = []
+      for (const prop of initializer.getProperties()) {
+        if (!prop.isKind(SK.PropertyAssignment)) continue
 
-      const name = prop.getName()
-      const value = prop.getInitializer()
-      if (!value) continue
+        const name = prop.getName()
+        const value = prop.getInitializer()
+        if (!value) continue
 
-      let valueType: string
+        let valueType: string
 
-      if (value.isKind(SK.ArrowFunction) || value.isKind(SK.FunctionExpression)) {
-        const returnType = value.getReturnType()
-        valueType = typeToString(returnType, tsObj)
-      } else {
-        valueType = typeToString(value.getType(), tsObj)
+        if (value.isKind(SK.ArrowFunction) || value.isKind(SK.FunctionExpression)) {
+          // A resolver may be async, and the prop carries what it resolves to.
+          valueType = unwrapPromise(value.getReturnType(), tsObj, value)
+        } else {
+          valueType = typeToString(value.getType(), tsObj)
+        }
+
+        members.push({ name, type: valueType, optional: false })
       }
 
-      members.push({ name, type: valueType, optional: false })
+      if (members.length > 0) {
+        return { members }
+      }
     }
 
-    if (members.length > 0) {
-      return { members }
-    }
   }
 
   return null
@@ -978,30 +1041,39 @@ export function generateInertiaTypes(input: GenerateTypesInput): string {
 
   // Shared page props
   const sharedMembers: string[] = []
+  const declared = new Set<string>()
+
+  // More than one source can answer for the same name — the module config and a
+  // `.share()` of that key, or access control and a `.share('access')`. The
+  // first declaration wins, because a second would only restate it optionally,
+  // and two members of one name do not compile.
+  const declare = (name: string, member: string): void => {
+    if (declared.has(name)) return
+    declared.add(name)
+    sharedMembers.push(member)
+  }
 
   // From module config (non-optional)
   if (sharedData) {
     for (const member of sharedData.members) {
-      sharedMembers.push(`      ${member.name}${member.optional ? '?' : ''}: ${member.type}`)
+      declare(member.name, `      ${member.name}${member.optional ? '?' : ''}: ${member.type}`)
     }
   }
 
   // From i18n detection (non-optional)
   if (i18n.enabled) {
-    sharedMembers.push('      locale: string')
-    sharedMembers.push('      translations: Record<string, string>')
+    declare('locale', '      locale: string')
+    declare('translations', '      translations: Record<string, string>')
   }
 
   // From access control (non-optional — shared on every Inertia render)
   if (accessControl) {
-    sharedMembers.push("      access: import('@stratal/inertia').SharedAccess")
+    declare('access', "      access: import('@stratal/inertia').SharedAccess")
   }
 
   // From .share() calls (optional — per-request)
   for (const [key, type] of shareCallTypes) {
-    // Skip if already declared by module config
-    if (sharedData?.members.some((m) => m.name === key)) continue
-    sharedMembers.push(`      ${key}?: ${type}`)
+    declare(key, `      ${key}?: ${type}`)
   }
 
   if (sharedMembers.length > 0) {
@@ -1411,7 +1483,6 @@ export async function runTypeGeneration(cwd: string): Promise<{ outputPath: stri
   const pagesDir = findPagesDir(cwd)
   const srcDir = join(cwd, 'src')
   const outputPath = findOutputPath(cwd)
-  const moduleFilePath = findAppModulePath(cwd)
   const tsConfigPath = findTsConfigPath(cwd)
 
   // Single shared project for all extractors
@@ -1427,13 +1498,11 @@ export async function runTypeGeneration(cwd: string): Promise<{ outputPath: stri
   seedInertiaI18nAugmentation(project, outputPath, i18n)
   primeTranslationKeys(project, i18n.only, srcDir)
 
-  // 1. Controller ctx.inertia() calls — sole source of truth for InertiaPageRegistry
+  // 1. Controller ctx.inertia() / ctx.modal() calls — sole source of truth for InertiaPageRegistry
   const pages = extractControllerPageTypes(project, SyntaxKind, ts, srcDir, pagesDir)
 
   // 2. Module shared data config
-  const sharedData = moduleFilePath
-    ? extractSharedDataType(project, SyntaxKind, ts, moduleFilePath)
-    : null
+  const sharedData = extractSharedDataType(project, SyntaxKind, ts, srcDir)
 
   // 3. Per-request .share() calls
   const shareCallTypes = extractShareCallTypes(project, SyntaxKind, ts, srcDir)
@@ -1442,9 +1511,7 @@ export async function runTypeGeneration(cwd: string): Promise<{ outputPath: stri
   const flashTypes = extractFlashTypes(project, SyntaxKind, ts, srcDir)
 
   // 5. Access control resources and roles
-  const accessControl = moduleFilePath
-    ? extractAccessControlType(project, SyntaxKind, moduleFilePath)
-    : null
+  const accessControl = extractAccessControlType(project, SyntaxKind, srcDir)
 
   // 6. Generate
   const content = generateInertiaTypes({

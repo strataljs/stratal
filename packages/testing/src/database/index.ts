@@ -4,10 +4,12 @@ export {
   createTestDatabaseGlobalSetup,
   databasePrefix,
   DEFAULT_DB_BINDING,
+  cloneWorkerDatabase,
   deriveAdminConnectionString,
-  deriveFileDbName,
   deriveTemplateName,
-  ensureWorkerDatabase,
+  deriveWorkerDbName,
+  leaseWorkerDatabase,
   type TestDatabaseGlobalSetupOptions,
+  type WorkerDatabaseLease,
 } from './test-database'
 export { buildTableDiscoverySql, buildTruncateSql, resetWorkerDatabase, type ResetOptions } from './reset'

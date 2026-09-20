@@ -13,6 +13,7 @@ import { ResponseCacheModule } from '../../response-cache/response-cache.module'
 import type { PurgeSpec } from '../../response-cache/services/response-cache.service'
 import { Controller, Get, Post } from '../decorators'
 import type { Middleware, Next } from '../middleware.interface'
+import { markNestedDispatch } from '../nested-dispatch'
 import type { RouterContext } from '../router-context'
 
 // ── Fixtures ──────────────────────────────────────────────────────────
@@ -323,6 +324,28 @@ describe('gateway dispatch wiring', () => {
       expect(harness.calls[0].props).toEqual({ user: 'u-1' })
     })
 
+    it('runs a request the app dispatched into itself inline, never through the loopback', async () => {
+      // A nested dispatch is entitled to an answer a client would not be given, so the loopback
+      // must never see one: `ctx.props` is the client's cache key, and the entry stored under it
+      // is handed to the next client it matches. The far side is also a different isolate, where
+      // whatever told the route this was a nested dispatch was never minted.
+      app = createApp()
+      const harness = createHarness('gateway')
+
+      await app.initialize()
+      const hono = await app.ensureHono()
+      const res = await hono.fetch(
+        markNestedDispatch(
+          new Request('http://localhost/gw/dashboard', { headers: { 'x-user': 'u-42' } }),
+        ),
+        mockEnv,
+        harness.ctx,
+      )
+
+      expect(harness.calls).toHaveLength(0)
+      expect(await res.json()).toEqual({ ok: true })
+    })
+
     it('runs a POST inline — a mutation never loops back', async () => {
       app = createApp()
       const harness = createHarness('gateway')
@@ -378,6 +401,7 @@ describe('gateway dispatch wiring', () => {
 
       expect(harness.calls).toHaveLength(0)
       expect(res.headers.get('Cache-Control')).toBe('public, max-age=3600')
+      expect(res.headers.get('CDN-Cache-Control')).toBe('public, max-age=3600')
     })
 
     it('runs a route with no cache decorators inline', async () => {
@@ -484,6 +508,7 @@ describe('gateway dispatch wiring', () => {
       })
 
       expect(res.headers.get('Cache-Control')).toBe('public, max-age=60')
+      expect(res.headers.get('CDN-Cache-Control')).toBe('public, max-age=60')
     })
 
     it('fails closed when a caller reaches it with no props at all', async () => {
@@ -518,12 +543,10 @@ describe('gateway dispatch wiring', () => {
      * `hono.fetch(request, env)` with no third argument — what `quarry api`
      * and `mcp serve` do.
      *
-     * The first request of an isolate would fail the `assertCachingAvailable`
-     * boot check here (no `ctx.cache`), which latches. So each test drives one
-     * normal request first: that latches the check as *passed*, and every
-     * later context-less request then sails through to `applyCacheDecision`.
-     * That is the genuinely reachable path, and testing it without the warm-up
-     * would only re-prove the boot check.
+     * Each test drives one normal request first, because a context-less
+     * request is only ever the *second* kind an isolate sees: something has
+     * to have served the traffic that established the app. That is the
+     * genuinely reachable path.
      */
     async function warmThenFetchWithoutContext(path: string, init?: RequestInit) {
       const harness = createHarness('cached', 'Cached', { props: { user: 'warm' } })
@@ -555,6 +578,7 @@ describe('gateway dispatch wiring', () => {
 
       expect(res.status).toBe(200)
       expect(res.headers.get('Cache-Control')).toBe('public, max-age=3600')
+      expect(res.headers.get('CDN-Cache-Control')).toBe('public, max-age=3600')
     })
   })
 
@@ -577,9 +601,10 @@ describe('gateway dispatch wiring', () => {
 
     it('boots and purges on a gateway that has no ctx.cache of its own', async () => {
       // The real gateway config: `"default": { "cache": { "enabled": false } }`,
-      // so `ctx.cache` is absent. Without the RPC redirection the boot check
-      // (`assertCachingAvailable`) would 500 the very first request of every
-      // gateway app, and the purge would have nothing to call.
+      // so `ctx.cache` is absent. Without the RPC redirection the gateway
+      // would read itself as an entrypoint that cannot cache — dropping the
+      // freshness claim on every route it serves inline — and the purge would
+      // have nothing to call.
       app = createApp()
       const harness = createHarness('gateway', 'Cached', { withCache: false })
 
@@ -608,10 +633,11 @@ describe('gateway dispatch wiring', () => {
 
   describe('boot verification of the configured entrypoint', () => {
     // The thrown `ResponseCacheConfigError` reaches the application's own
-    // exception handler, which renders it as a 500 — the same shape
-    // `assertCachingAvailable`'s boot failure already takes. What matters is
-    // that a typo'd entrypoint fails every request loudly instead of running
-    // every partitioned route inline forever with no signal.
+    // exception handler, which renders it as a 500. Unlike an unavailable
+    // cache — which has a truthful uncached answer to fall back on — a
+    // partitioned route pointed at an entrypoint that does not exist has
+    // none: serving it inline would answer one caller from another's
+    // partition. So this one does fail every request, loudly.
     it('fails the very first request when ctx.exports has no such export', async () => {
       app = createApp(TypoGatewayModule)
       const harness = createHarness('gateway')

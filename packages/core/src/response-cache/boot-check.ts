@@ -3,24 +3,36 @@ import type { WorkersCache } from './services/response-cache.service'
 import type { ResponseCacheModuleOptions } from './types'
 
 /**
- * Fail boot when routes ask for caching the runtime cannot provide.
+ * Why this entrypoint cannot cache, or `undefined` when it can.
  *
  * A Worker cannot read its own Wrangler configuration, but the presence of
  * `ctx.cache` tells us whether Workers Caching is enabled for this entrypoint.
- * Without this, a misconfigured deploy would serve every request uncached with
- * no signal at all.
+ *
+ * Reported rather than thrown, and the distinction is the whole point. The
+ * hazard is a route stamping `public, max-age=…` while nothing stores the
+ * response: a claim the app makes and no layer honours. Refusing to make that
+ * claim removes the hazard — the response falls through to
+ * `createNoStoreFallbackMiddleware` and is stamped `private, no-store`, which
+ * is both true and visible in the response itself. Failing the request
+ * removes it too, but takes down every route in the isolate to do it,
+ * including the ones that never asked to be cached.
+ *
+ * The answer belongs to an entrypoint rather than to the app, because a
+ * gateway topology runs two of them — one with `cache.enabled` false by
+ * design, one with it true — inside a single isolate.
  */
-export function assertCachingAvailable(
+export function cachingUnavailableReason(
   cacheableRouteCount: number,
   cache: WorkersCache | undefined,
-): void {
-  if (cacheableRouteCount === 0) return
-  if (cache) return
+): string | undefined {
+  if (cacheableRouteCount === 0) return undefined
+  if (cache) return undefined
 
-  throw new ResponseCacheConfigError(
-    `${cacheableRouteCount} route(s) declare @Cacheable, but Workers Caching is not available on this entrypoint. ` +
-      'Set `"cache": { "enabled": true }` in your Wrangler config, use Wrangler >= 4.69.0, ' +
-      'and set `compatibility_date` to 2026-07-06 or later.',
+  return (
+    `${cacheableRouteCount} route(s) declare @Cacheable, but Workers Caching is not available on this entrypoint, ` +
+    'so their responses are served uncached and stamped `private, no-store`. ' +
+    'Set `"cache": { "enabled": true }` in your Wrangler config, use Wrangler >= 4.69.0, ' +
+    'and set `compatibility_date` to 2026-07-06 or later.'
   )
 }
 
@@ -69,6 +81,27 @@ export function assertValidGatewayEntrypoint(options: ResponseCacheModuleOptions
 }
 
 /**
+ * Keep partition names out of the `$`-prefixed space the framework reserves.
+ *
+ * Partitions and the representation both become `ctx.props` entries, and props
+ * is a flat object — a partition named `$representation` would overwrite the
+ * representation or be overwritten by it, either way silently collapsing two
+ * cache keys into one. The prefix is rejected wholesale rather than just the
+ * one name in use today, so a later reserved key cannot break an app that had
+ * already shipped a partition called it.
+ */
+export function assertPartitionNames(options: ResponseCacheModuleOptions): void {
+  const reserved = Object.keys(options.partitions ?? {}).filter((name) => name.startsWith('$'))
+
+  if (reserved.length > 0) {
+    throw new ResponseCacheConfigError(
+      `ResponseCacheModule: partition name(s) ${reserved.join(', ')} start with "$", which is ` +
+        'reserved for values the framework puts in `ctx.props` itself. Rename them.',
+    )
+  }
+}
+
+/**
  * Reject the two module options only the gateway entrypoint can act on, when
  * no gateway entrypoint is configured.
  *
@@ -87,6 +120,7 @@ export function assertValidGatewayEntrypoint(options: ResponseCacheModuleOptions
  */
 export function assertNoGatewayOptions(options: ResponseCacheModuleOptions): void {
   assertValidGatewayEntrypoint(options)
+  assertPartitionNames(options)
 
   if (options.gateway !== undefined) return
 

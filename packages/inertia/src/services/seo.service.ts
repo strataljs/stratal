@@ -29,6 +29,17 @@ export class SeoService {
   }
 
   /**
+   * Whether anything has contributed SEO to this request.
+   *
+   * Told apart from "resolves to the defaults" so a caller rendering one page over another can
+   * keep the underlying page's metadata when the page on top named none of its own. Resolving
+   * regardless would answer with the module defaults and overwrite it.
+   */
+  contributed(): boolean {
+    return Object.keys(this.accumulated).length > 0
+  }
+
+  /**
    * Resolves the final SEO data: module defaults (base) merged with the
    * request's accumulated data, then the title template applied. Resolver
    * functions for `defaults`/`titleTemplate` are awaited with the request `ctx`.

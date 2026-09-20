@@ -79,22 +79,66 @@ describe('rate-limit-bridge', () => {
   })
 
   describe('createBetterAuthRateLimitStorage', () => {
-    it('round-trips a RateLimit value under the namespaced key', async () => {
+    const rule = { window: 10, max: 3 }
+
+    it('allows the first request and records it under the namespaced key', async () => {
       const store = new FakeStore()
       const adapter = createBetterAuthRateLimitStorage(store)
 
-      const value = { key: 'k', count: 3, lastRequest: Date.now() }
-      await adapter.set('k', value)
-      const got = await adapter.get('k')
-
-      expect(got).toEqual(value)
-      expect(store.raw().has('ba-rl:k')).toBe(true)
+      expect(await adapter.consume('k', rule)).toEqual({ allowed: true, retryAfter: null })
+      expect(store.raw().get('ba-rl:k')).toMatchObject({ key: 'k', count: 1 })
       expect(store.raw().has('k')).toBe(false)
     })
 
-    it('returns null for a missing key', async () => {
+    it('allows exactly `max` requests inside the window, then rejects', async () => {
       const adapter = createBetterAuthRateLimitStorage(new FakeStore())
-      expect(await adapter.get('missing')).toBeNull()
+
+      for (let i = 0; i < rule.max; i++) {
+        expect(await adapter.consume('k', rule)).toEqual({ allowed: true, retryAfter: null })
+      }
+
+      const rejected = await adapter.consume('k', rule)
+      expect(rejected.allowed).toBe(false)
+      expect(rejected.retryAfter).toBeGreaterThan(0)
+      expect(rejected.retryAfter).toBeLessThanOrEqual(rule.window)
+    })
+
+    it('opens a fresh window once the previous one has elapsed', async () => {
+      vi.useFakeTimers()
+      try {
+        const adapter = createBetterAuthRateLimitStorage(new FakeStore())
+
+        for (let i = 0; i < rule.max; i++) await adapter.consume('k', rule)
+        expect((await adapter.consume('k', rule)).allowed).toBe(false)
+
+        vi.advanceTimersByTime(rule.window * 1000)
+
+        expect(await adapter.consume('k', rule)).toEqual({ allowed: true, retryAfter: null })
+      }
+      finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('does not let a rejected request extend the window it bounced off', async () => {
+      vi.useFakeTimers()
+      try {
+        const store = new FakeStore()
+        const adapter = createBetterAuthRateLimitStorage(store)
+
+        for (let i = 0; i < rule.max; i++) await adapter.consume('k', rule)
+        const spentAt = (store.raw().get('ba-rl:k') as { lastRequest: number }).lastRequest
+
+        vi.advanceTimersByTime(5_000)
+        await adapter.consume('k', rule)
+
+        // The rejected hit left `lastRequest` where the last allowed hit put it,
+        // so the window still frees up on its original schedule.
+        expect((store.raw().get('ba-rl:k') as { lastRequest: number }).lastRequest).toBe(spentAt)
+      }
+      finally {
+        vi.useRealTimers()
+      }
     })
 
     it('namespace prefix prevents collision with Stratal counters', async () => {
@@ -103,8 +147,8 @@ describe('rate-limit-bridge', () => {
 
       // Stratal-side write under its own namespace
       await store.set('rl:api:60:alice', { count: 1, resetAt: 0 }, 60)
-      // Better-auth-side write under same logical key
-      await adapter.set('rl:api:60:alice', { key: 'rl:api:60:alice', count: 1, lastRequest: 0 })
+      // Better-auth-side write under the same logical key
+      await adapter.consume('rl:api:60:alice', rule)
 
       // Both coexist
       expect(await store.get('rl:api:60:alice')).not.toBeNull()

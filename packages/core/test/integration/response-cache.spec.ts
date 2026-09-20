@@ -30,13 +30,11 @@ import {
  *    file additionally proves it in the real workerd runtime, which is
  *    genuinely new information (previously untestable there at all).
  * 2. **The stub opted out (`cache: false`)** — reproduces the genuinely
- *    unconfigured runtime this feature's boot guard exists for, so that guard
- *    stays testable. `assertCachingAvailable` fires on the first request to
- *    an app with cache-decorated routes — even a request to a route with no
- *    cache decorator of its own — and 500s. The check is a latch on its
- *    *result*, not merely the attempt: every later request in the same app
- *    keeps failing too, so a misconfigured deploy can never silently start
- *    serving uncached traffic after one stray error.
+ *    unconfigured runtime, so what an app does there stays testable. Every
+ *    route still answers, including the `@Cacheable` ones, and none of them
+ *    claims a freshness the runtime cannot keep: the responses carry
+ *    `private, no-store` rather than `public, max-age=…`. What the app must
+ *    never do is fail a route over a facility that route never asked for.
  *
  * **Deliberately not written:** a test driving `@PurgesCache`'s per-request
  * `CachePurgeError` (thrown when the purge itself fails) through a real HTTP
@@ -85,6 +83,7 @@ describe('response-cache: workerd integration', () => {
 
       response.assertOk()
       response.assertHeader('Cache-Control', 'public, max-age=60')
+      response.assertHeader('CDN-Cache-Control', 'public, max-age=60')
     })
 
     it('also emits the declared Cache-Tag for that route', async () => {
@@ -112,39 +111,32 @@ describe('response-cache: workerd integration', () => {
       await module.close()
     })
 
-    it('500s the very first request in the app — even to a route with no cache decorator of its own', async () => {
+    it('serves a route carrying no cache decorator of its own', async () => {
       // This is the app's first-ever request, and it hits /plain, which has
-      // neither @Cacheable nor @PurgesCache. It still 500s: the boot check
-      // counts cache-decorated routes across the WHOLE app and fires on the
-      // first request to ANY of them, exactly as `route-registration.service.ts`
-      // documents. This is real, unmocked Miniflare behavior — there is no
-      // mock anywhere in this file.
+      // neither @Cacheable nor @PurgesCache. Whether the runtime can cache is
+      // none of its business, and an app is not broken because a facility this
+      // route never opted into is unavailable. Real, unmocked Miniflare — there
+      // is no mock anywhere in this file.
       const response = await module.http.get('/cache-demo/plain').send()
 
-      response.assertServerError()
+      response.assertOk()
     })
 
-    it('keeps failing on every later request, so a misconfigured deploy can never silently serve uncached', async () => {
-      // Same app, same module instance, second request overall — and it must
-      // fail too. The latch remembers the boot check's *result*, not merely
-      // that it was attempted, so the error is rethrown rather than skipped.
-      //
-      // Latching the attempt would be far worse than not checking at all:
-      // exactly one arbitrary request per isolate would 500, and every request
-      // after it would return `Cache-Control: public, max-age=…` while nothing
-      // was ever stored — the precise silent no-op this guard exists to
-      // prevent, made harder to spot by the single stray error.
+    it('serves a @Cacheable route too, without claiming a freshness nothing keeps', async () => {
+      // The route is answered; only the claim is dropped. `public, max-age=…`
+      // on a response nothing stores is the failure worth preventing — and
+      // `private, no-store` prevents it while still answering the student.
       const response = await module.http.get('/cache-demo/cacheable').send()
 
-      response.assertServerError()
+      response.assertOk()
+      response.assertHeader('Cache-Control', 'private, no-store')
     })
 
-    it('still stamps an explicit caching decision on the failure response', async () => {
-      // Even the boot-check 500 carries a decision. Workers Caching applies
-      // RFC 9111 heuristic freshness, so a header-less 500 would be eligible
-      // for caching on status codes that allow it — the global fallback
-      // middleware runs outside the handler and covers this path too.
-      const response = await module.http.get('/cache-demo/cacheable').send()
+    it('stamps an explicit caching decision on every response', async () => {
+      // Workers Caching applies RFC 9111 heuristic freshness, so a header-less
+      // response is eligible for caching on statuses that allow it. The global
+      // fallback middleware runs outside the handler and covers every path.
+      const response = await module.http.get('/cache-demo/plain').send()
 
       response.assertHeader('Cache-Control', 'private, no-store')
     })

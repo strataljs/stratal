@@ -1,8 +1,14 @@
 import type { MiddlewareHandler } from 'hono'
-import { setResponseHeaders } from '../../response-cache/response-headers'
+import { PER_CALLER_RATE_LIMIT_HEADERS } from '../../rate-limiter/limit'
+import { isSharedCacheable, setResponseHeaders } from '../../response-cache/response-headers'
 import type { RouterEnv } from '../types'
 
 const NO_STORE = 'private, no-store'
+
+/** `{ 'X-RateLimit-Limit': null, … }` — the delete form `setResponseHeaders` takes. */
+const DROP_PER_CALLER_HEADERS = Object.fromEntries(
+  PER_CALLER_RATE_LIMIT_HEADERS.map((name) => [name, null]),
+) as Record<string, string | null>
 
 /**
  * The single outermost safety net behind Stratal's caching-decision
@@ -40,6 +46,20 @@ export function createNoStoreFallbackMiddleware(): MiddlewareHandler<RouterEnv> 
       // whatever is assigned, so reassigning the same (in-place-mutated)
       // object would immediately re-clone it for nothing.
       if (stamped !== c.res) c.res = stamped
+    }
+
+    // `X-RateLimit-*` describe one caller's remaining budget, so they must not survive on a
+    // response a shared cache may store: the entry is replayed to every other caller, and a cache
+    // hit never runs the throttle middleware, so the figure counts down for nobody.
+    //
+    // This is the only layer where the cache decision is already on the response — it is stamped
+    // inside the route handler, and Hono's `res` setter merges headers as the chain unwinds, so a
+    // middleware testing `Cache-Control` after its own `next()` races the header it depends on.
+    //
+    // The limit is still consumed and enforced; only the reporting is withheld.
+    if (isSharedCacheable(c.res)) {
+      const stripped = setResponseHeaders(c.res, DROP_PER_CALLER_HEADERS)
+      if (stripped !== c.res) c.res = stripped
     }
   }
 }

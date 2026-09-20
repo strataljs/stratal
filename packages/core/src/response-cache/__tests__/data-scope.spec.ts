@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { capturePayload, needsPayloadCapture } from '../../router/services/capture-payload'
+import { InvalidCacheTagError } from '../errors'
 import { renderTags } from '../tag-template'
 
 describe('needsPayloadCapture', () => {
@@ -81,7 +82,52 @@ describe('capturePayload', () => {
 
 describe('{data.*} scope end to end', () => {
   it('renders a tag from a captured nested payload value', () => {
-    const scopes = { param: {}, query: {}, body: undefined, data: { post: { id: 7, categoryId: 42 } } }
+    const scopes = { param: {}, query: {}, body: undefined, data: { post: { id: 7, categoryId: 42 } }, partition: {} }
     expect(renderTags(['cat:{data.post.categoryId}'], scopes)).toEqual(['cat:42'])
+  })
+})
+
+describe('{partition.*} scope', () => {
+  it('renders a tag from a resolved partition value', () => {
+    const scopes = {
+      param: {},
+      query: {},
+      body: undefined,
+      data: undefined,
+      partition: { user: 'u-1' },
+    }
+    expect(renderTags(['user:{partition.user}'], scopes)).toEqual(['user:u-1'])
+  })
+
+  it('combines a partition with a path param in one tag', () => {
+    const scopes = {
+      param: { slug: 'hello-world' },
+      query: {},
+      body: undefined,
+      data: undefined,
+      partition: { tenant: 't-1' },
+    }
+    expect(renderTags(['post:{partition.tenant}:{param.slug}'], scopes)).toEqual([
+      'post:t-1:hello-world',
+    ])
+  })
+
+  it('renders identically whether or not the payload is present, which is the point', () => {
+    // A partial reload carries only the props it asked for, so `{data.*}` has a
+    // different shape on the document and on the partial. A partition is in the
+    // cache key, so it is the same on both — which is what lets every variant of
+    // one URL carry the identical `Cache-Tag` set that purging requires.
+    const partition = { user: 'u-1' }
+    const document = { param: {}, query: {}, body: undefined, data: { auth: {} }, partition }
+    const partial = { param: {}, query: {}, body: undefined, data: undefined, partition }
+
+    expect(renderTags(['user:{partition.user}'], document)).toEqual(
+      renderTags(['user:{partition.user}'], partial)
+    )
+  })
+
+  it('throws when the named partition did not resolve, so the response fails closed', () => {
+    const scopes = { param: {}, query: {}, body: undefined, data: undefined, partition: {} }
+    expect(() => renderTags(['user:{partition.user}'], scopes)).toThrow(InvalidCacheTagError)
   })
 })

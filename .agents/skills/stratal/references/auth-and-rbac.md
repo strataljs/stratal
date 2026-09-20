@@ -71,7 +71,7 @@ async show(ctx: RouterContext) {
 | `requireUserId()` / `getUserId()` | `string` / `string \| undefined` | Convenience accessors for `user.id`. |
 | `getRole()` | `string \| undefined` | Reads `user.role` (augment `AuthUser` to type it). |
 | `getRoles()` | `string[]` | Splits `user.role` on `,` (e.g. `"admin,editor"`). |
-| `getAuthInfo()` | `{ user: AuthUser }` | Throws if not authenticated. (Was `getAuthContext()`.) |
+| `getAuthInfo()` | `{ user: AuthUser }` | Throws if not authenticated. |
 | `isAuthenticated()` | `boolean` | True when a user is set. |
 | `setAuthContext({ user })` | `void` | Called by middleware; rarely called from app code. |
 | `clearAuthContext()` | `void` | Test/cleanup helper. |
@@ -269,7 +269,7 @@ export class ProfileController { ... }
 @UseGuards(AuthGuard({ permissions: 'admin:access' }))
 export class AdminController { ... }
 
-// Multiple permissions — any one grants access
+// Multiple permissions — ALL must be granted (AND)
 @UseGuards(AuthGuard({ permissions: ['posts:update', 'posts:delete'] }))
 
 // Wildcard — any action on the resource
@@ -289,6 +289,8 @@ export class PostsController {
 ```
 
 Permission syntax: `"resource:action"` — resource and action must match a key/value defined in `createAccessControl()`.
+
+A list of permissions is combined with **AND**: every entry must be granted. A user holding several roles passes when **any single role** grants the whole list — permissions are not pooled across roles, so a user who is `editor` (`posts:update`) and `moderator` (`posts:delete`) is still rejected by `['posts:update', 'posts:delete']`. Grant the combination to one role.
 
 Errors thrown:
 - `UserNotAuthenticatedError` — 401, user not logged in

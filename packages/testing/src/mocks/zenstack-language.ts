@@ -5,7 +5,7 @@
  * incompatible with Cloudflare Workers runtime. These exports are only used
  * for schema generation (CLI functionality), not runtime authentication.
  *
- * This mock provides stub implementations to allow tests to run in vitest-pool-workers.
+ * This mock provides stub implementations to allow tests to run in the Workers Vitest integration.
  */
 
 // Main exports from @zenstackhq/language

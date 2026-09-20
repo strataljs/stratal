@@ -26,7 +26,7 @@
       "ESNext"
     ],
     "types": [
-      "@cloudflare/workers-types",
+      "@cloudflare/workers-types/experimental",
       "node"
     ]
   },

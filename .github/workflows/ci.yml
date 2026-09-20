@@ -58,15 +58,14 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      # Every `@stratal/*` package peers on `stratal`, and changesets majors a
-      # dependent whenever the package it peers on is bumped. The
-      # `onlyUpdatePeerDependentsWhenOutOfRange` option in .changeset/config.json
-      # suppresses that — but the packages which actually read it,
-      # @changesets/config and @changesets/assemble-release-plan, are transitive
-      # and can move even though @changesets/cli itself is pinned. An option
-      # shape they no longer recognize is ignored silently: no error, no
-      # warning, just a release that quietly becomes a major. Catch it here
-      # rather than on npm, where it cannot be taken back.
+      # Every `@stratal/*` package peers on `stratal`, so changesets decides on
+      # its own how hard to bump each of them whenever `stratal` is bumped.
+      # Changesets 2.x majored them by default and needed an opt-out; 3.x bumps
+      # by patch instead. Either way the decision is made silently, by
+      # @changesets/config and @changesets/assemble-release-plan — transitive
+      # packages that can move even though @changesets/cli itself is pinned. So
+      # don't infer the behaviour from config, assert the plan: catch a
+      # surprise major here rather than on npm, where it cannot be taken back.
       #
       # `changeset status` diffs against config.baseBranch (`dev`), which exists
       # only on the Forgejo origin; without it the command fails before printing
@@ -83,7 +82,7 @@ jobs:
 
           majors=$(jq -r '[.releases[] | select(.type == "major" and (.oldVersion | startswith("0.")))] | length' "$PLAN")
           if [ "$majors" -gt 0 ]; then
-            echo "::error::A major bump is planned while these packages are still below 1.0.0. If that is deliberate, update this guard. Otherwise the peer-dependent escalation is back: check that .changeset/config.json still declares ___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH.onlyUpdatePeerDependentsWhenOutOfRange, that every peer range on 'stratal' admits the new version, and that @changesets/config and @changesets/assemble-release-plan have not moved."
+            echo "::error::A major bump is planned while these packages are still below 1.0.0. If that is deliberate, update this guard. Otherwise the peer-dependent escalation is back: check whether @changesets/config or @changesets/assemble-release-plan have moved (they are transitive, so they can move even though @changesets/cli is pinned), and that every peer range on 'stratal' admits the new version. Changesets 3.x bumps peer-dependents by patch; if that default has changed back, this is where it shows up."
             exit 1
           fi
 

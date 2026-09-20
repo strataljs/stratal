@@ -7,7 +7,7 @@ const ctx = { controller: 'PostsController', method: 'index', guarded: false }
 describe('resolveCacheable', () => {
   it('applies module defaults to a bare @Cacheable', () => {
     const result = resolveCacheable({}, { ttl: 300, swr: 60, partitionBy: ['user'] }, ctx)
-    expect(result).toEqual({ ttl: 300, swr: 60, tags: [], partitionBy: ['user'], vary: [] })
+    expect(result).toEqual({ ttl: 300, browserTtl: 300, swr: 60, tags: [], partitionBy: ['user'], vary: [] })
   })
 
   it('lets route options override scalar defaults', () => {
@@ -54,6 +54,33 @@ describe('resolveCacheable', () => {
   it('allows a guarded route that inherits a default partition', () => {
     const result = resolveCacheable({ ttl: 60 }, { partitionBy: ['user'] }, { ...ctx, guarded: true })
     expect(result.partitionBy).toEqual(['user'])
+  })
+
+  it('gives the browser the same lifetime as the shared cache by default', () => {
+    // Saying nothing about browsers means a route is as willing to be held by
+    // one as by the edge — which is what makes a repeat visit free.
+    const result = resolveCacheable({ ttl: 3600 }, {}, ctx)
+    expect(result.browserTtl).toBe(3600)
+  })
+
+  it('lets a route keep the shared lifetime while giving the browser none', () => {
+    // The shape a retractable response wants: purgeable for a month at the
+    // edge, never held unaskably by a visitor.
+    const result = resolveCacheable({ ttl: 2592000, browserTtl: 0 }, {}, ctx)
+    expect(result).toMatchObject({ ttl: 2592000, browserTtl: 0 })
+  })
+
+  it('lets route options override a browserTtl default', () => {
+    const result = resolveCacheable({ ttl: 60, browserTtl: 5 }, { browserTtl: 30 }, ctx)
+    expect(result.browserTtl).toBe(5)
+  })
+
+  it('throws when browserTtl is negative', () => {
+    expect(() => resolveCacheable({ ttl: 60, browserTtl: -1 }, {}, ctx)).toThrow(/browserTtl/)
+  })
+
+  it('throws when browserTtl is not finite', () => {
+    expect(() => resolveCacheable({ ttl: 60, browserTtl: Number.POSITIVE_INFINITY }, {}, ctx)).toThrow(/browserTtl/)
   })
 
   it('lets route options override swr defaults', () => {

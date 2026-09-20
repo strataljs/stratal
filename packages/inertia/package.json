@@ -4,8 +4,11 @@
   "description": "Inertia.js v3 server adapter for Stratal framework — server-driven React SPAs",
   "type": "module",
   "license": "MIT",
-  "author": "Temitayo Fadojutimi",
-  "homepage": "https://github.com/strataljs/stratal#readme",
+  "author": {
+    "name": "Temitayo Fadojutimi",
+    "url": "https://x.com/adesege_"
+  },
+  "homepage": "https://stratal.dev",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/strataljs/stratal.git",
@@ -56,6 +59,10 @@
       "types": "./dist/seo-runtime.d.mts",
       "import": "./dist/seo-runtime.mjs"
     },
+    "./services/ssr-exclusion": {
+      "types": "./dist/services/ssr-exclusion.d.mts",
+      "import": "./dist/services/ssr-exclusion.mjs"
+    },
     "./ssr": {
       "types": "./dist/ssr.d.mts",
       "import": "./dist/ssr.mjs"
@@ -79,7 +86,7 @@
     "lint:fix": "npx oxlint --fix ."
   },
   "dependencies": {
-    "intl-messageformat": "^11.2.12",
+    "intl-messageformat": "^12.1.1",
     "ts-morph": "^28.0.0"
   },
   "peerDependencies": {
@@ -122,25 +129,25 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.45.0",
-    "@cloudflare/workers-types": "5.20260716.1",
-    "@inertiajs/core": "^3.6.1",
-    "@inertiajs/react": "^3.6.1",
-    "@inertiajs/vite": "^3.6.1",
+    "@cloudflare/vite-plugin": "^1.56.0",
+    "@cloudflare/workers-types": "5.20260919.1",
+    "@inertiajs/core": "^3.7.1",
+    "@inertiajs/react": "^3.7.1",
+    "@inertiajs/vite": "^3.7.1",
     "@stratal/testing": "workspace:*",
-    "@types/node": "^26.1.1",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
-    "@vitest/runner": "~4.1.10",
-    "@vitest/snapshot": "~4.1.10",
-    "hono": "^4.12.30",
-    "jsdom": "^29.1.1",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitest/runner": "~4.1.11",
+    "@vitest/snapshot": "~4.1.11",
+    "hono": "^4.13.8",
+    "jsdom": "^30.1.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "stratal": "workspace:*",
-    "tsdown": "^0.22.9",
+    "tsdown": "^0.23.0",
     "typescript": "^7.0.2",
-    "vite": "^8.1.5",
-    "vitest": "~4.1.10"
+    "vite": "^8.3.0",
+    "vitest": "~4.1.11"
   }
 }

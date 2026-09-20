@@ -20,6 +20,14 @@ function navigate(props: Record<string, unknown>): void {
   handlers.navigate({ detail: { page: { props } } })
 }
 
+/**
+ * A visit that changed the props of the component already on screen. Inertia fires no `navigate`
+ * for one — closing a sheet onto the page it was drawn over is exactly that shape.
+ */
+function propsOnlyVisit(props: Record<string, unknown>): void {
+  handlers.success({ detail: { page: { props } } })
+}
+
 beforeEach(() => {
   document.head.innerHTML = ''
   document.title = ''
@@ -35,6 +43,25 @@ describe('seo-runtime', () => {
 
     expect(document.title).toBe('Home')
     expect(document.head.querySelector('meta[name="description"]')?.getAttribute('content')).toBe('Welcome')
+  })
+
+  it('reconciles a visit that only changed props, which fires no navigate', () => {
+    // Closing a modal lands on the page it was drawn over, so the component never changes and
+    // Inertia reports `success` without `navigate`. Listening for navigate alone left the head
+    // wearing the level's title while the address had already moved back to the page's.
+    navigate({ seo: { title: 'Change plan' } })
+
+    propsOnlyVisit({ seo: { title: 'Account' } })
+
+    expect(document.title).toBe('Account')
+  })
+
+  it('leaves the head alone when a props-only visit carries no seo', () => {
+    navigate({ seo: { title: 'Change plan' } })
+
+    propsOnlyVisit({ somethingElse: 1 })
+
+    expect(document.title).toBe('Change plan')
   })
 
   it('reconciles between navigations without duplicates', () => {

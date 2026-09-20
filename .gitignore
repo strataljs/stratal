@@ -162,3 +162,4 @@ coldstart.mjs
 # Build artifacts from tsdown.base.ts — regenerated, never source
 tsdown.base.d.ts
 tsdown.base.d.ts.map
+.worktrees

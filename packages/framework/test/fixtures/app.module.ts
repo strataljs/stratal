@@ -38,7 +38,7 @@ export const superAdminRole = extendRole(permissions.ac, permissions.roles.admin
 // each request's own I/O context — mandatory on workerd, where a pool opened in one
 // request cannot be reused by another. In PRODUCTION, Hyperdrive fronts those pools
 // and multiplexes the real server connections, so they never accumulate. These tests
-// run on @cloudflare/vitest-pool-workers against a DIRECT Postgres with NO Hyperdrive,
+// run on @cloudflare/vitest-plugin against a DIRECT Postgres with NO Hyperdrive,
 // so a fresh pool per resolution would exhaust `max_connections` under parallel test
 // files ("sorry, too many clients already").
 //

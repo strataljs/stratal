@@ -15,7 +15,7 @@
     ],
     "types": [
       "node",
-      "@cloudflare/workers-types"
+      "@cloudflare/workers-types/experimental"
     ]
   },
   "include": [
