@@ -89,9 +89,9 @@
     "@stratal/testing": "workspace:^",
     "@types/node": "^26.6.2",
     "@types/pg": "^8.23.1",
-    "@vitest/coverage-istanbul": "~4.1.11",
+    "@vitest/coverage-istanbul": "~5.0.1",
     "@vitest/runner": "~4.1.11",
-    "@vitest/snapshot": "~4.1.11",
+    "@vitest/snapshot": "~5.0.1",
     "@zenstackhq/better-auth": "^3.9.4",
     "@zenstackhq/cli": "^3.9.4",
     "@zenstackhq/orm": "^3.9.4",
@@ -103,7 +103,7 @@
     "stratal": "workspace:*",
     "tsdown": "^0.23.0",
     "typescript": "^7.0.2",
-    "vitest": "~4.1.11",
+    "vitest": "~5.0.1",
     "wrangler": "^4.135.0"
   }
 }

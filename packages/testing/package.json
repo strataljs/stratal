@@ -116,12 +116,12 @@
     "@types/node": "^26.6.2",
     "@types/pg": "^8.23.1",
     "@vitest/runner": "~4.1.11",
-    "@vitest/snapshot": "~4.1.11",
+    "@vitest/snapshot": "~5.0.1",
     "better-auth": "^1.7.5",
     "pg": "^8.23.0",
     "stratal": "workspace:*",
     "tsdown": "^0.23.0",
     "typescript": "^7.0.2",
-    "vitest": "~4.1.11"
+    "vitest": "~5.0.1"
   }
 }
