@@ -1,6 +1,6 @@
 {
   "name": "@stratal/feature-flags",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Cloudflare Flagship feature flags for the Stratal framework — binding API wrapper with Inertia.js sharing",
   "type": "module",
   "license": "MIT",
@@ -59,11 +59,11 @@
   "peerDependencies": {
     "@inertiajs/core": ">=3",
     "@inertiajs/react": ">=3",
-    "@stratal/inertia": ">=0.1.0",
+    "@stratal/inertia": ">=0.1.1",
     "hono": ">=4",
     "react": ">=19",
     "react-dom": ">=19",
-    "stratal": ">=0.1.0"
+    "stratal": ">=0.1.1"
   },
   "peerDependenciesMeta": {
     "@inertiajs/core": {

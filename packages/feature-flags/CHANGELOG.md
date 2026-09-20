@@ -1,5 +1,14 @@
 # @stratal/feature-flags
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [99e36c5]
+- Updated dependencies [df54f36]
+  - @stratal/inertia@0.1.1
+  - stratal@0.1.1
+
 ## 0.1.0
 
 ### Patch Changes
