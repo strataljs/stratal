@@ -97,7 +97,7 @@
     "@zenstackhq/orm": "^3.9.4",
     "@zenstackhq/schema": "^3.9.4",
     "better-auth": "^1.7.5",
-    "better-call": "1.4.0",
+    "better-call": "2.0.6",
     "dotenv-cli": "^11.0.0",
     "pg": "^8.23.0",
     "stratal": "workspace:*",

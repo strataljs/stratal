@@ -85,7 +85,7 @@
   "dependencies": {
     "@cloudflare/vitest-plugin": "^1.1.13",
     "@golevelup/ts-vitest": "^4.0.0",
-    "msw": "^2.15.0"
+    "msw": "^3.0.0"
   },
   "peerDependencies": {
     "@better-auth/core": ">=1.6",
