@@ -83,7 +83,7 @@
     "lint:fix": "npx oxlint --fix ."
   },
   "dependencies": {
-    "@cloudflare/vitest-plugin": "^1.1.13",
+    "@cloudflare/vitest-plugin": "^1.3.1",
     "@golevelup/ts-vitest": "^4.0.0",
     "msw": "^2.15.0"
   },
@@ -110,14 +110,14 @@
     }
   },
   "devDependencies": {
-    "@better-auth/core": "^1.7.5",
-    "@cloudflare/workers-types": "5.20260919.1",
+    "@better-auth/core": "^1.7.6",
+    "@cloudflare/workers-types": "5.20260928.1",
     "@stratal/framework": "workspace:*",
-    "@types/node": "^26.6.2",
+    "@types/node": "^26.6.3",
     "@types/pg": "^8.23.1",
     "@vitest/runner": "~4.1.11",
     "@vitest/snapshot": "~4.1.11",
-    "better-auth": "^1.7.5",
+    "better-auth": "^1.7.6",
     "pg": "^8.23.0",
     "stratal": "workspace:*",
     "tsdown": "^0.23.0",

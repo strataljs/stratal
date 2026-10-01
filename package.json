@@ -62,9 +62,9 @@
     "globals": "^17.12.0",
     "husky": "^9.1.7",
     "jiti": "^2.7.0",
-    "lint-staged": "^17.5.1",
-    "oxlint": "^1.83.0",
-    "oxlint-tsgolint": "^7.0.2002",
+    "lint-staged": "^17.6.0",
+    "oxlint": "^1.86.0",
+    "oxlint-tsgolint": "^7.0.2003",
     "tsdown": "^0.23.0",
     "typedoc": "^0.28.20",
     "typescript": "^7.0.2"
