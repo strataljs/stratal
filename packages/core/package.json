@@ -176,7 +176,7 @@
   },
   "dependencies": {
     "@hono/swagger-ui": "^0.6.1",
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "@swc-node/register": "^1.12.1",
     "@swc/core": "^1.16.2",
     "@swc/helpers": "^0.5.23",
