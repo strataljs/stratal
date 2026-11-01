@@ -83,19 +83,19 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20260919.1",
-    "@inertiajs/core": "^3.7.1",
-    "@inertiajs/react": "^3.7.1",
+    "@cloudflare/workers-types": "5.20261029.1",
+    "@inertiajs/core": "^3.9.1",
+    "@inertiajs/react": "^3.9.1",
     "@stratal/inertia": "workspace:*",
-    "@types/node": "^26.6.2",
+    "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "hono": "^4.13.8",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
+    "hono": "^4.13.14",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "stratal": "workspace:*",
-    "tsdown": "^0.23.0",
+    "tsdown": "^0.23.4",
     "typescript": "^7.0.2",
-    "vitest": "~4.1.11"
+    "vitest": "~4.1.12"
   }
 }

@@ -175,16 +175,16 @@
     "lint:fix": "npx oxlint --fix ."
   },
   "dependencies": {
-    "@hono/swagger-ui": "^0.6.1",
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@hono/swagger-ui": "^0.6.2",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@swc-node/register": "^1.12.1",
-    "@swc/core": "^1.16.2",
+    "@swc/core": "^1.16.20",
     "@swc/helpers": "^0.5.23",
     "clipanion": "^4.0.0-rc.4",
-    "hono": "^4.13.8",
-    "intl-messageformat": "^12.1.1",
-    "openapi3-ts": "^4.6.1",
-    "zod": "^4.6.5"
+    "hono": "^4.13.14",
+    "intl-messageformat": "^12.1.4",
+    "openapi3-ts": "^4.6.2",
+    "zod": "^4.6.7"
   },
   "peerDependencies": {
     "@react-email/render": ">=2",
@@ -203,21 +203,21 @@
     }
   },
   "devDependencies": {
-    "@cloudflare/vitest-plugin": "^1.1.13",
-    "@cloudflare/workers-types": "5.20260919.1",
-    "@react-email/render": "^2.1.0",
+    "@cloudflare/vitest-plugin": "^1.4.11",
+    "@cloudflare/workers-types": "5.20261029.1",
+    "@react-email/render": "^2.2.0",
     "@stratal/testing": "workspace:*",
-    "@types/node": "^26.6.2",
+    "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^4.1.12",
     "@vitest/runner": "~4.1.11",
-    "@vitest/snapshot": "~4.1.11",
+    "@vitest/snapshot": "~4.1.12",
     "jsonc-parser": "^3.3.1",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
-    "tsdown": "^0.23.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tsdown": "^0.23.4",
     "typescript": "^7.0.2",
-    "vitest": "~4.1.11"
+    "vitest": "~4.1.12"
   }
 }

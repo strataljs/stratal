@@ -83,8 +83,8 @@
     "lint:fix": "npx oxlint --fix ."
   },
   "dependencies": {
-    "@cloudflare/vitest-plugin": "^1.1.13",
-    "@golevelup/ts-vitest": "^4.0.0",
+    "@cloudflare/vitest-plugin": "^1.4.11",
+    "@golevelup/ts-vitest": "^4.0.1",
     "msw": "^2.15.0"
   },
   "peerDependencies": {
@@ -110,18 +110,18 @@
     }
   },
   "devDependencies": {
-    "@better-auth/core": "^1.7.5",
-    "@cloudflare/workers-types": "5.20260919.1",
+    "@better-auth/core": "^1.7.14",
+    "@cloudflare/workers-types": "5.20261029.1",
     "@stratal/framework": "workspace:*",
-    "@types/node": "^26.6.2",
+    "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
     "@vitest/runner": "~4.1.11",
-    "@vitest/snapshot": "~4.1.11",
-    "better-auth": "^1.7.5",
-    "pg": "^8.23.0",
+    "@vitest/snapshot": "~4.1.12",
+    "better-auth": "^1.7.14",
+    "pg": "^8.23.1",
     "stratal": "workspace:*",
-    "tsdown": "^0.23.0",
+    "tsdown": "^0.23.4",
     "typescript": "^7.0.2",
-    "vitest": "~4.1.11"
+    "vitest": "~4.1.12"
   }
 }
