@@ -58,14 +58,14 @@
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.1",
     "@changesets/cli": "3.0.3",
-    "@opentelemetry/api": "^1.9.1",
-    "globals": "^17.12.0",
+    "@opentelemetry/api": "^1.10.0",
+    "globals": "^17.13.0",
     "husky": "^9.1.7",
     "jiti": "^2.7.0",
-    "lint-staged": "^17.5.1",
-    "oxlint": "^1.83.0",
-    "oxlint-tsgolint": "^7.0.2002",
-    "tsdown": "^0.23.0",
+    "lint-staged": "^17.6.0",
+    "oxlint": "^1.90.0",
+    "oxlint-tsgolint": "^7.0.2005",
+    "tsdown": "^0.23.4",
     "typedoc": "^0.28.20",
     "typescript": "^7.0.2"
   }
