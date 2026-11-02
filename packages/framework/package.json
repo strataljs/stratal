@@ -96,7 +96,7 @@
     "@zenstackhq/cli": "^3.9.4",
     "@zenstackhq/orm": "^3.9.4",
     "@zenstackhq/schema": "^3.9.4",
-    "better-auth": "^1.7.5",
+    "better-auth": "^1.7.7",
     "better-call": "1.4.0",
     "dotenv-cli": "^11.0.0",
     "pg": "^8.23.0",
