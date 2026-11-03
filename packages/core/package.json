@@ -184,7 +184,7 @@
     "hono": "^4.13.8",
     "intl-messageformat": "^12.1.1",
     "openapi3-ts": "^4.6.1",
-    "zod": "^4.6.5"
+    "zod": "^4.6.6"
   },
   "peerDependencies": {
     "@react-email/render": ">=2",
